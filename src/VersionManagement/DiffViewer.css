@@ -1,0 +1,223 @@
+.diff-viewer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    background: #fff;
+    overflow: hidden;
+  }
+  
+  .diff-viewer.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #586069;
+  }
+  
+  .diff-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e1e4e8;
+    background: #f6f8fa;
+  }
+  
+  .diff-header h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+  
+  .diff-mode-selector {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .mode-btn {
+    padding: 6px 12px;
+    background: #f6f8fa;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  .mode-btn.active {
+    background: #0366d6;
+    color: white;
+    border-color: #0366d6;
+  }
+  
+  .diff-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+  }
+  
+  /* Side-by-side styles */
+  .side-by-side-container {
+    display: flex;
+    height: 100%;
+  }
+  
+  .version-pane {
+    flex: 1;
+    padding: 16px;
+    overflow: auto;
+    border-right: 1px solid #e1e4e8;
+  }
+  
+  .version-pane:last-child {
+    border-right: none;
+  }
+  
+  .version-pane h4 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: #24292e;
+  }
+  
+  .version-pane pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  
+  /* Unified diff styles */
+  .unified-container {
+    padding: 16px;
+  }
+  
+  .jsondiffpatch-delta {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  
+  .jsondiffpatch-added .jsondiffpatch-property-name,
+  .jsondiffpatch-added .jsondiffpatch-value pre,
+  .jsondiffpatch-modified .jsondiffpatch-right-value pre,
+  .jsondiffpatch-textdiff-added {
+    background: #e6ffed;
+  }
+  
+  .jsondiffpatch-deleted .jsondiffpatch-property-name,
+  .jsondiffpatch-deleted pre,
+  .jsondiffpatch-modified .jsondiffpatch-left-value pre,
+  .jsondiffpatch-textdiff-deleted {
+    /* background: #ffebe9; */
+    text-decoration: line-through;
+  }
+  
+  .diff-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #e1e4e8;
+  }
+  
+  .revert-btn {
+    background: #2ea44f;
+    color: white;
+    border: 1px solid rgba(27, 31, 35, 0.15);
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .copy-btn {
+    background: #f6f8fa;
+    border: 1px solid #d1d5da;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .form-preview {
+    padding: 20px;
+    background: #fff;
+    border-radius: 4px;
+  }
+
+  .form-preview.changed {
+    /* background: #ffebe9; */
+  }
+
+  .form-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #24292e;
+  }
+
+  .form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+    margin-bottom: 8px;
+  }
+
+  .form-field.added {
+    background-color: #e6ffed;
+    border: 1px solid #85e89d;
+  }
+
+  .form-field.removed {
+    background-color: #ffebe9 !important;
+    border: 1px solid #f97583;
+    text-decoration: line-through;
+  }
+
+  .form-field.modified {
+    background-color: #fff8c5;
+    border: 1px solid #f9c513;
+  }
+
+  .form-field label {
+    font-weight: 500;
+    color: #24292e;
+  }
+
+  .form-field.added label::before {
+    content: "+ ";
+    color: #22863a;
+  }
+
+  .form-field.removed label::before {
+    content: "- ";
+    color: #cb2431;
+  }
+
+  .form-field input {
+    padding: 8px 12px;
+    border: 1px solid #d1d5da;
+    border-radius: 4px;
+    font-size: 14px;
+    background: #f6f8fa;
+  }
+
+  .form-field.added input {
+    background: #f0fff4;
+  }
+
+  .form-field.removed input {
+    background: #fff5f5 !important;
+    text-decoration: line-through;
+  }
+
+  .form-field input:disabled {
+    cursor: not-allowed;
+    opacity: 0.8;
+  }

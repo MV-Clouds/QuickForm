@@ -1,0 +1,254 @@
+/* styles.css */
+.version-control-container {
+    display: flex;
+    height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  .version-history {
+    width: 350px;
+    border-right: 1px solid #e1e4e8;
+    overflow-y: auto;
+    background: #f6f8fa;
+  }
+  
+  .version-search {
+    padding: 15px;
+    background: #fff;
+    border-bottom: 1px solid #e1e4e8;
+  }
+  
+  .version-search input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #d1d5da;
+    border-radius: 3px;
+  }
+  
+  .version-list {
+    padding: 10px;
+  }
+  
+  .version-item {
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 3px;
+    padding: 15px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  
+  .version-item.selected {
+    border-color: #0366d6;
+    background-color: #f1f8ff;
+  }
+  
+  .version-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  
+  .version-id {
+    font-weight: 600;
+    color: #0366d6;
+  }
+  
+  .version-date {
+    color: #586069;
+    font-size: 0.85em;
+  }
+  
+  .lock-icon {
+    margin-left: 5px;
+  }
+  
+  .version-author {
+    color: #586069;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+  }
+  
+  .version-summary {
+    margin-bottom: 8px;
+  }
+  
+  .version-tags {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+  }
+  
+  .tag {
+    font-size: 0.75em;
+    padding: 2px 5px;
+    border-radius: 3px;
+  }
+  
+  .tag.draft {
+    background: #dbedff;
+    color: #044289;
+  }
+  
+  .tag.approved {
+    background: #dcffe4;
+    color: #165c26;
+  }
+  
+  .tag.production {
+    background: #ffdce0;
+    color: #86181d;
+  }
+  
+  .version-actions {
+    display: flex;
+    gap: 5px;
+  }
+  
+  .version-actions button {
+    flex: 1;
+    padding: 5px;
+    font-size: 0.8em;
+    background: #f6f8fa;
+    border: 1px solid #d1d5da;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  
+  .version-actions button:hover {
+    background: #e1e4e8;
+  }
+  
+  .diff-viewer {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  
+  .diff-viewer.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #586069;
+  }
+  
+  .diff-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .diff-mode-selector {
+    display: flex;
+    gap: 15px;
+  }
+  
+  .diff-content {
+    border: 1px solid #e1e4e8;
+    border-radius: 3px;
+    padding: 15px;
+    background: #fff;
+    margin-bottom: 15px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.9em;
+  }
+  
+  .diff-actions {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .diff-actions button {
+    padding: 8px 15px;
+    background: #2ea44f;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+  
+  .diff-actions button:hover {
+    background: #2c974b;
+  }
+  
+  /* jsondiffpatch styles */
+  .jsondiffpatch-delta {
+    margin: 0;
+    padding: 0;
+    display: inline-block;
+  }
+  
+  .jsondiffpatch-delta pre {
+    margin: 0;
+    font-family: inherit;
+    white-space: pre-wrap;
+  }
+  
+  .jsondiffpatch-added .jsondiffpatch-property-name,
+  .jsondiffpatch-added .jsondiffpatch-value pre,
+  .jsondiffpatch-modified .jsondiffpatch-right-value pre,
+  .jsondiffpatch-textdiff-added {
+    background: #e6ffed;
+  }
+  
+  .jsondiffpatch-deleted .jsondiffpatch-property-name,
+  .jsondiffpatch-deleted pre,
+  .jsondiffpatch-modified .jsondiffpatch-left-value pre,
+  .jsondiffpatch-textdiff-deleted {
+    background: #ffebe9;
+    text-decoration: line-through;
+  }
+  
+  .jsondiffpatch-unchanged,
+  .jsondiffpatch-movedestination {
+    color: #999;
+  }
+  
+  .jsondiffpatch-unchanged,
+  .jsondiffpatch-movedestination > .jsondiffpatch-value {
+    transition: all 0.5s;
+    -webkit-transition: all 0.5s;
+    overflow-y: hidden;
+  }
+  
+  .jsondiffpatch-unchanged-showing .jsondiffpatch-unchanged,
+  .jsondiffpatch-unchanged-showing .jsondiffpatch-movedestination > .jsondiffpatch-value {
+    max-height: 100px;
+  }
+  
+  .jsondiffpatch-unchanged-hidden .jsondiffpatch-unchanged,
+  .jsondiffpatch-unchanged-hidden .jsondiffpatch-movedestination > .jsondiffpatch-value {
+    max-height: 0;
+  }
+  
+  .jsondiffpatch-unchanged-hiding .jsondiffpatch-unchanged,
+  .jsondiffpatch-unchanged-hiding .jsondiffpatch-movedestination > .jsondiffpatch-value,
+  .jsondiffpatch-unchanged-hidden .jsondiffpatch-unchanged,
+  .jsondiffpatch-unchanged-hidden .jsondiffpatch-movedestination > .jsondiffpatch-value {
+    overflow-y: hidden;
+  }
+  
+  .jsondiffpatch-unchanged-shown .jsondiffpatch-unchanged,
+  .jsondiffpatch-unchanged-shown .jsondiffpatch-movedestination > .jsondiffpatch-value {
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  
+  .jsondiffpatch-unchanged-hiding .jsondiffpatch-unchanged,
+  .jsondiffpatch-unchanged-hiding .jsondiffpatch-movedestination > .jsondiffpatch-value {
+    max-height: 0;
+  }
+  
+  .jsondiffpatch-modified .jsondiffpatch-value {
+    display: inline-block;
+  }
+  
+  .jsondiffpatch-modified .jsondiffpatch-left-value {
+    float: left;
+  }
+  
+  .jsondiffpatch-modified .jsondiffpatch-right-value {
+    float: right;
+  }
+
