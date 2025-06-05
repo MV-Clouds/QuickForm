@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { MenuIcon, PanelsTopLeft } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Menu } from "@/components/admin-panel/menu";
 import {
@@ -10,7 +9,8 @@ import {
   SheetTrigger,
   SheetTitle
 } from "@/components/ui/sheet";
-
+import Image from "next/image";
+import LogoQF from "@/components/admin-panel/logoQF.png";
 export function SheetMenu() {
   return (
     <Sheet>
@@ -27,8 +27,11 @@ export function SheetMenu() {
             asChild
           >
             <Link href="/dashboard" className="flex items-center gap-2">
-              <PanelsTopLeft className="w-6 h-6 mr-1" />
-              <SheetTitle className="font-bold text-lg">Brand</SheetTitle>
+            <Image src={LogoQF.src}  width={50} height={50}/>
+            <SheetTitle className="font-bold text-lg"> <span className="font-bold text-lg tracking-tight hidden sm:inline-block">
+              <span style={{color:'#37B9FD'}}>QUICK </span><span>FORM</span>
+            </span>
+            <span className="font-bold text-base tracking-tight sm:hidden">QF</span>   </SheetTitle>
             </Link>
           </Button>
         </SheetHeader>

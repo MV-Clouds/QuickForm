@@ -1,11 +1,13 @@
 import {
-  Tag,
-  Users,
-  Settings,
-  Bookmark,
-  SquarePen,
-  LayoutGrid,
-  LucideIcon
+  Home,
+  ListChecks,
+  Bell,
+  Shuffle,
+  Smile,
+  Upload,
+  LucideIcon,
+  User,
+  Mail
 } from "lucide-react";
 
 type Submenu = {
@@ -33,57 +35,54 @@ export function getMenuList(pathname: string): Group[] {
       groupLabel: "",
       menus: [
         {
-          href: "/dashboard",
-          label: "Dashboard",
-          icon: LayoutGrid,
-          submenus: []
-        }
-      ]
-    },
-    {
-      groupLabel: "Contents",
-      menus: [
-        {
-          href: "",
-          label: "Posts",
-          icon: SquarePen,
-          submenus: [
-            {
-              href: "/posts",
-              label: "All Posts"
-            },
-            {
-              href: "/posts/new",
-              label: "New Post"
-            }
-          ]
+          href: "/",
+          label: "Home",
+          icon: Home
         },
         {
-          href: "/categories",
-          label: "Categories",
-          icon: Bookmark
+          href: "/fields",
+          label: "Fields",
+          icon: ListChecks
         },
         {
-          href: "/tags",
-          label: "Tags",
-          icon: Tag
-        }
-      ]
-    },
-    {
-      groupLabel: "Settings",
-      menus: [
-        {
-          href: "/users",
-          label: "Users",
-          icon: Users
+          href: "/notification",
+          label: "Notification",
+          icon: Bell
         },
         {
-          href: "/account",
-          label: "Account",
-          icon: Settings
+          href: "/mapping",
+          label: "Mapping",
+          icon: Shuffle
+        },
+        {
+          href: "/thankyou",
+          label: "Thank You",
+          icon: Smile
+        },
+        {
+          href: "/publish",
+          label: "Publish",
+          icon: Upload
         }
       ]
     }
   ];
+}
+export function getUserList(pathname: string): Group[] {
+  return [
+    {
+      groupLabel: "",
+      menus: [
+        {
+          href: "/notify",
+          label: "Notification",
+          icon: Mail
+        },
+       {
+          href: "/users",
+          label: "Profile",
+          icon: User
+        },
+      ]
+    }]
 }

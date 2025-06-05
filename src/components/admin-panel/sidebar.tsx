@@ -6,8 +6,9 @@ import { useSidebar } from "@/hooks/use-sidebar";
 import { useStore } from "@/hooks/use-store";
 import { cn } from "@/lib/utils";
 import { PanelsTopLeft } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-
+import LogoQF from "@/components/admin-panel/logoQF.png";
 export function Sidebar() {
   const sidebar = useStore(useSidebar, (x) => x);
   if (!sidebar) return null;
@@ -35,17 +36,16 @@ export function Sidebar() {
           asChild
         >
           <Link href="/dashboard" className="flex items-center gap-2">
-            <PanelsTopLeft className="w-6 h-6 mr-1" />
-            <h1
-              className={cn(
+           <Image src={LogoQF.src}  width={50} height={50} alt="quickform"/>
+            <span  className={cn(
                 "font-bold text-lg whitespace-nowrap transition-[transform,opacity,display] ease-in-out duration-300",
                 !getOpenState()
                   ? "-translate-x-96 opacity-0 hidden"
                   : "translate-x-0 opacity-100"
-              )}
-            >
-              Brand
-            </h1>
+              )}>
+              <span style={{color:'#37B9FD'}}>QUICK </span><span>FORM</span>
+            </span>
+            <span className="font-bold text-base tracking-tight sm:hidden">QF</span>
           </Link>
         </Button>
         <Menu isOpen={getOpenState()} />
