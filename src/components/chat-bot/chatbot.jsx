@@ -1,140 +1,376 @@
 'use client'
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
+import ReactMarkdown from 'react-markdown';
+import { Bot, X, Send, Maximize2, Minimize2 } from 'lucide-react'
+import BotButton from './bot-button'
 export default function ConvoBotPopup() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: 'bot', content: 'Hello! I\'m your QuickForm assistant. How can I help you today? 🌟' }
-  ]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+    const [messages, setMessages] = useState([
+        { role: 'bot', content: 'Hello! I\'m your QuickForm assistant. How can I help you today? 🌟' }
+    ]);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Dynamic configuration
-  const config = {
-    botName: 'FormiBot',
-    accentColor: 'bg-indigo-600',
-    hoverColor: 'bg-indigo-700',
-    popupPosition: 'right', // 'left' | 'right' | 'center'
-  };
+    // Dynamic configuration
+    const config = {
+        botName: 'Formi',
+        accentColor: 'bg-blue-600',
+        hoverColor: 'bg-blue-700',
+        popupPosition: 'right', // 'left' | 'right' | 'center'
+    };
+    const streamString = async (stream) => {
+        return await new Response(stream).text();
+    }
+    const handleSend = async () => {
+        if (!input.trim()) return;
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    
-    // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: input }]);
-    setInput('');
-    setIsLoading(true);
+        // Add user message
+        setMessages(prev => [...prev, { role: 'user', content: input }]);
+        setInput('');
+        setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setMessages(prev => [...prev, { 
-        role: 'bot', 
-        content: `Thanks for your question about "${input}". I'd be happy to help with that!` 
-      }]);
-      setIsLoading(false);
-    }, 1500);
-  };
+        try {
+              const res = await fetch('http://localhost:3000/api/chat/chatTogether', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: input }),
+              });
+              const data = await streamString(res.body);
+//             const data = `### Payment Integration in QuickForm
+// QuickForm allows you to integrate payment gateways into your forms, making it easy to collect payments from your users. Here's how it works:
 
-  return (
-    <div className={`fixed ${config.popupPosition === 'right' ? 'right-8' : config.popupPosition === 'left' ? 'left-8' : 'left-1/2 transform -translate-x-1/2'} bottom-8 z-50`}>
-      {/* Trigger Button */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`${config.accentColor} hover:${config.hoverColor} text-white rounded-full p-4 shadow-xl transition-all duration-300 flex items-center justify-center`}
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-      </motion.button>
+// #### Supported Payment Gateways
+// QuickForm supports various payment gateways, including:
+// * Stripe
+// * PayPal
+// * Authorize.net
+// * and more`;
+            console.log('bot Data', data)
+            setMessages(prev => [
+                ...prev,
+                { role: 'bot', content: data || "Sorry, I couldn't understand that." }
+            ]);
+        } catch (error) {
+            setMessages(prev => [
+                ...prev,
+                { role: 'bot', content: "⚠️ Sorry, something went wrong. Please try again later." }
+            ]);
+        }
+        setIsLoading(false);
+    };
 
-      {/* Chat Popup */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="absolute bottom-20 right-0 w-80 h-96 bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col"
-          >
-            {/* Header */}
-            <div className={`${config.accentColor} p-4 text-white flex items-center justify-between`}>
-              <h3 className="font-bold text-lg">{config.botName}</h3>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-1 rounded-full hover:bg-black/10 transition"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
+    return (
+        <div
+            className={`fixed ${isFullscreen
+                ? 'inset-0 w-screen h-screen left-0 top-0 right-0 bottom-0 rounded-xl'
+                : config.popupPosition === 'right'
+                    ? 'right-8'
+                    : config.popupPosition === 'left'
+                        ? 'left-8'
+                        : 'left-1/2 transform -translate-x-1/2'
+                } ${isFullscreen ? 'z-[9999]' : 'bottom-8 z-50'}`}
+            style={isFullscreen ? { maxWidth: '75vw', maxHeight: '75vh', margin: '7rem 12rem' } : {}}
+        >
+            {/* Trigger Button */}
+            {!isFullscreen && <BotButton isOpen={isOpen} setIsOpen={setIsOpen} />}
 
-            {/* Messages */}
-            <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
-              {messages.map((msg, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: msg.role === 'user' ? 20 : -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className={`mb-3 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs p-3 rounded-lg ${msg.role === 'user' 
-                      ? `${config.accentColor} text-white` 
-                      : 'bg-white border border-gray-200'}`}
-                  >
-                    {msg.content}
-                  </div>
-                </motion.div>
-              ))}
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex justify-start mb-3"
-                >
-                  <div className="bg-white border border-gray-200 p-3 rounded-lg">
-                    <div className="flex space-x-2">
-                      <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"></div>
-                      <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
+            {/* Chat Popup */}
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 50, scale: 0.9 }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                        className={`absolute ${isFullscreen ? 'inset-0 w-full h-full' : 'bottom-24 right-4 w-96 max-w-[90vw] h-[32rem]'} bg-white/5 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-white/10`}
+                        style={{
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            ...isFullscreen ? { maxWidth: '100vw', maxHeight: '100vh' } : {}
+                        }}
+                    >
+                        {/* Floating particles background */}
+                        <div className="absolute inset-0 overflow-hidden">
+                            {[...Array(15)].map((_, i) => (
+                                <motion.div
+                                    key={i}
+                                    className="absolute rounded-full bg-white/10"
+                                    style={{
+                                        width: `${Math.random() * 6 + 2}px`,
+                                        height: `${Math.random() * 6 + 2}px`,
+                                        top: `${Math.random() * 100}%`,
+                                        left: `${Math.random() * 100}%`,
+                                    }}
+                                    animate={{
+                                        y: [0, (Math.random() - 0.5) * 40],
+                                        x: [0, (Math.random() - 0.5) * 40],
+                                        opacity: [0.2, 0.8, 0.2],
+                                    }}
+                                    transition={{
+                                        repeat: Infinity,
+                                        duration: Math.random() * 10 + 5,
+                                        ease: 'easeInOut',
+                                        delay: Math.random() * 5,
+                                    }}
+                                />
+                            ))}
+                        </div>
 
-            {/* Input */}
-            <div className="p-4 border-t bg-white">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Type your question..."
-                  className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim()}
-                  className={`p-2 rounded-lg ${input.trim() 
-                    ? `${config.accentColor} hover:${config.hoverColor} text-white` 
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'} transition`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
+                        {/* Header with glass morphism effect */}
+                        <motion.div
+                            className={`relative p-4 flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-indigo-500/80 to-purple-600/80`}
+                            initial={{ y: -20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.1, duration: 0.3 }}
+                        >
+                            <div className="flex items-center space-x-3">
+                                <motion.div
+                                    className="p-2 rounded-lg bg-white/10 backdrop-blur-sm"
+                                    whileHover={{ rotate: 15 }}
+                                >
+                                    <Bot className="h-5 w-5 text-white" />
+                                </motion.div>
+                                <motion.h3
+                                    className="font-bold text-lg text-white tracking-tight"
+                                    animate={{
+                                        x: [0, -2, 2, 0],
+                                        transition: { repeat: Infinity, duration: 6, ease: 'easeInOut' }
+                                    }}
+                                >
+                                    {config.botName}
+                                </motion.h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <motion.button
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => setIsFullscreen(f => !f)}
+                                    className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200"
+                                    title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                                >
+                                    {isFullscreen ? (
+                                        <Minimize2 className="h-4 w-4 text-white" />
+                                    ) : (
+                                        <Maximize2 className="h-4 w-4 text-white" />
+                                    )}
+                                </motion.button>
+                                <motion.button
+                                    whileHover={{ scale: 1.1, rotate: 90 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => {setIsOpen(false); if(isFullscreen) setIsFullscreen(f => !f);}}
+                                    className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200"
+                                >
+                                    <X className="h-4 w-4 text-white" />
+                                </motion.button>
+                            </div>
+                        </motion.div>
+
+                        {/* Messages Area with subtle gradient */}
+                        <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-white/5 to-white/2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                            {/* {messages.length === 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 0.3 }}
+                                    className="h-full flex flex-col items-center justify-center text-center p-6"
+                                >
+                                    <motion.div
+                                        animate={{
+                                            y: [0, -10, 0],
+                                            transition: { repeat: Infinity, duration: 4, ease: 'easeInOut' }
+                                        }}
+                                    >
+                                        <Bot className="h-12 w-12 text-indigo-400 mb-4" />
+                                    </motion.div>
+                                    <h4 className="text-lg font-medium text-white/90 mb-2">How can I help you today?</h4>
+                                    <p className="text-sm text-white/60 max-w-xs">
+                                        Ask me anything or share what you're working on.
+                                    </p>
+                                </motion.div>
+                            )} */}
+
+                            <div className="space-y-4">
+                                {messages.map((msg, i) => (
+                                    <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, y: msg.role === 'user' ? 20 : -20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{
+                                            type: 'spring',
+                                            damping: 20,
+                                            stiffness: 300,
+                                            delay: i * 0.05
+                                        }}
+                                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <motion.div
+                                            whileHover={{
+                                                scale: 1.02,
+                                                boxShadow: msg.role === 'user'
+                                                    ? '0 5px 20px rgba(99, 102, 241, 0.3)'
+                                                    : '0 5px 20px rgba(0, 0, 0, 0.1)'
+                                            }}
+                                            className={`relative max-w-[85%] p-4 rounded-2xl ${msg.role === 'user'
+                                                ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white'
+                                                : 'bg-white/90 backdrop-blur-sm text-gray-800'
+                                                } shadow-md`}
+                                        >
+                                            {/* Message tail */}
+                                            <motion.div
+                                                className={`absolute w-3 h-3 ${msg.role === 'user' ? 'right-[-4px]' : 'left-[-4px]'
+                                                    } top-4 transform rotate-45 ${msg.role === 'user' ? 'bg-indigo-500' : 'bg-white/90'
+                                                    }`}
+                                                initial={{ scale: 0 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ delay: 0.1 }}
+                                            />
+
+                                            {msg.role === 'bot' ? (
+                                                <ReactMarkdown
+                                                    components={{
+                                                        h1: ({ node, ...props }) => (
+                                                            <h1 className="text-xl font-bold mb-2 text-indigo-800">
+                                                                <span role="img" aria-label="QuickForm" className="mr-2">📝</span>
+                                                                {props.children}
+                                                            </h1>
+                                                        ),
+                                                        h2: ({ node, ...props }) => (
+                                                            <h2 className="text-lg font-semibold mb-1 text-indigo-700">
+                                                                <span role="img" aria-label="settings" className="mr-2">⚙️</span>
+                                                                {props.children}
+                                                            </h2>
+                                                        ),
+                                                        h3: ({ node, ...props }) => (
+                                                            <h3 className="text-base font-bold text-indigo-600">
+                                                                <span role="img" aria-label="fields" className="mr-2">🔢</span>
+                                                                {props.children}
+                                                            </h3>
+                                                        ), h4: ({ node, ...props }) => (
+                                                            <h3 className="text-base text-indigo-600">
+                                                                <span role="img" aria-label="info" className="mr-2">💡</span>
+                                                                {props.children}
+                                                            </h3>
+                                                        ),
+                                                        ul: ({ node, ...props }) => (
+                                                            <ul className="list-disc pl-5 mb-2 space-y-1" {...props} />
+                                                        ),
+                                                        ol: ({ node, ...props }) => (
+                                                            <ol className="list-decimal pl-5 mb-2 space-y-1" {...props} />
+                                                        ),
+                                                        li: ({ node, ...props }) => (
+                                                            <li className="text-gray-700" {...props} />
+                                                        ),
+                                                        code: ({ node, ...props }) => (
+                                                            <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono text-indigo-700">
+                                                                {props.children}
+                                                            </code>
+                                                        ),
+                                                        a: ({ node, ...props }) => (
+                                                            <a
+                                                                className="text-indigo-600 hover:underline"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                {...props}
+                                                            />
+                                                        ),
+                                                    }}
+                                                >
+                                                    {msg.content}
+                                                </ReactMarkdown>
+                                            ) : (
+                                                <p className="text-white">{msg.content}</p>
+                                            )}
+                                        </motion.div>
+                                    </motion.div>
+                                ))}
+
+                                {isLoading && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="flex justify-start"
+                                    >
+                                        <div className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-sm">
+                                            <div className="flex space-x-2">
+                                                {[...Array(3)].map((_, i) => (
+                                                    <motion.div
+                                                        key={i}
+                                                        className="w-2.5 h-2.5 rounded-full bg-indigo-400"
+                                                        animate={{
+                                                            y: [0, -5, 0],
+                                                            opacity: [0.6, 1, 0.6],
+                                                        }}
+                                                        transition={{
+                                                            repeat: Infinity,
+                                                            duration: 1.2,
+                                                            ease: 'easeInOut',
+                                                            delay: i * 0.2,
+                                                        }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Input Area with floating effect */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="p-4 border-t border-white/10 bg-white/5 backdrop-blur-lg"
+                        >
+                            <motion.div
+                                whileHover={{ y: -2 }}
+                                className="flex gap-3 items-end"
+                            >
+                                <motion.div
+                                    className="flex-1 relative"
+                                    whileFocusWithin={{ y: -3 }}
+                                >
+                                    <motion.textarea
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="Type your message..."
+                                        className="w-full p-3 pr-10 rounded-xl border border-blue/20 bg-black/10 backdrop-blur-sm text-black placeholder-black/50 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent resize-none"
+                                        style={{ minHeight: '44px', maxHeight: '120px' }}
+                                        rows={1}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSend();
+                                            }
+                                        }}
+                                    />
+                                    <motion.button
+                                        whileHover={{ scale: 1.1 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => input.trim() && handleSend()}
+                                        className="absolute right-2 bottom-4 p-1.5 rounded-lg bg-black/10 hover:bg-black/20 transition-all"
+                                        disabled={!input.trim()}
+                                    >
+                                        <Send className="h-4 w-4" />
+                                    </motion.button>
+                                </motion.div>
+                            </motion.div>
+
+                            <motion.div
+                                className="mt-2 flex justify-center"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 0.5 }}
+                                transition={{ delay: 1 }}
+                            >
+                                <p className="text-xs text-black/50">
+                                    {config.botName} • Powered by AI
+                                </p>
+                            </motion.div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
 }

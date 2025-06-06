@@ -27,7 +27,7 @@ export function SheetMenu() {
             asChild
           >
             <Link href="/dashboard" className="flex items-center gap-2">
-            <Image src={LogoQF.src}  width={50} height={50}/>
+            <Image src={LogoQF.src}  width={50} height={50} alt="logo"/>
             <SheetTitle className="font-bold text-lg"> <span className="font-bold text-lg tracking-tight hidden sm:inline-block">
               <span style={{color:'#37B9FD'}}>QUICK </span><span>FORM</span>
             </span>
