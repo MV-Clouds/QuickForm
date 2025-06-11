@@ -8,6 +8,8 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "babel-standalone": "^6.26.0",
+    "crypto": "^1.0.1",
+    "crypto-js": "^4.2.0",
     "emoji-picker-react": "^4.12.2",
     "framer-motion": "^12.15.0",
     "libphonenumber": "^0.0.10",
@@ -23,6 +25,7 @@
     "react-signature-canvas": "^1.1.0-alpha.2",
     "rsuite": "^5.82.0",
     "use-undo": "^1.1.1",
+    "uuid": "^11.1.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

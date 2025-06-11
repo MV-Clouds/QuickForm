@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import MainMenuBar from './MainMenuBar';
 import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
+import { encrypt } from './crypto';
 
 function MainFormBuilder() {
   const { formVersionId } = useParams();
@@ -78,11 +79,19 @@ function MainFormBuilder() {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
       const token = (await fetchAccessToken(userId, instanceUrl));
+      const linkData = {
+        userId,
+        instanceUrl,
+        formVersionId: selectedVersionId,
+      };
+      const encryptedLinkId = encrypt(JSON.stringify(linkData));
+      const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encodeURIComponent(encryptedLinkId)}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';
       formVersion.Id = selectedVersionId;
       formVersion.Form__c = formId;
+      formVersion.Publish_Link__c = publishLink;
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -224,7 +233,10 @@ function MainFormBuilder() {
       navigate(`/form-builder/${newVersionId}`);
     }
   };
-
+  useEffect(() => {
+    console.log(fieldsState);
+    
+  },[fieldsState]);
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -397,6 +409,116 @@ function MainFormBuilder() {
     }
   };
 
+  const getDefaultValidation = (fieldType) => {
+    const field = fieldType.toLowerCase().replace(/\s+/g, '');
+    const validations = {
+      fullname: {
+        pattern: "^[a-zA-Z\\s'-]+$",
+        description: "Only letters, spaces, hyphens, and apostrophes allowed."
+      },
+      phonenumber: {
+        pattern: "^\\+?[0-9]{7,15}$",
+        description: "Must be a valid phone number (7-15 digits, optional '+')."
+      },
+      email: {
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+        description: "Must be a valid email (e.g., user@example.com)."
+      },
+      address: {
+        pattern: "^[\\w\\s\\-\\.,#]+$",
+        description: "Alphanumeric, spaces, hyphens, commas, and periods allowed."
+      },
+      fileupload: {
+        pattern: ".*\\.(jpg|jpeg|png|gif|pdf|doc|docx)$",
+        description: "Only JPG, PNG, GIF, PDF, DOC, or DOCX files allowed."
+      },
+      signature: {
+        pattern: "^[\\w\\s\\-\\.,#]+$",
+        description: "Must be a valid signature input."
+      },
+      termsofservice: {
+        pattern: "^true$",
+        description: "Must be accepted (checked)."
+      },
+      link: {
+        pattern: "^(https?:\\/\\/)?[\\w.-]+\\.[a-z]{2,}(\\/\\S*)?$",
+        description: "Must be a valid URL (e.g., https://example.com)."
+      },
+      date: {
+        pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+        description: "Must be in YYYY-MM-DD format."
+      },
+      datetime: {
+        pattern: "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$",
+        description: "Must be in YYYY-MM-DD HH:MM format."
+      },
+      time: {
+        pattern: "^\\d{2}:\\d{2}$",
+        description: "Must be in HH:MM format."
+      },
+      emojirating: {
+        pattern: "^[1-5]$",
+        description: "Rating must be between 1 and 5."
+      },
+      starrating: {
+        pattern: "^[1-5]$",
+        description: "Rating must be between 1 and 5."
+      },
+      scalerating: {
+        pattern: "^[0-5]$",
+        description: "Must be a rating between 0 and 5."
+      },
+      shorttext: {
+        pattern: "^.{1,255}$",
+        description: "Maximum 255 characters allowed."
+      },
+      longtext: {
+        pattern: "^.{1,1000}$",
+        description: "Maximum 1000 characters allowed."
+      },
+      number: {
+        pattern: "^[0-9]+$",
+        description: "Only numbers allowed."
+      },
+      checkbox: {
+        pattern: "^true|false$",
+        description: "Must be checked (true) or unchecked (false)."
+      },
+      displaytext: {
+        pattern: ".*",
+        description: "Display-only text (no validation needed)."
+      },
+      price: {
+        pattern: "^\\d+(\\.\\d{1,2})?$",
+        description: "Must be a valid price (e.g., 10 or 10.99)."
+      },
+      radiobutton: {
+        pattern: ".*",
+        description: "Must select one of the available options."
+      },
+      togglebutton: {
+        pattern: "^true|false$",
+        description: "Must be toggled (true) or untoggled (false)."
+      },
+      dropdownelements: {
+        pattern: ".*",
+        description: "Must select one of the available options."
+      },
+      imageuploader: {
+        pattern: ".*\\.(jpg|jpeg|png|gif|pdf|doc|docx)$",
+        description: "Only images (JPG, PNG, GIF), PDF, or Word documents allowed."
+      },
+      section: {
+        pattern: ".*",
+        description: "Display-only section (no validation needed)."
+      },
+      default: {
+        pattern: ".*",
+        description: "No specific validation rules."
+      }
+    };
+    return validations[field] || validations['default'];
+  };
   const handleDrop = (
     fieldType,
     pageIndex,
@@ -449,6 +571,7 @@ function MainFormBuilder() {
         type: fieldType,
         sectionId: sectionId || null,
         sectionSide: sectionSide || null,
+        validation: getDefaultValidation(fieldType), // <-- Add this line to include validation key
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);

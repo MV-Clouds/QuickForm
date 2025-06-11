@@ -5,6 +5,7 @@ import CreateFormWizard from './components/createFormWizard';
 import Home from './components/home';
 import ProtectedRoute from './components/protectedRoute';
 import MainFormBuilder from './components/MainFormBuilder';
+import PublicFormViewer from './components/PublicFormViewer';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
             path="/form-builder/:formVersionId"
             element={<ProtectedRoute element={<MainFormBuilder />} />}
           />
+          <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
         </Routes>
       </div>
     </Router>
