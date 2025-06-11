@@ -1,15 +1,15 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/login-home-version-pages/quick-form-app/node_modules
+/QuickForm-Romit/quick-form-app/node_modules
 .pnp
 .pnp.js
 .env
 # testing
-/login-home-version-pages/quick-form-app/coverage
+/QuickForm-Romit/quick-form-app/coverage
 
 # production
-/login-home-version-pages/quick-form-app/build
+/QuickForm-Romit/quick-form-app/build
 
 # misc
 .DS_Store
