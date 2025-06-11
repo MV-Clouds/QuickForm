@@ -1,7 +1,7 @@
 // PublicFormViewer.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { decrypt } from './crypto';
+import { decrypt } from '../form-builder-with-versions/crypto';
 import { DatePicker } from 'rsuite';
 import 'rsuite/dist/rsuite.min.css';
 import SignatureCanvas from 'react-signature-canvas';

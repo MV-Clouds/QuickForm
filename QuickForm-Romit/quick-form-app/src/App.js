@@ -1,11 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Login from './components/login';
-import CreateFormWizard from './components/createFormWizard';
-import Home from './components/home';
-import ProtectedRoute from './components/protectedRoute';
-import MainFormBuilder from './components/MainFormBuilder';
-import PublicFormViewer from './components/PublicFormViewer';
+import Login from './components/login-page/login';
+import CreateFormWizard from './components/create-form-wizard/createFormWizard';
+import Home from './components/create-form-wizard/home';
+import ProtectedRoute from './components/login-page/protectedRoute';
+import MainFormBuilder from './components/form-builder-with-versions/MainFormBuilder';
+import PublicFormViewer from './components/form-publish/PublicFormViewer';
 
 function App() {
   return (
