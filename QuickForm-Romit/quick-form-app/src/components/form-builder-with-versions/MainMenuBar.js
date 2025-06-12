@@ -77,7 +77,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                       <a
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/"
+                        href="/home"
                       >
                         <span className="mr-4">
                           <svg
