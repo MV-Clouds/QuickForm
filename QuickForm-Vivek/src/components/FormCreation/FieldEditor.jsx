@@ -132,7 +132,13 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [shuffleOptions, setShuffleOptions] = useState(selectedField?.shuffleOptions || false);
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(selectedField?.dropdownRelatedValues || {});
-  
+
+  // NEW : Default value / Hidden Feature / Unique Name
+  const [defaultValue, setDefaultValue] = useState(selectedField?.defaultValue || '');
+  const [isHidden, setIsHidden] = useState(selectedField?.isHidden || false);
+  const [uniqueName, setUniqueName] = useState(selectedField?.uniqueName || '');
+  const [uniqueNameError, setUniqueNameError] = useState('');
+
   useEffect(() => {
     if (selectedField) {
       setLabel(selectedField.label || '');
@@ -177,6 +183,12 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setAllowMultipleSelections(selectedField.allowMultipleSelections || false);
       setShuffleOptions(selectedField.shuffleOptions || false);
       setDropdownRelatedValues(selectedField.dropdownRelatedValues || {});
+      // NEW: Set default value / Hidden Feature / Unique Name
+      setDefaultValue(selectedField.defaultValue || '');
+      setIsHidden(selectedField.isHidden || false);
+      setUniqueName(selectedField.uniqueName || '');
+      setUniqueNameError('');
+
       // Set default predefined option set based on options
       if (selectedField.options?.join(',') === 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday') {
         setPredefinedOptionSet('days');
@@ -289,7 +301,12 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setColumns(newColumns);
     onUpdateField(selectedField.id, { columns: newColumns });
   };
-
+  
+  // Handler for hidden feature
+  const handleHiddenChange = (e) => {
+    setIsHidden(e.target.checked);
+    onUpdateField(selectedField.id, { isHidden: e.target.checked });
+  };
   const handleAddColumn = () => {
     const newColumns = [...columns, `${columns.length + 1}`];
     setColumns(newColumns);
@@ -499,6 +516,27 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setIsDisabled(e.target.checked);
     onUpdateField(selectedField.id, { isDisabled: e.target.checked });
   };
+  // Handler for unique name input
+  const handleUniqueNameChange = (e) => {
+    let value = e.target.value;
+
+    // Ensure it starts and ends with { }
+    if (!value.startsWith('{')) value = '{' + value;
+    if (!value.endsWith('}')) value = value + '}';
+
+    // Remove spaces inside the curly braces
+    const inner = value.slice(1, -1).replace(/\s/g, '');
+    value = `{${inner}}`;
+
+    // Validation: must not contain spaces, must start and end with { }
+    if (/\s/.test(inner)) {
+      setUniqueNameError('Unique name cannot contain spaces.');
+    } else {
+      setUniqueNameError('');
+      setUniqueName(value);
+      onUpdateField(selectedField.id, { uniqueName: value });
+    }
+  };
 
   const handleShowHelpTextChange = (e) => {
     setShowHelpText(e.target.checked);
@@ -672,7 +710,11 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
     }
   };
-
+    // Handler for default value
+  const handleDefaultValueChange = (e) => {
+    setDefaultValue(e.target.value);
+    onUpdateField(selectedField.id, { defaultValue: e.target.value });
+  };
   const handleOptionChange = (index, value) => {
     const newOptions = [...options];
     const oldOption = newOptions[index];
@@ -939,6 +981,17 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         </select>
                       </div>
                     )}
+                    {/* Default Value Feature */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
+                      <input
+                        type="text"
+                        value={defaultValue}
+                        onChange={handleDefaultValueChange}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="Enter default value"
+                      />
+                    </div>
                     <div className="mb-4">
                       <label className="inline-flex items-center">
                         <input
@@ -959,6 +1012,18 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       className="mr-2"
                     />
                     <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
+                  </label>
+                </div>
+                {/* Hidden Feature */}
+                <div className="mb-4">
+                  <label className="inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={isHidden}
+                      onChange={handleHiddenChange}
+                      className="mr-2"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Hidden Field</span>
                   </label>
                 </div>
                 <div className="mb-4">
@@ -983,6 +1048,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       />
                     </div>
                   )}
+                  
                 </div>
                   </>
                 )}
@@ -1965,7 +2031,24 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
             </button>
             {expandedSection === 'advanced' && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                
+                   {/* Unique Name Feature */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unique Name</label>
+                    <input
+                      type="text"
+                      value={uniqueName}
+                      onChange={handleUniqueNameChange}
+                      className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? 'border-red-500' : ''}`}
+                      placeholder="{uniqueName}"
+                      maxLength={50}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      This can be used to pre-populate fields from a URL and pass data to another form automatically. It can't include spaces.
+                    </p>
+                    {uniqueNameError && (
+                      <p className="text-xs text-red-500 mt-1">{uniqueNameError}</p>
+                    )}
+                  </div>
               </div>
             )}
           </div>

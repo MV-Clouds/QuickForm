@@ -9,6 +9,7 @@
   "dependencies": {
     "@tailwindcss/forms": "^0.3.2",
     "@tanstack/react-table": "^8.21.3",
+    "crypto-js": "^4.2.0",
     "emoji-picker-react": "^4.12.2",
     "framer-motion": "^12.17.1",
     "libphonenumber-js": "^1.12.9",
