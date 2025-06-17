@@ -1,7 +1,5 @@
-'use client'
-
+ 
 import React, { useState } from 'react';
-// import { Sidebar } from './Components/Sidebar';
 import { NotificationTab } from './Components/NotificationTab';
 import { EmailTab } from './Components/EmailTab';
 import { DigestEmailTab } from './Components/DigestEmailTab';

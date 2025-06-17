@@ -1,8 +1,7 @@
 "use client"
-import { ContentLayout } from "@/components/admin-panel/content-layout";
+// import { ContentLayout } from "@/components/admin-panel/content-layout";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ThankYouQF.css'
-import Image from 'next/image';
 const QuickForm = () => {
   const [formState, setFormState] = useState({
     text: '',
@@ -469,7 +468,7 @@ const QuickForm = () => {
     return `
       <div class="preview-content" style="${Object.entries(formState.backgroundStyle).map(([k, v]) => `${k}: ${v}`).join(';')}">
         <div class="preview-image" style="${Object.entries(formState.imageStyle).map(([k, v]) => `${k}: ${v}`).join(';')}; max-width: 100%; max-height: 400px">
-          <Image src="${formState.imageUrl}" alt="Thank You Logo" width={} style="width: ${formState.imageStyle.width}; height: ${formState.imageStyle.height}; object-fit: contain" />
+          <img src="${formState.imageUrl}" alt="Thank You Logo" width={} style="width: ${formState.imageStyle.width}; height: ${formState.imageStyle.height}; object-fit: contain" />
         </div>
         ${(visibility.text || visibility.text_url || visibility.richtext) ? `
           <div class="preview-text" style="${Object.entries(formState.textStyle).map(([k, v]) => `${k}: ${v}`).join(';')}; margin-top: 1.5rem; padding: 0 1rem">
@@ -678,7 +677,7 @@ const handleSourceCodeChange = (e) => {
   };
 
   return (
-    <ContentLayout title="Thank you">
+    // <ContentLayout title="Thank you">
     <div className={`quick-form-container `}>
       {uiState.isLoading && (
         <div className="spinner-overlay">
@@ -903,7 +902,7 @@ const handleSourceCodeChange = (e) => {
           <>
             <div className="edit-label-btn">
               <button onClick={() => setUiState(prev => ({ ...prev, showLabelEditor: true }))}>
-                <Image src={whitepen} alt="Edit" width={10}  height={10}/> Edit Label
+                <img src={whitepen} alt="Edit" width={10}  height={10}/> Edit Label
               </button>
             </div>
 
@@ -963,7 +962,7 @@ const handleSourceCodeChange = (e) => {
               maxHeight: '400px'
             }}
           >
-            <Image
+            <img
               src={formState.imageUrl}
               alt="Thank You Logo"
               style={{
@@ -1052,7 +1051,8 @@ const handleSourceCodeChange = (e) => {
           ))}
         </div>
       </div>
-    </div></ContentLayout>
+    </div>
+    // </ContentLayout>
   );
 };
 

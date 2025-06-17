@@ -7,6 +7,7 @@ import {
   Upload,
   User,
   Mail,
+  LayoutTemplateIcon,
 } from "lucide-react";
 
 export const mainMenuList = [
@@ -21,9 +22,10 @@ export const mainMenuList = [
     groupLabel: "Settings",
     menus: [
       { href: "/notification", label: "Notification", icon: Bell },
-      { href: "/mapping", label: "Mapping", icon: Shuffle },
+      { href: "/flow", label: "Mapping", icon: Shuffle },
       { href: "/thankyou", label: "Thank You", icon: Smile },
       { href: "/publish", label: "Publish", icon: Upload },
+      { href: "/template", label: "Templates", icon: LayoutTemplateIcon },
     ],
   },
 ];

@@ -192,13 +192,17 @@ function FieldWrapper({ children, alignment, showHelpText, helpText, labelConten
       {labelContent && (
         <div className="flex items-center gap-2">
           {labelContent}
-          {showHelpText && helpText && (
-            <div className="relative group">
+           {showHelpText && helpText && (
+            <span className="relative inline-block">
               <FaInfoCircle className="text-gray-500 hover:text-gray-700 cursor-pointer" />
-              <div className="absolute hidden group-hover:block bg-gray-800 text-white text-sm rounded p-2 w-48 z-10">
+              <span className="absolute left-1/2 z-20 -translate-x-1/2 mt-2 w-48 bg-gray-800 text-white text-xs rounded p-2 shadow-lg opacity-0 pointer-events-none transition-opacity duration-200
+                group-hover:opacity-100 group-hover:pointer-events-auto
+                hover:opacity-100 hover:pointer-events-auto"
+                style={{ top: '100%' }}
+              >
                 {helpText}
-              </div>
-            </div>
+              </span>
+            </span>
           )}
         </div>
       )}
@@ -511,11 +515,12 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     }
   };
 
-  const handleCut = (e) => {
-    e.stopPropagation();
-    setClipboard({ field, operation: 'cut' });
-    onUpdateField(id, { isCut: true });
-  };
+ const handleCut = (e) => {
+  e.stopPropagation();
+  if (clipboard.operation === 'cut') return; // Prevent cutting another field
+  setClipboard({ field, operation: 'cut' });
+  onUpdateField(id, { isCut: true });
+};
 
   const handleCopy = (e) => {
     e.stopPropagation();
@@ -560,17 +565,29 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </div>
       )}
       {children}
-      {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && (
+       {/* Paste Above/Below buttons, only if not cut/blurred */}
+    {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && !isCut && (
+      <div className="flex flex-col gap-1 w-full">
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handlePaste();
+            handlePaste('above');
           }}
-          className="w-full mt-1 text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
+          className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
         >
-          ------Paste here-------
+          ------Paste above-------
         </button>
-      )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePaste('below');
+          }}
+          className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
+        >
+          ------Paste below-------
+        </button>
+      </div>
+    )}
     </div>
   );
 
