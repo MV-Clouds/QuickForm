@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FormName from './FormName';
 
 const Home = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -8,6 +9,7 @@ const Home = () => {
   const [forms, setForms] = useState([]);
   const [selectedVersions, setSelectedVersions] = useState({});
   const [fetchError, setFetchError] = useState(null);
+  const [isFormNameOpen, setIsFormNameOpen] = useState(false);
   const navigate = useNavigate();
 
   const getStatusBadge = (form) => {
@@ -195,7 +197,7 @@ const Home = () => {
       navigate('/wizard');
     } else if (option === 'scratch') {
       setIsLoading(false);
-      alert('Build from Scratch is not implemented yet.');
+      setIsFormNameOpen(true);
     } else if (option === 'templates') {
       setIsLoading(false);
       alert('Use a Template is not implemented yet.');
@@ -600,6 +602,19 @@ const Home = () => {
           </div>
         )}
       </div>
+      {isFormNameOpen && (
+  <FormName
+    onClose={() => setIsFormNameOpen(false)}
+    fields={[
+      {
+        id: 'default-header',
+        type: 'header',
+        heading: 'Contact Form',
+        alignment: 'center',
+      },
+    ]}
+  />
+)}
     </div>
   );
 

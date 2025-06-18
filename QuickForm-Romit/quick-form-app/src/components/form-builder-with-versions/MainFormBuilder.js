@@ -22,9 +22,6 @@ function MainFormBuilder() {
   const [fetchFormError, setFetchFormError] = useState(null);
   const [currentFormVersion, setCurrentFormVersion] = useState(null);
   const navigate = useNavigate();
-  const [showFormNamePopup, setShowFormNamePopup] = useState(!formVersionId);
-  const [formName, setFormName] = useState('');
-  const [formNameError, setFormNameError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
 
   const [
@@ -263,48 +260,7 @@ function MainFormBuilder() {
     }
   }, [fields]);
 
-  const handleFormNameSubmit = async () => {
-    if (!formName.trim()) {
-      setFormNameError('Form name is required.');
-      return;
-    }
-    setIsSaving(true);
-    setFormNameError(null);
-    try {
-      const userId = sessionStorage.getItem('userId');
-      const instanceUrl = sessionStorage.getItem('instanceUrl');
-      const token = await fetchAccessToken(userId, instanceUrl);
-      if (!token) throw new Error('Failed to obtain access token.');
-      const { formVersion, formFields } = prepareFormData(true);
-      const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: instanceUrl.replace(/https?:\/\//, ''),
-          formData: { formVersion, formFields },
-        }),
-      });
-      const data = await response.json();
-      console.log('Form creation response:', data);
-      
-      if (!response.ok) throw new Error(data.error || 'Failed to create form.');
-      const newFormVersionId = data.formVersionId;
-      setCurrentFormVersion({ ...formVersion, Id: newFormVersionId, Fields: formFields });
-      setIsFirstSave(true);
-      setShowFormNamePopup(false);
-      navigate(`/form-builder/${newFormVersionId}`);
-    } catch (error) {
-      console.error('Error creating form:', error);
-      setFormNameError(error.message || 'Failed to create form.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
+  
   const prepareFormData = (isNewForm = false) => {
     const headerField = fields.find((f) => f.type === 'header');
     const nonHeaderFields = fields.filter((f) => f.type !== 'header');
@@ -324,7 +280,7 @@ function MainFormBuilder() {
       pages.push({ fields: currentPage, pageNumber });
     }
     const formVersion = {
-      Name: isNewForm ? formName : headerField?.heading || 'Contact Form',
+      Name: headerField?.heading || 'Contact Form',
       Description__c: '',
       Stage__c: 'Draft',
       Publish_Link__c: '',
@@ -947,31 +903,7 @@ function MainFormBuilder() {
           )}
         </div>
       </div>
-      {showFormNamePopup && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Enter Form Name</h2>
-              <button onClick={() => navigate('/home')} className="text-gray-500 hover:text-gray-700">×</button>
-            </div>
-            <input
-              type="text"
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              placeholder="Form Name"
-              className="w-full p-2 border rounded-md mb-4"
-            />
-            {formNameError && <p className="text-red-500 text-sm mb-4">{formNameError}</p>}
-            <button
-              onClick={handleFormNameSubmit}
-              disabled={isSaving}
-              className={`w-full p-2 bg-blue-600 text-white rounded-md ${isSaving ? 'opacity-50' : 'hover:bg-blue-700'}`}
-            >
-              {isSaving ? 'Creating...' : 'Create Form'}
-            </button>
-          </div>
-        </div>
-      )}
+     
     </div>
   );
 }

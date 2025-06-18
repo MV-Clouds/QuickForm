@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import FormName from './FormName';
 
 const itemVariants = {
   hidden: { opacity: 0, scale: 0.95, y: 10 }, // Animation variant for hidden state
@@ -20,6 +21,7 @@ const CreateFormWizard = () => {
   const [objectSearch, setObjectSearch] = useState(''); // State for object search input
   const [fieldSearch, setFieldSearch] = useState(''); // State for field search input
   const [accessToken, setAccessToken] = useState(null); // State for storing access token
+  const [isFormNameOpen, setIsFormNameOpen] = useState(false);
   const navigate = useNavigate(); // Hook for navigation
 
   // Memoize filtered metadata based on search input
@@ -331,7 +333,7 @@ const CreateFormWizard = () => {
       }
     }
 
-    navigate('/form-builder'); // Navigate to form builder page on successful submission
+    setIsFormNameOpen(true); 
   }, [selectedObjects, selectedFields, fieldsData, navigate]); // Dependencies for useCallback
 
   // Handle closing the wizard
@@ -340,6 +342,14 @@ const CreateFormWizard = () => {
   }, [navigate]); // Dependencies for useCallback
 
   // Main JSX return statement with comments for major sections
+  if (isFormNameOpen) {
+    return (
+      <FormName
+        onClose={() => setIsFormNameOpen(false)}
+        fields={[{ id: 'default-header', type: 'header', heading: 'Contact Form', alignment: 'center' }]}
+      />
+    );
+  }
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50"> {/* Overlay for modal */}
       {isLoading && ( // Loading overlay section
