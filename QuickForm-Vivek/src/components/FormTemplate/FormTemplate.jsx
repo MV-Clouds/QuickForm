@@ -1,113 +1,40 @@
 import { useState, useEffect } from 'react';
 import { X, SearchIcon, StarIcon, ArrowRightIcon, PlusIcon } from 'lucide-react';
-
+import { GetFormTemplate, useForms } from './getFormTemplate'
 const TemplatePicker = ({ onClose, onTemplateSelect }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState('Popular');
-
-  // Sample template data
-  const templates = [
-    {
-      id: 'blank',
-      title: 'Start from Scratch',
-      description: 'Build a custom form with drag-and-drop.',
-      category: 'All',
-      fields: 0,
-      isPopular: false,
-      isNew: true,
-      usageCount: 0,
-      completionRate: 0,
-      hasPayment: false,
-      hasConditionalLogic: false,
-      isMobileFriendly: true,
-    },
-    {
-      id: 'event-registration',
-      title: 'Event Registration',
-      description: 'Collect names, emails, and ticket choices.',
-      category: 'Registrations',
-      fields: 5,
-      isPopular: true,
+  const [templates, settemplates] = useState([]);
+  const formsData = useForms();
+  useEffect(()=>{
+    const templates = GetFormTemplate();
+    const cleanData = formsData?.records?.map((form) => ({
+      id: form.Id || form.Name?.toLowerCase().replace(/\s+/g, '-'),
+      title: form.Name || '',
+      description: form.Description__c || '',
+      category: form.Category__c || 'Other',
+      fields: form.Form_Field__c ? Number(form.Form_Field__c) : 0,
+      isPopular: !!form.Usage_Count__c && form.Usage_Count__c > 1000,
       isNew: false,
-      usageCount: 1200,
-      completionRate: 90,
-      hasPayment: true,
-      hasConditionalLogic: true,
+      usageCount: form.Usage_Count__c || 0,
+      completionRate: form.Complete_Rate__c || 0,
+      hasPayment: !!form.hasPayment__c,
+      hasConditionalLogic: !!form.hasConditionalLogic__c,
       isMobileFriendly: true,
-    },
-    {
-      id: 'customer-feedback',
-      title: 'Customer Feedback',
-      description: 'Gather product reviews and satisfaction ratings.',
-      category: 'Surveys',
-      fields: 7,
-      isPopular: true,
-      isNew: false,
-      usageCount: 850,
-      completionRate: 78,
-      hasPayment: false,
-      hasConditionalLogic: false,
-      isMobileFriendly: true,
-    },
-    {
-      id: 'contact-form',
-      title: 'Contact Form',
-      description: 'Basic form for website visitor inquiries.',
-      category: 'Contact',
-      fields: 4,
-      isPopular: false,
-      isNew: false,
-      usageCount: 3200,
-      completionRate: 95,
-      hasPayment: false,
-      hasConditionalLogic: false,
-      isMobileFriendly: true,
-    },
-    {
-      id: 'job-application',
-      title: 'Job Application',
-      description: 'Collect resumes and candidate information.',
-      category: 'HR',
-      fields: 8,
-      isPopular: false,
-      isNew: true,
-      usageCount: 150,
-      completionRate: 65,
-      hasPayment: false,
-      hasConditionalLogic: true,
-      isMobileFriendly: true,
-    },
-    {
-      id: 'course-enrollment',
-      title: 'Course Enrollment',
-      description: 'Register students for classes with payment.',
-      category: 'Education',
-      fields: 6,
-      isPopular: false,
-      isNew: false,
-      usageCount: 420,
-      completionRate: 88,
-      hasPayment: true,
-      hasConditionalLogic: false,
-      isMobileFriendly: true,
-    },
-  ];
-
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, []);
+    }));
+    settemplates(cleanData);
+    console.log('Form from salesforce ' , cleanData);
+    if(cleanData) setIsLoading(false);
+  },[formsData])
+ 
 
   // Filter templates based on search, category, etc.
-  const filteredTemplates = templates.filter(template => {
-    const matchesSearch = template.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         template.description.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredTemplates = templates?.filter(template => {
+    const matchesSearch = template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = activeCategory === 'All' || template.category === activeCategory;
     return matchesSearch && matchesCategory;
   }).sort((a, b) => {
@@ -127,7 +54,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Darkened overlay */}
       <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={onClose}></div>
-      
+
       {/* Modal container */}
       <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
@@ -146,7 +73,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 <X className="h-6 w-6 text-gray-500" />
               </button>
             </div>
-            
+
             {/* Search and filters */}
             <div className="mt-6">
               <div className="relative">
@@ -161,7 +88,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              
+
               <div className="mt-4 flex items-center justify-between">
                 {/* Category tabs */}
                 <div className="relative">
@@ -170,18 +97,17 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                       <button
                         key={category}
                         onClick={() => setActiveCategory(category)}
-                        className={`px-4 py-2 text-sm font-medium rounded-full whitespace-nowrap transition-colors ${
-                          activeCategory === category
+                        className={`px-4 py-2 text-sm font-medium rounded-full whitespace-nowrap transition-colors ${activeCategory === category
                             ? 'bg-blue-100 text-blue-700'
                             : 'text-gray-600 hover:bg-gray-100'
-                        }`}
+                          }`}
                       >
                         {category}
                       </button>
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Sort dropdown */}
                 <div className="flex items-center">
                   <label htmlFor="sort" className="mr-2 text-sm text-gray-600">Sort by:</label>
@@ -198,7 +124,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 </div>
               </div>
             </div>
-            
+
             {/* Template grid */}
             <div className="mt-8">
               {isLoading ? (
@@ -210,6 +136,13 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                         <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                         <div className="h-3 bg-gray-200 rounded w-full"></div>
                         <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                        <div className="flex gap-2 mt-4">
+                          <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                          <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                        </div>
+                        <div className="mt-6">
+                          <div className="h-8 bg-blue-100 rounded w-full"></div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -228,9 +161,8 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                     <div
                       key={template.id}
                       onClick={() => setSelectedTemplate(template)}
-                      className={`bg-white rounded-lg overflow-hidden shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-100 hover:scale-[1.02] transition-all duration-200 cursor-pointer flex flex-col ${
-                        selectedTemplate?.id === template.id ? 'ring-2 ring-blue-500' : ''
-                      }`}
+                      className={`bg-white rounded-lg overflow-hidden shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-100 hover:scale-[1.02] transition-all duration-200 cursor-pointer flex flex-col ${selectedTemplate?.id === template.id ? 'ring-2 ring-blue-500' : ''
+                        }`}
                     >
                       {template.id === 'blank' ? (
                         <div className="flex items-center justify-center h-32 bg-gray-50">
@@ -250,7 +182,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                           </div>
                         </div>
                       )}
-                      
+
                       <div className="p-4 flex-grow flex flex-col">
                         <div className="flex justify-between items-start">
                           <h3 className="text-lg font-medium text-gray-900">{template.title}</h3>
@@ -262,7 +194,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                           )}
                         </div>
                         <p className="mt-1 text-sm text-gray-500">{template.description}</p>
-                        
+
                         <div className="mt-3 flex flex-wrap gap-2">
                           {template.fields > 0 && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
@@ -280,7 +212,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                             </span>
                           )}
                         </div>
-                        
+
                         <div className="mt-auto pt-4">
                           <button
                             onClick={(e) => {
@@ -301,7 +233,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
           </div>
         </div>
       </div>
-      
+
       {/* Template preview side panel */}
       {selectedTemplate && (
         <div className="fixed inset-y-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out translate-x-0">
@@ -315,7 +247,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 <X className="h-6 w-6 text-gray-500" />
               </button>
             </div>
-            
+
             <div className="flex-grow overflow-y-auto p-6">
               <div className="bg-blue-50 p-4 rounded-lg mb-4">
                 <div className="bg-white p-4 rounded shadow-xs">
@@ -345,7 +277,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   )}
                 </div>
               </div>
-              
+
               <div className="mb-6">
                 <h4 className="text-sm font-medium text-gray-900 mb-2">Fields in this template</h4>
                 <ul className="space-y-2">
@@ -361,7 +293,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   )}
                 </ul>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-50 p-3 rounded">
                   <p className="text-xs text-gray-500">Used</p>
@@ -377,14 +309,14 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   <p className="font-medium">{selectedTemplate.completionRate}%</p>
                 </div>
               </div>
-              
+
               {selectedTemplate.hasPayment && (
                 <div className="bg-blue-50 p-3 rounded mb-6">
                   <p className="text-sm font-medium text-blue-800">Includes payment integration</p>
                   <p className="text-xs text-blue-600 mt-1">Stripe or PayPal ready</p>
                 </div>
               )}
-              
+
               {selectedTemplate.hasConditionalLogic && (
                 <div className="bg-purple-50 p-3 rounded mb-6">
                   <p className="text-sm font-medium text-purple-800">Includes conditional logic</p>
@@ -392,7 +324,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 </div>
               )}
             </div>
-            
+
             <div className="p-6 border-t border-gray-200 bg-gray-50">
               <div className="grid grid-cols-2 gap-3">
                 <button

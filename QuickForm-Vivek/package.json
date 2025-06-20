@@ -7,6 +7,7 @@
     "serve": "vite preview"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.4",
     "@tailwindcss/forms": "^0.3.2",
     "@tanstack/react-table": "^8.21.3",
     "crypto-js": "^4.2.0",
@@ -20,6 +21,7 @@
     "react-hook-form": "^7.57.0",
     "react-icons": "^5.5.0",
     "react-input-mask": "^2.0.4",
+    "react-intersection-observer": "^9.16.0",
     "react-markdown": "^10.1.0",
     "react-phone-input-2": "^2.15.1",
     "react-quill": "^2.0.0",

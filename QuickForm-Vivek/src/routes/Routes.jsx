@@ -10,23 +10,48 @@ import Sidebar from '@/components/Bar';
 import FormTemplate from '@/components/FormTemplate/FormTemplate';
 import { ChatBotProvider } from '@/components/FormCreation/ChatBotContext';
 import Mainflow from '@/components/mainFlow';
+import GuestPage from '@/components/LandingPage/GuestPage';
+import GuestPageC from '@/components/LandingPage/GuestPageC';
+import GuestPageD from '@/components/LandingPage/GuestPageD';
 export default function AllRoutes() {
   return (
     <FormErrorBoundary>
-    <Router>
-      <ChatBotProvider>
-      <Sidebar/>
-      <ChatBot /> 
-        <Routes>
-        <Route path='/' element={<Home />} />
-        <Route path='/fields' element={<MainFormBuilder />} />
-        <Route path='/notification' element={<NotificationSettings />} />
-        <Route path='/thankyou' element={<ThankYou />} />
-        <Route path='/template' element={<FormTemplate />} />
-        <Route path='/flow' element={<Mainflow />} />
-      </Routes>
-      </ChatBotProvider>
-    </Router>
+      <Router>
+        <ChatBotProvider>
+          <ChatBot />
+          <Routes>
+            <Route path='/home' element={
+              <>
+                <Sidebar />
+                <Home />
+              </>
+            } />
+            <Route path='/guest' element={<GuestPage />} />
+            <Route path='/guest2' element={<GuestPageC />} />
+            <Route path='/' element={<GuestPageD />} />
+            <Route path='/fields' element={
+              <>
+                <Sidebar />
+                <MainFormBuilder />
+              </>
+            } />
+            <Route path='/notification' element={<NotificationSettings />} />
+            <Route path='/thankyou' element={<ThankYou />} />
+            <Route path='/template' element={
+              <>
+                <Sidebar />
+                <FormTemplate />
+              </>
+            } />
+            <Route path='/flow' element={
+              <>
+                <Sidebar />
+                <Mainflow />
+              </>
+            } />
+          </Routes>
+        </ChatBotProvider>
+      </Router>
     </FormErrorBoundary>
   );
 }

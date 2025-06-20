@@ -922,29 +922,30 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 placeholder={placeholder.main || 'Enter long text'}
               />
             ) : (
-              <textarea
-                className="w-full p-2 border rounded"
-                rows="4"
-                placeholder={placeholder.main || 'Enter long text'}
-                maxLength={longTextMaxChars || 131072}
-                value={plainTextValue}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (!longTextMaxChars || value.length <= longTextMaxChars) {
-                    setPlainTextValue(value);
-                    setRichTextValue(textToHtml(value));
-                    if (onUpdateField) {
-                      onUpdateField(id, { value: textToHtml(value) });
+              <div>
+                <textarea
+                  className="w-full p-2 border rounded"
+                  rows="4"
+                  placeholder={placeholder.main || 'Enter long text'}
+                  maxLength={longTextMaxChars || 131072}
+                  value={plainTextValue}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!longTextMaxChars || value.length <= longTextMaxChars) {
+                      setPlainTextValue(value);
+                      setRichTextValue(textToHtml(value));
+                      if (onUpdateField) {
+                        onUpdateField(id, { value: textToHtml(value) });
+                      }
                     }
-                  }
-                }}
-                readOnly={isDisabled}
-              />
-            )}
-            {longTextMaxChars && (
-              <p className="text-sm text-gray-500 mt-1">
-                Characters: {plainTextValue.length}/{longTextMaxChars}
-              </p>
+                  }}
+                  readOnly={isDisabled}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Words: {plainTextValue.trim() ? plainTextValue.trim().split(/\s+/).length : 0}</span>
+                  <span>Characters: {plainTextValue.length}{longTextMaxChars ? ` / ${longTextMaxChars}` : ''}</span>
+                </div>
+              </div>
             )}
           </FieldWrapper>
         </SelectionWrapper>
