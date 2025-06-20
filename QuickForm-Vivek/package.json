@@ -12,6 +12,7 @@
     "@tanstack/react-table": "^8.21.3",
     "crypto-js": "^4.2.0",
     "emoji-picker-react": "^4.12.2",
+    "express": "^5.1.0",
     "framer-motion": "^12.17.1",
     "libphonenumber-js": "^1.12.9",
     "lucide-react": "^0.513.0",
@@ -30,6 +31,7 @@
     "react-signature-canvas": "^1.1.0-alpha.2",
     "reactflow": "^11.11.4",
     "rsuite": "^5.82.0",
+    "twilio": "^5.7.1",
     "use-undo": "^1.1.1"
   },
   "devDependencies": {
