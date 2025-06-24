@@ -51,7 +51,6 @@ function App() {
             path="/mapping"
             element={<ProtectedRoute element={<Mapping />} />}
           />
-
           <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
         </Routes>
       </div>

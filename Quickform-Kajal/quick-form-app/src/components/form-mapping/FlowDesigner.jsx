@@ -3,6 +3,7 @@ import ReactFlow, { useNodesState, useEdgesState, addEdge, Controls, Background,
 import { motion, AnimatePresence } from "framer-motion";
 import "reactflow/dist/style.css";
 
+
 const CustomNode = ({ data, selected, id }) => {
   const [isHovered, setIsHovered] = useState(false);
 

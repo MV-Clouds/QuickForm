@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 
 function MainMenuBar({ isSidebarOpen, toggleSidebar, selectedObjects, selectedFields, fieldsData, formVersionId}) {
   const navigate = useNavigate();
-  console.log('formVersionId in main menu==> ',formVersionId);
   
   const handleMappingClick = () => {
     navigate('/mapping', {

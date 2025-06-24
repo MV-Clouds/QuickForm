@@ -6,6 +6,7 @@ import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
 import { XMarkIcon } from '@heroicons/react/24/solid';
 
+
 const Sidebar = ({ onDragStart }) => {
   const actions = ["Create/Update", "Find"];
   const utilities = ["Formatter", "Filter", "Path", "Loop"];

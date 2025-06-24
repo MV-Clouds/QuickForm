@@ -6,7 +6,6 @@ import timezones from "timezones-list";
 import countries from "i18n-iso-countries";
 import currencyCodes from "currency-codes";
 
-// Initialize i18n-iso-countries with English locale
 countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
 
 const ActionPanel = ({

@@ -9,6 +9,7 @@ const itemVariants = {
   exit: { opacity: 0, scale: 0.95, y: -10 }, // Animation variant for exit state
 };
 
+
 const CreateFormWizard = () => {
   const [step, setStep] = useState(1); // State for tracking current step (1 or 2)
   const [selectedObjects, setSelectedObjects] = useState([]); // State for storing selected object names

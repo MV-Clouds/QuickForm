@@ -3,6 +3,7 @@ import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 const METADATA_TABLE_NAME = 'SalesforceMetadata';
 
+
 export const handler = async (event) => {
   try {
     console.log('Received event:', JSON.stringify(event, null, 2));

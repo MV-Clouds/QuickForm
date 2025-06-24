@@ -10,6 +10,7 @@ import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
 
+
 function MainFormBuilder() {
   const { formVersionId } = useParams();
   const [formId, setFormId] = useState(null);
