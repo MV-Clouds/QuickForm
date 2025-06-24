@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react';
-import { X, SearchIcon, StarIcon, ArrowRightIcon, PlusIcon } from 'lucide-react';
+import { X, SearchIcon, StarIcon, ArrowRightIcon, PlusIcon, GitMergeIcon, SmartphoneIcon, CreditCardIcon, ListIcon, FolderIcon, UsersIcon, SparklesIcon, SquareIcon, UploadIcon, CircleIcon, CheckSquareIcon, ChevronDownIcon, PhoneIcon, MailIcon, UserIcon, BookTemplateIcon } from 'lucide-react';
 import { GetFormTemplate, useForms } from './getFormTemplate'
+import './style.css'
 const TemplatePicker = ({ onClose, onTemplateSelect }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('Popular');
+  const [sortBy, setSortBy] = useState('Newest');
   const [templates, settemplates] = useState([]);
   const formsData = useForms();
-  useEffect(()=>{
+  useEffect(() => {
     const templates = GetFormTemplate();
+    console.log('Temp Data', templates);
+
     const cleanData = formsData?.records?.map((form) => ({
-      id: form.Id || form.Name?.toLowerCase().replace(/\s+/g, '-'),
-      title: form.Name || '',
+      id: form.Id || form.formname?.toLowerCase().replace(/\s+/g, '-'),
+      title: form.formname || '',
       description: form.Description__c || '',
       category: form.Category__c || 'Other',
       fields: form.Form_Field__c ? Number(form.Form_Field__c) : 0,
@@ -25,29 +28,50 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
       hasConditionalLogic: !!form.hasConditionalLogic__c,
       isMobileFriendly: true,
     }));
-    settemplates(cleanData);
-    console.log('Form from salesforce ' , cleanData);
-    if(cleanData) setIsLoading(false);
-  },[formsData])
- 
+    settemplates(templates);
+    console.log(templates);
+    console.log('Form from salesforce ', cleanData);
+    //  show loading for at least 1 second
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+
+    // If data loads after 1s, clear loading
+    if (templates || cleanData) {
+      setTimeout(() => setIsLoading(false), 1000);
+    }
+
+    return () => clearTimeout(timer);
+  }, [formsData])
+
 
   // Filter templates based on search, category, etc.
   const filteredTemplates = templates?.filter(template => {
-    const matchesSearch = template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = template.formname.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.Description__c.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = activeCategory === 'All' || template.category === activeCategory;
     return matchesSearch && matchesCategory;
   }).sort((a, b) => {
     if (sortBy === 'Popular') return (b.isPopular ? 1 : 0) - (a.isPopular ? 1 : 0) || b.usageCount - a.usageCount;
     if (sortBy === 'Newest') return (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0);
-    return a.title.localeCompare(b.title);
+    return a.formname.localeCompare(b.formname);
   });
 
-  const categories = ['All', 'Surveys', 'Registrations', 'Contact', 'Payments', 'HR', 'Education'];
+  // Extract unique categories from templates for the category filter
+  const categories = [
+    'All',
+    ...Array.from(
+      new Set(
+        templates
+          .map((t) => t.category)
+          .filter((c) => !!c)
+      )
+    ),
+  ];
 
   const handleUseTemplate = (template) => {
     onTemplateSelect(template);
-    onClose();
+    // onClose();
   };
 
   return (
@@ -98,8 +122,8 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                         key={category}
                         onClick={() => setActiveCategory(category)}
                         className={`px-4 py-2 text-sm font-medium rounded-full whitespace-nowrap transition-colors ${activeCategory === category
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'text-gray-600 hover:bg-gray-100'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'text-gray-600 hover:bg-gray-100'
                           }`}
                       >
                         {category}
@@ -117,8 +141,8 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                   >
-                    <option value="Popular">Popular</option>
                     <option value="Newest">Newest</option>
+                    <option value="Popular">Popular</option>
                     <option value="A-Z">A-Z</option>
                   </select>
                 </div>
@@ -160,45 +184,140 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   {filteredTemplates.map((template) => (
                     <div
                       key={template.id}
-                      onClick={() => setSelectedTemplate(template)}
-                      className={`bg-white rounded-lg overflow-hidden shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-100 hover:scale-[1.02] transition-all duration-200 cursor-pointer flex flex-col ${selectedTemplate?.id === template.id ? 'ring-2 ring-blue-500' : ''
-                        }`}
+                      className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col h-full"
                     >
-                      {template.id === 'blank' ? (
-                        <div className="flex items-center justify-center h-32 bg-gray-50">
-                          <PlusIcon className="h-12 w-12 text-blue-500" />
-                        </div>
-                      ) : (
-                        <div className="h-32 bg-blue-50 flex items-center justify-center">
-                          <div className="w-3/4 bg-white p-2 rounded shadow-xs">
-                            <div className="h-3 bg-gray-200 mb-2 rounded w-full"></div>
-                            <div className="h-3 bg-gray-200 mb-2 rounded w-3/4"></div>
-                            <div className="h-3 bg-gray-200 mb-2 rounded w-1/2"></div>
-                            {template.hasPayment && (
-                              <div className="mt-3 pt-2 border-t border-gray-100">
-                                <div className="h-3 bg-green-200 rounded w-1/3"></div>
+                      {/* Form Preview Section with Auto-scroll */}
+                      <div className="relative group h-48 bg-gradient-to-br from-blue-50 to-indigo-50 overflow-hidden p-4">
+                        <div className="bg-white rounded-lg shadow-xs border border-gray-200 w-full h-full overflow-hidden">
+                          <div className="group-hover:animate-scrollUp p-4 space-y-4">
+                            {/* Form Header */}
+                            <div className="text-center pb-2 border-b border-gray-100">
+                              <h3 className="text-lg font-medium text-gray-800">{template.formname}</h3>
+                              {template.Description__c && (
+                                <p className="text-xs text-gray-500 mt-1">{template.Description__c}</p>
+                              )}
+                            </div>
+
+                            {/* Form Fields */}
+                            {template.formFields && template.formFields.length > 0 ? (
+                              <div className="space-y-4">
+                                {template.formFields.map((field, idx) => (
+                                  <div key={`${template.id}-${idx}`} className="space-y-1">
+                                    <label className="block text-sm font-medium text-gray-700">
+                                      {field.Name}
+                                      {field.Properties__c?.Properties__c?.required && (
+                                        <span className="text-red-500 ml-1">*</span>
+                                      )}
+                                    </label>
+
+                                    {field.Field_Type__c === 'fullname' && (
+                                      <input
+                                        type="text"
+                                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="John Doe"
+                                      />
+                                    )}
+
+                                    {field.Field_Type__c === 'email' && (
+                                      <input
+                                        type="email"
+                                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="your@email.com"
+                                      />
+                                    )}
+
+                                    {field.Field_Type__c === 'dropdown' && (
+                                      <select className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        {field.Properties__c?.options?.map((option, i) => (
+                                          <option key={i}>{option}</option>
+                                        ))}
+                                      </select>
+                                    )}
+
+                                    {field.Field_Type__c === 'checkbox' && (
+                                      <div className="space-y-2">
+                                        {field.Properties__c?.options?.map((option, i) => (
+                                          <div key={i} className="flex items-center">
+                                            <input
+                                              type="checkbox"
+                                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <label className="ml-2 block text-sm text-gray-700">{option}</label>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {field.Field_Type__c === 'radio' && (
+                                      <div className="space-y-2">
+                                        {field.Properties__c?.options?.map((option, i) => (
+                                          <div key={i} className="flex items-center">
+                                            <input
+                                              type="radio"
+                                              className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <label className="ml-2 block text-sm text-gray-700">{option}</label>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {field.Field_Type__c === 'longtext' && (
+                                      <textarea
+                                        rows={3}
+                                        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder={field.Properties__c?.placeholder?.main || ''}
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+
+                                {/* Form Submit Button */}
+                                <div className="pt-4 border-t border-gray-100">
+                                  <button
+                                    type="button"
+                                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                  >
+                                    Submit
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-8">
+                                <p className="text-sm text-gray-500">No fields configured</p>
                               </div>
                             )}
                           </div>
                         </div>
-                      )}
+                      </div>
 
+                      {/* Details Section */}
                       <div className="p-4 flex-grow flex flex-col">
                         <div className="flex justify-between items-start">
-                          <h3 className="text-lg font-medium text-gray-900">{template.title}</h3>
-                          {template.isPopular && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              <StarIcon className="h-3 w-3 mr-1" />
-                              Popular
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-sm text-gray-500">{template.description}</p>
+                          <h3 className="text-lg font-semibold text-gray-900">{template.formname}</h3>
 
+                          {/* Badges */}
+                          <div className="flex space-x-1">
+                            {template.isPopular && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <StarIcon className="h-3 w-3 mr-1" />
+                              </span>
+                            )}
+                            {template.isNew && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                New
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="mt-2 text-sm text-gray-600 line-clamp-2">{template.Description__c}</p>
+
+                        {/* Features */}
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {template.fields > 0 && (
+                          {template.formFields?.length > 0 && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                              {template.fields} fields
+                              {template.formFields.length} fields
                             </span>
                           )}
                           {template.hasPayment && (
@@ -213,17 +332,16 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                           )}
                         </div>
 
-                        <div className="mt-auto pt-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUseTemplate(template);
-                            }}
-                            className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                          >
-                            {template.id === 'blank' ? 'Start Blank' : 'Use Template'}
-                          </button>
-                        </div>
+                        {/* Use Template Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUseTemplate(template);
+                          }}
+                          className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                        >
+                          {template.id === 'blank' ? 'Start Blank' : 'Use Template'}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -239,7 +357,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
         <div className="fixed inset-y-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out translate-x-0">
           <div className="h-full flex flex-col">
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">{selectedTemplate.title}</h3>
+              <h3 className="text-lg font-medium text-gray-900">{selectedTemplate.formname}</h3>
               <button
                 onClick={() => setSelectedTemplate(null)}
                 className="p-1 rounded-md hover:bg-gray-100 focus:outline-none transition-colors"
@@ -284,12 +402,34 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   {selectedTemplate.id === 'blank' ? (
                     <li className="text-sm text-gray-500">No predefined fields</li>
                   ) : (
-                    Array.from({ length: selectedTemplate.fields }, (_, i) => (
-                      <li key={i} className="flex items-center text-sm text-gray-600">
-                        <ArrowRightIcon className="h-4 w-4 text-gray-400 mr-2" />
-                        Field {i + 1} ({['Text', 'Email', 'Dropdown', 'Checkbox'][i % 4]})
-                      </li>
-                    ))
+                    selectedTemplate.formFields.map((t, i) => {
+                      return (
+                        <li
+                          key={i}
+                          className="flex items-center gap-4 py-3 px-4 rounded-xl bg-gradient-to-r from-blue-50 via-white to-blue-50 shadow-md hover:shadow-lg hover:scale-[1.03] transition-all border border-blue-200"
+                        >
+                          <span className="flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-400 text-white font-bold text-base shadow-lg border-2 border-white">
+                            {`${i + 1}`}
+                          </span>
+                          <div className="flex flex-col flex-grow">
+                            <span className="font-semibold text-gray-900 text-base leading-tight">
+                              {t.formname || `Field ${i + 1}`}
+                            </span>
+                            <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 tracking-wide shadow">
+                              {t.Field_Type__c || "Field"}
+                            </span>
+                            {t.Properties__c?.description && (
+                              <span className="block mt-1 text-xs text-gray-500 italic">{t.Properties__c.description}</span>
+                            )}
+                          </div>
+                          {t.Properties__c?.required && (
+                            <span className="ml-2 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold shadow">
+                              Required
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })
                   )}
                 </ul>
               </div>
@@ -306,7 +446,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 </div>
                 <div className="bg-gray-50 p-3 rounded">
                   <p className="text-xs text-gray-500">Completion rate</p>
-                  <p className="font-medium">{selectedTemplate.completionRate}%</p>
+                  <p className="font-medium">{selectedTemplate.completionRate}</p>
                 </div>
               </div>
 
@@ -330,7 +470,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 <button
                   onClick={() => {
                     onTemplateSelect(selectedTemplate);
-                    onClose();
+                    // onClose();
                   }}
                   className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                 >
@@ -339,7 +479,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 <button
                   onClick={() => {
                     onTemplateSelect(selectedTemplate);
-                    onClose();
+                    // onClose();
                     // In a real app, you would navigate to the editor with customization mode
                   }}
                   className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"

@@ -7,7 +7,7 @@ import NotificationSettings from '@/components/NotificationSettings/Notification
 import ThankYou from '@/components/Thankyou/ThankYou';
 import ChatBot from '@/components/chat-bot/chat-bot-new';
 import Sidebar from '@/components/Bar';
-import FormTemplate from '@/components/FormTemplate/FormTemplate';
+import FormTemplate from '@/components/FormTemplate/MainTemplate';
 import { ChatBotProvider } from '@/components/FormCreation/ChatBotContext';
 import Mainflow from '@/components/mainFlow';
 import GuestPage from '@/components/LandingPage/GuestPage';
