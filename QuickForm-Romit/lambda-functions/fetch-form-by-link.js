@@ -2,7 +2,7 @@
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   // Parse the request body
@@ -20,10 +20,10 @@ export const handler = async (event) => {
     };
   }
 
-  const { userId, instanceUrl, formVersionId, accessToken } = body;
+  const { userId, formVersionId, accessToken } = body;
 
   // Validate required parameters
-  if (!userId || !instanceUrl || !formVersionId || !accessToken) {
+  if (!userId || !formVersionId || !accessToken) {
     return {
       statusCode: 400,
       headers: {
@@ -31,12 +31,21 @@ export const handler = async (event) => {
         'Access-Control-Allow-Origin': '*',
       },
       body: JSON.stringify({
-        error: 'Missing userId, instanceUrl, formVersionId, or accessToken',
+        error: 'Missing userId, formVersionId, or accessToken',
       }),
     };
   }
 
   try {
+    const dataForInstance = await dynamoClient.send(
+      new GetItemCommand({
+        TableName: METADATA_TABLE_NAME,
+        Key: {
+          UserId: { S: userId },
+        },
+      })
+    );
+    const instanceUrl = dataForInstance.Item.InstanceUrl.S;
     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
 
     // Fetch metadata from DynamoDB
@@ -44,7 +53,6 @@ export const handler = async (event) => {
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
         },
       })

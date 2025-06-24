@@ -37,16 +37,16 @@ function PublicFormViewer() {
       try {
         let decrypted;
         try {
-          decrypted = JSON.parse(decrypt(decodeURIComponent(linkId)));
+          decrypted = JSON.parse(decrypt(linkId));
         } catch (e) {
-          throw new Error('Invalid or corrupted link');
+          throw new Error(e.message || 'Invalid link format');
         }
 
-        const { userId, instanceUrl, formVersionId } = decrypted;
-        if (!userId || !instanceUrl || !formVersionId) {
+        const { userId, formVersionId } = decrypted;
+        if (!userId || !formVersionId) {
           throw new Error('Invalid link data');
         }
-        setLinkData({ userId, instanceUrl, formVersionId });
+        setLinkData({ userId, formVersionId });
 
         const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
           method: 'POST',
@@ -55,7 +55,7 @@ function PublicFormViewer() {
           },
           body: JSON.stringify({
             userId,
-            instanceUrl,
+            
           }),
         });
 
@@ -73,7 +73,6 @@ function PublicFormViewer() {
           },
           body: JSON.stringify({
             userId,
-            instanceUrl,
             formVersionId,
             accessToken: token,
           }),
@@ -331,7 +330,6 @@ function PublicFormViewer() {
     formData.append('file', file);
     formData.append('submissionId', submissionId);
     formData.append('userId', linkData.userId);
-    formData.appendcidas('instanceUrl', linkData.instanceUrl);
 
     const response = await fetch(process.env.REACT_APP_UPLOAD_DOCUMENT_URL, {
       method: 'POST',
@@ -388,7 +386,6 @@ function PublicFormViewer() {
         },
         body: JSON.stringify({
           userId: linkData.userId,
-          instanceUrl: linkData.instanceUrl,
           submissionData: {
             formId: formData.Form__c,
             formVersionId: formData.Id,

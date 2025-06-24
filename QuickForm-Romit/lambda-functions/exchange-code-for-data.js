@@ -6,15 +6,14 @@ import {
 import {
   DynamoDBClient,
   PutItemCommand,
-  QueryCommand,
   GetItemCommand
 } from '@aws-sdk/client-dynamodb';
 
 const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const TOKEN_TABLE_NAME = 'SalesforceAuthTokens';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   // Extract query parameters from the Lambda event
@@ -41,27 +40,24 @@ export const handler = async (event) => {
 
     // 1. Upsert token to DynamoDB (similar to the iframe flow)
     const tokenItem = {
-      InstanceUrl: { S: cleanedInstanceUrl },
       UserId: { S: userId },
+      InstanceUrl: { S: cleanedInstanceUrl },
       RefreshToken: { S: refresh_token || '' },
       AccessToken: { S: access_token },
       CreatedAt: { S: currentTime },
       UpdatedAt: { S: currentTime },
     };
-
     const queryResponse = await dynamoClient.send(
-      new QueryCommand({
+      new GetItemCommand({
         TableName: TOKEN_TABLE_NAME,
-        IndexName: 'UserId-InstanceUrl-Index',
-        KeyConditionExpression: 'UserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: userId },
+        Key: {
+          UserId: { S: userId },
         },
       })
     );
-
-    if (queryResponse.Items && queryResponse.Items.length > 0) {
-      tokenItem.CreatedAt = queryResponse.Items[0].CreatedAt || { S : currentTime};
+    
+    if (queryResponse.Item) {
+      tokenItem.CreatedAt = queryResponse.Item.CreatedAt || { S : currentTime};
     }
     
     await dynamoClient.send(
@@ -195,7 +191,6 @@ export const handler = async (event) => {
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
         },
       })
@@ -230,8 +225,8 @@ export const handler = async (event) => {
     // 5. Only write metadata if it has changed
     if (!isSameMetadata || !isSameFormRecords) {
       const itemToWrite = {
-        InstanceUrl: { S: cleanedInstanceUrl },
         UserId: { S: userId },
+        InstanceUrl: { S: cleanedInstanceUrl },
         Metadata: { S: JSON.stringify(metadata) },
         FormRecords: { S: JSON.stringify(formRecords) },
         CreatedAt: {

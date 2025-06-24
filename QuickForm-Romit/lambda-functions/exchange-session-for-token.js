@@ -6,7 +6,6 @@ import {
 import {
   DynamoDBClient,
   PutItemCommand,
-  QueryCommand,
   GetItemCommand
 } from '@aws-sdk/client-dynamodb';
 
@@ -15,8 +14,8 @@ import jwt from 'jsonwebtoken';
 const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const TOKEN_TABLE_NAME = 'SalesforceAuthTokens';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   const { sessionId, userId, username, audience } = event;
@@ -35,18 +34,16 @@ export const handler = async (event) => {
 
     // 1. Try to reuse existing access token
     const existingTokenRes = await dynamoClient.send(
-      new QueryCommand({
+      new GetItemCommand({
         TableName: TOKEN_TABLE_NAME,
-        IndexName: 'UserId-InstanceUrl-Index',
-        KeyConditionExpression: 'UserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: userId },
+        Key: {
+          UserId: { S: userId },
         },
       })
     );
 
-    if (existingTokenRes.Items && existingTokenRes.Items.length > 0) {
-      const item = existingTokenRes.Items[0];
+    if (existingTokenRes.Item) {
+      const item = existingTokenRes.Item;
       access_token = item.AccessToken?.S;
       refresh_token = item.RefreshToken?.S || '';
       cleanedInstanceUrl = item.InstanceUrl?.S;
@@ -118,8 +115,8 @@ export const handler = async (event) => {
 
       // 4. Upsert new token to DynamoDB
       const tokenItem = {
-        InstanceUrl: { S: cleanedInstanceUrl },
         UserId: { S: userId },
+        InstanceUrl: { S: cleanedInstanceUrl },
         RefreshToken: { S: refresh_token },
         AccessToken: { S: access_token },
         CreatedAt: { S: currentTime },
@@ -247,7 +244,6 @@ export const handler = async (event) => {
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
         },
       })
@@ -283,8 +279,8 @@ export const handler = async (event) => {
         new PutItemCommand({
           TableName: METADATA_TABLE_NAME,
           Item: {
-            InstanceUrl: { S: cleanedInstanceUrl },
             UserId: { S: userId },
+            InstanceUrl: { S: cleanedInstanceUrl },
             Metadata: { S: JSON.stringify(metadata) },
             FormRecords: { S: JSON.stringify(formRecords) },
             CreatedAt: {

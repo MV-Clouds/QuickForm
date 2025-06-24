@@ -1,7 +1,7 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   try {
@@ -36,7 +36,6 @@ export const handler = async (event) => {
           new GetItemCommand({
             TableName: METADATA_TABLE_NAME,
             Key: {
-              InstanceUrl: { S: cleanedInstanceUrl },
               UserId: { S: userId },
             },
           })
@@ -72,7 +71,6 @@ export const handler = async (event) => {
         new GetItemCommand({
           TableName: METADATA_TABLE_NAME,
           Key: {
-            InstanceUrl: { S: cleanedInstanceUrl },
             UserId: { S: userId },
           },
         })
@@ -128,7 +126,6 @@ export const handler = async (event) => {
         new GetItemCommand({
           TableName: METADATA_TABLE_NAME,
           Key: {
-            InstanceUrl: { S: cleanedInstanceUrl },
             UserId: { S: userId },
           },
         })
@@ -159,8 +156,8 @@ export const handler = async (event) => {
       new PutItemCommand({
         TableName: METADATA_TABLE_NAME,
         Item: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
+          InstanceUrl: { S: cleanedInstanceUrl },
           Metadata: { S: existingMetadataRes.Item?.Metadata?.S || '{}' },
           FormRecords: { S: JSON.stringify(updatedFormRecords) },
           CreatedAt: { S: existingMetadataRes.Item?.CreatedAt?.S || currentTime },
@@ -377,7 +374,6 @@ export const handler = async (event) => {
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
         },
       })
@@ -449,8 +445,8 @@ export const handler = async (event) => {
       new PutItemCommand({
         TableName: METADATA_TABLE_NAME,
         Item: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
+          InstanceUrl: { S: cleanedInstanceUrl },
           Metadata: { S: existingMetadata ? JSON.stringify(existingMetadata) : '{}' },
           FormRecords: { S: JSON.stringify(updatedFormRecords) },
           CreatedAt: { S: createdAt },
@@ -480,8 +476,8 @@ async function updateDynamoDB(instanceUrl, userId, formRecords, currentTime, exi
     new PutItemCommand({
       TableName: METADATA_TABLE_NAME,
       Item: {
-        InstanceUrl: { S: instanceUrl },
         UserId: { S: userId },
+        InstanceUrl: { S: instanceUrl },
         Metadata: { S: JSON.stringify(existingMetadata) },
         FormRecords: { S: JSON.stringify(formRecords) },
         CreatedAt: { S: currentTime },

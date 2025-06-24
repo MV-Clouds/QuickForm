@@ -2,7 +2,7 @@ import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   // Parse the request body
@@ -39,7 +39,6 @@ export const handler = async (event) => {
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: instanceUrl },
           UserId: { S: userId },
         },
       })

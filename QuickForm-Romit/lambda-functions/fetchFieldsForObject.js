@@ -1,9 +1,3 @@
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-
-const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
-
 export const handler = async (event) => {
   // Parse the request body
   let body;
