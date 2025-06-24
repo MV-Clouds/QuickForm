@@ -1,10 +1,10 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
 
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
+const TOKEN_TABLE_NAME = 'SalesforceAuthTokens';
 
 export const handler = async (event) => {
   // Parse the request body
@@ -22,34 +22,31 @@ export const handler = async (event) => {
     };
   }
 
-  const { userId, instanceUrl } = body;
+  const { userId } = body;
 
-  if (!userId || !instanceUrl) {
+  if (!userId) {
     return {
       statusCode: 400,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify({ error: 'Missing userId or instanceUrl' }),
+      body: JSON.stringify({ error: 'Missing userId' }),
     };
   }
 
   try {
-    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
     // Fetch token data from DynamoDB
     const tokenResponse = await dynamoClient.send(
-      new QueryCommand({
+      new GetItemCommand({
         TableName: TOKEN_TABLE_NAME,
-        IndexName: 'UserId-InstanceUrl-Index',
-        KeyConditionExpression: 'UserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: userId },
+        Key: {
+          UserId: { S: userId },
         },
       })
     );
-
-    const item = tokenResponse.Items?.[0];
+      
+    const item = tokenResponse.Item;
     if (!item) {
       return {
         statusCode: 404,
@@ -63,6 +60,8 @@ export const handler = async (event) => {
 
     let access_token = item.AccessToken.S;
     const refresh_token = item.RefreshToken?.S || '';
+    const instanceUrl = item.InstanceUrl.S;
+    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
 
     // Validate the access token
     const isValid = await validateAccessToken(access_token, cleanedInstanceUrl);
@@ -97,6 +96,7 @@ export const handler = async (event) => {
         };
       }
 
+      const currentTime = new Date().toISOString();
       // Use refresh token to get a new access token
       const refreshResponse = await fetch(`https://${cleanedInstanceUrl}/services/oauth2/token`, {
         method: 'POST',
@@ -136,6 +136,8 @@ export const handler = async (event) => {
             InstanceUrl: { S: cleanedInstanceUrl },
             AccessToken: { S: access_token },
             RefreshToken: { S: refresh_token },
+            CreatedAt: item.CreatedAt || { S: currentTime },
+            UpdatedAt: { S: currentTime },
           },
         })
       );
