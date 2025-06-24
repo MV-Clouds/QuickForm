@@ -60,10 +60,37 @@ const ActionPanel = ({
   const [pathOption, setPathOption] = useState("Rules");
 
   useEffect(() => {
+    // Reset state when nodeId changes to ensure node-specific data
+    setSelectedObject("");
+    setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+    setConditions([{ field: "", operator: "=", value: "", value2: "" }]);
+    setLogicType("AND");
+    setCustomLogic("");
+    setExitConditions([{ field: "", operator: "=", value: "", value2: "" }]);
+    setLoopCollection("");
+    setCurrentItemVariableName("");
+    setLoopVariables({ currentIndex: false, indexBase: "0", counter: false });
+    setMaxIterations("");
+    setLoopDescription("");
+    setFormatterConfig({
+      formatType: "date",
+      operation: "",
+      inputField: "",
+      inputField2: "",
+      customValue: "",
+      useCustomInput: false,
+      options: {},
+    });
+    setEnableConditions(false);
+    setReturnLimit("");
+    setSortField("");
+    setSortOrder("ASC");
+    setPathOption("Rules");
+
+    // Load node-specific mappings if they exist
     if (mappings[nodeId]) {
       setSelectedObject(mappings[nodeId].salesforceObject || "");
       setLocalMappings(mappings[nodeId].fieldMappings?.length > 0 ? mappings[nodeId].fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
-      // setConditions(mappings[nodeId].conditions?.length > 0 ? mappings[nodeId].conditions.map(c => ({ ...c, logic: undefined })) : [{ field: "", operator: "=", value: "", value2: "" }]);
       setConditions(mappings[nodeId].conditions?.length > 0 ? mappings[nodeId].conditions.map(c => ({ ...c, logic: undefined })) : (mappings[nodeId].pathOption === "Rules" ? [{ field: "", operator: "=", value: "", value2: "" }] : []));
       setLogicType(mappings[nodeId].logicType || "AND");
       setCustomLogic(mappings[nodeId].customLogic || "");
@@ -107,7 +134,7 @@ const ActionPanel = ({
         options: formatterConfig.options || {},
       });
     }
-  }, [nodeId, mappings, nodes, edges, setMappings,isConditionNode]);
+  }, [nodeId, mappings, nodes, edges, setMappings, isConditionNode]);
 
   useEffect(() => {
     const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
@@ -520,27 +547,30 @@ const ActionPanel = ({
     const outgoingEdges = edges.filter((e) => e.source === nodeId);
     const nextNodeIds = outgoingEdges.map((e) => e.target).filter((id, index, self) => self.indexOf(id) === index);
 
-    setMappings((prev) => ({
-      ...prev,
-      [nodeId]: {
-        actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
-        salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
-        fieldMappings: isCreateUpdateNode ? validMappings : [],
-        conditions: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? validConditions : [],
-        logicType: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? logicType : undefined,
-        customLogic: logicType === "Custom" ? customLogic : undefined,
-        loopConfig: isLoopNode ? loopConfig : undefined,
-        formatterConfig: isFormatterNode ? formatterConfig : undefined,
-        enableConditions: isCreateUpdateNode ? enableConditions : undefined,
-        returnLimit: (isFindNode || isFilterNode) ? returnLimit : undefined,
-        sortField: (isFindNode || isFilterNode) ? sortField : undefined,
-        sortOrder: (isFindNode || isFilterNode) ? sortOrder : undefined,
-        pathOption: isConditionNode ? pathOption : undefined,
-        previousNodeId,
-        nextNodeIds,
-        label: nodes.find((n) => n.id === nodeId)?.data.label || `${nodeType}_Level0`,
-      },
-    }));
+    setMappings((prev) => {
+      const updatedMappings = {
+        ...prev,
+        [nodeId]: {
+          actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
+          salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
+          fieldMappings: isCreateUpdateNode ? validMappings : [],
+          conditions: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? validConditions : [],
+          logicType: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? logicType : undefined,
+          customLogic: logicType === "Custom" ? customLogic : undefined,
+          loopConfig: isLoopNode ? loopConfig : undefined,
+          formatterConfig: isFormatterNode ? formatterConfig : undefined,
+          enableConditions: isCreateUpdateNode ? enableConditions : undefined,
+          returnLimit: (isFindNode || isFilterNode) ? returnLimit : undefined,
+          sortField: (isFindNode || isFilterNode) ? sortField : undefined,
+          sortOrder: (isFindNode || isFilterNode) ? sortOrder : undefined,
+          pathOption: isConditionNode ? pathOption : undefined,
+          previousNodeId,
+          nextNodeIds,
+          label: nodes.find((n) => n.id === nodeId)?.data.label || `${nodeType}_Level0`,
+        },
+      };
+      return updatedMappings;
+    });
     setSaveError(null);
     console.log("Mappings saved successfully for node:", nodeId);
     onClose();
@@ -1282,8 +1312,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          
-           {isFormatterNode && (
+          {isFormatterNode && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1707,7 +1736,6 @@ const ActionPanel = ({
                       />
                     </div>
                   )}
-
                   {formatterConfig.operation === "currency_format" && (
                     <>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -1764,7 +1792,6 @@ const ActionPanel = ({
                       </div>
                     </>
                   )}
-
                   {formatterConfig.operation === "round_number" && (
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Decimals</label>
@@ -1778,7 +1805,6 @@ const ActionPanel = ({
                       />
                     </div>
                   )}
-
                   {formatterConfig.operation === "phone_format" && (
                     <>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -1813,7 +1839,7 @@ const ActionPanel = ({
                           value={phoneFormatOptions.find((opt) => opt.value === formatterConfig.options.format) || null}
                           onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
                           options={phoneFormatOptions}
-                          placeholder="Select Phone Format"
+                          placeholder="Select Format"
                           styles={{
                             container: (base) => ({
                               ...base,
@@ -1832,33 +1858,17 @@ const ActionPanel = ({
                           }}
                           classNamePrefix="select"
                         />
-                        {formatterConfig.options.format === "Custom" && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            className="mt-2"
-                          >
-                            <input
-                              type="text"
-                              value={formatterConfig.options.customFormat || ""}
-                              onChange={(e) => handleFormatterOptionChange("customFormat", e.target.value)}
-                              placeholder="e.g., (###) ###-####"
-                              className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-                            />
-                          </motion.div>
-                        )}
                       </div>
                     </>
                   )}
-
                   {formatterConfig.operation === "math_operation" && (
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Math Operation</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
                       <Select
                         value={[{ value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "multiply", label: "Multiply" }, { value: "divide", label: "Divide" }].find((opt) => opt.value === formatterConfig.options.operation) || null}
                         onChange={(selected) => handleFormatterOptionChange("operation", selected ? selected.value : "")}
                         options={[{ value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "multiply", label: "Multiply" }, { value: "divide", label: "Divide" }]}
-                        placeholder="Select Math Operation"
+                        placeholder="Select Operation"
                         styles={{
                           container: (base) => ({
                             ...base,
@@ -1881,7 +1891,6 @@ const ActionPanel = ({
                   )}
                 </motion.div>
               )}
-
               {formatterConfig.formatType === "text" && formatterConfig.operation && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -1912,7 +1921,6 @@ const ActionPanel = ({
                       </div>
                     </>
                   )}
-
                   {formatterConfig.operation === "split" && (
                     <>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -1958,7 +1966,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          <div className="mt-8 flex justify-end space-x-3 border-t border-gray-200 pt-6">
+          <div className="mt-8 flex justify-end space-x-3">
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium"
@@ -1973,7 +1981,7 @@ const ActionPanel = ({
             </button>
           </div>
         </div>
-        </div>
+      </div>
     </motion.div>
   );
 };

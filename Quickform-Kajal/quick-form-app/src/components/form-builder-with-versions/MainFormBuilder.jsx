@@ -87,11 +87,10 @@ function MainFormBuilder() {
       const token = (await fetchAccessToken(userId, instanceUrl));
       const linkData = {
         userId,
-        instanceUrl,
         formVersionId: selectedVersionId,
       };
       const encryptedLinkId = encrypt(JSON.stringify(linkData));
-      const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encodeURIComponent(encryptedLinkId)}`;
+      const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';
@@ -106,7 +105,6 @@ function MainFormBuilder() {
         },
         body: JSON.stringify({
           userId,
-          instanceUrl,
           formData: { formVersion, formFields },
         }),
       });

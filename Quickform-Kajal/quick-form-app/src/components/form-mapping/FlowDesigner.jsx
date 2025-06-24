@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from "react";
-import ReactFlow, { useNodesState, useEdgesState, addEdge, Controls, Background, Handle } from "reactflow";
+import ReactFlow, { useNodesState, useEdgesState, addEdge, Controls, Background, Handle, Position } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
+import Modal from "react-modal";
+import Select from "react-select";
 import "reactflow/dist/style.css";
 
-
-const CustomNode = ({ data, selected, id }) => {
+const CustomNode = ({ data, selected, id, onAddAction }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const getNodeStyles = () => {
@@ -48,7 +49,6 @@ const CustomNode = ({ data, selected, id }) => {
     }
   };
 
-  // Don't show icons for start and end nodes
   const shouldShowIcon = id !== "start" && id !== "end";
 
   return (
@@ -65,19 +65,29 @@ const CustomNode = ({ data, selected, id }) => {
       {/* Top Handle */}
       <Handle
         type="target"
-        position="top"
+        position={Position.Top}
         id="top"
         className="w-4 h-4 bg-gradient-to-r from-slate-400 to-slate-500 -top-2 left-1/2 transform -translate-x-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
       />
 
       {/* Node Content */}
-      <div className="flex justify-center items-center space-x-3">
-        {shouldShowIcon && (
-          <span className={`text-lg ${getIconColor()}`}>{getIcon()}</span>
-        )}
-        <div className="font-semibold text-slate-700 text-sm leading-tight">
-          {data.displayLabel}
+      <div className="flex justify-between items-center space-x-3">
+        <div className="flex items-center space-x-2">
+          {shouldShowIcon && (
+            <span className={`text-lg ${getIconColor()}`}>{getIcon()}</span>
+          )}
+          <div className="font-semibold text-slate-700 text-sm leading-tight">
+            {data.displayLabel}
+          </div>
         </div>
+        {data.type === "loop" && (
+          <button
+            onClick={() => onAddAction(id)}
+            className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-blue-600"
+          >
+            +
+          </button>
+        )}
       </div>
 
       {/* Hover Effect */}
@@ -95,10 +105,28 @@ const CustomNode = ({ data, selected, id }) => {
       {/* Bottom Handle */}
       <Handle
         type="source"
-        position="bottom"
+        position={Position.Bottom}
         id="bottom"
         className="w-4 h-4 bg-gradient-to-r from-slate-400 to-slate-500 -bottom-2 left-1/2 transform -translate-x-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
       />
+
+      {/* Loop Handles */}
+      {data.type === "loop" && (
+        <>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="loop"
+            className="w-4 h-4 bg-gradient-to-r from-violet-400 to-violet-500 right-[-8px] top-1/2 transform -translate-y-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
+          />
+          <Handle
+            type="target"
+            position={Position.Right}
+            id="loop-back"
+            className="w-4 h-4 bg-gradient-to-r from-violet-400 to-violet-500 right-[-8px] top-1/3 transform -translate-y-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
+          />
+        </>
+      )}
     </motion.div>
   );
 };
@@ -171,13 +199,46 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const orderCounterRef = useRef(1);
   const lastConnectTimeRef = useRef(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loopNodeId, setLoopNodeId] = useState(null);
+
+  const actionOptions = [
+    { value: "Create/Update", label: "Create/Update" },
+    { value: "Find", label: "Find" },
+  ];
 
   useEffect(() => {
     setParentNodes(nodes);
     setParentEdges(edges);
   }, [nodes, edges, setParentNodes, setParentEdges]);
 
-  // Add delete node function to window for access from CustomNode
+  // Add self-connected edge for loop nodes
+  useEffect(() => {
+    nodes.forEach((node) => {
+      if (node.data.type === "loop") {
+        const loopEdge = edges.find(
+          (edge) => edge.source === node.id && edge.sourceHandle === "loop" && edge.target === node.id && edge.targetHandle === "loop-back"
+        );
+        if (!loopEdge) {
+          setEdges((eds) => [
+            ...eds,
+            {
+              id: `loop-${node.id}`,
+              source: node.id,
+              sourceHandle: "loop",
+              target: node.id,
+              targetHandle: "loop-back",
+              type: "default",
+              animated: true,
+              style: { stroke: "#8b5cf6", strokeWidth: 2 },
+            },
+          ]);
+        }
+      }
+    });
+  }, [nodes, edges, setEdges]);
+
+  // Add delete node function to window
   useEffect(() => {
     window.deleteNode = (nodeId) => {
       setNodes((nds) => nds.filter((n) => n.id !== nodeId));
@@ -215,21 +276,14 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     orderCounterRef.current = 1;
     const levelNodeCounts = {};
 
-    // First pass: Calculate levels for all nodes
     const calculateLevels = (nodeId, level = 1) => {
       if (!nodeId || visited.has(nodeId)) return;
       visited.add(nodeId);
-      
-      // Set level for current node (use maximum level if already set)
       const currentLevel = nodeLevels.get(nodeId) || 0;
       nodeLevels.set(nodeId, Math.max(currentLevel, level));
-
-      // Process outgoing edges
       const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
-      
       for (const edge of outgoingEdges) {
         if (edge.target === "end") {
-          // Don't process End node yet, just mark its minimum level
           const endCurrentLevel = nodeLevels.get("end") || 0;
           nodeLevels.set("end", Math.max(endCurrentLevel, level + 1));
         } else {
@@ -238,27 +292,21 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       }
     };
 
-    // Start level calculation from start node
     const startNode = currentNodes.find(node => node.id === "start");
     if (startNode) {
       visited.clear();
       calculateLevels(startNode.id);
     }
 
-    // Second pass: Assign orders based on levels
     visited.clear();
     const assignOrders = (nodeId, targetLevel = null) => {
       if (!nodeId || visited.has(nodeId)) return;
-      
       const nodeIndex = updatedNodes.findIndex(n => n.id === nodeId);
       if (nodeIndex === -1) return;
-      
       const node = updatedNodes[nodeIndex];
       const level = targetLevel !== null ? targetLevel : (nodeLevels.get(nodeId) || 1);
-      
       visited.add(nodeId);
 
-      // Assign order if not already assigned
       let order;
       if (nodeOrders.has(nodeId)) {
         order = nodeOrders.get(nodeId);
@@ -267,13 +315,11 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
         nodeOrders.set(nodeId, order);
       }
 
-      // Track node counts at each level for labeling
       if (!levelNodeCounts[level]) levelNodeCounts[level] = {};
       const actionKey = node.data.action || (node.id === "start" ? "Start" : node.id === "end" ? "End" : "Condition");
       levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
       const index = levelNodeCounts[level][actionKey];
 
-      // Generate labels
       let label = node.id === "start" ? "Start" :
         node.id === "end" ? "End" :
           node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
@@ -290,24 +336,19 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
         data: { ...node.data, order, label, displayLabel },
       };
 
-      // Process child nodes, but skip End node for now
       const childEdges = currentEdges.filter(edge => edge.source === nodeId && edge.target !== "end");
       for (const edge of childEdges) {
         assignOrders(edge.target);
       }
     };
 
-    // Process all nodes except End
     assignOrders("start");
-
-    // Process any unvisited nodes (except End)
     for (const node of currentNodes) {
       if (!visited.has(node.id) && node.id !== "end") {
         assignOrders(node.id);
       }
     }
 
-    // Finally, process the End node with the highest level and order
     const endNode = currentNodes.find(node => node.id === "end");
     if (endNode) {
       const endLevel = nodeLevels.get("end") || 1;
@@ -339,7 +380,6 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     (params) => {
       const now = Date.now();
       if (now - lastConnectTimeRef.current < 100) {
-        console.log("onConnect skipped due to debounce:", params);
         return;
       }
       lastConnectTimeRef.current = now;
@@ -348,14 +388,11 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       const targetNode = nodes.find((node) => node.id === params.target);
 
       if (!sourceNode || !targetNode) {
-        console.warn("Source or target node not found:", params);
         alert("Invalid connection: Source or target node not found.");
         return;
       }
 
-      // Prevent self-connections
-      if (params.source === params.target) {
-        console.log("Self-connection blocked:", params);
+      if (params.source === params.target && params.sourceHandle !== "loop") {
         alert("Cannot connect a node to itself.");
         return;
       }
@@ -371,13 +408,10 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       }
 
       if (sourceNode.data.action === "Path") {
-        // Get all outgoing condition edges from the Path node
         const outgoingConditionEdges = edges.filter(
           (edge) => edge.source === params.source && edge.conditionNodeId
         );
-        console.log("Outgoing condition edges:", outgoingConditionEdges);
 
-        // Check for existing connection to the target via a condition node
         const existingConnection = outgoingConditionEdges.find((edge) => {
           const conditionNode = nodes.find((n) => n.id === edge.target);
           const nextEdge = edges.find((e) => e.source === edge.target && e.target === params.target);
@@ -389,7 +423,6 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           return;
         }
 
-        // Check for potential cycles
         const createsCycle = (sourceId, targetId, edges) => {
           const visited = new Set();
           const stack = [targetId];
@@ -411,13 +444,11 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           return;
         }
 
-        // Limit Path nodes to two outgoing condition edges
         if (outgoingConditionEdges.length >= 2) {
           alert("Path nodes can have exactly two outgoing connections.");
           return;
         }
 
-        // Create a new condition node
         const randomNum = Math.floor(Math.random() * 10000);
         const conditionIndex = outgoingConditionEdges.length + 1;
         const conditionNodeId = `${sourceNode.id}_cond_${conditionIndex}_${randomNum}`;
@@ -438,6 +469,9 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
             pathNodeId: params.source,
             targetNodeId: params.target,
             pathOption: "Rules",
+            conditions: [],
+            logicType: "AND", // Initialize logicType
+            customLogic: "",
           },
           draggable: true,
         };
@@ -459,12 +493,10 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           },
         ];
 
-        // Update nodes and edges atomically
         setNodes((nds) => {
           const updatedNodes = [...nds, newConditionNode];
           setEdges((eds) => {
             const updatedEdges = newEdges.reduce((acc, edge) => addEdge(edge, acc), eds);
-            console.log("Updated edges:", updatedEdges);
             const orderedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
             setNodes(orderedNodes);
             return updatedEdges;
@@ -472,20 +504,22 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           return updatedNodes;
         });
       } else {
-        // Non-Path nodes: Allow one outgoing edge
         const hasOutgoingEdge = edges.some(
-          (edge) => edge.source === params.source && !edge.conditionNodeId
+          (edge) => edge.source === params.source && !edge.conditionNodeId && edge.sourceHandle !== "loop"
         );
         if (hasOutgoingEdge) {
-          alert("Each node can have only one outgoing connection, except Path nodes.");
+          alert("Each node can have only one outgoing connection, except Path and Loop nodes.");
           return;
         }
 
         const newEdge = {
           id: `e${params.source}-${params.target}`,
           source: params.source,
+          sourceHandle: params.sourceHandle || null,
           target: params.target,
+          targetHandle: params.targetHandle || null,
           type: "default",
+          animated: params.sourceHandle === "loop",
         };
 
         setEdges((eds) => {
@@ -547,24 +581,32 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
             returnLimit: "",
             salesforceObject: "",
             fieldMappings: [],
-            conditions: []
+            conditions: [],
+            logicType: "AND",
+            customLogic: "",
           } : {}),
           ...(type === "action" && action === "Find" ? {
             salesforceObject: "",
             conditions: [],
             returnLimit: "",
             sortField: "",
-            sortOrder: "ASC"
+            sortOrder: "ASC",
+            logicType: "AND",
+            customLogic: "",
           } : {}),
           ...(type === "action" && action === "Filter" ? {
             salesforceObject: "",
             conditions: [],
             returnLimit: "",
             sortField: "",
-            sortOrder: "ASC"
+            sortOrder: "ASC",
+            logicType: "AND",
+            customLogic: "",
           } : {}),
           ...(type === "utility" && action === "Condition" ? {
-            conditions: []
+            conditions: [],
+            logicType: "AND",
+            customLogic: "",
           } : {}),
           ...(type === "utility" && action === "Path" ? { pathOption: "Rules" } : {}),
           ...(type === "utility" && action === "Loop" ? {
@@ -576,7 +618,8 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
                 currentIndex: false,
                 counter: false,
                 indexBase: "0"
-              }
+              },
+              exitConditions: [],
             }
           } : {}),
           ...(type === "utility" && action === "Formatter" ? {
@@ -616,15 +659,105 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     [setSelectedNode, edges]
   );
 
-  const nodeTypes = useMemo(() => ({ custom: CustomNode }), []);
-  const edgeTypes = useMemo(() => ({ default: (props) => <CustomEdge {...props} onEdgeDelete={onEdgeDelete} /> }), [onEdgeDelete]);
+  const handleAddAction = (nodeId) => {
+    setLoopNodeId(nodeId);
+    setIsModalOpen(true);
+  };
+
+  const handleAddActionNode = (actionType) => {
+    const loopNode = nodes.find((n) => n.id === loopNodeId);
+    if (!loopNode) return;
+
+    const randomNum = Math.floor(Math.random() * 10000);
+    const nodeName = actionType.toLowerCase().replace("/", "_");
+    const newNodeId = `${nodeName}_${randomNum}`;
+    const newNode = {
+      id: newNodeId,
+      type: "custom",
+      position: { x: loopNode.position.x + 150, y: loopNode.position.y },
+      data: {
+        label: `${actionType}_Level0`,
+        displayLabel: actionType,
+        type: "action",
+        action: actionType,
+        order: null,
+        ...(actionType === "Create/Update" ? {
+          enableConditions: false,
+          returnLimit: "",
+          salesforceObject: "",
+          fieldMappings: [],
+          conditions: [],
+          logicType: "AND",
+          customLogic: "",
+        } : {}),
+        ...(actionType === "Find" ? {
+          salesforceObject: "",
+          conditions: [],
+          returnLimit: "",
+          sortField: "",
+          sortOrder: "ASC",
+          logicType: "AND",
+          customLogic: "",
+        } : {}),
+      },
+      draggable: true,
+    };
+
+    const newEdges = [
+      {
+        id: `e${loopNodeId}-${newNodeId}`,
+        source: loopNodeId,
+        sourceHandle: "loop",
+        target: newNodeId,
+        targetHandle: null,
+        type: "default",
+        animated: true,
+      },
+      {
+        id: `e${newNodeId}-${loopNodeId}`,
+        source: newNodeId,
+        target: loopNodeId,
+        targetHandle: "loop-back",
+        type: "default",
+        animated: true,
+      },
+    ];
+
+    setNodes((nds) => {
+      const updatedNodes = [...nds, newNode];
+      setEdges((eds) => {
+        const updatedEdges = newEdges.reduce((acc, edge) => addEdge(edge, acc), eds);
+        const orderedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+        setNodes(orderedNodes);
+        return updatedEdges;
+      });
+      return updatedNodes;
+    });
+
+    setIsModalOpen(false);
+    setLoopNodeId(null);
+  };
+
+  // Validate flow before saving
+  const validateFlow = useCallback(() => {
+    const actionNodes = nodes.filter(node => !['start', 'end'].includes(node.id));
+    if (actionNodes.length === 0) {
+      alert("Flow must contain at least one action node.");
+      return false;
+    }
+    return true;
+  }, [nodes]);
+
+  const nodeTypes = useMemo(() => ({
+    custom: (props) => <CustomNode {...props} onAddAction={handleAddAction} />
+  }), []);
+  const edgeTypes = useMemo(() => ({
+    default: (props) => <CustomEdge {...props} onEdgeDelete={onEdgeDelete} />
+  }), [onEdgeDelete]);
 
   return (
     <div className="w-full h-full relative overflow-hidden">
-      {/* Gradient Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-gray-50 to-slate-100 z-0" />
-
-      {/* Flow Container */}
       <div ref={reactFlowWrapper} className="w-full h-full relative z-10">
         <ReactFlow
           nodes={nodesWithDraggable}
@@ -664,6 +797,42 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           />
         </ReactFlow>
       </div>
+
+      <Modal
+        isOpen={isModalOpen}
+        onRequestClose={() => setIsModalOpen(false)}
+        style={{
+          content: {
+            top: "50%",
+            left: "50%",
+            right: "auto",
+            bottom: "auto",
+            marginRight: "-50%",
+            transform: "translate(-50%, -50%)",
+            width: "400px",
+            padding: "20px",
+            borderRadius: "8px",
+          },
+        }}
+      >
+        <h2 className="text-lg font-semibold mb-4">Add Action to Loop</h2>
+        <Select
+          options={actionOptions}
+          onChange={(selected) => handleAddActionNode(selected.value)}
+          placeholder="Select Action Type"
+          styles={{
+            container: { borderRadius: "0.375rem", borderColor: "#e5e7eb" },
+            control: { minHeight: "42px" },
+            menu: { zIndex: 9999 },
+          }}
+        />
+        <button
+          onClick={() => setIsModalOpen(false)}
+          className="mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+      </Modal>
     </div>
   );
 };

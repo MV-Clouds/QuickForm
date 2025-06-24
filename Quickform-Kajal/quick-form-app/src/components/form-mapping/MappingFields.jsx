@@ -4,12 +4,12 @@ import { ReactFlowProvider } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
+import MainMenuBar from '../form-builder-with-versions/MainMenuBar';
 import { XMarkIcon } from '@heroicons/react/24/solid';
-
 
 const Sidebar = ({ onDragStart }) => {
   const actions = ["Create/Update", "Find"];
-  const utilities = ["Formatter", "Filter", "Path", "Loop"];
+  const utilities = ["Formatter", "Filter", "Path", "Loop", "Condition"];
 
   return (
     <motion.div
@@ -78,21 +78,31 @@ const MappingFields = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [token, setToken] = useState(null);
-  const [existingMappings, setExistingMappings] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [lastFetchedFormVersionId, setLastFetchedFormVersionId] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const initialNodes = [
-    { id: "start", type: "custom", position: { x: 250, y: 50 }, data: { label: "Start", displayLabel: "Start", order: 1 }, draggable: true },
-    { id: "end", type: "custom", position: { x: 250, y: 500 }, data: { label: "End", displayLabel: "End", order: null }, draggable: true },
+    {
+      id: "start",
+      type: "custom",
+      position: { x: 250, y: 50 },
+      data: { label: "Start", displayLabel: "Start", order: 1, type: "start", action: "Start" },
+      draggable: false,
+    },
+    {
+      id: "end",
+      type: "custom",
+      position: { x: 250, y: 500 },
+      data: { label: "End", displayLabel: "End", order: null, type: "end", action: "End" },
+      draggable: false,
+    },
   ];
 
-  console.log('salesforceObjects ===> ',salesforceObjects);
-  console.log('formVersionId==> ',formVersionId);
-  
-  
   const initialEdges = [];
 
   const showToast = (message, type = 'error') => {
@@ -129,7 +139,11 @@ const MappingFields = () => {
       const url = process.env.REACT_APP_FETCH_METADATA_URL || "https://hmcyy3382m.execute-api.us-east-1.amazonaws.com/prod/fetchMetadata";
       if (!url) throw new Error("Metadata URL is not defined.");
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
-      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl, formVersionId }) });
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl, formVersionId }),
+      });
       const text = await response.text();
       let data = JSON.parse(text);
       if (!response.ok) throw new Error(data.error || `Failed to fetch form metadata: ${response.status}`);
@@ -187,6 +201,14 @@ const MappingFields = () => {
           showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
           return false;
         }
+        if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
+          showToast(`Logic type must be defined for condition node ${conditionNode.data.displayLabel} with multiple conditions.`);
+          return false;
+        }
+        if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
+          showToast(`Custom logic expression must be provided for condition node ${conditionNode.data.displayLabel}.`);
+          return false;
+        }
       }
       return true;
     } else if (node.data.action === "Condition") {
@@ -194,6 +216,14 @@ const MappingFields = () => {
       const validPathOption = conditionMapping.pathOption || "Rules";
       if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
         showToast(`Condition node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
+        return false;
+      }
+      if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
+        showToast(`Logic type must be defined for condition node ${node.data.displayLabel} with multiple conditions.`);
+        return false;
+      }
+      if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
+        showToast(`Custom logic expression must be provided for condition node ${node.data.displayLabel}.`);
         return false;
       }
       return true;
@@ -207,6 +237,14 @@ const MappingFields = () => {
       }
       if (nodeMapping.enableConditions && (!nodeMapping.conditions || nodeMapping.conditions.length === 0)) {
         showToast(`No complete conditions defined for node ${node.data.displayLabel} when conditions are enabled.`);
+        return false;
+      }
+      if (nodeMapping.enableConditions && nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
+        showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
+        return false;
+      }
+      if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
+        showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
         return false;
       }
       if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
@@ -244,11 +282,22 @@ const MappingFields = () => {
         showToast(`Max iterations for Loop node ${node.data.displayLabel} must be a positive number.`);
         return false;
       }
-      if (nodeMapping.loopConfig.loopVariables && (typeof nodeMapping.loopConfig.loopVariables !== "object" ||
-        typeof nodeMapping.loopConfig.loopVariables.currentIndex !== "boolean" ||
-        typeof nodeMapping.loopConfig.loopVariables.counter !== "boolean" ||
-        !["0", "1"].includes(nodeMapping.loopConfig.loopVariables.indexBase))) {
+      if (
+        nodeMapping.loopConfig.loopVariables &&
+        (typeof nodeMapping.loopConfig.loopVariables !== "object" ||
+          typeof nodeMapping.loopConfig.loopVariables.currentIndex !== "boolean" ||
+          typeof nodeMapping.loopConfig.loopVariables.counter !== "boolean" ||
+          !["0", "1"].includes(nodeMapping.loopConfig.loopVariables.indexBase))
+      ) {
         showToast(`Invalid loop variables configuration for Loop node ${node.data.displayLabel}.`);
+        return false;
+      }
+      if (nodeMapping.loopConfig.exitConditions && nodeMapping.loopConfig.exitConditions.length > 1 && !nodeMapping.loopConfig.logicType) {
+        showToast(`Logic type must be defined for loop exit conditions in node ${node.data.displayLabel}.`);
+        return false;
+      }
+      if (nodeMapping.loopConfig.logicType === "Custom" && !nodeMapping.loopConfig.customLogic) {
+        showToast(`Custom logic expression must be provided for loop exit conditions in node ${node.data.displayLabel}.`);
         return false;
       }
     } else if (node.data.action === "Formatter") {
@@ -257,19 +306,34 @@ const MappingFields = () => {
         return false;
       }
       if (nodeMapping.formatterConfig.formatType === "date") {
-        if ((nodeMapping.formatterConfig.operation === "format_date" || nodeMapping.formatterConfig.operation === "format_datetime" || nodeMapping.formatterConfig.operation === "format_time") && (!nodeMapping.formatterConfig.options?.format || !nodeMapping.formatterConfig.options?.timezone)) {
+        if (
+          (nodeMapping.formatterConfig.operation === "format_date" ||
+            nodeMapping.formatterConfig.operation === "format_datetime" ||
+            nodeMapping.formatterConfig.operation === "format_time") &&
+          (!nodeMapping.formatterConfig.options?.format || !nodeMapping.formatterConfig.options?.timezone)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a date format and timezone defined.`);
           return false;
         }
-        if (nodeMapping.formatterConfig.operation === "timezone_conversion" && (!nodeMapping.formatterConfig.options?.timezone || !nodeMapping.formatterConfig.options?.targetTimezone)) {
+        if (
+          nodeMapping.formatterConfig.operation === "timezone_conversion" &&
+          (!nodeMapping.formatterConfig.options?.timezone || !nodeMapping.formatterConfig.options?.targetTimezone)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have source and target timezones defined.`);
           return false;
         }
-        if ((nodeMapping.formatterConfig.operation === "add_date" || nodeMapping.formatterConfig.operation === "subtract_date") && (!nodeMapping.formatterConfig.options?.unit || nodeMapping.formatterConfig.options?.value === undefined)) {
+        if (
+          (nodeMapping.formatterConfig.operation === "add_date" || nodeMapping.formatterConfig.operation === "subtract_date") &&
+          (!nodeMapping.formatterConfig.options?.unit || nodeMapping.formatterConfig.options?.value === undefined)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a date unit and value defined.`);
           return false;
         }
-        if (nodeMapping.formatterConfig.operation === "date_difference" && !nodeMapping.formatterConfig.inputField2 && !nodeMapping.formatterConfig.useCustomInput) {
+        if (
+          nodeMapping.formatterConfig.operation === "date_difference" &&
+          !nodeMapping.formatterConfig.inputField2 &&
+          !nodeMapping.formatterConfig.useCustomInput
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a second input field or use custom input for date difference.`);
           return false;
         }
@@ -283,7 +347,10 @@ const MappingFields = () => {
           showToast(`Formatter node ${node.data.displayLabel} must have a locale defined.`);
           return false;
         }
-        if (nodeMapping.formatterConfig.operation === "currency_format" && (!nodeMapping.formatterConfig.options?.currency || !nodeMapping.formatterConfig.options?.locale)) {
+        if (
+          nodeMapping.formatterConfig.operation === "currency_format" &&
+          (!nodeMapping.formatterConfig.options?.currency || !nodeMapping.formatterConfig.options?.locale)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a currency and locale defined.`);
           return false;
         }
@@ -291,11 +358,18 @@ const MappingFields = () => {
           showToast(`Formatter node ${node.data.displayLabel} must have number of decimals defined.`);
           return false;
         }
-        if (nodeMapping.formatterConfig.operation === "phone_format" && (!nodeMapping.formatterConfig.options?.countryCode || !nodeMapping.formatterConfig.options?.format)) {
+        if (
+          nodeMapping.formatterConfig.operation === "phone_format" &&
+          (!nodeMapping.formatterConfig.options?.countryCode || !nodeMapping.formatterConfig.options?.format)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a country code and format defined.`);
           return false;
         }
-        if (nodeMapping.formatterConfig.operation === "math_operation" && (!nodeMapping.formatterConfig.options?.operation || (!nodeMapping.formatterConfig.inputField2 && !nodeMapping.formatterConfig.useCustomInput))) {
+        if (
+          nodeMapping.formatterConfig.operation === "math_operation" &&
+          (!nodeMapping.formatterConfig.options?.operation ||
+            (!nodeMapping.formatterConfig.inputField2 && !nodeMapping.formatterConfig.useCustomInput))
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a math operation and second input field or custom value defined.`);
           return false;
         }
@@ -305,11 +379,17 @@ const MappingFields = () => {
         }
       }
       if (nodeMapping.formatterConfig.formatType === "text") {
-        if (nodeMapping.formatterConfig.operation === "replace" && (!nodeMapping.formatterConfig.options?.searchValue || !nodeMapping.formatterConfig.options?.replaceValue)) {
+        if (
+          nodeMapping.formatterConfig.operation === "replace" &&
+          (!nodeMapping.formatterConfig.options?.searchValue || !nodeMapping.formatterConfig.options?.replaceValue)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have search and replace values defined.`);
           return false;
         }
-        if (nodeMapping.formatterConfig.operation === "split" && (!nodeMapping.formatterConfig.options?.delimiter || !nodeMapping.formatterConfig.options?.index)) {
+        if (
+          nodeMapping.formatterConfig.operation === "split" &&
+          (!nodeMapping.formatterConfig.options?.delimiter || !nodeMapping.formatterConfig.options?.index)
+        ) {
           showToast(`Formatter node ${node.data.displayLabel} must have a delimiter and index defined.`);
           return false;
         }
@@ -324,11 +404,18 @@ const MappingFields = () => {
 
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
-    console.log('userid--> ',userId);
-    console.log('instanceUrl--> ',instanceUrl);
+    const flowId = formVersionId; // Use formVersionId as flowId
 
-    if (!userId || !instanceUrl) {
-      showToast("Missing userId or instanceUrl. Please log in again.", 'error');
+    if (!userId || !instanceUrl || !flowId) {
+      showToast("Missing userId, instanceUrl, or flowId. Please log in again.", 'error');
+      setIsSaving(false);
+      return;
+    }
+
+    // Validate empty flow
+    const actionNodes = nodes.filter(node => !['start', 'end'].includes(node.id));
+    if (actionNodes.length === 0) {
+      showToast("Flow must contain at least one action node.", 'error');
       setIsSaving(false);
       return;
     }
@@ -384,12 +471,35 @@ const MappingFields = () => {
       const mappingData = {
         nodeId: node.id,
         actionType,
-        salesforceObject: actionType === "CreateUpdate" || actionType === "Find" || actionType === "Filter" || (actionType === "Condition" && nodeMapping.pathOption === "Rules") ? nodeMapping.salesforceObject || "" : "",
+        salesforceObject:
+          actionType === "CreateUpdate" ||
+          actionType === "Find" ||
+          actionType === "Filter" ||
+          (actionType === "Condition" && nodeMapping.pathOption === "Rules")
+            ? nodeMapping.salesforceObject || ""
+            : "",
         fieldMappings: actionType === "CreateUpdate" ? nodeMapping.fieldMappings || [] : [],
-        conditions: actionType === "Find" || actionType === "Filter" || (actionType === "CreateUpdate" && nodeMapping.enableConditions) || (actionType === "Condition" && nodeMapping.pathOption === "Rules") ? nodeMapping.conditions || [] : [],
-        logicType: (actionType === "Find" || actionType === "Filter" || (actionType === "CreateUpdate" && nodeMapping.enableConditions) || (actionType === "Condition" && nodeMapping.pathOption === "Rules")) ? nodeMapping.logicType || "AND" : null,
+        conditions:
+          actionType === "Find" ||
+          actionType === "Filter" ||
+          (actionType === "CreateUpdate" && nodeMapping.enableConditions) ||
+          (actionType === "Condition" && nodeMapping.pathOption === "Rules")
+            ? nodeMapping.conditions || []
+            : [],
+        logicType:
+          (actionType === "Find" ||
+            actionType === "Filter" ||
+            (actionType === "CreateUpdate" && nodeMapping.enableConditions) ||
+            (actionType === "Condition" && nodeMapping.pathOption === "Rules"))
+            ? nodeMapping.logicType || "AND"
+            : null,
         customLogic: nodeMapping.logicType === "Custom" ? nodeMapping.customLogic || "" : "",
-        loopConfig: actionType === "Loop" ? nodeMapping.loopConfig || {} : undefined,
+        loopConfig: actionType === "Loop" ? {
+          ...nodeMapping.loopConfig,
+          exitConditions: nodeMapping.loopConfig?.exitConditions || [],
+          logicType: nodeMapping.loopConfig?.logicType || "AND",
+          customLogic: nodeMapping.loopConfig?.logicType === "Custom" ? nodeMapping.loopConfig?.customLogic || "" : "",
+        } : undefined,
         formatterConfig: actionType === "Formatter" ? nodeMapping.formatterConfig || {} : undefined,
         enableConditions: actionType === "CreateUpdate" ? nodeMapping.enableConditions || false : undefined,
         returnLimit: actionType === "Find" || actionType === "Filter" ? nodeMapping.returnLimit || "" : undefined,
@@ -420,7 +530,10 @@ const MappingFields = () => {
     try {
       const payload = {
         userId,
-        instanceUrl: instanceUrl.replace(/https?:\/\//, ""),
+        instanceUrl,
+        flowId,
+        nodes,
+        edges,
         mappings: allMappings,
       };
 
@@ -452,45 +565,387 @@ const MappingFields = () => {
     }
   };
 
-  const initializeData = async () => {
-    setIsLoading(true);
-    setFetchError(null);
+  // const fetchExistingMappings = async (userId, formVersionId, instanceUrl, access_token, retries = 2) => {
+  //   try {
+  //     console.log('In mapping===> ', userId, formVersionId, instanceUrl, access_token);
+      
+  //     const url = process.env.REACT_APP_FETCH_MAPPINGS_URL;
+  //     console.log('mapping url--> ', url);
+      
+  //     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
+  //     const response = await fetch(url, {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         Authorization: `Bearer ${access_token}`,
+  //       },
+  //       body: JSON.stringify({ userId, formVersionId, instanceUrl: cleanedInstanceUrl }),
+  //     });
+  //     console.log('response in mapping==> ', response);
+      
+  //     const data = await response.json();
+  //     if (!response.ok) {
+  //       if (response.status === 401 && retries > 0) {
+  //         throw new Error("Unauthorized: Retry fetching access token");
+  //       }
+  //       throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
+  //     }
 
-    const userId = sessionStorage.getItem('userId');
-    const instanceUrl = sessionStorage.getItem('instanceUrl');
+  //     // Parse mappings to include returnLimit, sortField, sortOrder from Conditions__c
+  //     const parsedMappings = Array.isArray(data.mappings) ? data.mappings.map(mapping => {
+  //       let conditionsData = {};
+  //       if (mapping.Conditions__c) {
+  //         try {
+  //           conditionsData = JSON.parse(mapping.Conditions__c);
+  //         } catch (e) {
+  //           console.error(`Failed to parse Conditions__c for node ${mapping.nodeId}:`, e);
+  //         }
+  //       }
 
-    console.log('userId==> ',userId,' ', 'instanceUrl==> ',instanceUrl, 'formVersionId==> ',formVersionId);
-        
-    if (!userId || !instanceUrl || !formVersionId) {
-      showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
-      setIsLoading(false);
-      return;
+  //       return {
+  //         ...mapping,
+  //         conditions: conditionsData.conditions || [],
+  //         logicType: conditionsData.logicType || null,
+  //         customLogic: conditionsData.customLogic || null,
+  //         pathOption: conditionsData.pathOption || 'Rules',
+  //         returnLimit: conditionsData.returnLimit || null,
+  //         sortField: conditionsData.sortField || null,
+  //         sortOrder: conditionsData.sortOrder || null,
+  //       };
+  //     }) : [];
+
+  //     return {
+  //       mappings: parsedMappings,
+  //       nodes: Array.isArray(data.nodes) ? data.nodes : [],
+  //       edges: Array.isArray(data.edges) ? data.edges : [],
+  //     };
+  //   } catch (error) {
+  //     showToast(`Failed to fetch existing mappings: ${error.message}`, 'error');
+  //     return { mappings: [], nodes: [], edges: [] };
+  //   }
+  // };
+
+  const fetchExistingMappings = async (userId, formVersionId, instanceUrl, access_token, retries = 2) => {
+  try {
+    console.log('In mapping===> ', userId, formVersionId, instanceUrl, access_token);
+    
+    const url = process.env.REACT_APP_FETCH_MAPPINGS_URL;
+    console.log('mapping url--> ', url);
+    
+    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${access_token}`,
+      },
+      body: JSON.stringify({ userId, formVersionId, instanceUrl: cleanedInstanceUrl }),
+    });
+    console.log('response in mapping==> ', response);
+    
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401 && retries > 0) {
+        throw new Error("Unauthorized: Retry fetching access token");
+      }
+      throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
     }
 
-    try {
-      // Fetch access token
-      const tokenToUse = await fetchAccessToken(userId, instanceUrl);
+    // Parse mappings with all properties
+    const parsedMappings = Array.isArray(data.mappings) ? data.mappings.map(mapping => {
+      let conditionsData = {};
+      if (mapping.Conditions__c) {
+        try {
+          conditionsData = JSON.parse(mapping.Conditions__c);
+        } catch (e) {
+          console.error(`Failed to parse Conditions__c for node ${mapping.nodeId}:`, e);
+        }
+      }
+
+      let fieldMappings = [];
+      if (mapping.Field_Mappings__c) {
+        try {
+          fieldMappings = JSON.parse(mapping.Field_Mappings__c);
+        } catch (e) {
+          console.error(`Failed to parse Field_Mappings__c for node ${mapping.nodeId}:`, e);
+        }
+      }
+
+      let loopConfig = {};
+      if (mapping.Loop_Config__c) {
+        try {
+          loopConfig = JSON.parse(mapping.Loop_Config__c);
+        } catch (e) {
+          console.error(`Failed to parse Loop_Config__c for node ${mapping.nodeId}:`, e);
+        }
+      }
+
+      let formatterConfig = {};
+      if (mapping.Formatter_Config__c) {
+        try {
+          formatterConfig = JSON.parse(mapping.Formatter_Config__c);
+        } catch (e) {
+          console.error(`Failed to parse Formatter_Config__c for node ${mapping.nodeId}:`, e);
+        }
+      }
+
+      // Map action types to client-side naming
+      const actionType = mapping.Type__c === "CreateUpdate" ? "Create/Update" :
+                         mapping.Type__c === "Start" ? "Start" :
+                         mapping.Type__c === "End" ? "End" :
+                         mapping.Type__c;
+
+      // Determine node type for UI rendering
+      const nodeType = actionType === "Start" || actionType === "End" ? actionType.toLowerCase() :
+                       actionType === "Condition" || actionType === "Path" || actionType === "Loop" || actionType === "Formatter" ? "utility" :
+                       "action";
+
+      return {
+        nodeId: mapping.Node_Id__c,
+        actionType,
+        label: mapping.Name,
+        order: parseInt(mapping.Order__c, 10),
+        formVersionId: mapping.Form_Version__c,
+        previousNodeId: mapping.Previous_Node_Id__c || null,
+        nextNodeIds: mapping.Next_Node_Id__c ? mapping.Next_Node_Id__c.split(',') : [],
+        salesforceObject: mapping.Salesforce_Object__c || "",
+        fieldMappings,
+        conditions: conditionsData.conditions || [],
+        logicType: conditionsData.logicType || "AND",
+        customLogic: conditionsData.customLogic || "",
+        pathOption: conditionsData.pathOption || "Rules",
+        returnLimit: conditionsData.returnLimit || "",
+        sortField: conditionsData.sortField || "",
+        sortOrder: conditionsData.sortOrder || "ASC",
+        enableConditions: actionType === "Create/Update" ? (conditionsData.conditions?.length > 0) : false,
+        loopConfig: actionType === "Loop" ? {
+          loopCollection: loopConfig.loopCollection || "",
+          currentItemVariableName: loopConfig.currentItemVariableName || "",
+          maxIterations: loopConfig.maxIterations || "",
+          loopVariables: loopConfig.loopVariables || { currentIndex: false, counter: false, indexBase: "0" },
+          exitConditions: loopConfig.exitConditions || [],
+          logicType: loopConfig.logicType || "AND",
+          customLogic: loopConfig.customLogic || "",
+        } : undefined,
+        formatterConfig: actionType === "Formatter" ? {
+          formatType: formatterConfig.formatType || "date",
+          operation: formatterConfig.operation || "",
+          inputField: formatterConfig.inputField || "",
+          outputVariable: formatterConfig.outputVariable || "",
+          options: formatterConfig.options || {},
+          inputField2: formatterConfig.inputField2 || "",
+          useCustomInput: formatterConfig.useCustomInput || false,
+          customValue: formatterConfig.customValue || "",
+        } : undefined,
+        id: mapping.Id,
+        // Additional properties for node rendering
+        type: nodeType,
+        displayLabel: mapping.Name || actionType,
+      };
+    }) : [];
+
+    // Update nodes to include all mapping properties
+    const updatedNodes = Array.isArray(data.nodes) ? data.nodes.map(node => {
+      const mapping = parsedMappings.find(m => m.nodeId === node.id);
+      if (!mapping) {
+        return node; // Fallback to original node if no mapping
+      }
+      return {
+        ...node,
+        type: "custom",
+        data: {
+          ...node.data,
+          label: mapping.label,
+          displayLabel: mapping.displayLabel || mapping.label,
+          action: mapping.actionType,
+          type: mapping.type,
+          order: mapping.order,
+          salesforceObject: mapping.salesforceObject,
+          fieldMappings: mapping.fieldMappings,
+          conditions: mapping.conditions,
+          logicType: mapping.logicType,
+          customLogic: mapping.customLogic,
+          pathOption: mapping.pathOption,
+          returnLimit: mapping.returnLimit,
+          sortField: mapping.sortField,
+          sortOrder: mapping.sortOrder,
+          enableConditions: mapping.enableConditions,
+          loopConfig: mapping.loopConfig,
+          formatterConfig: mapping.formatterConfig,
+        },
+      };
+    }) : [];
+
+    return {
+      mappings: parsedMappings,
+      nodes: updatedNodes,
+      edges: Array.isArray(data.edges) ? data.edges : [],
+    };
+  } catch (error) {
+    showToast(`Failed to fetch existing mappings: ${error.message}`, 'error');
+    return { mappings: [], nodes: [], edges: [] };
+  }
+};
+
+  // const initializeData = async () => {
+  //   setIsLoading(true);
+  //   setFetchError(null);
+
+  //   const userId = sessionStorage.getItem('userId');
+  //   const instanceUrl = sessionStorage.getItem('instanceUrl');
+  //   const formVersionIdLocal = formVersionId;
+
+  //   if (!userId || !instanceUrl || !formVersionIdLocal) {
+  //     showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
+  //     setIsLoading(false);
+  //     return;
+  //   }
+
+  //   try {
+  //     let tokenToUse = token;
+  //     if (!tokenToUse) {
+  //       tokenToUse = await fetchAccessToken(userId, instanceUrl);
+  //       if (!tokenToUse) {
+  //         setIsLoading(false);
+  //         return;
+  //       }
+  //       setToken(tokenToUse);
+  //     }
+
+  //     const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionIdLocal);
+  //     setFormFields(formFieldsData);
+
+  //     // Only fetch mappings if formVersionId has changed
+  //     if (formVersionIdLocal !== lastFetchedFormVersionId) {
+  //       let existingMappingsData = { mappings: [], nodes: [], edges: [] };
+  //       let retries = 2;
+  //       while (retries > 0) {
+  //         try {
+  //           existingMappingsData = await fetchExistingMappings(userId, formVersionIdLocal, instanceUrl, tokenToUse, retries);
+  //           break;
+  //         } catch (error) {
+  //           if (error.message.includes("Unauthorized") && retries > 0) {
+  //             tokenToUse = await fetchAccessToken(userId, instanceUrl, retries - 1);
+  //             if (!tokenToUse) throw new Error("Failed to refresh access token");
+  //             setToken(tokenToUse);
+  //             retries--;
+  //             continue;
+  //           }
+  //           throw error;
+  //         }
+  //       }
+
+  //       if (existingMappingsData.mappings.length > 0) {
+  //         setNodes(existingMappingsData.nodes);
+  //         setEdges(existingMappingsData.edges);
+  //         setMappings(existingMappingsData.mappings.reduce((acc, mapping) => ({
+  //           ...acc,
+  //           [mapping.nodeId]: mapping,
+  //         }), {}));
+  //         setLastFetchedFormVersionId(formVersionIdLocal);
+  //       } else {
+  //         setNodes(initialNodes);
+  //         setEdges(initialEdges);
+  //         setLastFetchedFormVersionId(formVersionIdLocal);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     showToast(`Initialization failed: ${error.message}. Please try again or contact support.`, 'error');
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  const initializeData = async () => {
+  setIsLoading(true);
+  setFetchError(null);
+
+  const userId = sessionStorage.getItem('userId');
+  const instanceUrl = sessionStorage.getItem('instanceUrl');
+  const formVersionIdLocal = formVersionId;
+
+  if (!userId || !instanceUrl || !formVersionIdLocal) {
+    showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
+    setIsLoading(false);
+    return;
+  }
+
+  try {
+    let tokenToUse = token;
+    if (!tokenToUse) {
+      tokenToUse = await fetchAccessToken(userId, instanceUrl);
       if (!tokenToUse) {
         setIsLoading(false);
         return;
       }
       setToken(tokenToUse);
-
-      // Fetch form fields for the formVersionId
-      const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionId, tokenToUse);
-      setFormFields(formFieldsData);
-
-    } catch (error) {
-      showToast(`Initialization failed: ${error.message}`, 'error');
-    } finally {
-      setIsLoading(false);
     }
-  };
 
-  const [isInitialized, setIsInitialized] = useState(false);
+    const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionIdLocal);
+    setFormFields(formFieldsData);
+
+    // Only fetch mappings if formVersionId has changed
+    if (formVersionIdLocal !== lastFetchedFormVersionId) {
+      let existingMappingsData = { mappings: [], nodes: [], edges: [] };
+      let retries = 2;
+      while (retries > 0) {
+        try {
+          existingMappingsData = await fetchExistingMappings(userId, formVersionIdLocal, instanceUrl, tokenToUse, retries);
+          break;
+        } catch (error) {
+          if (error.message.includes("Unauthorized") && retries > 0) {
+            tokenToUse = await fetchAccessToken(userId, instanceUrl, retries - 1);
+            if (!tokenToUse) throw new Error("Failed to refresh access token");
+            setToken(tokenToUse);
+            retries--;
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      if (existingMappingsData.mappings.length > 0) {
+        // Merge mappings into state
+        const mappingsMap = existingMappingsData.mappings.reduce((acc, mapping) => ({
+          ...acc,
+          [mapping.nodeId]: mapping,
+        }), {});
+        setMappings(mappingsMap);
+
+        // Ensure nodes have correct type and data
+        const normalizedNodes = existingMappingsData.nodes.map(node => ({
+          ...node,
+          type: "custom",
+          draggable: node.id !== "start" && node.id !== "end",
+          data: {
+            ...node.data,
+            type: mappingsMap[node.id]?.type || (node.id === "start" ? "start" : node.id === "end" ? "end" : "action"),
+            action: mappingsMap[node.id]?.actionType || node.data.action,
+            label: mappingsMap[node.id]?.label || node.data.label,
+            displayLabel: mappingsMap[node.id]?.displayLabel || node.data.displayLabel || node.data.label,
+            order: mappingsMap[node.id]?.order || node.data.order || 0,
+          },
+        }));
+
+        setNodes(normalizedNodes);
+        setEdges(existingMappingsData.edges);
+        setLastFetchedFormVersionId(formVersionIdLocal);
+      } else {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+        setMappings({});
+        setLastFetchedFormVersionId(formVersionIdLocal);
+      }
+    }
+  } catch (error) {
+    showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   useEffect(() => {
-    if (!isInitialized && (!formFields.length || !Object.keys(mappings).length)) {
+    if (!isInitialized) {
       initializeData();
       setIsInitialized(true);
     }
@@ -502,103 +957,135 @@ const MappingFields = () => {
     event.dataTransfer.effectAllowed = "move";
   };
 
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans relative">
-      <AnimatePresence>
-        {isLoading && (
-          <motion.div
-            className="fixed inset-0 flex items-center justify-center bg-gray-50 bg-opacity-80 z-50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div>
-              <p className="mt-4 text-gray-700 text-lg font-medium">Loading Editor...</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {!isLoading && (
-        <>
-          <motion.header
-            className="bg-white p-4 flex justify-between items-center shadow-md h-16 sticky top-0 z-10 border-b border-gray-200"
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <h1 className="text-xl font-bold text-gray-800 tracking-tight">
-              Field Mapping
-            </h1>
-            <motion.button
-              onClick={saveAllConfiguration}
-              disabled={isSaving}
-              className={`px-5 py-2 rounded-md font-medium text-white shadow-sm transition-all duration-200 ease-in-out
-                ${isSaving
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                }`}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              {isSaving ? "Saving..." : "Save All Configuration"}
-            </motion.button>
-          </motion.header>
-
-          <div className="flex flex-1 overflow-hidden">
-            <Sidebar onDragStart={onDragStart} />
-            <div className="flex-1 relative z-0 h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
-              <ReactFlowProvider>
-                <FlowDesigner
-                  initialNodes={initialNodes}
-                  initialEdges={initialEdges}
-                  setSelectedNode={setSelectedNode}
-                  setNodes={setNodes}
-                  setEdges={setEdges}
-                />
-              </ReactFlowProvider>
-            </div>
-
-            {selectedNode && ["Create/Update", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
-              <ActionPanel
-                nodeId={selectedNode.id}
-                nodeType={selectedNode.data.action}
-                formFields={formFields}
-                salesforceObjects={salesforceObjects}
-                mappings={mappings}
-                setMappings={setMappings}
-                setSalesforceObjects={setSalesforceObjects}
-                onClose={() => setSelectedNode(null)}
-                nodeLabel={selectedNode.data.displayLabel}
-                nodes={nodes}
-                edges={edges}
-              />
+    <div className="flex h-screen">
+      <MainMenuBar isSidebarOpen={isSidebarOpen} 
+        toggleSidebar={toggleSidebar} 
+        selectedObjects={selectedObjects}
+        selectedFields={selectedFields}
+        fieldsData={fieldsData}
+        formVersionId={formVersionId} />
+      <div
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
+          isSidebarOpen ? 'ml-64' : 'ml-16'
+        }`}
+      >
+        <div className="flex flex-col h-screen bg-gray-50 font-sans relative">
+          <AnimatePresence>
+            {isLoading && (
+              <motion.div
+                className="fixed inset-0 flex items-center justify-center bg-gray-50 bg-opacity-80 z-50"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex flex-col items-center">
+                  <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div>
+                  <p className="mt-4 text-gray-700 text-lg font-medium">Loading Editor...</p>
+                </div>
+              </motion.div>
             )}
-          </div>
-        </>
-      )}
+          </AnimatePresence>
 
-      <AnimatePresence>
-        {saveError && (
-          <motion.div
-            className={`fixed top-24 right-4 ${saveError.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white px-5 py-3 rounded-md shadow-lg flex items-center space-x-3 z-50 max-w-sm`}
-            initial={{ x: "100%", opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: "100%", opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="font-medium text-sm flex-grow">{saveError.message}</p>
-            <button onClick={() => setSaveError(null)} className="p-1 rounded-full hover:bg-red-700 transition-colors">
-              <XMarkIcon className="h-4 w-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {!isLoading && (
+            <>
+              <motion.header
+                className="bg-white p-4 flex justify-between items-center shadow-md h-16 sticky top-0 z-10 border-b border-gray-200"
+                initial={{ y: -100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <h1 className="text-xl font-bold text-gray-800 tracking-tight">
+                  Field Mapping
+                </h1>
+                <motion.button
+                  onClick={saveAllConfiguration}
+                  disabled={isSaving}
+                  className={`px-5 py-2 rounded-md font-medium text-white shadow-sm transition-all duration-200 ease-in-out
+                    ${isSaving
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    }`}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {isSaving ? "Saving..." : "Save All Configuration"}
+                </motion.button>
+              </motion.header>
+
+              <div className="flex flex-1 overflow-hidden">
+                <Sidebar onDragStart={onDragStart} />
+                <div className="flex-1 relative z-0 h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
+                  <ReactFlowProvider>
+                    <FlowDesigner
+                      initialNodes={nodes.length ? nodes : initialNodes}
+                      initialEdges={edges.length ? edges : initialEdges}
+                      setSelectedNode={setSelectedNode}
+                      setNodes={setNodes}
+                      setEdges={setEdges}
+                    />
+                  </ReactFlowProvider>
+                </div>
+
+                {selectedNode && ["Create/Update", "Find", "Filter", "Loop", "Formatter", "Condition", "Path"].includes(selectedNode.data.action) && (
+                  <ActionPanel
+                    nodeId={selectedNode.id}
+                    nodeType={selectedNode.data.action}
+                    formFields={formFields}
+                    salesforceObjects={salesforceObjects}
+                    mappings={mappings}
+                    setMappings={setMappings}
+                    setSalesforceObjects={setSalesforceObjects}
+                    onClose={() => setSelectedNode(null)}
+                    nodeLabel={selectedNode.data.displayLabel}
+                    nodes={nodes}
+                    edges={edges}
+                  />
+                )}
+              </div>
+            </>
+          )}
+
+          <AnimatePresence>
+            {saveError && (
+              <motion.div
+                className={`fixed top-24 right-4 ${saveError.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white px-5 py-3 rounded-md shadow-lg flex items-center space-x-3 z-50 max-w-sm`}
+                initial={{ x: "100%", opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "100%", opacity: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <p className="font-medium text-sm flex-grow">{saveError.message}</p>
+                <button
+                  onClick={() => setSaveError(null)}
+                  className="p-1 rounded-full hover:bg-red-700 transition-colors"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 };

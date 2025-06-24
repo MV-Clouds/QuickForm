@@ -1,16 +1,19 @@
 // src/utils/crypto.js
-import CryptoJS from 'crypto-js';
 
-const secret = 'process.env.REACT_APP_ENCRYPTION_SECRET' ;
-const iv = CryptoJS.enc.Hex.parse('process.env.REACT_APP_ENCRYPTION_IV');
+// Basic obfuscation: base64 + reverse
 
 function encrypt(text) {
-  return CryptoJS.AES.encrypt(text, secret, { iv }).toString();
+  const base64 = btoa(text); // Convert to base64
+  return base64.split('').reverse().join(''); // Reverse the string
 }
 
-function decrypt(encrypted) {
-  const bytes = CryptoJS.AES.decrypt(encrypted, secret, { iv });
-  return bytes.toString(CryptoJS.enc.Utf8);
+function decrypt(obfuscated) {
+  try {
+    const reversed = obfuscated.split('').reverse().join('');
+    return atob(reversed); // Decode base64
+  } catch (e) {
+    throw new Error('Invalid or corrupted link');
+  }
 }
 
 export { encrypt, decrypt };
