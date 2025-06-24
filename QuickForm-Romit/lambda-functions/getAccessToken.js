@@ -97,6 +97,7 @@ export const handler = async (event) => {
         };
       }
 
+      const currentTime = new Date().toISOString();
       // Use refresh token to get a new access token
       const refreshResponse = await fetch(`https://${cleanedInstanceUrl}/services/oauth2/token`, {
         method: 'POST',
@@ -136,6 +137,8 @@ export const handler = async (event) => {
             InstanceUrl: { S: cleanedInstanceUrl },
             AccessToken: { S: access_token },
             RefreshToken: { S: refresh_token },
+            CreatedAt: item.CreatedAt || { S: currentTime },
+            UpdatedAt: { S: currentTime },
           },
         })
       );

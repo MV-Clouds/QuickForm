@@ -61,7 +61,7 @@ export const handler = async (event) => {
     );
 
     if (queryResponse.Items && queryResponse.Items.length > 0) {
-      tokenItem.CreatedAt = queryResponse.Items[0].CreatedAt;
+      tokenItem.CreatedAt = queryResponse.Items[0].CreatedAt || { S : currentTime};
     }
     
     await dynamoClient.send(
