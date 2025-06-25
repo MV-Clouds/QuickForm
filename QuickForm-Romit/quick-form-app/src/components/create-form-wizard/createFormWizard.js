@@ -333,6 +333,24 @@ const CreateFormWizard = () => {
       }
     }
 
+    // Prepare object and field info in JSON format
+    const objectInfo = selectedObjects.map((obj) => {
+      const objMetadata = metadata.find((m) => m.name === obj) || {};
+      return {
+        objectName: obj,
+        objectLabel: objMetadata.label || obj,
+        fields: (selectedFields[obj] || []).map((fieldName) => {
+          const field = fieldsData[obj]?.find((f) => f.name === fieldName) || {};
+          return {
+            name: fieldName,
+            label: field.label || fieldName,
+            type: field.type || 'Unknown',
+            required: field.required || false,
+            referenceTo: field.referenceTo || [],
+          };
+        }),
+      };
+    });
     setIsFormNameOpen(true); 
   }, [selectedObjects, selectedFields, fieldsData, navigate]); // Dependencies for useCallback
 
@@ -343,10 +361,28 @@ const CreateFormWizard = () => {
 
   // Main JSX return statement with comments for major sections
   if (isFormNameOpen) {
+    const objectInfo = selectedObjects.map((obj) => {
+    const objMetadata = metadata.find((m) => m.name === obj) || {};
+    return {
+        objectName: obj,
+        objectLabel: objMetadata.label || obj,
+        fields: (selectedFields[obj] || []).map((fieldName) => {
+          const field = fieldsData[obj]?.find((f) => f.name === fieldName) || {};
+          return {
+            name: fieldName,
+            label: field.label || fieldName,
+            type: field.type || 'Unknown',
+            required: field.required || false,
+            referenceTo: field.referenceTo || [],
+          };
+        }),
+      };
+    });
     return (
       <FormName
         onClose={() => setIsFormNameOpen(false)}
         fields={[{ id: 'default-header', type: 'header', heading: 'Contact Form', alignment: 'center' }]}
+        objectInfo={objectInfo}
       />
     );
   }

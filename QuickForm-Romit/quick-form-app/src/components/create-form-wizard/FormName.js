@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const FormName = ({ onClose, fields = [] }) => {
+const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -60,6 +60,7 @@ const FormName = ({ onClose, fields = [] }) => {
       Stage__c: 'Draft',
       Publish_Link__c: '',
       Version__c: '1',
+      Object_Info__c: JSON.stringify(objectInfo),
     };
     const formFields = pages.flatMap((page) =>
       page.fields.map((field, index) => ({
