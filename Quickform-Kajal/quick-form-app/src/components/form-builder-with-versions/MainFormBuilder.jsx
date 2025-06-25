@@ -29,9 +29,10 @@ function MainFormBuilder() {
   const [formNameError, setFormNameError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const [selectedObjects, setSelectedObjects] = useState(location.state?.selectedObjects || []);
-  const [selectedFields, setSelectedFields] = useState(location.state?.selectedFields || {});
-  const [fieldsData, setFieldsData] = useState(location.state?.fieldsData || {});
+  const [formRecords, setFormRecords] = useState([]);
+  // const [selectedObjects, setSelectedObjects] = useState(location.state?.selectedObjects || []);
+  // const [selectedFields, setSelectedFields] = useState(location.state?.selectedFields || {});
+  // const [fieldsData, setFieldsData] = useState(location.state?.fieldsData || {});
 
   const [
     fieldsState,
@@ -149,6 +150,9 @@ function MainFormBuilder() {
       if (data.FormRecords) {
         try {
           formRecords = JSON.parse(data.FormRecords);
+          setFormRecords(formRecords);
+          console.log('Form Records==> ',formRecords);
+          
         } catch (e) {
           console.warn('Failed to parse FormRecords:', e);
         }
@@ -763,16 +767,13 @@ function MainFormBuilder() {
   };
 
   const selectedField = getSelectedField();
-  console.log('selectedVersionId==>',selectedVersionId);
   
   return (
     <div className="flex h-screen">
       <MainMenuBar isSidebarOpen={isSidebarOpen} 
         toggleSidebar={toggleSidebar} 
-        selectedObjects={selectedObjects}
-        selectedFields={selectedFields}
-        fieldsData={fieldsData}
-        formVersionId={selectedVersionId} />
+        formRecords={formRecords}
+        selectedVersionId={selectedVersionId} />
       <div
         className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
           isSidebarOpen ? 'ml-64' : 'ml-16'

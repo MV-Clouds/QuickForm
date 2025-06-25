@@ -7,20 +7,22 @@ import "reactflow/dist/style.css";
 
 const CustomNode = ({ data, selected, id, onAddAction }) => {
   const [isHovered, setIsHovered] = useState(false);
+  
+  const nodeType = data.actionType || data.action || "default";
 
   const getNodeStyles = () => {
     const baseStyles = "relative backdrop-blur-sm border-2 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl";
 
-    switch (data.type) {
-      case "condition":
+    switch (nodeType) {
+      case "Condition":
         return `${baseStyles} bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-300 hover:border-indigo-400`;
-      case "loop":
-        return `${baseStyles} bg-gradient-to-br from-violet-50 to-violet-100 border-violet-300 hover:border-violet-400`;
-      case "formatter":
-        return `${baseStyles} bg-gradient-to-br from-teal-50 to-teal-100 border-teal-300 hover:border-teal-400`;
-      case "action":
+      case "CreateUpdate":
+      case "Find":
         return `${baseStyles} bg-gradient-to-br from-rose-50 to-rose-100 border-rose-300 hover:border-rose-400`;
-      case "utility":
+      case "Formatter":
+      case "Filter":
+      case "Loop":
+      case "Path":
         return `${baseStyles} bg-gradient-to-br from-amber-50 to-amber-100 border-amber-300 hover:border-amber-400`;
       default:
         return `${baseStyles} bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300 hover:border-gray-400`;
@@ -28,23 +30,28 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
   };
 
   const getIconColor = () => {
-    switch (data.type) {
-      case "condition": return "text-indigo-600";
-      case "loop": return "text-violet-600";
-      case "formatter": return "text-teal-600";
-      case "action": return "text-rose-600";
-      case "utility": return "text-amber-600";
+    switch (nodeType) {
+      case "Condition": return "text-indigo-600";
+      case "Formatter":
+      case "Filter":
+      case "Loop": 
+      case "Path": return "text-amber-600";
+      case "CreateUpdate":
+      case "Find": return "text-rose-600";
       default: return "text-gray-600";
     }
   };
 
   const getIcon = () => {
-    switch (data.type) {
-      case "condition": return "🔀";
-      case "loop": return "🔄";
+    switch (nodeType) {
+      case "Condition": return "🔀";
+      case "Loop": return "🔄";
       case "formatter": return "🎨";
-      case "action": return "⚡";
-      case "utility": return "🔧";
+      case "CreateUpdate":
+      case "Find": return "⚡";
+      case "Formatter":
+      case "Filter": 
+      case "Path": return "🔧";
       default: return "📋";
     }
   };
@@ -77,7 +84,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
             <span className={`text-lg ${getIconColor()}`}>{getIcon()}</span>
           )}
           <div className="font-semibold text-slate-700 text-sm leading-tight">
-            {data.displayLabel}
+            {nodeType}
           </div>
         </div>
         {data.type === "loop" && (
@@ -212,6 +219,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     setParentEdges(edges);
   }, [nodes, edges, setParentNodes, setParentEdges]);
 
+  
   // Add self-connected edge for loop nodes
   useEffect(() => {
     nodes.forEach((node) => {

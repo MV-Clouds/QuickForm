@@ -1,10 +1,50 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar, selectedObjects, selectedFields, fieldsData, formVersionId}) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId}) {
   const navigate = useNavigate();
-  
+
   const handleMappingClick = () => {
+    // Find the form record and version matching selectedVersionId
+    const currentFormRecord = formRecords.find((record) =>
+      record.FormVersions.some((version) => version.Id === selectedVersionId)
+    );
+    const currentVersion = currentFormRecord?.FormVersions.find(
+      (version) => version.Id === selectedVersionId
+    );
+
+    // Extract data for navigation
+    const formVersionId = currentVersion.Id;
+    const fieldsData = currentVersion.Fields || [];
+
+    // Derive selectedObjects from Object_Info__c
+    let selectedObjects = [];
+    try {
+      const objectInfo = JSON.parse(currentVersion.Object_Info__c || '[]');
+      selectedObjects = objectInfo.map((obj) => ({
+        objectName: obj.objectName,
+        objectLabel: obj.objectLabel,
+      }));
+    } catch (e) {
+      console.warn('Failed to parse Object_Info__c:', e);
+    }
+
+    // Derive selectedFields from Object_Info__c
+    let selectedFields = {};
+    try {
+      const objectInfo = JSON.parse(currentVersion.Object_Info__c || '[]');
+      objectInfo.forEach((obj) => {
+        selectedFields[obj.objectName] = obj.fields.map((field) => ({
+          name: field.name,
+          label: field.label,
+          type: field.type,
+          required: field.required,
+        }));
+      });
+    } catch (e) {
+      console.warn('Failed to parse Object_Info__c for selectedFields:', e);
+    }
+
     navigate('/mapping', {
       state: {
         selectedObjects,

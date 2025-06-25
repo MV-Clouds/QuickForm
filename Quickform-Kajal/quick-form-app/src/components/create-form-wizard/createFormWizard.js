@@ -344,6 +344,23 @@ const CreateFormWizard = () => {
 
   // Main JSX return statement with comments for major sections
   if (isFormNameOpen) {
+    const objectInfo = selectedObjects.map((obj) => {
+    const objMetadata = metadata.find((m) => m.name === obj) || {};
+    return {
+        objectName: obj,
+        objectLabel: objMetadata.label || obj,
+        fields: (selectedFields[obj] || []).map((fieldName) => {
+          const field = fieldsData[obj]?.find((f) => f.name === fieldName) || {};
+          return {
+            name: fieldName,
+            label: field.label || fieldName,
+            type: field.type || 'Unknown',
+            required: field.required || false,
+            referenceTo: field.referenceTo || [],
+          };
+        }),
+      };
+    });
     return (
       <FormName
         onClose={() => setIsFormNameOpen(false)}
@@ -351,6 +368,7 @@ const CreateFormWizard = () => {
         selectedObjects={selectedObjects} // Pass selectedObjects
         selectedFields={selectedFields} // Pass selectedFields
         fieldsData={fieldsData} // Pass fieldsData
+        objectInfo={objectInfo}
       />
     );
   }

@@ -249,6 +249,7 @@ const Home = () => {
                 ) + 1
               ).toString(),
               Stage__c: 'Draft',
+              Object_Info__c: form.Object_Info__c,
             },
             formFields: (publishedVersion.Fields || []).map((field, index) => ({
               Name: field.Name,
@@ -261,8 +262,9 @@ const Home = () => {
           },
         }),
       });
-
+      
       const data = await response.json();
+      
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create new version');
       }

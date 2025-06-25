@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fieldsData }) => {
+const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fieldsData, objectInfo = []}) => {
+
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -61,6 +62,7 @@ const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fields
       Stage__c: 'Draft',
       Publish_Link__c: '',
       Version__c: '1',
+      Object_Info__c: JSON.stringify(objectInfo),
     };
     const formFields = pages.flatMap((page) =>
       page.fields.map((field, index) => ({
@@ -106,13 +108,7 @@ const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fields
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to create form.');
       const newFormVersionId = data.formVersionId;
-      navigate(`/form-builder/${newFormVersionId}`, {
-        state: {
-          selectedObjects,
-          selectedFields,
-          fieldsData,
-        },
-      });
+      navigate(`/form-builder/${newFormVersionId}`);
     } catch (error) {
       console.error('Error creating form:', error);
       setFormNameError(error.message || 'Failed to create form.');

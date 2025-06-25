@@ -60,58 +60,58 @@ const ActionPanel = ({
   const [pathOption, setPathOption] = useState("Rules");
 
   useEffect(() => {
-    // Reset state when nodeId changes to ensure node-specific data
-    setSelectedObject("");
-    setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
-    setConditions([{ field: "", operator: "=", value: "", value2: "" }]);
-    setLogicType("AND");
-    setCustomLogic("");
-    setExitConditions([{ field: "", operator: "=", value: "", value2: "" }]);
-    setLoopCollection("");
-    setCurrentItemVariableName("");
-    setLoopVariables({ currentIndex: false, indexBase: "0", counter: false });
-    setMaxIterations("");
-    setLoopDescription("");
-    setFormatterConfig({
-      formatType: "date",
-      operation: "",
-      inputField: "",
-      inputField2: "",
-      customValue: "",
-      useCustomInput: false,
-      options: {},
-    });
-    setEnableConditions(false);
-    setReturnLimit("");
-    setSortField("");
-    setSortOrder("ASC");
-    setPathOption("Rules");
-
     // Load node-specific mappings if they exist
-    if (mappings[nodeId]) {
-      setSelectedObject(mappings[nodeId].salesforceObject || "");
-      setLocalMappings(mappings[nodeId].fieldMappings?.length > 0 ? mappings[nodeId].fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
-      setConditions(mappings[nodeId].conditions?.length > 0 ? mappings[nodeId].conditions.map(c => ({ ...c, logic: undefined })) : (mappings[nodeId].pathOption === "Rules" ? [{ field: "", operator: "=", value: "", value2: "" }] : []));
-      setLogicType(mappings[nodeId].logicType || "AND");
-      setCustomLogic(mappings[nodeId].customLogic || "");
-      setEnableConditions(mappings[nodeId].enableConditions || false);
-      setReturnLimit(mappings[nodeId].returnLimit || "");
-      setSortField(mappings[nodeId].sortField || "");
-      setSortOrder(mappings[nodeId].sortOrder || "ASC");
-      const loopConfig = mappings[nodeId].loopConfig || {};
-      setCurrentItemVariableName(loopConfig.currentItemVariableName || "");
-      setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
-      setMaxIterations(loopConfig.maxIterations || "");
-      setExitConditions(loopConfig.exitConditions?.length > 0 ? loopConfig.exitConditions.map(c => ({ ...c, logic: undefined })) : [{ field: "", operator: "=", value: "", value2: "" }]);
-      setLoopDescription(loopConfig.loopDescription || "");
-      setPathOption(mappings[nodeId].pathOption || (isConditionNode ? "Rules" : undefined));
-      const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
-        .filter((node) => node.data.action === "Find")
-        .map((node) => node.id);
-      if (loopConfig.loopCollection && validCollectionOptions.includes(loopConfig.loopCollection)) {
-        setLoopCollection(loopConfig.loopCollection);
-      } else {
-        setLoopCollection("");
+    const nodeMapping = mappings[nodeId] || {};
+
+    setSelectedObject(nodeMapping.salesforceObject || "");
+    setLocalMappings(nodeMapping.fieldMappings?.length > 0 ? nodeMapping.fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+    setConditions(
+      nodeMapping.conditions?.length > 0
+        ? nodeMapping.conditions.map(c => ({ ...c, logic: undefined }))
+        : (nodeMapping.pathOption === "Rules" || isFindNode || isFilterNode || (isCreateUpdateNode && nodeMapping.enableConditions)
+            ? [{ field: "", operator: "=", value: "", value2: "" }]
+            : [])
+    );
+    setLogicType(nodeMapping.logicType || "AND");
+    setCustomLogic(nodeMapping.customLogic || "");
+    setEnableConditions(nodeMapping.enableConditions || false);
+    setReturnLimit(nodeMapping.returnLimit || "");
+    setSortField(nodeMapping.sortField || "");
+    setSortOrder(nodeMapping.sortOrder || "ASC");
+    setPathOption(nodeMapping.pathOption || (isConditionNode ? "Rules" : undefined));
+
+    const loopConfig = nodeMapping.loopConfig || {};
+    setCurrentItemVariableName(loopConfig.currentItemVariableName || "");
+    setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
+    setMaxIterations(loopConfig.maxIterations || "");
+    setExitConditions(
+      loopConfig.exitConditions?.length > 0
+        ? loopConfig.exitConditions.map(c => ({ ...c, logic: undefined }))
+        : [{ field: "", operator: "=", value: "", value2: "" }]
+    );
+    setLoopDescription(loopConfig.loopDescription || "");
+
+    const formatterConfigData = nodeMapping.formatterConfig || {};
+    setFormatterConfig({
+      formatType: formatterConfigData.formatType || "date",
+      operation: formatterConfigData.operation || "",
+      inputField: formatterConfigData.inputField || "",
+      inputField2: formatterConfigData.inputField2 || "",
+      customValue: formatterConfigData.customValue || "",
+      useCustomInput: formatterConfigData.useCustomInput || false,
+      options: formatterConfigData.options || {},
+      outputVariable: formatterConfigData.outputVariable || "",
+    });
+
+    const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
+      .filter((node) => node.data.action === "Find")
+      .map((node) => node.id);
+    if (loopConfig.loopCollection && validCollectionOptions.includes(loopConfig.loopCollection)) {
+      setLoopCollection(loopConfig.loopCollection);
+    } else {
+      setLoopCollection("");
+      if (loopConfig.loopCollection) {
+        setSaveError("Selected loop collection is no longer valid. Please select a valid Find node.");
         setMappings((prev) => ({
           ...prev,
           [nodeId]: {
@@ -123,49 +123,8 @@ const ActionPanel = ({
           },
         }));
       }
-      const formatterConfig = mappings[nodeId].formatterConfig || {};
-      setFormatterConfig({
-        formatType: formatterConfig.formatType || "date",
-        operation: formatterConfig.operation || "",
-        inputField: formatterConfig.inputField || "",
-        inputField2: formatterConfig.inputField2 || "",
-        customValue: formatterConfig.customValue || "",
-        useCustomInput: formatterConfig.useCustomInput || false,
-        options: formatterConfig.options || {},
-      });
     }
-  }, [nodeId, mappings, nodes, edges, setMappings, isConditionNode]);
-
-  useEffect(() => {
-    const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
-      .filter((node) => node.data.action === "Find")
-      .map((node) => node.id);
-    if (loopCollection && !validCollectionOptions.includes(loopCollection)) {
-      setLoopCollection("");
-      setSaveError("Selected loop collection is no longer valid. Please select a valid Find node.");
-      setMappings((prev) => ({
-        ...prev,
-        [nodeId]: {
-          ...prev[nodeId],
-          loopConfig: {
-            ...(prev[nodeId]?.loopConfig || {}),
-            loopCollection: "",
-          },
-        },
-      }));
-    } else if (loopCollection) {
-      setMappings((prev) => ({
-        ...prev,
-        [nodeId]: {
-          ...prev[nodeId],
-          loopConfig: {
-            ...(prev[nodeId]?.loopConfig || {}),
-            loopCollection,
-          },
-        },
-      }));
-    }
-  }, [loopCollection, nodeId, nodes, edges, setMappings]);
+  }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
     if (selectedObject && (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules"))) {
@@ -311,11 +270,6 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
-
-  useEffect(() => {
-    console.log("Locale Options:", localeOptions);
-    console.log("Currency Options:", currencyOptions);
-  }, []);
 
   const handleMappingChange = (index, key, value, extra = {}) => {
     setLocalMappings((prev) =>
@@ -571,6 +525,7 @@ const ActionPanel = ({
       };
       return updatedMappings;
     });
+    
     setSaveError(null);
     console.log("Mappings saved successfully for node:", nodeId);
     onClose();

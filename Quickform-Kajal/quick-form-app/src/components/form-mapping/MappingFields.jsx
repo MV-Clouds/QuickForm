@@ -9,7 +9,7 @@ import { XMarkIcon } from '@heroicons/react/24/solid';
 
 const Sidebar = ({ onDragStart }) => {
   const actions = ["Create/Update", "Find"];
-  const utilities = ["Formatter", "Filter", "Path", "Loop", "Condition"];
+  const utilities = ["Formatter", "Filter", "Path", "Loop"];
 
   return (
     <motion.div
@@ -69,10 +69,10 @@ const MappingFields = () => {
   const [salesforceObjects, setSalesforceObjects] = useState(
     selectedObjects.length > 0
       ? selectedObjects.map((obj) => ({
-          name: obj,
-          fields: selectedFields[obj] || [],
-          fieldDetails: fieldsData[obj] || [],
-        }))
+        name: obj,
+        fields: selectedFields[obj] || [],
+        fieldDetails: fieldsData[obj] || [],
+      }))
       : []
   );
   const [isLoading, setIsLoading] = useState(false);
@@ -473,17 +473,17 @@ const MappingFields = () => {
         actionType,
         salesforceObject:
           actionType === "CreateUpdate" ||
-          actionType === "Find" ||
-          actionType === "Filter" ||
-          (actionType === "Condition" && nodeMapping.pathOption === "Rules")
+            actionType === "Find" ||
+            actionType === "Filter" ||
+            (actionType === "Condition" && nodeMapping.pathOption === "Rules")
             ? nodeMapping.salesforceObject || ""
             : "",
         fieldMappings: actionType === "CreateUpdate" ? nodeMapping.fieldMappings || [] : [],
         conditions:
           actionType === "Find" ||
-          actionType === "Filter" ||
-          (actionType === "CreateUpdate" && nodeMapping.enableConditions) ||
-          (actionType === "Condition" && nodeMapping.pathOption === "Rules")
+            actionType === "Filter" ||
+            (actionType === "CreateUpdate" && nodeMapping.enableConditions) ||
+            (actionType === "Condition" && nodeMapping.pathOption === "Rules")
             ? nodeMapping.conditions || []
             : [],
         logicType:
@@ -525,7 +525,7 @@ const MappingFields = () => {
     }
 
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-    const saveMappingsUrl = process.env.REACT_APP_SAVE_MAPPINGS_URL || "https://q8en3hy1q7.execute-api.us-east-1.amazonaws.com/saveFieldMapping";
+    const saveMappingsUrl = process.env.REACT_APP_SAVE_MAPPINGS_URL;
 
     try {
       const payload = {
@@ -565,384 +565,257 @@ const MappingFields = () => {
     }
   };
 
-  // const fetchExistingMappings = async (userId, formVersionId, instanceUrl, access_token, retries = 2) => {
-  //   try {
-  //     console.log('In mapping===> ', userId, formVersionId, instanceUrl, access_token);
-      
-  //     const url = process.env.REACT_APP_FETCH_MAPPINGS_URL;
-  //     console.log('mapping url--> ', url);
-      
-  //     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
-  //     const response = await fetch(url, {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //         Authorization: `Bearer ${access_token}`,
-  //       },
-  //       body: JSON.stringify({ userId, formVersionId, instanceUrl: cleanedInstanceUrl }),
-  //     });
-  //     console.log('response in mapping==> ', response);
-      
-  //     const data = await response.json();
-  //     if (!response.ok) {
-  //       if (response.status === 401 && retries > 0) {
-  //         throw new Error("Unauthorized: Retry fetching access token");
-  //       }
-  //       throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
-  //     }
-
-  //     // Parse mappings to include returnLimit, sortField, sortOrder from Conditions__c
-  //     const parsedMappings = Array.isArray(data.mappings) ? data.mappings.map(mapping => {
-  //       let conditionsData = {};
-  //       if (mapping.Conditions__c) {
-  //         try {
-  //           conditionsData = JSON.parse(mapping.Conditions__c);
-  //         } catch (e) {
-  //           console.error(`Failed to parse Conditions__c for node ${mapping.nodeId}:`, e);
-  //         }
-  //       }
-
-  //       return {
-  //         ...mapping,
-  //         conditions: conditionsData.conditions || [],
-  //         logicType: conditionsData.logicType || null,
-  //         customLogic: conditionsData.customLogic || null,
-  //         pathOption: conditionsData.pathOption || 'Rules',
-  //         returnLimit: conditionsData.returnLimit || null,
-  //         sortField: conditionsData.sortField || null,
-  //         sortOrder: conditionsData.sortOrder || null,
-  //       };
-  //     }) : [];
-
-  //     return {
-  //       mappings: parsedMappings,
-  //       nodes: Array.isArray(data.nodes) ? data.nodes : [],
-  //       edges: Array.isArray(data.edges) ? data.edges : [],
-  //     };
-  //   } catch (error) {
-  //     showToast(`Failed to fetch existing mappings: ${error.message}`, 'error');
-  //     return { mappings: [], nodes: [], edges: [] };
-  //   }
-  // };
-
   const fetchExistingMappings = async (userId, formVersionId, instanceUrl, access_token, retries = 2) => {
-  try {
-    console.log('In mapping===> ', userId, formVersionId, instanceUrl, access_token);
-    
-    const url = process.env.REACT_APP_FETCH_MAPPINGS_URL;
-    console.log('mapping url--> ', url);
-    
-    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${access_token}`,
-      },
-      body: JSON.stringify({ userId, formVersionId, instanceUrl: cleanedInstanceUrl }),
-    });
-    console.log('response in mapping==> ', response);
-    
-    const data = await response.json();
-    if (!response.ok) {
-      if (response.status === 401 && retries > 0) {
-        throw new Error("Unauthorized: Retry fetching access token");
-      }
-      throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
-    }
+    try {
+      const url = process.env.REACT_APP_FETCH_MAPPINGS_URL;
 
-    // Parse mappings with all properties
-    const parsedMappings = Array.isArray(data.mappings) ? data.mappings.map(mapping => {
-      let conditionsData = {};
-      if (mapping.Conditions__c) {
-        try {
-          conditionsData = JSON.parse(mapping.Conditions__c);
-        } catch (e) {
-          console.error(`Failed to parse Conditions__c for node ${mapping.nodeId}:`, e);
-        }
-      }
-
-      let fieldMappings = [];
-      if (mapping.Field_Mappings__c) {
-        try {
-          fieldMappings = JSON.parse(mapping.Field_Mappings__c);
-        } catch (e) {
-          console.error(`Failed to parse Field_Mappings__c for node ${mapping.nodeId}:`, e);
-        }
-      }
-
-      let loopConfig = {};
-      if (mapping.Loop_Config__c) {
-        try {
-          loopConfig = JSON.parse(mapping.Loop_Config__c);
-        } catch (e) {
-          console.error(`Failed to parse Loop_Config__c for node ${mapping.nodeId}:`, e);
-        }
-      }
-
-      let formatterConfig = {};
-      if (mapping.Formatter_Config__c) {
-        try {
-          formatterConfig = JSON.parse(mapping.Formatter_Config__c);
-        } catch (e) {
-          console.error(`Failed to parse Formatter_Config__c for node ${mapping.nodeId}:`, e);
-        }
-      }
-
-      // Map action types to client-side naming
-      const actionType = mapping.Type__c === "CreateUpdate" ? "Create/Update" :
-                         mapping.Type__c === "Start" ? "Start" :
-                         mapping.Type__c === "End" ? "End" :
-                         mapping.Type__c;
-
-      // Determine node type for UI rendering
-      const nodeType = actionType === "Start" || actionType === "End" ? actionType.toLowerCase() :
-                       actionType === "Condition" || actionType === "Path" || actionType === "Loop" || actionType === "Formatter" ? "utility" :
-                       "action";
-
-      return {
-        nodeId: mapping.Node_Id__c,
-        actionType,
-        label: mapping.Name,
-        order: parseInt(mapping.Order__c, 10),
-        formVersionId: mapping.Form_Version__c,
-        previousNodeId: mapping.Previous_Node_Id__c || null,
-        nextNodeIds: mapping.Next_Node_Id__c ? mapping.Next_Node_Id__c.split(',') : [],
-        salesforceObject: mapping.Salesforce_Object__c || "",
-        fieldMappings,
-        conditions: conditionsData.conditions || [],
-        logicType: conditionsData.logicType || "AND",
-        customLogic: conditionsData.customLogic || "",
-        pathOption: conditionsData.pathOption || "Rules",
-        returnLimit: conditionsData.returnLimit || "",
-        sortField: conditionsData.sortField || "",
-        sortOrder: conditionsData.sortOrder || "ASC",
-        enableConditions: actionType === "Create/Update" ? (conditionsData.conditions?.length > 0) : false,
-        loopConfig: actionType === "Loop" ? {
-          loopCollection: loopConfig.loopCollection || "",
-          currentItemVariableName: loopConfig.currentItemVariableName || "",
-          maxIterations: loopConfig.maxIterations || "",
-          loopVariables: loopConfig.loopVariables || { currentIndex: false, counter: false, indexBase: "0" },
-          exitConditions: loopConfig.exitConditions || [],
-          logicType: loopConfig.logicType || "AND",
-          customLogic: loopConfig.customLogic || "",
-        } : undefined,
-        formatterConfig: actionType === "Formatter" ? {
-          formatType: formatterConfig.formatType || "date",
-          operation: formatterConfig.operation || "",
-          inputField: formatterConfig.inputField || "",
-          outputVariable: formatterConfig.outputVariable || "",
-          options: formatterConfig.options || {},
-          inputField2: formatterConfig.inputField2 || "",
-          useCustomInput: formatterConfig.useCustomInput || false,
-          customValue: formatterConfig.customValue || "",
-        } : undefined,
-        id: mapping.Id,
-        // Additional properties for node rendering
-        type: nodeType,
-        displayLabel: mapping.Name || actionType,
-      };
-    }) : [];
-
-    // Update nodes to include all mapping properties
-    const updatedNodes = Array.isArray(data.nodes) ? data.nodes.map(node => {
-      const mapping = parsedMappings.find(m => m.nodeId === node.id);
-      if (!mapping) {
-        return node; // Fallback to original node if no mapping
-      }
-      return {
-        ...node,
-        type: "custom",
-        data: {
-          ...node.data,
-          label: mapping.label,
-          displayLabel: mapping.displayLabel || mapping.label,
-          action: mapping.actionType,
-          type: mapping.type,
-          order: mapping.order,
-          salesforceObject: mapping.salesforceObject,
-          fieldMappings: mapping.fieldMappings,
-          conditions: mapping.conditions,
-          logicType: mapping.logicType,
-          customLogic: mapping.customLogic,
-          pathOption: mapping.pathOption,
-          returnLimit: mapping.returnLimit,
-          sortField: mapping.sortField,
-          sortOrder: mapping.sortOrder,
-          enableConditions: mapping.enableConditions,
-          loopConfig: mapping.loopConfig,
-          formatterConfig: mapping.formatterConfig,
+      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${access_token}`,
         },
+        body: JSON.stringify({ userId, formVersionId, instanceUrl: cleanedInstanceUrl }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401 && retries > 0) {
+          throw new Error("Unauthorized: Retry fetching access token");
+        }
+        throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
+      }
+
+      // Log raw mappings data for debugging
+      console.log('Raw mappings data:', data.mappings);
+
+      // Parse mappings with all properties
+      const parsedMappings = Array.isArray(data.mappings)
+        ? data.mappings.reduce((acc, mapping) => {
+            // Use nodeId from the server response
+            const nodeId = mapping.nodeId;
+            if (!nodeId) {
+              console.warn('Skipping mapping with missing nodeId:', mapping);
+              return acc;
+            }
+
+            // Handle conditions (object or JSON string)
+            let conditionsData = {};
+            if (mapping.conditions && typeof mapping.conditions === 'object') {
+              conditionsData = mapping.conditions;
+            } else if (mapping.Conditions__c) {
+              conditionsData = JSON.parse(mapping.Conditions__c);
+            }
+
+            let fieldMappings = [];
+            if (mapping.Field_Mappings__c) {
+              fieldMappings = JSON.parse(mapping.Field_Mappings__c);
+            } 
+
+            let loopConfig = {};
+            if (mapping.loopConfig && typeof mapping.loopConfig === 'object') {
+              loopConfig = mapping.loopConfig;
+            } else if (mapping.Loop_Config__c) {
+               loopConfig = JSON.parse(mapping.Loop_Config__c);
+            }
+
+            let formatterConfig = {};
+            if (mapping.formatterConfig && typeof mapping.formatterConfig === 'object') {
+              formatterConfig = mapping.formatterConfig;
+            } else if (mapping.Formatter_Config__c) {
+               formatterConfig = JSON.parse(mapping.Formatter_Config__c);
+            }
+
+            // Map action types to client-side naming
+            const actionType =
+              mapping.actionType === "CreateUpdate" || mapping.Type__c === "CreateUpdate"
+                ? "Create/Update"
+                : mapping.actionType === "Start" || mapping.Type__c === "Start"
+                ? "Start"
+                : mapping.actionType === "End" || mapping.Type__c === "End"
+                ? "End"
+                : mapping.actionType || mapping.Type__c;
+
+            // Determine node type for UI rendering
+            const nodeType =
+              actionType === "Start" || actionType === "End"
+                ? actionType.toLowerCase()
+                : actionType === "Condition" ||
+                  actionType === "Path" ||
+                  actionType === "Loop" ||
+                  actionType === "Formatter"
+                ? "utility"
+                : "action";
+
+            return {
+              ...acc,
+              [nodeId]: {
+                nodeId,
+                actionType,
+                label: mapping.label || mapping.Name || actionType,
+                order: parseInt(mapping.order || mapping.Order__c, 10) || 0,
+                formVersionId: mapping.formVersionId || mapping.Form_Version__c || "",
+                previousNodeId: mapping.previousNodeId || mapping.Previous_Node_Id__c || null,
+                nextNodeIds: (mapping.nextNodeIds || mapping.Next_Node_Id__c)
+                  ? Array.isArray(mapping.nextNodeIds)
+                    ? mapping.nextNodeIds
+                    : mapping.nextNodeIds.split(",")
+                  : [],
+                salesforceObject: mapping.salesforceObject || mapping.Salesforce_Object__c || "",
+                fieldMappings: Array.isArray(fieldMappings) ? fieldMappings : [],
+                conditions: Array.isArray(conditionsData.conditions) ? conditionsData.conditions : [],
+                logicType: conditionsData.logicType || "AND",
+                customLogic: conditionsData.customLogic || "",
+                pathOption: conditionsData.pathOption || "Rules",
+                returnLimit: conditionsData.returnLimit || "",
+                sortField: conditionsData.sortField || "",
+                sortOrder: conditionsData.sortOrder || "ASC",
+                enableConditions:
+                  actionType === "Create/Update" ? !!conditionsData.conditions?.length : false,
+                loopConfig: {
+                  loopCollection: loopConfig.loopCollection || "",
+                  currentItemVariableName: loopConfig.currentItemVariableName || "",
+                  maxIterations: loopConfig.maxIterations || "",
+                  loopVariables: loopConfig.loopVariables || {
+                    currentIndex: false,
+                    counter: false,
+                    indexBase: "0",
+                  },
+                  exitConditions: Array.isArray(loopConfig.exitConditions)
+                    ? loopConfig.exitConditions
+                    : [],
+                  logicType: loopConfig.logicType || "AND",
+                  customLogic: loopConfig.customLogic || "",
+                },
+                formatterConfig: {
+                  formatType: formatterConfig.formatType || "date",
+                  operation: formatterConfig.operation || "",
+                  inputField: formatterConfig.inputField || "",
+                  outputVariable: formatterConfig.outputVariable || "",
+                  options: formatterConfig.options || {},
+                  inputField2: formatterConfig.inputField2 || "",
+                  useCustomInput: formatterConfig.useCustomInput || false,
+                  customValue: formatterConfig.customValue || "",
+                },
+                id: mapping.id || mapping.Id || "",
+                type: nodeType,
+                displayLabel: mapping.label || mapping.Name || actionType,
+              },
+            };
+          }, {})
+        : {};
+
+      // Update nodes to include all mapping properties
+      const updatedNodes = Array.isArray(data.nodes)
+        ? data.nodes.map((node) => {
+            const mapping = parsedMappings[node.id];
+            if (!mapping) {
+              return node; // Fallback to original node if no mapping
+            }
+            return {
+              ...node,
+              type: "custom",
+              data: {
+                ...node.data,
+                label: mapping.label,
+                displayLabel: mapping.displayLabel || mapping.label,
+                action: mapping.actionType,
+                type: mapping.type,
+                order: mapping.order,
+                salesforceObject: mapping.salesforceObject,
+                fieldMappings: mapping.fieldMappings,
+                conditions: mapping.conditions,
+                logicType: mapping.logicType,
+                customLogic: mapping.customLogic,
+                pathOption: mapping.pathOption,
+                returnLimit: mapping.returnLimit,
+                sortField: mapping.sortField,
+                sortOrder: mapping.sortOrder,
+                enableConditions: mapping.enableConditions,
+                loopConfig: mapping.loopConfig,
+                formatterConfig: mapping.formatterConfig,
+              },
+            };
+          })
+        : [];
+
+      return {
+        mappings: parsedMappings,
+        nodes: updatedNodes,
+        edges: Array.isArray(data.edges) ? data.edges : [],
       };
-    }) : [];
-
-    return {
-      mappings: parsedMappings,
-      nodes: updatedNodes,
-      edges: Array.isArray(data.edges) ? data.edges : [],
-    };
-  } catch (error) {
-    showToast(`Failed to fetch existing mappings: ${error.message}`, 'error');
-    return { mappings: [], nodes: [], edges: [] };
-  }
-};
-
-  // const initializeData = async () => {
-  //   setIsLoading(true);
-  //   setFetchError(null);
-
-  //   const userId = sessionStorage.getItem('userId');
-  //   const instanceUrl = sessionStorage.getItem('instanceUrl');
-  //   const formVersionIdLocal = formVersionId;
-
-  //   if (!userId || !instanceUrl || !formVersionIdLocal) {
-  //     showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
-  //     setIsLoading(false);
-  //     return;
-  //   }
-
-  //   try {
-  //     let tokenToUse = token;
-  //     if (!tokenToUse) {
-  //       tokenToUse = await fetchAccessToken(userId, instanceUrl);
-  //       if (!tokenToUse) {
-  //         setIsLoading(false);
-  //         return;
-  //       }
-  //       setToken(tokenToUse);
-  //     }
-
-  //     const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionIdLocal);
-  //     setFormFields(formFieldsData);
-
-  //     // Only fetch mappings if formVersionId has changed
-  //     if (formVersionIdLocal !== lastFetchedFormVersionId) {
-  //       let existingMappingsData = { mappings: [], nodes: [], edges: [] };
-  //       let retries = 2;
-  //       while (retries > 0) {
-  //         try {
-  //           existingMappingsData = await fetchExistingMappings(userId, formVersionIdLocal, instanceUrl, tokenToUse, retries);
-  //           break;
-  //         } catch (error) {
-  //           if (error.message.includes("Unauthorized") && retries > 0) {
-  //             tokenToUse = await fetchAccessToken(userId, instanceUrl, retries - 1);
-  //             if (!tokenToUse) throw new Error("Failed to refresh access token");
-  //             setToken(tokenToUse);
-  //             retries--;
-  //             continue;
-  //           }
-  //           throw error;
-  //         }
-  //       }
-
-  //       if (existingMappingsData.mappings.length > 0) {
-  //         setNodes(existingMappingsData.nodes);
-  //         setEdges(existingMappingsData.edges);
-  //         setMappings(existingMappingsData.mappings.reduce((acc, mapping) => ({
-  //           ...acc,
-  //           [mapping.nodeId]: mapping,
-  //         }), {}));
-  //         setLastFetchedFormVersionId(formVersionIdLocal);
-  //       } else {
-  //         setNodes(initialNodes);
-  //         setEdges(initialEdges);
-  //         setLastFetchedFormVersionId(formVersionIdLocal);
-  //       }
-  //     }
-  //   } catch (error) {
-  //     showToast(`Initialization failed: ${error.message}. Please try again or contact support.`, 'error');
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
+    } catch (error) {
+      showToast(`Failed to fetch existing mappings: ${error.message}`, 'error');
+      return { mappings: {}, nodes: [], edges: [] };
+    }
+  };
 
   const initializeData = async () => {
-  setIsLoading(true);
-  setFetchError(null);
+    setIsLoading(true);
+    setFetchError(null);
 
-  const userId = sessionStorage.getItem('userId');
-  const instanceUrl = sessionStorage.getItem('instanceUrl');
-  const formVersionIdLocal = formVersionId;
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    const formVersionIdLocal = formVersionId;
 
-  if (!userId || !instanceUrl || !formVersionIdLocal) {
-    showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
-    setIsLoading(false);
-    return;
-  }
-
-  try {
-    let tokenToUse = token;
-    if (!tokenToUse) {
-      tokenToUse = await fetchAccessToken(userId, instanceUrl);
-      if (!tokenToUse) {
-        setIsLoading(false);
-        return;
-      }
-      setToken(tokenToUse);
+    if (!userId || !instanceUrl || !formVersionIdLocal) {
+      showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
+      setIsLoading(false);
+      return;
     }
 
-    const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionIdLocal);
-    setFormFields(formFieldsData);
+    try {
+      let tokenToUse = token;
+      if (!tokenToUse) {
+        tokenToUse = await fetchAccessToken(userId, instanceUrl);
+        if (!tokenToUse) {
+          setIsLoading(false);
+          return;
+        }
+        setToken(tokenToUse);
+      }
 
-    // Only fetch mappings if formVersionId has changed
-    if (formVersionIdLocal !== lastFetchedFormVersionId) {
-      let existingMappingsData = { mappings: [], nodes: [], edges: [] };
-      let retries = 2;
-      while (retries > 0) {
-        try {
-          existingMappingsData = await fetchExistingMappings(userId, formVersionIdLocal, instanceUrl, tokenToUse, retries);
-          break;
-        } catch (error) {
-          if (error.message.includes("Unauthorized") && retries > 0) {
-            tokenToUse = await fetchAccessToken(userId, instanceUrl, retries - 1);
-            if (!tokenToUse) throw new Error("Failed to refresh access token");
-            setToken(tokenToUse);
-            retries--;
-            continue;
+      const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionIdLocal);
+      setFormFields(formFieldsData);
+
+      if (formVersionIdLocal !== lastFetchedFormVersionId) {
+        let existingMappingsData = { mappings: {}, nodes: [], edges: [] };
+        let retries = 2;
+        while (retries > 0) {
+          try {
+            existingMappingsData = await fetchExistingMappings(userId, formVersionIdLocal, instanceUrl, tokenToUse, retries);
+            break;
+          } catch (error) {
+            if (error.message.includes("Unauthorized") && retries > 0) {
+              tokenToUse = await fetchAccessToken(userId, instanceUrl, retries - 1);
+              if (!tokenToUse) throw new Error("Failed to refresh access token");
+              setToken(tokenToUse);
+              retries--;
+              continue;
+            }
+            throw error;
           }
-          throw error;
+        }
+
+        if (Object.keys(existingMappingsData.mappings).length > 0) {
+          setMappings(existingMappingsData.mappings);
+          setNodes(existingMappingsData.nodes);
+          setEdges(existingMappingsData.edges);
+          setLastFetchedFormVersionId(formVersionIdLocal);
+        } else {
+          setNodes(initialNodes);
+          setEdges(initialEdges);
+          setMappings({});
+          setLastFetchedFormVersionId(formVersionIdLocal);
         }
       }
-
-      if (existingMappingsData.mappings.length > 0) {
-        // Merge mappings into state
-        const mappingsMap = existingMappingsData.mappings.reduce((acc, mapping) => ({
-          ...acc,
-          [mapping.nodeId]: mapping,
-        }), {});
-        setMappings(mappingsMap);
-
-        // Ensure nodes have correct type and data
-        const normalizedNodes = existingMappingsData.nodes.map(node => ({
-          ...node,
-          type: "custom",
-          draggable: node.id !== "start" && node.id !== "end",
-          data: {
-            ...node.data,
-            type: mappingsMap[node.id]?.type || (node.id === "start" ? "start" : node.id === "end" ? "end" : "action"),
-            action: mappingsMap[node.id]?.actionType || node.data.action,
-            label: mappingsMap[node.id]?.label || node.data.label,
-            displayLabel: mappingsMap[node.id]?.displayLabel || node.data.displayLabel || node.data.label,
-            order: mappingsMap[node.id]?.order || node.data.order || 0,
-          },
-        }));
-
-        setNodes(normalizedNodes);
-        setEdges(existingMappingsData.edges);
-        setLastFetchedFormVersionId(formVersionIdLocal);
-      } else {
-        setNodes(initialNodes);
-        setEdges(initialEdges);
-        setMappings({});
-        setLastFetchedFormVersionId(formVersionIdLocal);
-      }
+    } catch (error) {
+      showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   useEffect(() => {
     if (!isInitialized) {
@@ -960,19 +833,18 @@ const MappingFields = () => {
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
-
+ 
   return (
     <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen} 
-        toggleSidebar={toggleSidebar} 
+      <MainMenuBar isSidebarOpen={isSidebarOpen}
+        toggleSidebar={toggleSidebar}
         selectedObjects={selectedObjects}
         selectedFields={selectedFields}
         fieldsData={fieldsData}
         formVersionId={formVersionId} />
       <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-16'
-        }`}
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
+          }`}
       >
         <div className="flex flex-col h-screen bg-gray-50 font-sans relative">
           <AnimatePresence>
@@ -1091,3 +963,4 @@ const MappingFields = () => {
 };
 
 export default MappingFields;
+
