@@ -61,7 +61,7 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "default-header",
                     Field_Type__c: "header",
-                    "heading": "Order Form",
+                    Name: "Order Form",
                     "alignment": "center"
                 },
                 {
@@ -474,7 +474,7 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "default-header",
                     "Field_Type__c": "header",
-                    "heading": "Customer Feedback",
+                    Name: "Customer Feedback",
                     "alignment": "center",
                     "subheading": "We value your opinion! Please share your experience with us."
                 },
@@ -702,7 +702,7 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "default-header",
                     "Field_Type__c": "header",
-                    "heading": "Contact Us",
+                    Name: "Contact Us",
                     "alignment": "center",
                     "subheading": "We'll get back to you within 24 hours"
                 },
@@ -883,7 +883,7 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "default-header",
                     "Field_Type__c": "header",
-                    "heading": "Job Application",
+                    Name: "Job Application",
                     "alignment": "center"
                 },
                 {
@@ -1361,7 +1361,7 @@ const GetFormTemplate = () => {
                 Field_Type__c,
                 Order_Number__c: idx + 1,
                 Page_Number__c: pageNumber,
-                Properties__c : JSON.stringify({Properties__c , ...otherProps}),
+                Properties__c : JSON.stringify({id : Unique_Key__c,type : Field_Type__c ,Properties__c , ...otherProps}),
                 };
             })
             : [],

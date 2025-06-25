@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import FormTemplate from './FormTemplate';
+import {  useNavigate } from "react-router-dom";
 
 const MainTemplate = () => {
     const [data, setData] = useState();
@@ -7,7 +8,7 @@ const MainTemplate = () => {
     const [showModal, setShowModal] = useState(true);
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
-
+    const navigate = useNavigate();
     useEffect(() => {
         async function fetchData() {
             try {
@@ -61,12 +62,14 @@ const MainTemplate = () => {
             const res = await queryResponse.json();
             setData(res);
             console.log('Query Response', res);
+            navigate(`/form-builder/${res.formVersionId}`);
         } catch (error) {
             console.error('Error fetching template:', error);
         }
     };
 
     const handleClose = () => {
+        navigate('/home')
         setShowModal(false);
     };
 

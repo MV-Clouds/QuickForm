@@ -184,6 +184,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                   {filteredTemplates.map((template) => (
                     <div
                       key={template.id}
+                      onClick={() => setSelectedTemplate(template)} // Opens the side panel i.e Details of form
                       className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col h-full"
                     >
                       {/* Form Preview Section with Auto-scroll */}
@@ -478,13 +479,11 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                 </button>
                 <button
                   onClick={() => {
-                    onTemplateSelect(selectedTemplate);
-                    // onClose();
-                    // In a real app, you would navigate to the editor with customization mode
+                    onClose();
                   }}
                   className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                 >
-                  Customize First
+                 Close
                 </button>
               </div>
             </div>
