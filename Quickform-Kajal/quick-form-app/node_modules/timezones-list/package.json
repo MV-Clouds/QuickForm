@@ -1,0 +1,33 @@
+{
+  "name": "timezones-list",
+  "version": "3.1.0",
+  "description": "List of all timezones",
+  "author": "Om Srivastava",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "homepage": "https://github.com/omsrivastava/timezones#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omsrivastava/timezones.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bugs": {
+    "url": "https://github.com/omsrivastava/timezones/issues"
+  },
+  "keywords": [
+    "timezones",
+    "timezone",
+    "utc",
+    "GMT"
+  ],
+  "devDependencies": {
+    "@tsconfig/node14": "^1.0.0",
+    "typescript": "^4.2.4"
+  }
+}
