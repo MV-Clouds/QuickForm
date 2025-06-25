@@ -69,12 +69,14 @@ const MappingFields = () => {
   const [salesforceObjects, setSalesforceObjects] = useState(
     selectedObjects.length > 0
       ? selectedObjects.map((obj) => ({
-        name: obj,
-        fields: selectedFields[obj] || [],
-        fieldDetails: fieldsData[obj] || [],
-      }))
+          name: obj.objectName,
+          label: obj.objectLabel,
+          fields: selectedFields[obj.objectName] || [],
+          fieldDetails: fieldsData[obj.objectName] || [],
+        }))
       : []
   );
+
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [token, setToken] = useState(null);
@@ -92,14 +94,14 @@ const MappingFields = () => {
       type: "custom",
       position: { x: 250, y: 50 },
       data: { label: "Start", displayLabel: "Start", order: 1, type: "start", action: "Start" },
-      draggable: false,
+      draggable: true,
     },
     {
       id: "end",
       type: "custom",
       position: { x: 250, y: 500 },
       data: { label: "End", displayLabel: "End", order: null, type: "end", action: "End" },
-      draggable: false,
+      draggable: true,
     },
   ];
 
@@ -904,7 +906,7 @@ const MappingFields = () => {
                   </ReactFlowProvider>
                 </div>
 
-                {selectedNode && ["Create/Update", "Find", "Filter", "Loop", "Formatter", "Condition", "Path"].includes(selectedNode.data.action) && (
+                {selectedNode && ["Create/Update", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
                   <ActionPanel
                     nodeId={selectedNode.id}
                     nodeType={selectedNode.data.action}

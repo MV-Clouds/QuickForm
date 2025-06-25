@@ -16,7 +16,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
     switch (nodeType) {
       case "Condition":
         return `${baseStyles} bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-300 hover:border-indigo-400`;
-      case "CreateUpdate":
+      case "Create/Update":
       case "Find":
         return `${baseStyles} bg-gradient-to-br from-rose-50 to-rose-100 border-rose-300 hover:border-rose-400`;
       case "Formatter":
@@ -36,7 +36,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       case "Filter":
       case "Loop": 
       case "Path": return "text-amber-600";
-      case "CreateUpdate":
+      case "Create/Update":
       case "Find": return "text-rose-600";
       default: return "text-gray-600";
     }
@@ -47,7 +47,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       case "Condition": return "🔀";
       case "Loop": return "🔄";
       case "formatter": return "🎨";
-      case "CreateUpdate":
+      case "Create/Update":
       case "Find": return "⚡";
       case "Formatter":
       case "Filter": 
@@ -79,7 +79,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
 
       {/* Node Content */}
       <div className="flex justify-between items-center space-x-3">
-        <div className="flex items-center space-x-2">
+        <div className="flex justify-center items-center space-x-2">
           {shouldShowIcon && (
             <span className={`text-lg ${getIconColor()}`}>{getIcon()}</span>
           )}

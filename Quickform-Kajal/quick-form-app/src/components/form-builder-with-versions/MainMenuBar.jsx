@@ -5,55 +5,68 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
   const navigate = useNavigate();
 
   const handleMappingClick = () => {
-    // Find the form record and version matching selectedVersionId
-    const currentFormRecord = formRecords.find((record) =>
-      record.FormVersions.some((version) => version.Id === selectedVersionId)
-    );
-    const currentVersion = currentFormRecord?.FormVersions.find(
-      (version) => version.Id === selectedVersionId
-    );
+  // Step 1: Find the selected form version
+  const currentFormRecord = formRecords.find((record) =>
+    record.FormVersions.some((version) => version.Id === selectedVersionId)
+  );
 
-    // Extract data for navigation
-    const formVersionId = currentVersion.Id;
-    const fieldsData = currentVersion.Fields || [];
+  const currentVersion = currentFormRecord?.FormVersions.find(
+    (version) => version.Id === selectedVersionId
+  );
 
-    // Derive selectedObjects from Object_Info__c
-    let selectedObjects = [];
-    try {
-      const objectInfo = JSON.parse(currentVersion.Object_Info__c || '[]');
-      selectedObjects = objectInfo.map((obj) => ({
-        objectName: obj.objectName,
-        objectLabel: obj.objectLabel,
-      }));
-    } catch (e) {
-      console.warn('Failed to parse Object_Info__c:', e);
-    }
+  if (!currentVersion) {
+    console.warn('No matching form version found');
+    return;
+  }
 
-    // Derive selectedFields from Object_Info__c
-    let selectedFields = {};
-    try {
-      const objectInfo = JSON.parse(currentVersion.Object_Info__c || '[]');
-      objectInfo.forEach((obj) => {
-        selectedFields[obj.objectName] = obj.fields.map((field) => ({
-          name: field.name,
-          label: field.label,
-          type: field.type,
-          required: field.required,
-        }));
-      });
-    } catch (e) {
-      console.warn('Failed to parse Object_Info__c for selectedFields:', e);
-    }
+  // Step 2: Extract values
+  const formVersionId = currentVersion.Id;
+  const fieldsData = currentVersion.Fields || [];
 
-    navigate('/mapping', {
-      state: {
-        selectedObjects,
-        selectedFields,
-        fieldsData,
-        formVersionId,
-      },
-    });
-  };
+  console.log('selectedVersionId =>', selectedVersionId);
+  console.log('formVersionId =>', formVersionId);
+  console.log('fieldsData =>', fieldsData);
+  console.log('Raw Object_Info__c =>', currentVersion.Object_Info__c);
+
+  // Step 3: Parse Object_Info__c once and reuse
+  let objectInfo = [];
+  try {
+    objectInfo = JSON.parse(currentVersion.Object_Info__c || '[]');
+  } catch (e) {
+    console.warn('Failed to parse Object_Info__c:', e);
+  }
+
+  // Step 4: Derive selectedObjects
+  const selectedObjects = objectInfo.map((obj) => ({
+    objectName: obj.objectName,
+    objectLabel: obj.objectLabel,
+  }));
+
+  // Step 5: Derive selectedFields
+  const selectedFields = {};
+  objectInfo.forEach((obj) => {
+    selectedFields[obj.objectName] = (obj.fields || []).map((field) => ({
+      name: field.name,
+      label: field.label,
+      type: field.type,
+      required: field.required,
+    }));
+  });
+
+  console.log('selectedObjects =>', selectedObjects);
+  console.log('selectedFields =>', selectedFields);
+
+  // Step 6: Navigate
+  navigate('/mapping', {
+    state: {
+      selectedObjects,
+      selectedFields,
+      fieldsData,
+      formVersionId,
+    },
+  });
+};
+
 
   return (
     <aside

@@ -56,6 +56,8 @@ const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fields
     if (currentPage.length > 0 || pages.length === 0) {
       pages.push({ fields: currentPage, pageNumber });
     }
+    console.log('object info -----> ',JSON.stringify(objectInfo));
+    
     const formVersion = {
       Name: formName,
       Description__c: '',
@@ -108,6 +110,13 @@ const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fields
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to create form.');
       const newFormVersionId = data.formVersionId;
+      // navigate(`/form-builder/${newFormVersionId}`, {
+      //   state: {
+      //     selectedObjects,
+      //     selectedFields,
+      //     fieldsData,
+      //   },
+      // });
       navigate(`/form-builder/${newFormVersionId}`);
     } catch (error) {
       console.error('Error creating form:', error);

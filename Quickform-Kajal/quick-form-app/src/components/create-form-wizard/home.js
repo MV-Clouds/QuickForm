@@ -285,9 +285,14 @@ const Home = () => {
 
   const getFormDisplayName = (form) => {
    const publishedVersion = form.FormVersions.find(
-    (version) => version.Stage__c === 'Publish'
-  );
-  return publishedVersion?.Name || 'Unnamed Form';
+      (version) => version.Stage__c === 'Publish'
+    );
+      if (!publishedVersion) {
+          return form.FormVersions.find(
+            (version) => version.Stage__c === 'Draft'
+          )?.Name || 'Unnamed Form';
+      }
+    return publishedVersion?.Name || 'Unnamed Form';
   };
 
   return (

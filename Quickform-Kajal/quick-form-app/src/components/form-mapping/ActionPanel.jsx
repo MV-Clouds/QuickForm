@@ -536,9 +536,15 @@ const ActionPanel = ({
 
   const formFieldOptions = safeFormFields.map((field) => ({ value: field.id || "", label: field.name || "Unknown" }));
   const objectOptions = safeSalesforceObjects.map((obj) => ({ value: obj.name || "", label: obj.name || "Unknown" }));
+  
   const fieldOptions = selectedObject
-    ? safeSalesforceObjects.find((obj) => obj.name === selectedObject)?.fields?.map((f) => ({ value: f, label: f })) || []
-    : [];
+  ? safeSalesforceObjects
+      .find((obj) => obj.name === selectedObject)
+      ?.fields?.map((f) => ({
+          value: f.name, 
+          label: f.label || f.name || "Unknown Field", 
+        })) || []
+  : [];
 
   const sortOrderOptions = [
     { value: "ASC", label: "Ascending" },

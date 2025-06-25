@@ -357,6 +357,7 @@ const CreateFormWizard = () => {
             type: field.type || 'Unknown',
             required: field.required || false,
             referenceTo: field.referenceTo || [],
+            values: field.values || []
           };
         }),
       };
