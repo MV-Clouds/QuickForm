@@ -33,7 +33,7 @@ const ActionPanel = ({
   const isFilterNode = nodeType === "Filter";
   const isConditionNode = nodeType === "Condition";
   const [selectedObject, setSelectedObject] = useState("");
-  const [localMappings, setLocalMappings] = useState([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+  const [localMappings, setLocalMappings] = useState([{ formFieldId: "", fieldType: "", salesforceField: "", picklistValue: "" }]);
   const [conditions, setConditions] = useState([{ field: "", operator: "=", value: "", value2: "" }]);
   const [logicType, setLogicType] = useState("AND");
   const [customLogic, setCustomLogic] = useState("");
@@ -58,6 +58,23 @@ const ActionPanel = ({
   const [sortField, setSortField] = useState("");
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
+
+  const typeMapping = {
+    string: ["shorttext", "longtext"],
+    double: ["number", "price"],
+    currency: ["price", "number"],
+    boolean: ["checkbox"],
+    date: ["date"],
+    datetime: ["datetime"],
+    email: ["email"],
+    phone: ["phone"],
+    picklist: ["dropdown", "checkbox", "radio", "picklist"],
+    multipicklist: ["dropdown", "checkbox", "radio", "picklist"],
+    textarea: ["shorttext", "longtext"],
+    url: ["shorttext"],
+    percent: ["number"],
+    time: ["time"],
+  };
 
   useEffect(() => {
     // Load node-specific mappings if they exist
@@ -127,21 +144,23 @@ const ActionPanel = ({
   }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
-    if (selectedObject && (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules"))) {
-      const existingObject = salesforceObjects.find((obj) => obj.name === selectedObject);
-      if (!existingObject?.fields?.length) {
-        fetchSalesforceFields(userId, instanceUrl, token, selectedObject)
-          .then((data) => {
-            setSalesforceObjects((prev) =>
-              prev.map((obj) => (obj.name === selectedObject ? { ...obj, fields: data.fields } : obj))
-            );
-          })
-          .catch((error) => {
-            setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
-          });
-      }
+  if (selectedObject && (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules"))) {
+    const existingObject = salesforceObjects.find((obj) => obj.name === selectedObject);
+    if (!existingObject?.fields?.length) {
+      fetchSalesforceFields(userId, instanceUrl, token, selectedObject)
+        .then((data) => {
+          console.log('Fetched Salesforce fields for', selectedObject, ':', data.fields);
+          setSalesforceObjects((prev) =>
+            prev.map((obj) => (obj.name === selectedObject ? { ...obj, fields: data.fields } : obj))
+          );
+        })
+        .catch((error) => {
+          console.error('Error fetching Salesforce fields:', error);
+          setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
+        });
     }
-  }, [selectedObject, salesforceObjects, fetchSalesforceFields, userId, instanceUrl, token, setSalesforceObjects, isFindNode, isFilterNode, isCreateUpdateNode, enableConditions, isConditionNode, pathOption]);
+  }
+}, [selectedObject, salesforceObjects, fetchSalesforceFields, userId, instanceUrl, token, setSalesforceObjects, isFindNode, isFilterNode, isCreateUpdateNode, enableConditions, isConditionNode, pathOption]);
 
   const operators = [
     { value: "=", label: "Equals" },
@@ -160,6 +179,79 @@ const ActionPanel = ({
     { value: "IS NULL", label: "Is Null" },
     { value: "IS NOT NULL", label: "Is Not Null" },
   ];
+
+  const operatorGroups = {
+    text: [
+      { value: "=", label: "Equals" },
+      { value: "!=", label: "Not Equals" },
+      { value: "LIKE", label: "Contains" },
+      { value: "NOT LIKE", label: "Not Contains" },
+      { value: "STARTS WITH", label: "Starts With" },
+      { value: "ENDS WITH", label: "Ends With" },
+      { value: "IS NULL", label: "Is Null" },
+      { value: "IS NOT NULL", label: "Is Not Null" }
+    ],
+    number: [
+      { value: "=", label: "Equals" },
+      { value: "!=", label: "Not Equals" },
+      { value: ">", label: "Greater Than" },
+      { value: "<", label: "Less Than" },
+      { value: ">=", label: "Greater Than or Equal To" },
+      { value: "<=", label: "Less Than or Equal To" },
+      { value: "BETWEEN", label: "Between" },
+      { value: "IS NULL", label: "Is Null" },
+      { value: "IS NOT NULL", label: "Is Not Null" }
+    ],
+    date: [
+      { value: "=", label: "Equals" },
+      { value: "!=", label: "Not Equals" },
+      { value: ">", label: "After" },
+      { value: "<", label: "Before" },
+      { value: ">=", label: "On or After" },
+      { value: "<=", label: "On or Before" },
+      { value: "BETWEEN", label: "Between" },
+      { value: "IS NULL", label: "Is Null" },
+      { value: "IS NOT NULL", label: "Is Not Null" }
+    ],
+    boolean: [
+      { value: "=", label: "Equals" },
+      { value: "!=", label: "Not Equals" },
+      { value: "IS NULL", label: "Is Null" },
+      { value: "IS NOT NULL", label: "Is Not Null" }
+    ],
+    picklist: [
+      { value: "=", label: "Equals" },
+      { value: "!=", label: "Not Equals" },
+      { value: "IN", label: "In" },
+      { value: "NOT IN", label: "Not In" },
+      { value: "IS NULL", label: "Is Null" },
+      { value: "IS NOT NULL", label: "Is Not Null" }
+    ],
+    default: [
+      { value: "=", label: "Equals" },
+      { value: "!=", label: "Not Equals" },
+      { value: "IS NULL", label: "Is Null" },
+      { value: "IS NOT NULL", label: "Is Not Null" }
+    ]
+  };
+
+  // Map Salesforce field types to our operator groups
+  const fieldTypeToOperatorGroup = {
+    string: 'text',
+    double: 'number',
+    currency: 'number',
+    boolean: 'boolean',
+    date: 'date',
+    datetime: 'date',
+    email: 'text',
+    phone: 'text',
+    picklist: 'picklist',
+    multipicklist: 'picklist',
+    textarea: 'text',
+    url: 'text',
+    percent: 'number',
+    time: 'date'
+  };
 
   const logicOptions = [
     { value: "AND", label: "AND" },
@@ -271,11 +363,76 @@ const ActionPanel = ({
     { value: "Fallback", label: "Fallback" },
   ];
 
-  const handleMappingChange = (index, key, value, extra = {}) => {
-    setLocalMappings((prev) =>
-      prev.map((mapping, i) => (i === index ? { ...mapping, [key]: value, ...extra } : mapping))
-    );
+const handleMappingChange = (index, key, value, extra = {}) => {
+  const newMappings = [...localMappings];
+  const currentMapping = newMappings[index];
+  
+  // Handle picklist value selection
+  if (key === 'picklistValue') {
+    newMappings[index] = { 
+      ...currentMapping, 
+      picklistValue: value,
+      formFieldId: "", // Clear form field if picklist value is selected
+      fieldType: "picklist"
+    };
+    setLocalMappings(newMappings);
+    setSaveError(null);
+    return;
+  }
+  
+  if (key === 'formFieldId' || key === 'salesforceField') {
+    let formField = null;
+    let salesforceField = null;
+    
+    if (key === 'formFieldId') {
+      formField = safeFormFields.find(f => f.id === value);
+      salesforceField = currentMapping.salesforceField 
+        ? (safeSalesforceObjects
+            .find(obj => obj.name === selectedObject)
+            ?.fields?.find(f => f.name === currentMapping.salesforceField) || null)
+        : null;
+    } else { // salesforceField
+      salesforceField = safeSalesforceObjects
+        .find(obj => obj.name === selectedObject)
+        ?.fields?.find(f => f.name === value) || null;
+      formField = currentMapping.formFieldId 
+        ? (safeFormFields.find(f => f.id === currentMapping.formFieldId) || null)
+        : null;
+    }
+    
+    // Validate field types
+    if (formField && salesforceField) {
+      const allowedTypes = typeMapping[salesforceField.type] || [];
+      let isValid = allowedTypes.includes(formField.type);
+      
+      // Special handling for checkbox/radio with picklist
+      if ((formField.type === 'checkbox' || formField.type === 'radio') && 
+          (salesforceField.type === 'picklist' || salesforceField.type === 'multipicklist')) {
+        try {
+          const properties = JSON.parse(formField.Properties__c || '{}');
+          isValid = properties.options && properties.options.length > 1;
+        } catch (e) {
+          isValid = false;
+        }
+      }
+      
+      if (!isValid) {
+        setSaveError(`Type mismatch: Form field type ${formField.type} is not compatible with Salesforce field type ${salesforceField.type}`);
+        return;
+      } else {
+        setSaveError(null);
+      }
+    }
+  }
+  
+  newMappings[index] = { 
+    ...currentMapping, 
+    [key]: value, 
+    ...extra,
+    ...(key === 'formFieldId' ? { picklistValue: "" } : {}) // Clear picklist value if form field is selected
   };
+  setLocalMappings(newMappings);
+};
 
   const handleConditionChange = (index, key, value, conditionType = "conditions") => {
     const setState = conditionType === "exitConditions" ? setExitConditions : setConditions;
@@ -463,7 +620,18 @@ const ActionPanel = ({
       return;
     }
 
-    const validMappings = localMappings.filter((m) => m.formFieldId && m.fieldType && m.salesforceField);
+    const validMappings = localMappings.filter((m) => {
+      if (!m.salesforceField) return false;
+      
+      // Either form field or picklist value must be set
+      return m.formFieldId || m.picklistValue;
+    });
+
+    if (isCreateUpdateNode && validMappings.length !== localMappings.length) {
+      setSaveError("Some field mappings have type mismatches. Please correct them before saving.");
+      return;
+    }
+
     const validConditions = conditions.filter((c) =>
       c.field &&
       c.operator &&
@@ -507,7 +675,12 @@ const ActionPanel = ({
         [nodeId]: {
           actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
           salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
-          fieldMappings: isCreateUpdateNode ? validMappings : [],
+          fieldMappings: isCreateUpdateNode ? validMappings.map(m => ({
+            formFieldId: m.formFieldId,
+            fieldType: m.fieldType,
+            salesforceField: m.salesforceField,
+            picklistValue: m.picklistValue || undefined
+          })) : [],
           conditions: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? validConditions : [],
           logicType: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? logicType : undefined,
           customLogic: logicType === "Custom" ? customLogic : undefined,
@@ -534,7 +707,74 @@ const ActionPanel = ({
   const safeFormFields = Array.isArray(formFields) ? formFields : [];
   const safeSalesforceObjects = Array.isArray(salesforceObjects) ? salesforceObjects : [];
 
-  const formFieldOptions = safeFormFields.map((field) => ({ value: field.id || "", label: field.name || "Unknown" }));
+const formFieldOptions = (mappingIndex) => {
+  const currentSalesforceField = localMappings[mappingIndex]?.salesforceField;
+  const sfField = selectedObject 
+    ? safeSalesforceObjects
+        .find(obj => obj.name === selectedObject)
+        ?.fields?.find(f => f.name === currentSalesforceField)
+    : null;
+
+  // If no Salesforce field is selected or it's not a picklist/multipicklist, return all form fields
+  if (!sfField || (sfField.type !== 'picklist' && sfField.type !== 'multipicklist')) {
+    return safeFormFields.map(field => ({
+      value: field.id,
+      label: field.name || 'Unknown',
+      isDisabled: sfField ? !(typeMapping[sfField.type] || []).includes(field.type) : false
+    }));
+  }
+
+  // For picklist/multipicklist fields, return grouped options
+  const groups = [];
+
+  // Add Picklist Values group
+  if (sfField.values && Array.isArray(sfField.values) && sfField.values.length > 0) {
+    groups.push({
+      label: 'Picklist Values',
+      options: sfField.values.map(val => ({
+        value: val,
+        label: val,
+        isPicklistValue: true
+      }))
+    });
+  } else {
+    groups.push({
+      label: 'Picklist Values',
+      options: [{ value: '', label: 'No picklist values available', isDisabled: true }]
+    });
+  }
+
+  // Add Form Fields group
+  const compatibleFormFields = safeFormFields.filter(f => {
+    const allowedTypes = typeMapping[sfField.type] || [];
+    let isValid = allowedTypes.includes(f.type);
+
+    if ((f.type === 'checkbox' || f.type === 'radio') && 
+        (sfField.type === 'picklist' || sfField.type === 'multipicklist')) {
+      try {
+        const properties = JSON.parse(f.Properties__c || '{}');
+        isValid = properties.options && properties.options.length > 1;
+      } catch (e) {
+        isValid = false;
+      }
+    }
+    return isValid;
+  });
+
+  groups.push({
+    label: 'Form Fields',
+    options: compatibleFormFields.length > 0
+      ? compatibleFormFields.map(f => ({
+          value: f.id,
+          label: f.name || 'Unknown',
+          isFormField: true
+        }))
+      : [{ value: '', label: 'No compatible form fields available', isDisabled: true }]
+  });
+
+  return groups;
+};
+
   const objectOptions = safeSalesforceObjects.map((obj) => ({ value: obj.name || "", label: obj.name || "Unknown" }));
   
   const fieldOptions = selectedObject
@@ -553,6 +793,30 @@ const ActionPanel = ({
 
   const renderConditions = (conditionType = "conditions", isExit = false) => {
     const conditionsList = isExit ? exitConditions : conditions;
+
+     // Helper function to get operators for a condition
+    const getOperatorsForCondition = (conditionIndex) => {
+      if (isExit) {
+        return operatorGroups.default; // For exit conditions, use default operators
+      }
+      
+      const condition = conditionsList[conditionIndex];
+      if (!condition.field || !selectedObject) {
+        return operatorGroups.default;
+      }
+      
+      // Find the Salesforce field type
+      const sfObject = safeSalesforceObjects.find(obj => obj.name === selectedObject);
+      if (!sfObject) return operatorGroups.default;
+      
+      const sfField = sfObject.fields?.find(f => f.name === condition.field);
+      if (!sfField) return operatorGroups.default;
+      const operatorGroup = fieldTypeToOperatorGroup[sfField.type] || 'default';
+
+      return operatorGroups[operatorGroup] || operatorGroups.default;
+    };
+
+
     return (
       <div className="space-y-4">
         {conditionsList.length > 1 && (
@@ -660,12 +924,53 @@ const ActionPanel = ({
                   />
                 )}
               </div>
-              <div className="col-span-2">
+              {/* <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Operator</label>
                 <Select
                   value={operators.find((opt) => opt.value === condition.operator) || null}
                   onChange={(selected) => handleConditionChange(index, "operator", selected ? selected.value : "=", conditionType)}
                   options={operators}
+                  placeholder="Op"
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                      paddingLeft: "4px",
+                    }),
+                    dropdownIndicator: (base) => ({
+                      ...base,
+                      padding: "4px",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                      minWidth: "120px",
+                    }),
+                    option: (base) => ({
+                      ...base,
+                      padding: "4px 8px",
+                      fontSize: "0.75rem",
+                    }),
+                    singleValue: (base) => ({
+                      ...base,
+                      fontSize: "0.75rem",
+                    }),
+                  }}
+                  classNamePrefix="select"
+                />
+              </div> */}
+               <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-500 mb-1">Operator</label>
+                <Select
+                  value={getOperatorsForCondition(index).find((opt) => opt.value === condition.operator) || null}
+                  onChange={(selected) => handleConditionChange(index, "operator", selected ? selected.value : "=", conditionType)}
+                  options={getOperatorsForCondition(index)}
                   placeholder="Op"
                   styles={{
                     container: (base) => ({
@@ -1146,50 +1451,13 @@ const ActionPanel = ({
             >
               <div className="space-y-4">
                 {localMappings.map((mapping, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
-                  >
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+                    >
                     <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Form Field</label>
-                        <Select
-                          value={formFieldOptions.find((opt) => opt.value === mapping.formFieldId) || null}
-                          onChange={(selected) => {
-                            const field = safeFormFields.find((f) => f.id === (selected ? selected.value : ""));
-                            handleMappingChange(index, "formFieldId", selected ? selected.value : "", { fieldType: field ? field.type : "" });
-                          }}
-                          options={formFieldOptions}
-                          placeholder={formFieldOptions.length ? "Select Form Field" : "No Form Fields Available"}
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            placeholder: (base) => ({
-                              ...base,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          isClearable
-                          isDisabled={!formFieldOptions.length}
-                          classNamePrefix="select"
-                        />
-                      </div>
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Field</label>
                         <Select
@@ -1222,6 +1490,90 @@ const ActionPanel = ({
                           isDisabled={!selectedObject}
                           isClearable
                           classNamePrefix="select"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Form Field</label>
+                        <Select
+                          value={
+                            localMappings[index].picklistValue 
+                              ? { 
+                                  value: localMappings[index].picklistValue, 
+                                  label: localMappings[index].picklistValue,
+                                  isPicklistValue: true 
+                                }
+                              : safeFormFields.find(f => f.id === localMappings[index].formFieldId) 
+                                ? { 
+                                    value: localMappings[index].formFieldId, 
+                                    label: safeFormFields.find(f => f.id === localMappings[index].formFieldId).name || 'Unknown',
+                                    isFormField: true 
+                                  }
+                                : null
+                          }
+                          onChange={(selected) => {
+                            if (!selected) {
+                              handleMappingChange(index, 'formFieldId', '', { fieldType: '' });
+                              return;
+                            }
+                            if (selected.isPicklistValue) {
+                              handleMappingChange(index, 'picklistValue', selected.value);
+                            } else {
+                              const field = safeFormFields.find(f => f.id === selected.value);
+                              handleMappingChange(index, 'formFieldId', selected.value, { fieldType: field ? field.type : '' });
+                            }
+                          }}
+                          options={formFieldOptions(index)}
+                          placeholder={formFieldOptions.length ? "Select Form Field" : "No Form Fields Available"}
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            placeholder: (base) => ({
+                              ...base,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                            groupHeading: (base) => ({
+                              ...base,
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase',
+                              color: '#6b7280',
+                              backgroundColor: '#f9fafb',
+                              padding: '4px 8px',
+                              borderBottom: '1px solid #e5e7eb',
+                            }),
+                            option: (base, { data, isDisabled }) => ({
+                              ...base,
+                              backgroundColor: data.isPicklistValue ? '#f0f9ff' : base.backgroundColor,
+                              color: isDisabled ? '#ccc' : (data.isPicklistValue ? '#0369a1' : base.color),
+                              cursor: isDisabled ? 'not-allowed' : 'default',
+                              ':active': {
+                                backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : base[':active'].backgroundColor),
+                              },
+                            }),
+                          }}
+                          isClearable
+                          isDisabled={!formFieldOptions.length}
+                          classNamePrefix="select"
+                          getOptionIsDisabled={(option) => option.isDisabled === true}
+                          formatGroupLabel={(group) => (
+                            <div className="flex items-center">
+                              <span>{group.label}</span>
+                            </div>
+                          )}
                         />
                       </div>
                       {localMappings.length > 1 && (
@@ -1337,10 +1689,15 @@ const ActionPanel = ({
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
                 <Select
-                  value={formFieldOptions.find((opt) => opt.value === formatterConfig.inputField) || null}
+                  value={safeFormFields.find((f) => f.id === formatterConfig.inputField) ? 
+                    { value: formatterConfig.inputField, label: safeFormFields.find((f) => f.id === formatterConfig.inputField).name } 
+                    : null}
                   onChange={(selected) => handleFormatterChange("inputField", selected ? selected.value : "")}
-                  options={formFieldOptions}
-                  placeholder={formFieldOptions.length ? "Select Form Field" : "No Form Fields Available"}
+                  options={safeFormFields.map(f => ({
+                    value: f.id,
+                    label: f.name || 'Unknown'
+                  }))}
+                  placeholder="Select Input Field"
                   styles={{
                     container: (base) => ({
                       ...base,
@@ -1352,19 +1709,12 @@ const ActionPanel = ({
                       ...base,
                       minHeight: "34px",
                     }),
-                    placeholder: (base) => ({
-                      ...base,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }),
                     menu: (base) => ({
                       ...base,
                       zIndex: 9999,
                     }),
                   }}
                   isClearable
-                  isDisabled={!formFieldOptions.length}
                   classNamePrefix="select"
                 />
               </div>

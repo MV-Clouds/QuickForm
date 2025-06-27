@@ -49,10 +49,12 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
       name: field.name,
       label: field.label,
       type: field.type,
+      values: field.values || null,
       required: field.required,
     }));
   });
 
+  console.log('selectedFields in handleMappingClick:', selectedFields);
   console.log('selectedObjects =>', selectedObjects);
   console.log('selectedFields =>', selectedFields);
 

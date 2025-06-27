@@ -16,15 +16,20 @@ const Login = () => {
 
     // Add message event listener
     const handleMessage = (event) => {
-      if (event.origin === 'https://d2bri1qui9cr5s.cloudfront.net') {
+      console.log('---Handle message call---');
+      
+      if (event.origin === 'https://d2gg09yhu3xa1a.cloudfront.net') {
         if (event.data.type === 'login_error') {
+          console.log('------here one---------');
+          
           if (popup && !popup.closed) {
             popup.close(); // Close popup on error
           }
         }
       }
-      if (event.origin === 'https://vm6pandneg.execute-api.us-east-1.amazonaws.com') {
+      if (event.origin === 'https://ew2pvgsa59.execute-api.us-east-1.amazonaws.com') {
         if (event.data.type === 'login_success') {
+          console.log('------here two---------');
           if (popup && !popup.closed) {
             popup.close(); // Close popup on success
           }
@@ -56,7 +61,7 @@ const Login = () => {
   const openPopup = () => {
     if (!org) return; // Do nothing if org not selected
 
-    let base = 'https://d2bri1qui9cr5s.cloudfront.net/auth/login'; // Base login URL
+    let base = 'https://d2gg09yhu3xa1a.cloudfront.net/auth/login'; // Base login URL
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login status
 
     if (isLoggedIn) {
@@ -84,6 +89,7 @@ const Login = () => {
     popup = popupWindow; // Store popup reference
 
     if (isLoggedIn) {
+      console.log('------here three---------');
       if (popup && !popup.closed) {
         popup.close(); // Close popup immediately if already logged in
       }

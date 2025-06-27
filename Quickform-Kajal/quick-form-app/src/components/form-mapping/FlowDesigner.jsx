@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from "react";
-import ReactFlow, { useNodesState, useEdgesState, addEdge, Controls, Background, Handle, Position } from "reactflow";
+import ReactFlow, { useNodesState,useReactFlow, useEdgesState, addEdge, Controls, Background, Handle, Position } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import Modal from "react-modal";
 import Select from "react-select";
@@ -7,8 +7,14 @@ import "reactflow/dist/style.css";
 
 const CustomNode = ({ data, selected, id, onAddAction }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { deleteElements } = useReactFlow();
   
   const nodeType = data.actionType || data.action || "default";
+
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    deleteElements({ nodes: [{ id }] });
+  };
 
   const getNodeStyles = () => {
     const baseStyles = "relative backdrop-blur-sm border-2 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl";
@@ -17,6 +23,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       case "Condition":
         return `${baseStyles} bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-300 hover:border-indigo-400`;
       case "Create/Update":
+      case "CreateUpdate":
       case "Find":
         return `${baseStyles} bg-gradient-to-br from-rose-50 to-rose-100 border-rose-300 hover:border-rose-400`;
       case "Formatter":
@@ -37,6 +44,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       case "Loop": 
       case "Path": return "text-amber-600";
       case "Create/Update":
+      case "CreateUpdate":
       case "Find": return "text-rose-600";
       default: return "text-gray-600";
     }
@@ -48,6 +56,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       case "Loop": return "🔄";
       case "formatter": return "🎨";
       case "Create/Update":
+      case "CreateUpdate":
       case "Find": return "⚡";
       case "Formatter":
       case "Filter": 
@@ -116,6 +125,19 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
         id="bottom"
         className="w-4 h-4 bg-gradient-to-r from-slate-400 to-slate-500 -bottom-2 left-1/2 transform -translate-x-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
       />
+
+      {(isHovered || selected) && id !== "start" && id !== "end" && (
+        <motion.button
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          onClick={handleDelete}
+          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md hover:bg-red-600 z-10"
+          whileHover={{ scale: 1.1 }}
+        >
+          ×
+        </motion.button>
+      )}
 
       {/* Loop Handles */}
       {data.type === "loop" && (
@@ -208,7 +230,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
   const lastConnectTimeRef = useRef(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loopNodeId, setLoopNodeId] = useState(null);
-
+  const { deleteElements } = useReactFlow();
   const actionOptions = [
     { value: "Create/Update", label: "Create/Update" },
     { value: "Find", label: "Find" },
@@ -219,7 +241,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     setParentEdges(edges);
   }, [nodes, edges, setParentNodes, setParentEdges]);
 
-  
+
   // Add self-connected edge for loop nodes
   useEffect(() => {
     nodes.forEach((node) => {
@@ -546,10 +568,38 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       setEdges((eds) => {
         const edge = eds.find((e) => e.id === edgeId);
         let newEdges = eds.filter((e) => e.id !== edgeId);
+        
+        // Handle condition node removal for path nodes
         if (edge.conditionNodeId) {
-          newEdges = newEdges.filter((e) => e.source !== edge.conditionNodeId && e.target !== edge.conditionNodeId);
+          // Remove all edges connected to the condition node
+          newEdges = newEdges.filter((e) => 
+            !(e.source === edge.conditionNodeId || e.target === edge.conditionNodeId)
+          );
+          // Remove the condition node itself
           setNodes((nds) => nds.filter((n) => n.id !== edge.conditionNodeId));
         }
+        
+        // Also check if this was a path node connection
+        const pathNodeEdge = eds.find(e => 
+          e.id === edgeId && 
+          nodes.some(n => n.id === e.source && n.data.action === "Path")
+        );
+        
+        if (pathNodeEdge) {
+          // Find and remove any associated condition nodes
+          const conditionNodes = nodes.filter(n => 
+            n.data.pathNodeId === pathNodeEdge.source && 
+            n.data.targetNodeId === pathNodeEdge.target
+          );
+          
+          conditionNodes.forEach(conditionNode => {
+            newEdges = newEdges.filter(e => 
+              !(e.source === conditionNode.id || e.target === conditionNode.id)
+            );
+            setNodes(nds => nds.filter(n => n.id !== conditionNode.id));
+          });
+        }
+
         const updatedNodes = calculateNodeOrders(nodes, newEdges);
         setNodes(updatedNodes);
         return newEdges;
@@ -776,6 +826,12 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           onDragOver={onDragOver}
           onDrop={onDrop}
           onNodeClick={onNodeClick}
+          onNodesDelete={useCallback((nodesToDelete) => {
+            const nodeIds = nodesToDelete.map(n => n.id);
+            setEdges(eds => eds.filter(e => 
+              !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
+            ));
+          }, [setEdges])}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView={false}
@@ -846,3 +902,4 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
 };
 
 export default FlowDesigner;
+

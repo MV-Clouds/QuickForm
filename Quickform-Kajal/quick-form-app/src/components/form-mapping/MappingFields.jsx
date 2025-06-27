@@ -104,7 +104,7 @@ const MappingFields = () => {
       draggable: true,
     },
   ];
-
+  
   const initialEdges = [];
 
   const showToast = (message, type = 'error') => {
@@ -612,8 +612,27 @@ const MappingFields = () => {
 
             let fieldMappings = [];
             if (mapping.Field_Mappings__c) {
-              fieldMappings = JSON.parse(mapping.Field_Mappings__c);
-            } 
+              try {
+                fieldMappings = typeof mapping.Field_Mappings__c === 'string' 
+                  ? JSON.parse(mapping.Field_Mappings__c)
+                  : mapping.Field_Mappings__c;
+              } catch (e) {
+                console.error('Error parsing field mappings:', e);
+                fieldMappings = [];
+              }
+            } else if (mapping.fieldMappings) {
+              fieldMappings = Array.isArray(mapping.fieldMappings) 
+                ? mapping.fieldMappings 
+                : [];
+            }
+
+            // Ensure each field mapping has all required properties
+            fieldMappings = fieldMappings.map(fm => ({
+              formFieldId: fm.formFieldId || fm.Form_Field_Id__c || '',
+              fieldType: fm.fieldType || fm.Field_Type__c || '',
+              salesforceField: fm.salesforceField || fm.Salesforce_Field__c || '',
+              picklistValue: fm.picklistValue || fm.Picklist_Value__c || ''
+            }));
 
             let loopConfig = {};
             if (mapping.loopConfig && typeof mapping.loopConfig === 'object') {
@@ -665,7 +684,7 @@ const MappingFields = () => {
                     : mapping.nextNodeIds.split(",")
                   : [],
                 salesforceObject: mapping.salesforceObject || mapping.Salesforce_Object__c || "",
-                fieldMappings: Array.isArray(fieldMappings) ? fieldMappings : [],
+                fieldMappings: fieldMappings || [],
                 conditions: Array.isArray(conditionsData.conditions) ? conditionsData.conditions : [],
                 logicType: conditionsData.logicType || "AND",
                 customLogic: conditionsData.customLogic || "",
