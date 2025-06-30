@@ -6,6 +6,7 @@ import Home from './components/create-form-wizard/home';
 import ProtectedRoute from './components/login-page/protectedRoute';
 import MainFormBuilder from './components/form-builder-with-versions/MainFormBuilder';
 import PublicFormViewer from './components/form-publish/PublicFormViewer';
+import Conditions from './components/conditions/Conditions';
 
 function App() {
   return (
@@ -45,6 +46,10 @@ function App() {
             element={<ProtectedRoute element={<MainFormBuilder />} />}
           />
           <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
+          <Route
+            path="/conditions/:formVersionId"
+            element={<ProtectedRoute element={<Conditions />} />}
+          />
         </Routes>
       </div>
     </Router>

@@ -401,6 +401,15 @@ export const handler = async (event) => {
       createdAt = existingMetadataRes.Item.CreatedAt?.S || currentTime;
     }
 
+    let existingConditions = [];
+    if (Id) {
+      const existingFormVersion = existingFormRecords
+        .flatMap(form => form.FormVersions)
+        .find(version => version.Id === Id);
+      if (existingFormVersion && existingFormVersion.Conditions) {
+        existingConditions = existingFormVersion.Conditions;
+      }
+    }
     // Construct new or updated form record
     const newFormVersionRecord = {
       Id: formVersionId,
@@ -411,7 +420,9 @@ export const handler = async (event) => {
       Publish_Link__c: formData.formVersion.Publish_Link__c || '',
       Stage__c: formData.formVersion.Stage__c || 'Draft',
       Submission_Count__c: formData.formVersion.Submission_Count__c || 0,
+      Object_Info__c: formData.formVersion.Object_Info__c || [],
       Fields: createdFormFields,
+      Conditions: existingConditions,
       Source: 'Form_Version__c',
     };
 

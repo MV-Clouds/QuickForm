@@ -188,9 +188,11 @@ export const handler = async (event) => {
     let formRecords = [];
     try {
       const query = `SELECT Id, Name, Active_Version__c,
-                     (SELECT Id, Name, Form__c, Description__c, Version__c, Publish_Link__c, Stage__c, Submission_Count__c,
+                     (SELECT Id, Name, Form__c, Description__c, Version__c, Object_Info__c, Publish_Link__c, Stage__c, Submission_Count__c,
                        (SELECT Id, Name, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c 
-                        FROM Form_Fields__r) 
+                        FROM Form_Fields__r),
+                        (SELECT Id, Condition_Type__c, Condition_Data__c 
+                          FROM Form_Condition__r)
                       FROM Form_Versions__r ORDER BY Version__c DESC)
                      FROM Form__c`;
       const queryUrl = `${instance_url}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
@@ -216,6 +218,7 @@ export const handler = async (event) => {
           Id: version.Id,
           FormId: version.Form__c,
           Name: version.Name,
+          Object_Info__c: version.Object_Info__c || null,
           Description__c: version.Description__c || null,
           Version__c: version.Version__c || '1',
           Publish_Link__c: version.Publish_Link__c || null,
@@ -229,6 +232,11 @@ export const handler = async (event) => {
             Order_Number__c: field.Order_Number__c,
             Properties__c: field.Properties__c,
             Unique_Key__c: field.Unique_Key__c,
+          })),
+          Conditions: (version.Form_Conditions__r?.records || []).map(condition => ({
+            Id: condition.Id,
+            Condition_Type__c: condition.Condition_Type__c,
+            Condition_Data__c: condition.Condition_Data__c,
           })),
           Source: 'Form_Version__c',
         })),

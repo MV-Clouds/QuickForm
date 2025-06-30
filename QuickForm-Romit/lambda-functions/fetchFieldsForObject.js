@@ -81,6 +81,11 @@ export const handler = async (event) => {
         type: field.type, // Include the field type (e.g., string, boolean, reference)
         referenceTo: field.referenceTo || [], // For relationship fields
         required: !field.nillable && !field.defaultedOnCreate,
+        values: ['picklist', 'multipicklist'].includes(field.type)
+        ? field.picklistValues
+            .filter(v => !v.active || v.defaultValue !== undefined) // optional: filter inactive if needed
+            .map(v => v.value)
+        : undefined,
       }));
     
     return {

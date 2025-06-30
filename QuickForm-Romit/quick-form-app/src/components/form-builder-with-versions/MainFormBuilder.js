@@ -76,11 +76,8 @@ function MainFormBuilder() {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
       const token = (await fetchAccessToken(userId, instanceUrl));
-      const linkData = {
-        userId,
-        formVersionId: selectedVersionId,
-      };
-      const encryptedLinkId = encrypt(JSON.stringify(linkData));
+      const rawString = `${userId}$${selectedVersionId}`;
+      const encryptedLinkId = encrypt(rawString);
       const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
@@ -712,7 +709,7 @@ function MainFormBuilder() {
 
   return (
     <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+      <MainMenuBar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} formVersionId={selectedVersionId}/>
       <div
         className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
           isSidebarOpen ? 'ml-64' : 'ml-16'

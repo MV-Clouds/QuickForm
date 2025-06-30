@@ -37,12 +37,12 @@ function PublicFormViewer() {
       try {
         let decrypted;
         try {
-          decrypted = JSON.parse(decrypt(linkId));
+            decrypted = decrypt(linkId);
         } catch (e) {
           throw new Error(e.message || 'Invalid link format');
         }
 
-        const { userId, formVersionId } = decrypted;
+        const [ userId, formVersionId ] = decrypted.split('$');
         if (!userId || !formVersionId) {
           throw new Error('Invalid link data');
         }
@@ -374,8 +374,6 @@ function PublicFormViewer() {
         submissionData[key] = formValues[key];
       }
     }
-    console.log(submissionData);
-    console.log(filesToUpload);
     
     
       const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {

@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formVersionId }) {
+  const navigate = useNavigate();
   return (
     <aside
       className={`fixed top-0 left-0 z-20 h-screen transition-all ease-in-out duration-300 ${
@@ -191,10 +193,9 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                   </li>
                   <li className="w-full">
                     <div className="w-full">
-                      <a
+                      <button
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
-                        data-state="closed"
-                        href="/conditions"
+                        onClick={() => formVersionId && navigate(`/conditions/${formVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg
@@ -217,7 +218,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Conditions
                         </p>
-                      </a>
+                      </button>
                     </div>
                     <div className="w-full">
                       <a
