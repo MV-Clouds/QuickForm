@@ -366,9 +366,6 @@ const CreateFormWizard = () => {
       <FormName
         onClose={() => setIsFormNameOpen(false)}
         fields={[{ id: 'default-header', type: 'header', heading: 'Contact Form', alignment: 'center' }]}
-        selectedObjects={selectedObjects} // Pass selectedObjects
-        selectedFields={selectedFields} // Pass selectedFields
-        fieldsData={fieldsData} // Pass fieldsData
         objectInfo={objectInfo}
       />
     );

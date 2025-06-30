@@ -12,7 +12,10 @@ import { encrypt } from './crypto';
 
 
 function MainFormBuilder() {
-  const { formVersionId } = useParams();
+  // const { formVersionId } = useParams();
+  const location = useLocation();
+  const { formVersionId: urlFormVersionId } = useParams();
+  const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -22,7 +25,6 @@ function MainFormBuilder() {
   const [isNewVersion, setIsNewVersion] = useState(false);
   const [fetchFormError, setFetchFormError] = useState(null);
   const [currentFormVersion, setCurrentFormVersion] = useState(null);
-  const location = useLocation();
   const navigate = useNavigate();
   const [showFormNamePopup, setShowFormNamePopup] = useState(!formVersionId);
   const [formName, setFormName] = useState('');
@@ -30,9 +32,6 @@ function MainFormBuilder() {
   const [hasChanges, setHasChanges] = useState(false);
 
   const [formRecords, setFormRecords] = useState([]);
-  // const [selectedObjects, setSelectedObjects] = useState(location.state?.selectedObjects || []);
-  // const [selectedFields, setSelectedFields] = useState(location.state?.selectedFields || {});
-  // const [fieldsData, setFieldsData] = useState(location.state?.fieldsData || {});
 
   const [
     fieldsState,

@@ -29,6 +29,12 @@ function App() {
             element={<ProtectedRoute element={<Home />} />}
           />
 
+          {/* Protected route for Fields component */}
+          <Route
+            path="/fields"
+            element={<ProtectedRoute element={<MainFormBuilder />} />}
+          />
+
           {/* Duplicate protected route for Home (to support /app/home path) */}
           <Route
             path="/app/home"
@@ -47,8 +53,9 @@ function App() {
           />
 
           {/* Protected route for Mapping component */}
+         
           <Route
-            path="/mapping"
+            path="/mapping/:formVersionId"
             element={<ProtectedRoute element={<Mapping />} />}
           />
           <Route path="/public-form/:linkId" element={<PublicFormViewer />} />

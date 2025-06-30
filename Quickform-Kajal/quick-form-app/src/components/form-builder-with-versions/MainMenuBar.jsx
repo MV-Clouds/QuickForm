@@ -23,11 +23,6 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
   const formVersionId = currentVersion.Id;
   const fieldsData = currentVersion.Fields || [];
 
-  console.log('selectedVersionId =>', selectedVersionId);
-  console.log('formVersionId =>', formVersionId);
-  console.log('fieldsData =>', fieldsData);
-  console.log('Raw Object_Info__c =>', currentVersion.Object_Info__c);
-
   // Step 3: Parse Object_Info__c once and reuse
   let objectInfo = [];
   try {
@@ -53,13 +48,9 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
       required: field.required,
     }));
   });
-
-  console.log('selectedFields in handleMappingClick:', selectedFields);
-  console.log('selectedObjects =>', selectedObjects);
-  console.log('selectedFields =>', selectedFields);
-
+  
   // Step 6: Navigate
-  navigate('/mapping', {
+  navigate(`/mapping/${formVersionId}`, {
     state: {
       selectedObjects,
       selectedFields,

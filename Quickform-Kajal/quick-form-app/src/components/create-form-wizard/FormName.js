@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const FormName = ({ onClose, fields = [],selectedObjects, selectedFields, fieldsData, objectInfo = []}) => {
+const FormName = ({ onClose, fields = [], objectInfo = []}) => {
 
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
