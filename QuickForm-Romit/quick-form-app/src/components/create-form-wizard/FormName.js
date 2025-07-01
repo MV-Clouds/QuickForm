@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
   const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState(''); // New state for description
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
@@ -56,7 +57,7 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
     }
     const formVersion = {
       Name: formName,
-      Description__c: '',
+      Description__c: formDescription, // Include description
       Stage__c: 'Draft',
       Publish_Link__c: '',
       Version__c: '1',
@@ -119,7 +120,7 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Enter Form Name</h2>
+          <h2 className="text-xl font-bold">Enter Form Details</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700"
@@ -128,13 +129,32 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
             ×
           </button>
         </div>
-        <input
-          type="text"
-          value={formName}
-          onChange={(e) => setFormName(e.target.value)}
-          placeholder="Form Name"
-          className="w-full p-2 border rounded-md mb-4"
-        />
+        <div className="mb-4">
+          <label htmlFor="formName" className="block text-sm font-medium text-gray-700 mb-1">
+            Form Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="formName"
+            type="text"
+            value={formName}
+            onChange={(e) => setFormName(e.target.value)}
+            placeholder="Enter form name"
+            className="w-full p-2 border rounded-md"
+          />
+        </div>
+        <div className="mb-4">
+          <label htmlFor="formDescription" className="block text-sm font-medium text-gray-700 mb-1">
+            Form Description
+          </label>
+          <textarea
+            id="formDescription"
+            value={formDescription}
+            onChange={(e) => setFormDescription(e.target.value)}
+            placeholder="Enter form description"
+            className="w-full p-2 border rounded-md"
+            rows="4"
+          />
+        </div>
         {formNameError && <p className="text-red-500 text-sm mb-4">{formNameError}</p>}
         <button
           onClick={handleFormNameSubmit}

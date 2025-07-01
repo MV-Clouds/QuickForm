@@ -724,7 +724,7 @@ function MainFormBuilder() {
                 <h1 className="text-2xl font-semibold text-white">
                   {fields.find((f) => f.type === 'header')?.heading || 'Contact Form'}
                 </h1>
-                <p className="text-sm text-blue-100">Define the form structure</p>
+                <p className="text-sm text-blue-100">{currentFormVersion?.Description__c || 'Define the form structure'}</p>
                 <select
                   value={selectedVersionId || ''}
                   onChange={handleVersionChange}
