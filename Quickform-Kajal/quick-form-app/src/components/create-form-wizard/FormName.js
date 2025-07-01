@@ -1,14 +1,83 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const FormName = ({ onClose, fields = [], objectInfo = []}) => {
-
+const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
-  
+  const typeMapping = {
+    string: ['shorttext', 'longtext'],
+    phone: ['phone'],
+    date: ['date'],
+    picklist: ['dropdown'],
+    checkbox: ['checkbox'],
+    currency: ['price'],
+    email: ['email'],
+    url: ['link'],
+    number: ['number'],
+    boolean: ['checkbox'],
+    datetime: ['datetime'],
+    textarea: ['longtext'],
+    multipicklist: ['dropdown'],
+  };
+
+  const getDefaultValidation = (fieldType) => {
+    const field = fieldType.toLowerCase().replace(/\s+/g, '');
+    const validations = {
+      shorttext: {
+        pattern: '^.{1,255}$',
+        description: 'Maximum 255 characters allowed.',
+      },
+      longtext: {
+        pattern: '^.{1,1000}$',
+        description: 'Maximum 1000 characters allowed.',
+      },
+      phone: {
+        pattern: '^\\+?[0-9]{7,15}$',
+        description: "Must be a valid phone number (7-15 digits, optional '+').",
+      },
+      email: {
+        pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
+        description: 'Must be a valid email (e.g., user@example.com).',
+      },
+      date: {
+        pattern: '^\\d{4}-\\d{2}-\\d{2}$',
+        description: 'Must be in YYYY-MM-DD format.',
+      },
+      datetime: {
+        pattern: '^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$',
+        description: 'Must be in YYYY-MM-DD HH:MM format.',
+      },
+      number: {
+        pattern: '^[0-9]+$',
+        description: 'Only numbers allowed.',
+      },
+      price: {
+        pattern: '^\\d+(\\.\\d{1,2})?$',
+        description: 'Must be a valid price (e.g., 10 or 10.99).',
+      },
+      checkbox: {
+        pattern: '^true|false$',
+        description: 'Must be checked (true) or unchecked (false).',
+      },
+      dropdown: {
+        pattern: '.*',
+        description: 'Must select one of the available options.',
+      },
+      link: {
+        pattern: '^(https?:\\/\\/)?[\\w.-]+\\.[a-z]{2,}(\\/\\S*)?$',
+        description: 'Must be a valid URL (e.g., https://example.com).',
+      },
+      default: {
+        pattern: '.*',
+        description: 'No specific validation rules.',
+      },
+    };
+    return validations[field] || validations['default'];
+  };
+
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
       const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
@@ -34,49 +103,84 @@ const FormName = ({ onClose, fields = [], objectInfo = []}) => {
   };
 
   const prepareFormData = () => {
+    // Default header field
     const headerField = fields.find((f) => f.type === 'header') || {
-      id: 'default-header',
+      id: `field-${Date.now()}-header`,
       type: 'header',
-      heading: formName,
+      heading: formName || 'Contact Form',
       alignment: 'center',
     };
-    const nonHeaderFields = fields.filter((f) => f.type !== 'header');
-    const pages = [];
-    let currentPage = [];
-    let pageNumber = 1;
-    nonHeaderFields.forEach((field) => {
-      if (field.type === 'pagebreak') {
-        pages.push({ fields: currentPage, pageNumber });
-        pageNumber++;
-        currentPage = [];
-      } else {
-        currentPage.push(field);
-      }
-    });
-    if (currentPage.length > 0 || pages.length === 0) {
-      pages.push({ fields: currentPage, pageNumber });
-    }
-    console.log('object info -----> ',JSON.stringify(objectInfo));
-    
+
+    // Generate fields from objectInfo if available
+    const generatedFields = objectInfo.length > 0 && objectInfo[0].fields
+      ? objectInfo[0].fields.map((objField, index) => {
+          const fieldTypeOptions = typeMapping[objField.type] || ['shorttext'];
+          const selectedType = fieldTypeOptions[0];
+
+          const newField = {
+            id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            type: selectedType,
+            label: objField.label || objField.name,
+            isRequired: objField.required || false,
+            Properties__c: {
+              pattern: getDefaultValidation(selectedType).pattern,
+              description: getDefaultValidation(selectedType).description,
+              required: objField.required || false,
+            },
+          };
+
+          // Handle picklist fields
+          if (['picklist', 'multipicklist'].includes(objField.type)) {
+            newField.options = objField.values || ['Option 1', 'Option 2', 'Option 3'];
+            newField.allowMultipleSelections = objField.type === 'multipicklist';
+            newField.dropdownRelatedValues = (objField.values || ['Option 1', 'Option 2', 'Option 3']).reduce(
+              (acc, val) => {
+                acc[val] = val;
+                return acc;
+              },
+              {}
+            );
+          }
+
+          // Add phone-specific properties
+          if (objField.type === 'phone') {
+            newField.phoneInputMask = '(999) 999-9999';
+            newField.enableCountryCode = true;
+            newField.selectedCountryCode = 'US';
+          }
+
+          // Add placeholder for text fields
+          if (['shorttext', 'longtext', 'email', 'link'].includes(objField.type)) {
+            newField.placeholder = { main: `Enter ${objField.label || objField.name}` };
+          }
+
+          return newField;
+        })
+      : [];
+
+    // Combine header and generated fields
+    const allFields = [headerField, ...generatedFields];
+
+    // Create formFields for backend
+    const formFields = allFields.map((field, index) => ({
+      Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
+      Field_Type__c: field.type,
+      Page_Number__c: 1,
+      Order_Number__c: index + 1,
+      Properties__c: JSON.stringify(field),
+      Unique_Key__c: field.id,
+    }));
+
     const formVersion = {
-      Name: formName,
+      Name: formName || 'Contact Form',
       Description__c: '',
       Stage__c: 'Draft',
       Publish_Link__c: '',
       Version__c: '1',
       Object_Info__c: JSON.stringify(objectInfo),
     };
-    const formFields = pages.flatMap((page) =>
-      page.fields.map((field, index) => ({
-        Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
-        Field_Type__c: field.type,
-        Page_Number__c: page.pageNumber,
-        Order_Number__c: index + 1,
-        Properties__c: JSON.stringify(field),
-        Unique_Key__c: field.id,
-      }))
-    );
-    return { formVersion, formFields };
+
+    return { formVersion, formFields, allFields };
   };
 
   const handleFormNameSubmit = async () => {
@@ -94,7 +198,7 @@ const FormName = ({ onClose, fields = [], objectInfo = []}) => {
       }
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error('Failed to obtain access token.');
-      const { formVersion, formFields } = prepareFormData();
+      const { formVersion, formFields, allFields } = prepareFormData();
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -110,14 +214,9 @@ const FormName = ({ onClose, fields = [], objectInfo = []}) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to create form.');
       const newFormVersionId = data.formVersionId;
-      // navigate(`/form-builder/${newFormVersionId}`, {
-      //   state: {
-      //     selectedObjects,
-      //     selectedFields,
-      //     fieldsData,
-      //   },
-      // });
-      navigate(`/form-builder/${newFormVersionId}`);
+      navigate(`/form-builder/${newFormVersionId}`, {
+        state: { fields: allFields },
+      });
     } catch (error) {
       console.error('Error creating form:', error);
       setFormNameError(error.message || 'Failed to create form.');
