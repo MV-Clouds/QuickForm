@@ -839,7 +839,7 @@ const MappingFields = () => {
           <AnimatePresence>
             {isLoading && (
               <motion.div
-                className="fixed inset-0 flex items-center justify-center bg-gray-50 bg-opacity-80 z-50"
+                className="fixed inset-0 flex items-center align-center justify-center bg-gray-50 bg-opacity-10 z-10"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -904,7 +904,7 @@ const MappingFields = () => {
                     setSalesforceObjects={setSalesforceObjects}
                     fetchSalesforceFields={fetchSalesforceFields}
                     onClose={() => setSelectedNode(null)}
-                    nodeLabel={selectedNode.data.displayLabel}
+                    nodeLabel={selectedNode.data.action}
                     nodes={nodes}
                     edges={edges}
                   />

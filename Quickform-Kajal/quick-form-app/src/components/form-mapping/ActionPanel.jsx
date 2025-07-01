@@ -933,47 +933,7 @@ const formFieldOptions = (mappingIndex) => {
                   />
                 )}
               </div>
-              {/* <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Operator</label>
-                <Select
-                  value={operators.find((opt) => opt.value === condition.operator) || null}
-                  onChange={(selected) => handleConditionChange(index, "operator", selected ? selected.value : "=", conditionType)}
-                  options={operators}
-                  placeholder="Op"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                      paddingLeft: "4px",
-                    }),
-                    dropdownIndicator: (base) => ({
-                      ...base,
-                      padding: "4px",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                      minWidth: "120px",
-                    }),
-                    option: (base) => ({
-                      ...base,
-                      padding: "4px 8px",
-                      fontSize: "0.75rem",
-                    }),
-                    singleValue: (base) => ({
-                      ...base,
-                      fontSize: "0.75rem",
-                    }),
-                  }}
-                  classNamePrefix="select"
-                />
-              </div> */}
+           
                <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Operator</label>
                 <Select
@@ -1059,11 +1019,11 @@ const formFieldOptions = (mappingIndex) => {
 
   return (
     <motion.div
-      initial={{ x: "100%" }}
-      animate={{ x: 0 }}
-      exit={{ x: "100%" }}
-      transition={{ type: "spring", damping: 25 }}
-      className="fixed right-0 top-0 h-full w-1/3 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-10"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
+      className="absolute right-0 h-full w-1/3 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-10"
     >
       <div className="p-6">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
@@ -1072,13 +1032,7 @@ const formFieldOptions = (mappingIndex) => {
             animate={{ opacity: 1, y: 0 }}
             className="text-xl font-semibold text-gray-800"
           >
-            {isFindNode ? `Search Configuration for ${nodeLabel}` :
-              isCreateUpdateNode ? `Field Mapping for ${nodeLabel}` :
-                isPathNode ? `Path Configuration for ${nodeLabel}` :
-                  isLoopNode ? `Loop Configuration for ${nodeLabel}` :
-                    isFormatterNode ? `Formatter Configuration for ${nodeLabel}` :
-                      isFilterNode ? `Filter Configuration for ${nodeLabel}` :
-                        `Configuration for ${nodeLabel}`}
+            {`Configuration for ${nodeLabel}`}
           </motion.h2>
           <button
             onClick={onClose}
