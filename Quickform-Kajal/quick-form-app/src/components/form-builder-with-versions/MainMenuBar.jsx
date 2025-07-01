@@ -5,61 +5,33 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
   const navigate = useNavigate();
 
   const handleMappingClick = () => {
-  // Step 1: Find the selected form version
-  const currentFormRecord = formRecords.find((record) =>
-    record.FormVersions.some((version) => version.Id === selectedVersionId)
-  );
+    // Find the selected form version
+    try {
+      const currentFormRecord = formRecords.find((record) =>
+        record.FormVersions.some((version) => version.Id === selectedVersionId)
+      );
 
-  const currentVersion = currentFormRecord?.FormVersions.find(
-    (version) => version.Id === selectedVersionId
-  );
+      const currentVersion = currentFormRecord?.FormVersions.find(
+        (version) => version.Id === selectedVersionId
+      );
 
-  if (!currentVersion) {
-    console.warn('No matching form version found');
-    return;
-  }
+      if (!currentVersion) {
+        console.warn('No matching form version found');
+        return;
+      }
 
-  // Step 2: Extract values
-  const formVersionId = currentVersion.Id;
-  const fieldsData = currentVersion.Fields || [];
-
-  // Step 3: Parse Object_Info__c once and reuse
-  let objectInfo = [];
-  try {
-    objectInfo = JSON.parse(currentVersion.Object_Info__c || '[]');
-  } catch (e) {
-    console.warn('Failed to parse Object_Info__c:', e);
-  }
-
-  // Step 4: Derive selectedObjects
-  const selectedObjects = objectInfo.map((obj) => ({
-    objectName: obj.objectName,
-    objectLabel: obj.objectLabel,
-  }));
-
-  // Step 5: Derive selectedFields
-  const selectedFields = {};
-  objectInfo.forEach((obj) => {
-    selectedFields[obj.objectName] = (obj.fields || []).map((field) => ({
-      name: field.name,
-      label: field.label,
-      type: field.type,
-      values: field.values || null,
-      required: field.required,
-    }));
-  });
-  
-  // Step 6: Navigate
-  navigate(`/mapping/${formVersionId}`, {
-    state: {
-      selectedObjects,
-      selectedFields,
-      fieldsData,
-      formVersionId,
-    },
-  });
-};
-
+      // Extract values
+      const formVersionId = currentVersion.Id;
+      console.log('form version ',formVersionId);
+      
+      // Navigate
+      navigate(`/mapping/${formVersionId}`);
+    } catch (error) {
+      console.log('error in navigate ');
+      
+    }
+    
+  };
 
   return (
     <aside
@@ -219,12 +191,19 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
                         </p>
                       </a>
                     </div>
-                    {/* <div className="w-full">
-                      <a
+                 
+                    <div className="w-full">
+                      <button
+                        onClick={()=>handleMappingClick()}
+                        className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
+                        data-state="closed"
+                      >
+                      {/* <a
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
                         href="/mapping"
-                      >
+                        onClick={()=>handleMappingClick()}
+                      > */}
                         <span className="mr-4">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -246,35 +225,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Mapping
                         </p>
-                      </a>
-                    </div> */}
-                    <div className="w-full">
-                      <button
-                        onClick={handleMappingClick}
-                        className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
-                        data-state="closed"
-                      >
-                        <span className="mr-4">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="lucide lucide-bar-chart2"
-                          >
-                            <line x1="18" x2="18" y1="20" y2="10" />
-                            <line x1="12" x2="12" y1="20" y2="4" />
-                            <line x1="6" x2="6" y1="20" y2="14" />
-                          </svg>
-                        </span>
-                        <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
-                          Mapping
-                        </p>
+                      {/* </a> */}
                       </button>
                     </div>
                   </li>

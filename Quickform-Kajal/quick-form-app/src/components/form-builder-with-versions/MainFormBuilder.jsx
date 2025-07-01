@@ -9,9 +9,10 @@ import MainMenuBar from './MainMenuBar';
 import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
+import MappingFields from '../form-mapping/MappingFields'
 
 
-function MainFormBuilder() {
+function MainFormBuilder({showMapping}) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -912,7 +913,7 @@ function MainFormBuilder() {
                 ></path>
               </svg>
             </div>
-          ) : (
+          ) : showMapping ? <MappingFields /> : (
             <div className="flex w-full mt-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">

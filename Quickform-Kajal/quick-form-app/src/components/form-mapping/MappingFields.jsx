@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useState, useEffect, useContext } from "react";
+import { useLocation, useParams } from 'react-router-dom';
 import { ReactFlowProvider } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
-import MainMenuBar from '../form-builder-with-versions/MainMenuBar';
 import { XMarkIcon } from '@heroicons/react/24/solid';
+import { useSalesforceData } from '../Context/MetadataContext';
 
 const Sidebar = ({ onDragStart }) => {
   const actions = ["Create/Update", "Find"];
@@ -56,37 +56,21 @@ const Sidebar = ({ onDragStart }) => {
 
 const MappingFields = () => {
   const location = useLocation();
-  const {
-    selectedObjects = [],
-    selectedFields = {},
-    fieldsData = {},
-    formVersionId,
-  } = location.state || {};
+  const { formVersionId: urlFormVersionId } = useParams();
+  const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
+  const { metadata, formRecords } = useSalesforceData();
 
   const [selectedNode, setSelectedNode] = useState(null);
   const [mappings, setMappings] = useState({});
   const [formFields, setFormFields] = useState([]);
-  const [salesforceObjects, setSalesforceObjects] = useState(
-    selectedObjects.length > 0
-      ? selectedObjects.map((obj) => ({
-          name: obj.objectName,
-          label: obj.objectLabel,
-          fields: selectedFields[obj.objectName] || [],
-          fieldDetails: fieldsData[obj.objectName] || [],
-        }))
-      : []
-  );
-
-  const [isLoading, setIsLoading] = useState(false);
+  const [salesforceObjects, setSalesforceObjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading true
   const [fetchError, setFetchError] = useState(null);
   const [token, setToken] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [nodes, setNodes] = useState([]);
+  const [nodes, setNodes] = useState([]); // Initialize empty to avoid premature rendering
   const [edges, setEdges] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [lastFetchedFormVersionId, setLastFetchedFormVersionId] = useState(null);
-  const [isInitialized, setIsInitialized] = useState(false);
 
   const initialNodes = [
     {
@@ -114,6 +98,40 @@ const MappingFields = () => {
     }, 5000);
   };
 
+  // Initialize Salesforce objects from metadata
+  useEffect(() => {
+    if (metadata && metadata.length > 0) {      
+      const objects = metadata.map(obj => ({
+        name: obj.name,
+        label: obj.label,
+        fields: [],
+        fieldDetails: []
+      }));
+      setSalesforceObjects(objects);
+    }
+  }, [metadata]);
+
+  // Initialize form fields from formRecords
+  useEffect(() => {
+    if (formVersionId && formRecords && formRecords.length > 0) {
+      const formVersion = formRecords
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version.Id === formVersionId);
+      
+      if (formVersion && formVersion.Fields) {
+        const normalizedFields = formVersion.Fields.map(field => ({
+          id: field.Id || field.id || `field_${field.Name || field.name}`,
+          name: field.Name || field.name || field.label || "Unknown",
+          type: field.Field_Type__c || field.type,
+          Properties__c: field.Properties__c || '{}', // Include Properties__c for picklist validation
+        }));
+        setFormFields(normalizedFields);
+      } else {
+        console.warn('Form version not found or has no fields');
+      }
+    }
+  }, [formVersionId, formRecords]);
+
   const fetchAccessToken = async (userId, instanceUrl, retries = 2) => {
     try {
       const url = process.env.REACT_APP_GET_ACCESS_TOKEN_URL || "https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/prod/getAccessToken";
@@ -129,6 +147,7 @@ const MappingFields = () => {
         throw new Error(data.error || `Failed to fetch access token: ${response.status}`);
       }
       if (!data.access_token) throw new Error("No access token returned in response");
+      setToken(data.access_token);
       return data.access_token;
     } catch (error) {
       showToast(`Failed to fetch access token: ${error.message}. Please verify your Salesforce credentials or contact support.`, 'error');
@@ -136,36 +155,39 @@ const MappingFields = () => {
     }
   };
 
-  const fetchFormFields = async (userId, instanceUrl, formVersionId) => {
+  const fetchSalesforceFields = async (objectName) => {
     try {
-      const url = process.env.REACT_APP_FETCH_METADATA_URL || "https://hmcyy3382m.execute-api.us-east-1.amazonaws.com/prod/fetchMetadata";
-      if (!url) throw new Error("Metadata URL is not defined.");
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl, formVersionId }),
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+
+      if (!token || !instanceUrl || !userId) {
+        throw new Error('User not authenticated or instance URL missing');
+      }
+
+      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+      const response = await fetch(process.env.REACT_APP_FETCH_FIELDS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          instanceUrl: cleanedInstanceUrl,
+          objectName,
+          access_token: token,
+        }),
       });
-      const text = await response.text();
-      let data = JSON.parse(text);
-      if (!response.ok) throw new Error(data.error || `Failed to fetch form metadata: ${response.status}`);
 
-      let formRecords = [];
-      try { formRecords = JSON.parse(data.FormRecords); } catch { }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch fields for ${objectName}`);
+      }
 
-      const formVersion = formRecords.find((form) => form.FormVersions?.some((version) => version.Id === formVersionId));
-      const version = formVersion?.FormVersions.find((version) => version.Id === formVersionId);
-      const fields = version?.Fields || [];
-      const normalizedFields = fields.map((field) => ({
-        id: field.Id || field.id || `field_${field.Name || field.name}`,
-        name: field.Name || field.name || field.label || "Unknown",
-        type: field.Field_Type__c || field.type,
-      }));
-      if (normalizedFields.length === 0) showToast("No form fields found for the specified form version.", 'error');
-      return normalizedFields;
+      const data = await response.json();
+      return data;
     } catch (error) {
-      showToast(`Failed to load form fields: ${error.message}`, 'error');
-      return [];
+      showToast(`Failed to fetch fields: ${error.message}`, 'error');
+      return { fields: [] };
     }
   };
 
@@ -181,11 +203,13 @@ const MappingFields = () => {
     if (node.data.action === "Path") {
       const outgoingEdges = edges.filter((edge) => edge.source === nodeId && edge.conditionNodeId);
       if (outgoingEdges.length === 0) {
-        showToast(`Path node ${node.data.displayLabel} must have at least one outgoing connection.`);
-        return false;
+        if (!mappings[nodeId] || mappings[nodeId].isNew) {
+          showToast(`Path node ${node.data.displayLabel} must have at least one outgoing connection.`);
+          return false;
+        }
       }
 
-      for (const edge of outgoingEdges) {
+         for (const edge of outgoingEdges) {
         const conditionNodeId = edge.target;
         const conditionNode = nodes.find((n) => n.id === conditionNodeId);
         if (!conditionNode || conditionNode.data.action !== "Condition") {
@@ -406,7 +430,7 @@ const MappingFields = () => {
 
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
-    const flowId = formVersionId; // Use formVersionId as flowId
+    const flowId = formVersionId;
 
     if (!userId || !instanceUrl || !flowId) {
       showToast("Missing userId, instanceUrl, or flowId. Please log in again.", 'error');
@@ -414,7 +438,6 @@ const MappingFields = () => {
       return;
     }
 
-    // Validate empty flow
     const actionNodes = nodes.filter(node => !['start', 'end'].includes(node.id));
     if (actionNodes.length === 0) {
       showToast("Flow must contain at least one action node.", 'error');
@@ -429,12 +452,6 @@ const MappingFields = () => {
         return;
       }
       setToken(newToken);
-    }
-
-    if (!token || token.split('.').length !== 3) {
-      showToast("Invalid authentication token format. Please log in again.", 'error');
-      setIsSaving(false);
-      return;
     }
 
     for (const node of nodes) {
@@ -589,20 +606,16 @@ const MappingFields = () => {
         throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
       }
 
-      // Log raw mappings data for debugging
       console.log('Raw mappings data:', data.mappings);
 
-      // Parse mappings with all properties
       const parsedMappings = Array.isArray(data.mappings)
         ? data.mappings.reduce((acc, mapping) => {
-            // Use nodeId from the server response
             const nodeId = mapping.nodeId;
             if (!nodeId) {
               console.warn('Skipping mapping with missing nodeId:', mapping);
               return acc;
             }
 
-            // Handle conditions (object or JSON string)
             let conditionsData = {};
             if (mapping.conditions && typeof mapping.conditions === 'object') {
               conditionsData = mapping.conditions;
@@ -626,7 +639,6 @@ const MappingFields = () => {
                 : [];
             }
 
-            // Ensure each field mapping has all required properties
             fieldMappings = fieldMappings.map(fm => ({
               formFieldId: fm.formFieldId || fm.Form_Field_Id__c || '',
               fieldType: fm.fieldType || fm.Field_Type__c || '',
@@ -648,7 +660,6 @@ const MappingFields = () => {
                formatterConfig = JSON.parse(mapping.Formatter_Config__c);
             }
 
-            // Map action types to client-side naming
             const actionType =
               mapping.actionType === "CreateUpdate" || mapping.Type__c === "CreateUpdate"
                 ? "Create/Update"
@@ -658,7 +669,6 @@ const MappingFields = () => {
                 ? "End"
                 : mapping.actionType || mapping.Type__c;
 
-            // Determine node type for UI rendering
             const nodeType =
               actionType === "Start" || actionType === "End"
                 ? actionType.toLowerCase()
@@ -727,12 +737,11 @@ const MappingFields = () => {
           }, {})
         : {};
 
-      // Update nodes to include all mapping properties
       const updatedNodes = Array.isArray(data.nodes)
         ? data.nodes.map((node) => {
             const mapping = parsedMappings[node.id];
             if (!mapping) {
-              return node; // Fallback to original node if no mapping
+              return node;
             }
             return {
               ...node,
@@ -778,9 +787,8 @@ const MappingFields = () => {
 
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
-    const formVersionIdLocal = formVersionId;
 
-    if (!userId || !instanceUrl || !formVersionIdLocal) {
+    if (!userId || !instanceUrl || !formVersionId) {
       showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
       setIsLoading(false);
       return;
@@ -797,39 +805,15 @@ const MappingFields = () => {
         setToken(tokenToUse);
       }
 
-      const formFieldsData = await fetchFormFields(userId, instanceUrl, formVersionIdLocal);
-      setFormFields(formFieldsData);
-
-      if (formVersionIdLocal !== lastFetchedFormVersionId) {
-        let existingMappingsData = { mappings: {}, nodes: [], edges: [] };
-        let retries = 2;
-        while (retries > 0) {
-          try {
-            existingMappingsData = await fetchExistingMappings(userId, formVersionIdLocal, instanceUrl, tokenToUse, retries);
-            break;
-          } catch (error) {
-            if (error.message.includes("Unauthorized") && retries > 0) {
-              tokenToUse = await fetchAccessToken(userId, instanceUrl, retries - 1);
-              if (!tokenToUse) throw new Error("Failed to refresh access token");
-              setToken(tokenToUse);
-              retries--;
-              continue;
-            }
-            throw error;
-          }
-        }
-
-        if (Object.keys(existingMappingsData.mappings).length > 0) {
-          setMappings(existingMappingsData.mappings);
-          setNodes(existingMappingsData.nodes);
-          setEdges(existingMappingsData.edges);
-          setLastFetchedFormVersionId(formVersionIdLocal);
-        } else {
-          setNodes(initialNodes);
-          setEdges(initialEdges);
-          setMappings({});
-          setLastFetchedFormVersionId(formVersionIdLocal);
-        }
+      const existingMappingsData = await fetchExistingMappings(userId, formVersionId, instanceUrl, tokenToUse);
+      if (Object.keys(existingMappingsData.mappings).length > 0) {
+        setMappings(existingMappingsData.mappings);
+        setNodes(existingMappingsData.nodes);
+        setEdges(existingMappingsData.edges);
+      } else {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+        setMappings({});
       }
     } catch (error) {
       showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
@@ -839,11 +823,8 @@ const MappingFields = () => {
   };
 
   useEffect(() => {
-    if (!isInitialized) {
-      initializeData();
-      setIsInitialized(true);
-    }
-  }, []);
+    initializeData();
+  }, [formVersionId]);
 
   const onDragStart = (event, nodeType, action) => {
     event.dataTransfer.setData("application/reactflow-type", nodeType);
@@ -851,22 +832,9 @@ const MappingFields = () => {
     event.dataTransfer.effectAllowed = "move";
   };
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
-  };
- 
   return (
     <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen}
-        toggleSidebar={toggleSidebar}
-        selectedObjects={selectedObjects}
-        selectedFields={selectedFields}
-        fieldsData={fieldsData}
-        formVersionId={formVersionId} />
-      <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
-          }`}
-      >
+      <div className="flex-1 flex flex-col relative h-screen transition-all duration-300">
         <div className="flex flex-col h-screen bg-gray-50 font-sans relative">
           <AnimatePresence>
             {isLoading && (
@@ -916,8 +884,8 @@ const MappingFields = () => {
                 <div className="flex-1 relative z-0 h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
                   <ReactFlowProvider>
                     <FlowDesigner
-                      initialNodes={nodes.length ? nodes : initialNodes}
-                      initialEdges={edges.length ? edges : initialEdges}
+                      initialNodes={nodes}
+                      initialEdges={edges}
                       setSelectedNode={setSelectedNode}
                       setNodes={setNodes}
                       setEdges={setEdges}
@@ -934,6 +902,7 @@ const MappingFields = () => {
                     mappings={mappings}
                     setMappings={setMappings}
                     setSalesforceObjects={setSalesforceObjects}
+                    fetchSalesforceFields={fetchSalesforceFields}
                     onClose={() => setSelectedNode(null)}
                     nodeLabel={selectedNode.data.displayLabel}
                     nodes={nodes}
@@ -984,4 +953,3 @@ const MappingFields = () => {
 };
 
 export default MappingFields;
-

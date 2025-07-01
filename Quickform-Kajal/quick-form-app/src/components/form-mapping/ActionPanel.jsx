@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Select from "react-select";
 import { getCountryList } from "../form-builder-with-versions/getCountries";
@@ -18,9 +19,6 @@ const ActionPanel = ({
   setSalesforceObjects,
   onClose,
   fetchSalesforceFields,
-  userId,
-  instanceUrl,
-  token,
   nodeLabel,
   nodes,
   edges,
@@ -144,41 +142,23 @@ const ActionPanel = ({
   }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
-  if (selectedObject && (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules"))) {
-    const existingObject = salesforceObjects.find((obj) => obj.name === selectedObject);
-    if (!existingObject?.fields?.length) {
-      fetchSalesforceFields(userId, instanceUrl, token, selectedObject)
+    if (!selectedObject) return;
+
+    const objectExists = salesforceObjects.find(obj => obj.name === selectedObject);
+    if (!objectExists?.fields?.length) {
+      fetchSalesforceFields(selectedObject)
         .then((data) => {
-          console.log('Fetched Salesforce fields for', selectedObject, ':', data.fields);
-          setSalesforceObjects((prev) =>
-            prev.map((obj) => (obj.name === selectedObject ? { ...obj, fields: data.fields } : obj))
-          );
+          const newFields = data.fields || [];
+          setSalesforceObjects(prev => [
+            ...prev.filter(obj => obj.name !== selectedObject),
+            { name: selectedObject, fields: newFields }
+          ]);
         })
         .catch((error) => {
-          console.error('Error fetching Salesforce fields:', error);
           setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
         });
     }
-  }
-}, [selectedObject, salesforceObjects, fetchSalesforceFields, userId, instanceUrl, token, setSalesforceObjects, isFindNode, isFilterNode, isCreateUpdateNode, enableConditions, isConditionNode, pathOption]);
-
-  const operators = [
-    { value: "=", label: "Equals" },
-    { value: "!=", label: "Not Equals" },
-    { value: "LIKE", label: "Contains" },
-    { value: "NOT LIKE", label: "Not Contains" },
-    { value: "STARTS WITH", label: "Starts With" },
-    { value: "ENDS WITH", label: "Ends With" },
-    { value: ">", label: "Greater Than" },
-    { value: "<", label: "Less Than" },
-    { value: ">=", label: "Greater Than or Equal To" },
-    { value: "<=", label: "Less Than or Equal To" },
-    { value: "BETWEEN", label: "Between" },
-    { value: "IN", label: "In" },
-    { value: "NOT IN", label: "Not In" },
-    { value: "IS NULL", label: "Is Null" },
-    { value: "IS NOT NULL", label: "Is Not Null" },
-  ];
+  }, [selectedObject, salesforceObjects, fetchSalesforceFields]);
 
   const operatorGroups = {
     text: [
@@ -478,6 +458,35 @@ const handleMappingChange = (index, key, value, extra = {}) => {
       ...prev,
       options: { ...prev.options, [key]: value },
     }));
+  };
+
+  const handleObjectSelect = (selectedOption) => {    
+    if (!selectedOption) {
+      setSelectedObject("");
+      return;
+    }
+
+    const selectedObjectName = selectedOption.value;
+    setSelectedObject(selectedObjectName);
+
+    const shouldFetchFields =
+      selectedObjectName &&
+      (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
+
+    if (!shouldFetchFields) return;
+
+    fetchSalesforceFields(selectedObjectName)
+      .then((data) => {
+        const newFields = data.fields;
+
+        setSalesforceObjects(prev => [
+          ...prev.filter(obj => obj.name !== selectedObjectName), // remove old entry if any
+          { name: selectedObjectName, fields: newFields }          // add fresh entry
+        ]);
+      })
+      .catch((error) => {
+        setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
+      });
   };
 
   const getAncestorNodes = (currentNodeId, edges, nodes) => {
@@ -1141,7 +1150,7 @@ const formFieldOptions = (mappingIndex) => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Object</label>
                     <Select
                       value={objectOptions.find((opt) => opt.value === selectedObject) || null}
-                      onChange={(selected) => setSelectedObject(selected ? selected.value : "")}
+                      onChange={handleObjectSelect}
                       options={objectOptions}
                       placeholder={objectOptions.length ? "Select Salesforce Object" : "No Objects Available"}
                       styles={{
@@ -1184,7 +1193,7 @@ const formFieldOptions = (mappingIndex) => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Object</label>
               <Select
                 value={objectOptions.find((opt) => opt.value === selectedObject) || null}
-                onChange={(selected) => setSelectedObject(selected ? selected.value : "")}
+                onChange={handleObjectSelect}
                 options={objectOptions}
                 placeholder={objectOptions.length ? "Select Salesforce Object" : "No Objects Available"}
                 styles={{
@@ -1461,6 +1470,8 @@ const formFieldOptions = (mappingIndex) => {
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Field</label>
                         <Select
+                          // value={fieldOptions.find((opt) => opt.value === mapping.salesforceField) || null}
+                          // onChange={(selected) => handleMappingChange(index, "salesforceField", selected ? selected.value : "")}
                           value={fieldOptions.find((opt) => opt.value === mapping.salesforceField) || null}
                           onChange={(selected) => handleMappingChange(index, "salesforceField", selected ? selected.value : "")}
                           options={fieldOptions}

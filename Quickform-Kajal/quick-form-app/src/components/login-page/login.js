@@ -7,6 +7,11 @@ const Login = () => {
   const navigate = useNavigate(); // React Router navigation
   let popup = null; // Reference to popup window
 
+  useEffect(()=>{
+    sessionStorage.setItem('userId' , '005gL000002qyRxQAI');
+    sessionStorage.setItem('instanceUrl','https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com')
+  },[])
+  
   // Check if already logged in on mount
   useEffect(() => {
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login flag
