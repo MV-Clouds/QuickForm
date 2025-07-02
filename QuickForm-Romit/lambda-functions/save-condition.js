@@ -20,11 +20,9 @@ export const handler = async (event) => {
     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
     const salesforceBaseUrl = `https://${cleanedInstanceUrl}/services/data/v60.0`;
 
-    // Fetch existing conditions from Salesforce
     let existingConditionId = null;
     let existingConditions = [];
 
-    // Query for the single Form_Condition__c record for the Form_Version__c
     const query = `SELECT Id, Condition_Data__c FROM Form_Condition__c WHERE Form_Version__c = '${formVersionId}' LIMIT 1`;
     const queryResponse = await fetch(`${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`, {
       method: 'GET',
@@ -42,31 +40,32 @@ export const handler = async (event) => {
       }
     }
 
-    // Prepare new condition
     const conditionData = JSON.parse(condition.Condition_Data__c);
     const newCondition = {
-      Id: `local_${Date.now()}`, // Temporary ID for DynamoDB
-      type: condition.Condition_Type__c, // Store type in Condition_Data__c
-      ...(condition.Condition_Type__c === 'show_hide'
+      Id: `local_${Date.now()}`,
+      type: conditionData.type,
+      ifField: conditionData.ifField,
+      operator: conditionData.operator || 'equals',
+      value: conditionData.value || null,
+      ...(conditionData.type === 'show_hide'
         ? {
-            ifField: conditionData.ifField,
-            operator: conditionData.operator,
-            value: conditionData.value,
             thenAction: conditionData.thenAction,
             thenFields: conditionData.thenFields,
           }
-        : {
-            ifField: conditionData.controllingField,
-            value: conditionData.controllingValue,
+        : conditionData.type === 'dependent'
+        ? {
             dependentField: conditionData.dependentField,
             dependentValues: conditionData.dependentValues,
+          }
+        : {
+            thenAction: conditionData.thenAction,
+            thenFields: conditionData.thenFields,
+            ...(conditionData.thenAction === 'set mask' ? { maskPattern: conditionData.maskPattern } : {}),
           }),
     };
 
-    // Add new condition to existing conditions
     const updatedConditions = [...existingConditions, newCondition];
 
-    // Save to Salesforce (single record)
     const sfCondition = {
       Form_Version__c: formVersionId,
       Condition_Data__c: JSON.stringify(updatedConditions),
@@ -106,10 +105,8 @@ export const handler = async (event) => {
       conditionId = conditionData.id;
     }
 
-    // Update newCondition with Salesforce ID
     newCondition.Id = conditionId + '_' + newCondition.Id;
 
-    // Update DynamoDB
     const existingMetadataRes = await dynamoClient.send(
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
@@ -125,7 +122,7 @@ export const handler = async (event) => {
     let formVersion = null;
     let formIndex = -1;
     for (let i = 0; i < formRecords.length; i++) {
-      formVersion = formRecords[i].FormVersions.find(v => v.Id === formVersionId);
+      formVersion = formRecords[i].FormVersions.find((v) => v.Id === formVersionId);
       if (formVersion) {
         formIndex = i;
         break;

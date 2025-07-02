@@ -13,7 +13,7 @@ const Conditions = () => {
   const navigate = useNavigate();
   const [conditions, setConditions] = useState([]);
   const [fields, setFields] = useState([]);
-  const [formRecords, setFormRecords] = useState([]); // New state for formRecords
+  const [formRecords, setFormRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -27,6 +27,7 @@ const Conditions = () => {
     thenFields: [],
     dependentField: '',
     dependentValues: [],
+    maskPattern: '',
   });
 
   // Animation variants for Framer Motion
@@ -80,20 +81,14 @@ const Conditions = () => {
         setFormRecords(records);
         let formVersion = null;
         for (const form of records) {
-          formVersion = form.FormVersions.find(v => v.Id === formVersionId);
+          formVersion = form.FormVersions.find((v) => v.Id === formVersionId);
           if (formVersion) break;
         }
 
         if (!formVersion) throw new Error(`Form version ${formVersionId} not found`);
         console.log('Form Version Data:', formVersion);
         setFields(formVersion.Fields || []);
-        let parsedConditions = [];
-
-        if (Array.isArray(formVersion.Conditions)) {
-          setConditions(formVersion.Conditions); // they are already individual objects
-        } else {
-          setConditions([]);
-        }
+        setConditions(Array.isArray(formVersion.Conditions) ? formVersion.Conditions : []);
         console.log('Conditions:', formVersion.Conditions);
         
         
@@ -119,31 +114,62 @@ const Conditions = () => {
 
       let conditionData;
       if (newCondition.type === 'show_hide') {
+        if (!newCondition.ifField || !newCondition.operator || !newCondition.thenFields.length) {
+          throw new Error('Missing required fields for show/hide condition');
+        }
         conditionData = {
           Form_Version__c: formVersionId,
-          Condition_Type__c: newCondition.type,
           Condition_Data__c: JSON.stringify({
+            type: 'show_hide',
             ifField: newCondition.ifField,
             operator: newCondition.operator,
-            value: newCondition.value,
+            value: newCondition.value || null,
             thenAction: newCondition.thenAction,
             thenFields: newCondition.thenFields,
           }),
         };
-      } else { // dependent
+      } else if (newCondition.type === 'dependent') {
+        if (
+          !newCondition.ifField ||
+          !newCondition.value ||
+          !newCondition.dependentField ||
+          newCondition.dependentValues.length === 0
+        ) {
+          throw new Error('Missing required fields for dependent condition');
+        }
         conditionData = {
           Form_Version__c: formVersionId,
-          Condition_Type__c: newCondition.type,
           Condition_Data__c: JSON.stringify({
-            controllingField: newCondition.ifField,
-            controllingValue: newCondition.value,
+            type: 'dependent',
+            ifField: newCondition.ifField,
+            value: newCondition.value,
             dependentField: newCondition.dependentField,
             dependentValues: newCondition.dependentValues,
           }),
         };
+      } else {
+        // enable_require_mask
+        if (!newCondition.ifField || !newCondition.operator || !newCondition.thenFields.length) {
+          throw new Error('Missing required fields for enable/require/mask condition');
+        }
+        if (newCondition.thenAction === 'set mask' && !newCondition.maskPattern) {
+          throw new Error('Mask pattern is required for set mask action');
+        }
+        conditionData = {
+          Form_Version__c: formVersionId,
+          Condition_Data__c: JSON.stringify({
+            type: 'enable_require_mask',
+            ifField: newCondition.ifField,
+            operator: newCondition.operator,
+            value: newCondition.operator === 'is null' || newCondition.operator === 'is not null' ? null : newCondition.value,
+            thenAction: newCondition.thenAction,
+            thenFields: newCondition.thenFields,
+            ...(newCondition.thenAction === 'set mask' ? { maskPattern: newCondition.maskPattern } : {}),
+          }),
+        };
       }
       console.log('Saving condition data:', conditionData);
-      
+
       const response = await fetch(process.env.REACT_APP_SAVE_CONDITION_URL, {
         method: 'POST',
         headers: {
@@ -167,10 +193,11 @@ const Conditions = () => {
         ifField: '',
         operator: '',
         value: '',
-        thenAction: 'show',
+        thenAction: newCondition.type === 'enable_require_mask' ? 'require' : 'show',
         thenFields: [],
         dependentField: '',
         dependentValues: [],
+        maskPattern: '',
       });
     } catch (err) {
       setError(err.message);
@@ -202,24 +229,21 @@ const Conditions = () => {
       });
 
       if (!response.ok) throw new Error('Failed to delete condition');
-      setConditions(conditions.filter(c => c.Id !== conditionId));
+      setConditions(conditions.filter((c) => c.Id !== conditionId));
     } catch (err) {
       setError(err.message);
     }
   };
 
-  // Filter valid fields for "If" and "Then" (exclude non-interactive fields)
   const validIfFields = fields.filter(
-    f => !['signature', 'fileupload', 'imageuploader', 'terms', 'displaytext', 'divider', 'pagebreak', 'section', 'header'].includes(f.Field_Type__c)
+    (f) =>
+      !['signature', 'fileupload', 'imageuploader', 'terms', 'displaytext', 'divider', 'pagebreak', 'section', 'header'].includes(
+        f.Field_Type__c
+      )
   );
 
-  // Filter controlling fields for dependent picklist (checkbox, radio, dropdown)
-  const validControllingFields = fields.filter(f => ['checkbox', 'radio', 'dropdown'].includes(f.Field_Type__c));
-  // Filter dependent fields (dropdown, multiselect)
-  const validDependentFields = fields.filter(f => ['dropdown', 'multiselect'].includes(f.Field_Type__c));
-
-  const textConditions = ['equals', 'not equals', 'is null', 'is not null', 'contains', 'does not contain'];
-  const numberConditions = ['equals', 'not equals', 'greater than', 'greater than equals to', 'smaller than', 'smaller than equals to'];
+  const validControllingFields = fields.filter((f) => ['checkbox', 'radio', 'dropdown'].includes(f.Field_Type__c));
+  const validDependentFields = fields.filter((f) => ['dropdown', 'multiselect'].includes(f.Field_Type__c));
 
   const getOperators = (fieldType) => {
     if (['shorttext', 'longtext', 'email', 'phone', 'address', 'link', 'fullname'].includes(fieldType)) {
@@ -234,56 +258,43 @@ const Conditions = () => {
     return ['equals', 'not equals'];
   };
 
-  // Get available options for the selected "If" field
   const getFieldOptions = (fieldId) => {
-    const field = fields.find(f => f.Unique_Key__c === fieldId);
-    if (!field) return [];
-    const properties = JSON.parse(field.Properties__c || '{}');
-    if (field.Field_Type__c === 'checkbox') {
-      return properties.options || [];
-    }
-    if (field.Field_Type__c === 'radio' || field.Field_Type__c === 'dropdown') {
-      return properties.options || [];
-    }
-    return [];
-  };
-
-  // Get dependent picklist values from field properties
-  const getDependentValues = (fieldId) => {
-    const field = fields.find(f => f.Unique_Key__c === fieldId);
+    const field = fields.find((f) => f.Unique_Key__c === fieldId);
     if (!field) return [];
     try {
       const properties = JSON.parse(field.Properties__c || '{}');
-      return ['dropdown', 'multiselect'].includes(field.Field_Type__c) ? (properties.options || []) : [];
+      if (['checkbox', 'radio', 'dropdown'].includes(field.Field_Type__c)) {
+        return properties.options || [];
+      }
+      return [];
+    } catch (err) {
+      console.error('Error parsing Properties__c for field options:', err);
+      return [];
+    }
+  };
+
+  const getDependentValues = (fieldId) => {
+    const field = fields.find((f) => f.Unique_Key__c === fieldId);
+    if (!field) return [];
+    try {
+      const properties = JSON.parse(field.Properties__c || '{}');
+      return ['dropdown', 'multiselect'].includes(field.Field_Type__c) ? properties.options || [] : [];
     } catch (err) {
       console.error('Error parsing Properties__c for dependent values:', err);
       return [];
     }
-};
+  };
 
   const handleFieldChange = (field, value) => {
-    setNewCondition(prev => ({
+    setNewCondition((prev) => ({
       ...prev,
       [field]: value,
-      // Reset dependent fields when changing ifField
-      ...(field === 'ifField' ? { operator: '', value: '', thenFields: [], dependentField: '', dependentValues: [] } : {}),
+      ...(field === 'ifField'
+        ? { operator: '', value: '', thenFields: [], dependentField: '', dependentValues: [], maskPattern: '' }
+        : {}),
       ...(field === 'thenFields' ? { thenFields: value } : {}),
+      ...(field === 'thenAction' && value !== 'set mask' ? { maskPattern: '' } : {}),
     }));
-  };
-
-  const addThenField = () => {
-    setNewCondition({ ...newCondition, thenFields: [...newCondition.thenFields, ''] });
-  };
-
-  const updateThenField = (index, value) => {
-    const updatedFields = [...newCondition.thenFields];
-    updatedFields[index] = value;
-    setNewCondition({ ...newCondition, thenFields: updatedFields });
-  };
-
-  const removeThenField = (index) => {
-    const updatedFields = newCondition.thenFields.filter((_, i) => i !== index);
-    setNewCondition({ ...newCondition, thenFields: updatedFields });
   };
 
   const addDependentValue = () => {
@@ -310,7 +321,7 @@ const Conditions = () => {
           transition={{ duration: 0.5 }}
           className="w-64 bg-white shadow-lg"
         >
-          <MainMenuBar formVersionId={formVersionId} /> {/* Replaced Sidebar with MainMenuBar */}
+          <MainMenuBar formVersionId={formVersionId} />
         </motion.div>
       )}
       <motion.div
@@ -332,7 +343,7 @@ const Conditions = () => {
             </motion.div>
           )}
           {isLoading ? (
-            <div className="flex justify-center items-center h-100">
+            <div className="flex justify-center items-center h-full">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 1 }}
@@ -341,22 +352,23 @@ const Conditions = () => {
             </div>
           ) : (
             <Tabs
-            defaultActiveKey="show_hide"
-            style={{ marginBottom: '16px' }}
-            onChange={(key) => {
-              setNewCondition(prev => ({
-                ...prev,
-                type: key, // Set type to 'show_hide' or 'dependent' based on active tab
-                ifField: '',
-                operator: '',
-                value: '',
-                thenAction: 'show',
-                thenFields: [],
-                dependentField: '',
-                dependentValues: [],
-              }));
-            }}
-          >
+              defaultActiveKey="show_hide"
+              style={{ marginBottom: '16px' }}
+              onChange={(key) => {
+                setNewCondition((prev) => ({
+                  ...prev,
+                  type: key,
+                  ifField: '',
+                  operator: '',
+                  value: '',
+                  thenAction: key === 'enable_require_mask' ? 'require' : 'show',
+                  thenFields: [],
+                  dependentField: '',
+                  dependentValues: [],
+                  maskPattern: '',
+                }));
+              }}
+            >
               <TabPane tab="Show/Hide Fields" key="show_hide">
                 <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
                   <h2 className="text-xl font-semibold mb-3">Add Show/Hide Condition</h2>
@@ -369,7 +381,7 @@ const Conditions = () => {
                         placeholder="Select field"
                         style={{ width: '100%' }}
                       >
-                        {validIfFields.map(field => (
+                        {validIfFields.map((field) => (
                           <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
                             {field.Name}
                           </Option>
@@ -386,40 +398,62 @@ const Conditions = () => {
                             placeholder="Select operator"
                             style={{ width: '100%' }}
                           >
-                            {getOperators(fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c).map(op => (
-                              <Option key={op} value={op}>{op}</Option>
-                            ))}
+                            {getOperators(fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c).map(
+                              (op) => (
+                                <Option key={op} value={op}>
+                                  {op}
+                                </Option>
+                              )
+                            )}
                           </Select>
                         </div>
                         {newCondition.operator && !['is null', 'is not null'].includes(newCondition.operator) && (
                           <div className="mb-3">
                             <label className="block text-sm font-medium text-gray-700">Value</label>
-                            {['checkbox', 'radio', 'dropdown'].includes(fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c) ? (
-                            <Select
-                              value={newCondition.value}
-                              onChange={(value) => handleFieldChange('value', value)}
-                              placeholder="Select value"
-                              style={{ width: '100%' }}
-                            >
-                              {getFieldOptions(newCondition.ifField).map(option => (
-                                <Option key={option} value={option}>{option}</Option>
-                              ))}
-                            </Select>
-                          ) : ['date', 'datetime', 'date-time', 'time'].includes(fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c) ? (
-                            <Input
-                              type={fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date' ? 'date' : fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time' ? 'time' : 'datetime-local'}
-                              value={newCondition.value}
-                              onChange={(e) => handleFieldChange('value', e.target.value)}
-                              placeholder={fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date' ? 'YYYY-MM-DD' : fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time' ? 'HH:MM' : 'YYYY-MM-DD HH:MM'}
-                              style={{ width: '100%' }}
-                            />
-                          ) : (
-                            <Input
-                              value={newCondition.value}
-                              onChange={(e) => handleFieldChange('value', e.target.value)}
-                              placeholder="Enter value"
-                            />
-                          )}
+                            {['checkbox', 'radio', 'dropdown'].includes(
+                              fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c
+                            ) ? (
+                              <Select
+                                value={newCondition.value}
+                                onChange={(value) => handleFieldChange('value', value)}
+                                placeholder="Select value"
+                                style={{ width: '100%' }}
+                              >
+                                {getFieldOptions(newCondition.ifField).map((option) => (
+                                  <Option key={option} value={option}>
+                                    {option}
+                                  </Option>
+                                ))}
+                              </Select>
+                            ) : ['date', 'datetime', 'date-time', 'time'].includes(
+                                fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c
+                              ) ? (
+                              <Input
+                                type={
+                                  fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date'
+                                    ? 'date'
+                                    : fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time'
+                                    ? 'time'
+                                    : 'datetime-local'
+                                }
+                                value={newCondition.value}
+                                onChange={(e) => handleFieldChange('value', e.target.value)}
+                                placeholder={
+                                  fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date'
+                                    ? 'YYYY-MM-DD'
+                                    : fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time'
+                                    ? 'HH:MM'
+                                    : 'YYYY-MM-DD HH:MM'
+                                }
+                                style={{ width: '100%' }}
+                              />
+                            ) : (
+                              <Input
+                                value={newCondition.value}
+                                onChange={(e) => handleFieldChange('value', e.target.value)}
+                                placeholder="Enter value"
+                              />
+                            )}
                           </div>
                         )}
                         <div className="mb-3 flex items-center">
@@ -444,8 +478,8 @@ const Conditions = () => {
                               disabled={!newCondition.ifField}
                             >
                               {validIfFields
-                                .filter(f => f.Unique_Key__c !== newCondition.ifField)
-                                .map(f => (
+                                .filter((f) => f.Unique_Key__c !== newCondition.ifField)
+                                .map((f) => (
                                   <Option key={f.Unique_Key__c} value={f.Unique_Key__c}>
                                     {f.Name}
                                   </Option>
@@ -458,7 +492,7 @@ const Conditions = () => {
                     <Button
                       type="primary"
                       onClick={saveCondition}
-                      disabled={!newCondition.ifField || !newCondition.operator || !newCondition.thenFields[0]}
+                      disabled={!newCondition.ifField || !newCondition.operator || !newCondition.thenFields.length}
                     >
                       <FaSave style={{ marginRight: '4px' }} /> Save Condition
                     </Button>
@@ -467,11 +501,10 @@ const Conditions = () => {
                 <motion.div variants={containerVariants} className="mt-4">
                   <h2 className="text-xl font-semibold mb-3">Existing Conditions</h2>
                   <AnimatePresence>
-                    {conditions.filter(c => c.type === 'show_hide')
-                      .map(condition => {
-                        const conditionData = condition.Condition_Data__c
-                        ? JSON.parse(condition.Condition_Data__c)
-                        : condition;
+                    {conditions
+                      .filter((c) => (c.Condition_Data__c ? JSON.parse(c.Condition_Data__c || '{}').type : c.type) === 'show_hide')
+                      .map((condition) => {
+                        const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
                         return (
                           <motion.div
                             key={condition.Id}
@@ -482,22 +515,26 @@ const Conditions = () => {
                             className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
                           >
                             <div>
-                              <p><strong>If:</strong> {fields.find(f => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'}</p>
-                              <p><strong>Operator:</strong> {conditionData.operator || 'N/A'}</p>
-                              <p><strong>Value:</strong> {conditionData.value || 'N/A'}</p>
-                              <p><strong>Then:</strong> {conditionData.thenAction} {conditionData.thenFields?.map(id => fields.find(f => f.Unique_Key__c === id)?.Name).join(', ') || 'None'}</p>
+                              <p>
+                                <strong>If:</strong> {fields.find((f) => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'}
+                              </p>
+                              <p>
+                                <strong>Operator:</strong> {conditionData.operator || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Value:</strong> {conditionData.value || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Then:</strong> {conditionData.thenAction}{' '}
+                                {conditionData.thenFields?.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).join(', ') || 'None'}
+                              </p>
                             </div>
-                            <Button
-                              type="danger"
-                              size="small"
-                              onClick={() => deleteCondition(condition.Id)}
-                            >
+                            <Button type="danger" size="small" onClick={() => deleteCondition(condition.Id)}>
                               <FaTrash />
                             </Button>
                           </motion.div>
                         );
-                      })
-                      .filter(Boolean)}
+                      })}
                   </AnimatePresence>
                 </motion.div>
               </TabPane>
@@ -513,7 +550,7 @@ const Conditions = () => {
                         placeholder="Select controlling field"
                         style={{ width: '100%' }}
                       >
-                        {validControllingFields.map(field => (
+                        {validControllingFields.map((field) => (
                           <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
                             {field.Name}
                           </Option>
@@ -529,8 +566,10 @@ const Conditions = () => {
                           placeholder="Select value"
                           style={{ width: '100%' }}
                         >
-                          {getFieldOptions(newCondition.ifField).map(option => (
-                            <Option key={option} value={option}>{option}</Option>
+                          {getFieldOptions(newCondition.ifField).map((option) => (
+                            <Option key={option} value={option}>
+                              {option}
+                            </Option>
                           ))}
                         </Select>
                       </div>
@@ -545,8 +584,8 @@ const Conditions = () => {
                         disabled={!newCondition.ifField}
                       >
                         {validDependentFields
-                          .filter(f => f.Unique_Key__c !== newCondition.ifField)
-                          .map(field => (
+                          .filter((f) => f.Unique_Key__c !== newCondition.ifField)
+                          .map((field) => (
                             <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
                               {field.Name}
                             </Option>
@@ -564,25 +603,18 @@ const Conditions = () => {
                               placeholder="Select dependent value"
                               style={{ width: 'calc(100% - 40px)', marginRight: '8px' }}
                             >
-                              {getDependentValues(newCondition.dependentField).map(option => (
-                                <Option key={option} value={option}>{option}</Option>
+                              {getDependentValues(newCondition.dependentField).map((option) => (
+                                <Option key={option} value={option}>
+                                  {option}
+                                </Option>
                               ))}
                             </Select>
-                            <Button
-                              type="danger"
-                              size="small"
-                              onClick={() => removeDependentValue(index)}
-                            >
+                            <Button type="danger" size="small" onClick={() => removeDependentValue(index)}>
                               <FaTrash />
                             </Button>
                           </motion.div>
                         ))}
-                        <Button
-                          type="primary"
-                          size="small"
-                          onClick={addDependentValue}
-                          style={{ marginTop: '8px' }}
-                        >
+                        <Button type="primary" size="small" onClick={addDependentValue} style={{ marginTop: '8px' }}>
                           <FaPlus style={{ marginRight: '4px' }} /> Add Value
                         </Button>
                       </div>
@@ -590,7 +622,12 @@ const Conditions = () => {
                     <Button
                       type="primary"
                       onClick={saveCondition}
-                      disabled={!newCondition.ifField || !newCondition.dependentField || !newCondition.value || newCondition.dependentValues.length === 0}
+                      disabled={
+                        !newCondition.ifField ||
+                        !newCondition.dependentField ||
+                        !newCondition.value ||
+                        newCondition.dependentValues.length === 0
+                      }
                     >
                       <FaSave style={{ marginRight: '4px' }} /> Save Condition
                     </Button>
@@ -599,11 +636,10 @@ const Conditions = () => {
                 <motion.div variants={containerVariants} className="mt-4">
                   <h2 className="text-xl font-semibold mb-3">Existing Dependent Conditions</h2>
                   <AnimatePresence>
-                    {conditions.filter(c => c.type === 'dependent')
-                      .map(condition => {
-                        const conditionData = condition.Condition_Data__c
-                        ? JSON.parse(condition.Condition_Data__c)
-                        : condition;
+                    {conditions
+                      .filter((c) => (c.Condition_Data__c ? JSON.parse(c.Condition_Data__c || '{}').type : c.type) === 'dependent')
+                      .map((condition) => {
+                        const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
                         return (
                           <motion.div
                             key={condition.Id}
@@ -615,21 +651,230 @@ const Conditions = () => {
                           >
                             <div>
                               <p>
-                                <strong>If</strong> {fields.find(f => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'} equals "{conditionData.value || 'N/A'}", 
-                                then show [{conditionData.dependentValues?.join(', ') || 'None'}] for {fields.find(f => f.Unique_Key__c === conditionData.dependentField)?.Name || 'Unknown'}
+                                <strong>If:</strong> {fields.find((f) => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'}
+                              </p>
+                              <p>
+                                <strong>Value:</strong> {conditionData.value || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Then show:</strong> [{conditionData.dependentValues?.join(', ') || 'None'}] for{' '}
+                                {fields.find((f) => f.Unique_Key__c === conditionData.dependentField)?.Name || 'Unknown'}
                               </p>
                             </div>
-                            <Button
-                              type="danger"
-                              size="small"
-                              onClick={() => deleteCondition(condition.Id)}
-                            >
+                            <Button type="danger" size="small" onClick={() => deleteCondition(condition.Id)}>
                               <FaTrash />
                             </Button>
                           </motion.div>
                         );
-                      })
-                      .filter(Boolean)}
+                      })}
+                  </AnimatePresence>
+                </motion.div>
+              </TabPane>
+              <TabPane tab="Enable/Require/Mask a Field" key="enable_require_mask">
+                <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
+                  <h2 className="text-xl font-semibold mb-3">Add Enable/Require/Mask Condition</h2>
+                  <div className="mb-4">
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700">If Field</label>
+                      <Select
+                        value={newCondition.ifField}
+                        onChange={(value) => handleFieldChange('ifField', value)}
+                        placeholder="Select field"
+                        style={{ width: '100%' }}
+                      >
+                        {validIfFields.map((field) => (
+                          <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                            {field.Name}
+                          </Option>
+                        ))}
+                      </Select>
+                    </div>
+                    {newCondition.ifField && (
+                      <>
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-gray-700">Operator</label>
+                          <Select
+                            value={newCondition.operator}
+                            onChange={(value) => handleFieldChange('operator', value)}
+                            placeholder="Select operator"
+                            style={{ width: '100%' }}
+                          >
+                            {getOperators(fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c).map(
+                              (op) => (
+                                <Option key={op} value={op}>
+                                  {op}
+                                </Option>
+                              )
+                            )}
+                          </Select>
+                        </div>
+                        {newCondition.operator && !['is null', 'is not null'].includes(newCondition.operator) && (
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700">Value</label>
+                            {['checkbox', 'radio', 'dropdown'].includes(
+                              fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c
+                            ) ? (
+                              <Select
+                                value={newCondition.value}
+                                onChange={(value) => handleFieldChange('value', value)}
+                                placeholder="Select value"
+                                style={{ width: '100%' }}
+                              >
+                                {getFieldOptions(newCondition.ifField).map((option) => (
+                                  <Option key={option} value={option}>
+                                    {option}
+                                  </Option>
+                                ))}
+                              </Select>
+                            ) : ['date', 'datetime', 'date-time', 'time'].includes(
+                                fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c
+                              ) ? (
+                              <Input
+                                type={
+                                  fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date'
+                                    ? 'date'
+                                    : fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time'
+                                    ? 'time'
+                                    : 'datetime-local'
+                                }
+                                value={newCondition.value}
+                                onChange={(e) => handleFieldChange('value', e.target.value)}
+                                placeholder={
+                                  fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date'
+                                    ? 'YYYY-MM-DD'
+                                    : fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time'
+                                    ? 'HH:MM'
+                                    : 'YYYY-MM-DD HH:MM'
+                                }
+                                style={{ width: '100%' }}
+                              />
+                            ) : (
+                              <Input
+                                value={newCondition.value}
+                                onChange={(e) => handleFieldChange('value', e.target.value)}
+                                placeholder="Enter value"
+                              />
+                            )}
+                          </div>
+                        )}
+                        <div className="mb-3 flex items-center">
+                          <div style={{ width: '180px', marginRight: '8px' }}>
+                            <label className="block text-sm font-medium text-gray-700">Then</label>
+                            <Select
+                              value={newCondition.thenAction}
+                              onChange={(value) => handleFieldChange('thenAction', value)}
+                              style={{ width: '100%' }}
+                            >
+                              <Option value="require">Require</Option>
+                              <Option value="don't require">Don't Require</Option>
+                              <Option value="require multiple">Require Multiple</Option>
+                              <Option value="don't require multiple">Don't Require Multiple</Option>
+                              <Option value="disable">Disable</Option>
+                              <Option value="enable">Enable</Option>
+                              <Option value="set mask">Set Mask</Option>
+                            </Select>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label className="block text-sm font-medium text-gray-700">
+                              {newCondition.thenAction === 'require multiple' || newCondition.thenAction === "don't require multiple"
+                                ? 'Fields'
+                                : 'Field'}
+                            </label>
+                            <Select
+                              mode={
+                                newCondition.thenAction === 'require multiple' || newCondition.thenAction === "don't require multiple"
+                                  ? 'multiple'
+                                  : 'default'
+                              }
+                              value={newCondition.thenFields}
+                              onChange={(value) => handleFieldChange('thenFields', value)}
+                              placeholder={
+                                newCondition.thenAction === 'require multiple' || newCondition.thenAction === "don't require multiple"
+                                  ? 'Select fields'
+                                  : 'Select field'
+                              }
+                              style={{ width: '100%' }}
+                              disabled={!newCondition.ifField}
+                            >
+                              {validIfFields
+                                .filter((f) => f.Unique_Key__c !== newCondition.ifField)
+                                .map((f) => (
+                                  <Option key={f.Unique_Key__c} value={f.Unique_Key__c}>
+                                    {f.Name}
+                                  </Option>
+                                ))}
+                            </Select>
+                          </div>
+                        </div>
+                        {newCondition.thenAction === 'set mask' && (
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Mask Pattern <span className="text-gray-500 text-xs">(use @ to mask letters, # to mask numbers, * to mask both)</span>
+                            </label>
+                            <Input
+                              value={newCondition.maskPattern}
+                              onChange={(e) => handleFieldChange('maskPattern', e.target.value)}
+                              placeholder="e.g., @@##**"
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <Button
+                      type="primary"
+                      onClick={saveCondition}
+                      disabled={
+                        !newCondition.ifField ||
+                        !newCondition.operator ||
+                        !newCondition.thenFields.length ||
+                        (newCondition.thenAction === 'set mask' && !newCondition.maskPattern)
+                      }
+                    >
+                      <FaSave style={{ marginRight: '4px' }} /> Save Condition
+                    </Button>
+                  </div>
+                </motion.div>
+                <motion.div variants={containerVariants} className="mt-4">
+                  <h2 className="text-xl font-semibold mb-3">Existing Enable/Require/Mask Conditions</h2>
+                  <AnimatePresence>
+                    {conditions
+                      .filter((c) => (c.Condition_Data__c ? JSON.parse(c.Condition_Data__c || '{}').type : c.type) === 'enable_require_mask')
+                      ?.map((condition) => {
+                        const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
+                        return (
+                          <motion.div
+                            key={condition.Id}
+                            variants={itemVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
+                          >
+                            <div>
+                              <p>
+                                <strong>If:</strong> {fields.find((f) => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'}
+                              </p>
+                              <p>
+                                <strong>Operator:</strong> {conditionData.operator || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Value:</strong> {conditionData.value || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Then:</strong> {conditionData.thenAction}
+                                {conditionData.thenAction === 'set mask' ? ` with pattern "${conditionData.maskPattern || 'N/A'}"` : ''}{' '}
+                                {(Array.isArray(conditionData.thenFields)
+                                  ? conditionData.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean).join(', ')
+                                  : fields.find((f) => f.Unique_Key__c === conditionData.thenFields)?.Name) || 'None'}
+                              </p>
+                            </div>
+                            <Button type="danger" size="small" onClick={() => deleteCondition(condition.Id)}>
+                              <FaTrash />
+                            </Button>
+                          </motion.div>
+                        );
+                      })}
                   </AnimatePresence>
                 </motion.div>
               </TabPane>
