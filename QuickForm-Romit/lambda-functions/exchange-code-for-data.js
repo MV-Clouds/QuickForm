@@ -134,8 +134,7 @@ export const handler = async (event) => {
 
     // 3. Fetch Form__c records
     let formRecords = [];
-    try {
-      const query = `SELECT Id, Name, Active_Version__c,
+    const query = `SELECT Id, Name, Active_Version__c,
                      (SELECT Id, Name, Form__c, Description__c, Object_Info__c, Version__c, Publish_Link__c, Stage__c, Submission_Count__c,
                        (SELECT Id, Name, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c 
                         FROM Form_Fields__r),
@@ -143,8 +142,10 @@ export const handler = async (event) => {
                           FROM Form_Condition__r)
                       FROM Form_Versions__r ORDER BY Version__c DESC)
                      FROM Form__c`;
-      const queryUrl = `${instance_url}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
-      const queryRes = await fetch(queryUrl, {
+    let nextUrl = `${instance_url}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
+
+    while (nextUrl) {
+      const queryRes = await fetch(nextUrl, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -154,11 +155,12 @@ export const handler = async (event) => {
 
       if (!queryRes.ok) {
         const errorData = await queryRes.json();
-        throw new Error(errorData[0]?.message || 'Failed to fetch Form_Version__c records');
+        throw new Error(errorData[0]?.message || 'Failed to fetch Form__c records');
       }
 
       const queryData = await queryRes.json();
-      formRecords = (queryData.records || []).map(record => ({
+
+      const batch = (queryData.records || []).map(record => ({
         Id: record.Id,
         Name: record.Name,
         Active_Version__c: record.Active_Version__c || null,
@@ -190,9 +192,15 @@ export const handler = async (event) => {
         })),
         Source: 'Form__c',
       }));
-    } catch (queryError) {
-      console.warn(`Error fetching Form_Version__c records: ${queryError.message}`);
+
+      formRecords.push(...batch);
+
+      // Prepare for next batch if available
+      nextUrl = queryData.nextRecordsUrl
+        ? `${instance_url}${queryData.nextRecordsUrl}`
+        : null;
     }
+
 
     // 4. Check existing metadata from DynamoDB
     const existingMetadataRes = await dynamoClient.send(

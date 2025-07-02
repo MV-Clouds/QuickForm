@@ -50,7 +50,7 @@ const Conditions = () => {
         const instanceUrl = sessionStorage.getItem('instanceUrl');
         if (!userId || !instanceUrl) throw new Error('Missing userId or instanceUrl.');
 
-        // Fetch access token once
+        // Fetch access token
         const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -65,6 +65,7 @@ const Conditions = () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokenData.access_token}`,
           },
           body: JSON.stringify({
             userId,
@@ -76,7 +77,7 @@ const Conditions = () => {
         if (!metadataResponse.ok) throw new Error(data.error || 'Failed to fetch metadata');
 
         const records = JSON.parse(data.FormRecords || '[]');
-        setFormRecords(records); // Store formRecords in state
+        setFormRecords(records);
         let formVersion = null;
         for (const form of records) {
           formVersion = form.FormVersions.find(v => v.Id === formVersionId);
@@ -84,8 +85,19 @@ const Conditions = () => {
         }
 
         if (!formVersion) throw new Error(`Form version ${formVersionId} not found`);
+        console.log('Form Version Data:', formVersion);
         setFields(formVersion.Fields || []);
-        setConditions(formVersion.Conditions || []);
+        let parsedConditions = [];
+
+        if (Array.isArray(formVersion.Conditions)) {
+          setConditions(formVersion.Conditions); // they are already individual objects
+        } else {
+          setConditions([]);
+        }
+        console.log('Conditions:', formVersion.Conditions);
+        
+        
+
       } catch (err) {
         setError(err.message);
       } finally {
@@ -105,20 +117,33 @@ const Conditions = () => {
       const instanceUrl = sessionStorage.getItem('instanceUrl');
       if (!userId || !instanceUrl) throw new Error('Missing userId or instanceUrl.');
 
-      const conditionData = {
-        Form_Version__c: formVersionId,
-        Condition_Type__c: newCondition.type,
-        Condition_Data__c: JSON.stringify({
-          ifField: newCondition.ifField,
-          operator: newCondition.operator,
-          value: newCondition.value,
-          thenAction: newCondition.thenAction,
-          thenFields: newCondition.thenFields,
-          dependentField: newCondition.dependentField,
-          dependentValues: newCondition.dependentValues,
-        }),
-      };
-
+      let conditionData;
+      if (newCondition.type === 'show_hide') {
+        conditionData = {
+          Form_Version__c: formVersionId,
+          Condition_Type__c: newCondition.type,
+          Condition_Data__c: JSON.stringify({
+            ifField: newCondition.ifField,
+            operator: newCondition.operator,
+            value: newCondition.value,
+            thenAction: newCondition.thenAction,
+            thenFields: newCondition.thenFields,
+          }),
+        };
+      } else { // dependent
+        conditionData = {
+          Form_Version__c: formVersionId,
+          Condition_Type__c: newCondition.type,
+          Condition_Data__c: JSON.stringify({
+            controllingField: newCondition.ifField,
+            controllingValue: newCondition.value,
+            dependentField: newCondition.dependentField,
+            dependentValues: newCondition.dependentValues,
+          }),
+        };
+      }
+      console.log('Saving condition data:', conditionData);
+      
       const response = await fetch(process.env.REACT_APP_SAVE_CONDITION_URL, {
         method: 'POST',
         headers: {
@@ -138,7 +163,7 @@ const Conditions = () => {
 
       setConditions([...conditions, data.condition]);
       setNewCondition({
-        type: 'show_hide',
+        type: newCondition.type,
         ifField: '',
         operator: '',
         value: '',
@@ -198,10 +223,10 @@ const Conditions = () => {
 
   const getOperators = (fieldType) => {
     if (['shorttext', 'longtext', 'email', 'phone', 'address', 'link', 'fullname'].includes(fieldType)) {
-      return textConditions;
+      return ['equals', 'not equals', 'is null', 'is not null', 'contains', 'does not contain'];
     }
-    if (['number', 'price', 'percent'].includes(fieldType)) {
-      return numberConditions;
+    if (['number', 'price', 'percent', 'date', 'datetime', 'date-time', 'time'].includes(fieldType)) {
+      return ['equals', 'not equals', 'greater than', 'greater than or equal to', 'smaller than', 'smaller than or equal to'];
     }
     if (['checkbox', 'radio', 'dropdown'].includes(fieldType)) {
       return ['equals', 'not equals'];
@@ -223,18 +248,18 @@ const Conditions = () => {
     return [];
   };
 
-  // Get dependent picklist values from Object_Info__c or field properties
+  // Get dependent picklist values from field properties
   const getDependentValues = (fieldId) => {
     const field = fields.find(f => f.Unique_Key__c === fieldId);
     if (!field) return [];
-    const formVersion = formRecords.find(form =>
-      form.FormVersions.some(v => v.Id === formVersionId)
-    )?.FormVersions.find(v => v.Id === formVersionId);
-    if (!formVersion) return [];
-    const objectInfo = JSON.parse(formVersion.Object_Info__c || '[]')[0];
-    const sfField = objectInfo?.fields.find(f => f.label === field.Name);
-    return sfField?.values || (JSON.parse(field.Properties__c || '{}').options || []);
-  };
+    try {
+      const properties = JSON.parse(field.Properties__c || '{}');
+      return ['dropdown', 'multiselect'].includes(field.Field_Type__c) ? (properties.options || []) : [];
+    } catch (err) {
+      console.error('Error parsing Properties__c for dependent values:', err);
+      return [];
+    }
+};
 
   const handleFieldChange = (field, value) => {
     setNewCondition(prev => ({
@@ -315,7 +340,23 @@ const Conditions = () => {
               />
             </div>
           ) : (
-            <Tabs defaultActiveKey="show_hide" style={{ marginBottom: '16px' }}>
+            <Tabs
+            defaultActiveKey="show_hide"
+            style={{ marginBottom: '16px' }}
+            onChange={(key) => {
+              setNewCondition(prev => ({
+                ...prev,
+                type: key, // Set type to 'show_hide' or 'dependent' based on active tab
+                ifField: '',
+                operator: '',
+                value: '',
+                thenAction: 'show',
+                thenFields: [],
+                dependentField: '',
+                dependentValues: [],
+              }));
+            }}
+          >
               <TabPane tab="Show/Hide Fields" key="show_hide">
                 <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
                   <h2 className="text-xl font-semibold mb-3">Add Show/Hide Condition</h2>
@@ -354,23 +395,31 @@ const Conditions = () => {
                           <div className="mb-3">
                             <label className="block text-sm font-medium text-gray-700">Value</label>
                             {['checkbox', 'radio', 'dropdown'].includes(fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c) ? (
-                              <Select
-                                value={newCondition.value}
-                                onChange={(value) => handleFieldChange('value', value)}
-                                placeholder="Select value"
-                                style={{ width: '100%' }}
-                              >
-                                {getFieldOptions(newCondition.ifField).map(option => (
-                                  <Option key={option} value={option}>{option}</Option>
-                                ))}
-                              </Select>
-                            ) : (
-                              <Input
-                                value={newCondition.value}
-                                onChange={(e) => handleFieldChange('value', e.target.value)}
-                                placeholder="Enter value"
-                              />
-                            )}
+                            <Select
+                              value={newCondition.value}
+                              onChange={(value) => handleFieldChange('value', value)}
+                              placeholder="Select value"
+                              style={{ width: '100%' }}
+                            >
+                              {getFieldOptions(newCondition.ifField).map(option => (
+                                <Option key={option} value={option}>{option}</Option>
+                              ))}
+                            </Select>
+                          ) : ['date', 'datetime', 'date-time', 'time'].includes(fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c) ? (
+                            <Input
+                              type={fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date' ? 'date' : fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time' ? 'time' : 'datetime-local'}
+                              value={newCondition.value}
+                              onChange={(e) => handleFieldChange('value', e.target.value)}
+                              placeholder={fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date' ? 'YYYY-MM-DD' : fields.find(f => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time' ? 'HH:MM' : 'YYYY-MM-DD HH:MM'}
+                              style={{ width: '100%' }}
+                            />
+                          ) : (
+                            <Input
+                              value={newCondition.value}
+                              onChange={(e) => handleFieldChange('value', e.target.value)}
+                              placeholder="Enter value"
+                            />
+                          )}
                           </div>
                         )}
                         <div className="mb-3 flex items-center">
@@ -418,30 +467,37 @@ const Conditions = () => {
                 <motion.div variants={containerVariants} className="mt-4">
                   <h2 className="text-xl font-semibold mb-3">Existing Conditions</h2>
                   <AnimatePresence>
-                    {conditions.filter(c => c.Condition_Type__c === 'show_hide').map(condition => (
-                      <motion.div
-                        key={condition.Id}
-                        variants={itemVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
-                      >
-                        <div>
-                          <p><strong>If:</strong> {fields.find(f => f.Unique_Key__c === JSON.parse(condition.Condition_Data__c).ifField)?.Name}</p>
-                          <p><strong>Operator:</strong> {JSON.parse(condition.Condition_Data__c).operator}</p>
-                          <p><strong>Value:</strong> {JSON.parse(condition.Condition_Data__c).value || 'N/A'}</p>
-                          <p><strong>Then:</strong> {JSON.parse(condition.Condition_Data__c).thenAction} {JSON.parse(condition.Condition_Data__c).thenFields.map(id => fields.find(f => f.Unique_Key__c === id)?.Name).join(', ')}</p>
-                        </div>
-                        <Button
-                          type="danger"
-                          size="small"
-                          onClick={() => deleteCondition(condition.Id)}
-                        >
-                          <FaTrash />
-                        </Button>
-                      </motion.div>
-                    ))}
+                    {conditions.filter(c => c.type === 'show_hide')
+                      .map(condition => {
+                        const conditionData = condition.Condition_Data__c
+                        ? JSON.parse(condition.Condition_Data__c)
+                        : condition;
+                        return (
+                          <motion.div
+                            key={condition.Id}
+                            variants={itemVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
+                          >
+                            <div>
+                              <p><strong>If:</strong> {fields.find(f => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'}</p>
+                              <p><strong>Operator:</strong> {conditionData.operator || 'N/A'}</p>
+                              <p><strong>Value:</strong> {conditionData.value || 'N/A'}</p>
+                              <p><strong>Then:</strong> {conditionData.thenAction} {conditionData.thenFields?.map(id => fields.find(f => f.Unique_Key__c === id)?.Name).join(', ') || 'None'}</p>
+                            </div>
+                            <Button
+                              type="danger"
+                              size="small"
+                              onClick={() => deleteCondition(condition.Id)}
+                            >
+                              <FaTrash />
+                            </Button>
+                          </motion.div>
+                        );
+                      })
+                      .filter(Boolean)}
                   </AnimatePresence>
                 </motion.div>
               </TabPane>
@@ -534,7 +590,7 @@ const Conditions = () => {
                     <Button
                       type="primary"
                       onClick={saveCondition}
-                      disabled={!newCondition.ifField || !newCondition.dependentField || !newCondition.value}
+                      disabled={!newCondition.ifField || !newCondition.dependentField || !newCondition.value || newCondition.dependentValues.length === 0}
                     >
                       <FaSave style={{ marginRight: '4px' }} /> Save Condition
                     </Button>
@@ -543,30 +599,37 @@ const Conditions = () => {
                 <motion.div variants={containerVariants} className="mt-4">
                   <h2 className="text-xl font-semibold mb-3">Existing Dependent Conditions</h2>
                   <AnimatePresence>
-                    {conditions.filter(c => c.Condition_Type__c === 'dependent').map(condition => (
-                      <motion.div
-                        key={condition.Id}
-                        variants={itemVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
-                      >
-                        <div>
-                          <p><strong>Controlling:</strong> {fields.find(f => f.Unique_Key__c === JSON.parse(condition.Condition_Data__c).ifField)?.Name}</p>
-                          <p><strong>Value:</strong> {JSON.parse(condition.Condition_Data__c).value}</p>
-                          <p><strong>Dependent:</strong> {fields.find(f => f.Unique_Key__c === JSON.parse(condition.Condition_Data__c).dependentField)?.Name}</p>
-                          <p><strong>Values:</strong> {JSON.parse(condition.Condition_Data__c).dependentValues.join(', ')}</p>
-                        </div>
-                        <Button
-                          type="danger"
-                          size="small"
-                          onClick={() => deleteCondition(condition.Id)}
-                        >
-                          <FaTrash />
-                        </Button>
-                      </motion.div>
-                    ))}
+                    {conditions.filter(c => c.type === 'dependent')
+                      .map(condition => {
+                        const conditionData = condition.Condition_Data__c
+                        ? JSON.parse(condition.Condition_Data__c)
+                        : condition;
+                        return (
+                          <motion.div
+                            key={condition.Id}
+                            variants={itemVariants}
+                            initial="hidden"
+                            animate="visible"
+                            exit="exit"
+                            className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
+                          >
+                            <div>
+                              <p>
+                                <strong>If</strong> {fields.find(f => f.Unique_Key__c === conditionData.ifField)?.Name || 'Unknown'} equals "{conditionData.value || 'N/A'}", 
+                                then show [{conditionData.dependentValues?.join(', ') || 'None'}] for {fields.find(f => f.Unique_Key__c === conditionData.dependentField)?.Name || 'Unknown'}
+                              </p>
+                            </div>
+                            <Button
+                              type="danger"
+                              size="small"
+                              onClick={() => deleteCondition(condition.Id)}
+                            >
+                              <FaTrash />
+                            </Button>
+                          </motion.div>
+                        );
+                      })
+                      .filter(Boolean)}
                   </AnimatePresence>
                 </motion.div>
               </TabPane>

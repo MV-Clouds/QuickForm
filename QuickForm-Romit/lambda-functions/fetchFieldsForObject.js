@@ -36,6 +36,7 @@ export const handler = async (event) => {
       headers: {
         Authorization: `Bearer ${access_token}`,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
 
@@ -104,7 +105,7 @@ export const handler = async (event) => {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify({ error: `Failed to fetch fields: ${error.message}` }),
+      body: JSON.stringify({ error: `Failed to fetch fields: ${error}` }),
     };
   }
 };

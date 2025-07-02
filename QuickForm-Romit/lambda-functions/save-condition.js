@@ -23,6 +23,8 @@ export const handler = async (event) => {
     // Fetch existing conditions from Salesforce
     let existingConditionId = null;
     let existingConditions = [];
+
+    // Query for the single Form_Condition__c record for the Form_Version__c
     const query = `SELECT Id, Condition_Data__c FROM Form_Condition__c WHERE Form_Version__c = '${formVersionId}' LIMIT 1`;
     const queryResponse = await fetch(`${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`, {
       method: 'GET',
@@ -41,23 +43,37 @@ export const handler = async (event) => {
     }
 
     // Prepare new condition
+    const conditionData = JSON.parse(condition.Condition_Data__c);
     const newCondition = {
       Id: `local_${Date.now()}`, // Temporary ID for DynamoDB
-      Condition_Type__c: condition.Condition_Type__c,
-      Condition_Data__c: condition.Condition_Data__c,
+      type: condition.Condition_Type__c, // Store type in Condition_Data__c
+      ...(condition.Condition_Type__c === 'show_hide'
+        ? {
+            ifField: conditionData.ifField,
+            operator: conditionData.operator,
+            value: conditionData.value,
+            thenAction: conditionData.thenAction,
+            thenFields: conditionData.thenFields,
+          }
+        : {
+            ifField: conditionData.controllingField,
+            value: conditionData.controllingValue,
+            dependentField: conditionData.dependentField,
+            dependentValues: conditionData.dependentValues,
+          }),
     };
+
+    // Add new condition to existing conditions
     const updatedConditions = [...existingConditions, newCondition];
 
-    // Save to Salesforce (upsert single record)
+    // Save to Salesforce (single record)
     const sfCondition = {
       Form_Version__c: formVersionId,
-      Condition_Type__c: 'combined',
       Condition_Data__c: JSON.stringify(updatedConditions),
     };
 
     let conditionId;
     if (existingConditionId) {
-      // Update existing record
       const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
         method: 'PATCH',
         headers: {
@@ -73,7 +89,6 @@ export const handler = async (event) => {
       }
       conditionId = existingConditionId;
     } else {
-      // Create new record
       const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c`, {
         method: 'POST',
         headers: {
@@ -92,7 +107,7 @@ export const handler = async (event) => {
     }
 
     // Update newCondition with Salesforce ID
-    newCondition.Id = conditionId + '_' + newCondition.Id; // Unique ID combining Salesforce ID and local timestamp
+    newCondition.Id = conditionId + '_' + newCondition.Id;
 
     // Update DynamoDB
     const existingMetadataRes = await dynamoClient.send(

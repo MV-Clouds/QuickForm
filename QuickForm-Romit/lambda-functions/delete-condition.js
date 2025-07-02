@@ -40,13 +40,12 @@ export const handler = async (event) => {
       }
     }
 
-    // Remove the condition
+    // Filter out the condition to delete
     const updatedConditions = existingConditions.filter(c => c.Id !== conditionId);
 
     // Update Salesforce
     if (existingConditionId) {
       if (updatedConditions.length > 0) {
-        // Update existing record
         const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
           method: 'PATCH',
           headers: {
@@ -54,7 +53,6 @@ export const handler = async (event) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            Condition_Type__c: 'combined',
             Condition_Data__c: JSON.stringify(updatedConditions),
           }),
         });
@@ -67,10 +65,12 @@ export const handler = async (event) => {
         // Delete the record if no conditions remain
         const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
 
-        if (!response.ok && response.status !== 204) {
+        if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData[0]?.message || 'Failed to delete condition');
         }
@@ -103,22 +103,23 @@ export const handler = async (event) => {
     if (formVersion) {
       formVersion.Conditions = updatedConditions;
       formRecords[formIndex] = { ...formRecords[formIndex] };
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: METADATA_TABLE_NAME,
-          Item: {
-            UserId: { S: userId },
-            InstanceUrl: { S: cleanedInstanceUrl },
-            Metadata: { S: existingMetadataRes.Item?.Metadata?.S || '{}' },
-            FormRecords: { S: JSON.stringify(formRecords) },
-            CreatedAt: { S: existingMetadataRes.Item?.CreatedAt?.S || new Date().toISOString() },
-            UpdatedAt: { S: new Date().toISOString() },
-          },
-        })
-      );
     } else {
       throw new Error(`Form version ${formVersionId} not found in DynamoDB`);
     }
+
+    await dynamoClient.send(
+      new PutItemCommand({
+        TableName: METADATA_TABLE_NAME,
+        Item: {
+          UserId: { S: userId },
+          InstanceUrl: { S: cleanedInstanceUrl },
+          Metadata: { S: existingMetadataRes.Item?.Metadata?.S || '{}' },
+          FormRecords: { S: JSON.stringify(formRecords) },
+          CreatedAt: { S: existingMetadataRes.Item?.CreatedAt?.S || new Date().toISOString() },
+          UpdatedAt: { S: new Date().toISOString() },
+        },
+      })
+    );
 
     return {
       statusCode: 200,
