@@ -1025,6 +1025,7 @@ const formFieldOptions = (mappingIndex) => {
       transition={{ duration: 0.4 }}
       className="absolute right-0 h-full w-1/3 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-10"
     >
+ 
       <div className="p-6">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
           <motion.h2

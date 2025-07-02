@@ -124,6 +124,7 @@ const MappingFields = () => {
           name: field.Name || field.name || field.label || "Unknown",
           type: field.Field_Type__c || field.type,
           Properties__c: field.Properties__c || '{}', // Include Properties__c for picklist validation
+          Unique_Key__c: field.Unique_Key__c || field.id,
         }));
         setFormFields(normalizedFields);
       } else {
@@ -556,6 +557,8 @@ const MappingFields = () => {
         mappings: allMappings,
       };
 
+      console.log('payload  :: ',payload);
+      
       const response = await fetch(saveMappingsUrl, {
         method: "POST",
         headers,
@@ -815,6 +818,10 @@ const MappingFields = () => {
         setEdges(initialEdges);
         setMappings({});
       }
+      console.log('existingMappingsData :: ',existingMappingsData);
+      console.log('existingMappingsData.mappings:: ',existingMappingsData.mappings);
+      
+      
     } catch (error) {
       showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
     } finally {
@@ -907,6 +914,7 @@ const MappingFields = () => {
                     nodeLabel={selectedNode.data.action}
                     nodes={nodes}
                     edges={edges}
+                    
                   />
                 )}
               </div>

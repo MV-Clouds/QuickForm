@@ -1,26 +1,30 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSalesforceData } from '../Context/MetadataContext';
 
 const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
+  const { refreshData, setFormRecords } = useSalesforceData();
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
   const typeMapping = {
-    string: ['shorttext', 'longtext'],
+    string: ['shorttext'],
+    textarea: ['longtext'],
     phone: ['phone'],
     date: ['date'],
+    datetime: ['datetime'],
+    time: ['time'],
     picklist: ['dropdown'],
-    checkbox: ['checkbox'],
+    multipicklist: ['dropdown'],
+    percent: ['number'],
+    double: ['number'],
     currency: ['price'],
     email: ['email'],
     url: ['link'],
     number: ['number'],
     boolean: ['checkbox'],
-    datetime: ['datetime'],
-    textarea: ['longtext'],
-    multipicklist: ['dropdown'],
   };
 
   const getDefaultValidation = (fieldType) => {
@@ -49,6 +53,10 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
       datetime: {
         pattern: '^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$',
         description: 'Must be in YYYY-MM-DD HH:MM format.',
+      },
+      time: {
+        pattern: '^\\d{2}:\\d{2}$',
+        description: 'Must be in HH:MM format.',
       },
       number: {
         pattern: '^[0-9]+$',
@@ -111,16 +119,19 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
       alignment: 'center',
     };
 
-    // Generate fields from objectInfo if available
-    const generatedFields = objectInfo.length > 0 && objectInfo[0].fields
-      ? objectInfo[0].fields.map((objField, index) => {
+    // Generate fields from all objects in objectInfo
+    const generatedFields = objectInfo
+      .filter((obj) => obj.fields && obj.fields.length > 0)
+      .flatMap((obj) =>
+        obj.fields.map((objField) => {
           const fieldTypeOptions = typeMapping[objField.type] || ['shorttext'];
           const selectedType = fieldTypeOptions[0];
 
           const newField = {
             id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             type: selectedType,
-            label: objField.label || objField.name,
+            label: objField.label,
+            name: objField.name,
             isRequired: objField.required || false,
             Properties__c: {
               pattern: getDefaultValidation(selectedType).pattern,
@@ -129,17 +140,23 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
             },
           };
 
-          // Handle picklist fields
+          // Handle checkbox for boolean fields
+          if (objField.type === 'boolean') {
+            newField.options = ['Checked'];
+            newField.allowMultipleSelections = false;
+            newField.dropdownRelatedValues = { 'Checked': 'Checked' };
+          }
+
+          // Handle picklist and multipicklist fields
           if (['picklist', 'multipicklist'].includes(objField.type)) {
-            newField.options = objField.values || ['Option 1', 'Option 2', 'Option 3'];
+            newField.options = objField.values && objField.values.length > 0
+              ? objField.values
+              : ['Option 1', 'Option 2', 'Option 3'];
             newField.allowMultipleSelections = objField.type === 'multipicklist';
-            newField.dropdownRelatedValues = (objField.values || ['Option 1', 'Option 2', 'Option 3']).reduce(
-              (acc, val) => {
-                acc[val] = val;
-                return acc;
-              },
-              {}
-            );
+            newField.dropdownRelatedValues = newField.options.reduce((acc, val) => {
+              acc[val] = val;
+              return acc;
+            }, {});
           }
 
           // Add phone-specific properties
@@ -154,9 +171,14 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
             newField.placeholder = { main: `Enter ${objField.label || objField.name}` };
           }
 
+          // Add number-specific properties
+          if (['number', 'percent'].includes(objField.type)) {
+            newField.numberValueLimits = { enabled: false, min: '', max: '' };
+          }
+
           return newField;
         })
-      : [];
+      );
 
     // Combine header and generated fields
     const allFields = [headerField, ...generatedFields];
@@ -183,6 +205,157 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
     return { formVersion, formFields, allFields };
   };
 
+  const prepareMappingData = (formVersionId, objectInfo) => {
+    // Create nodes for the flow
+    const nodes = [];
+    const mappings = [];
+    const edges = [];
+    
+    // Start node
+    const startNode = {
+      nodeId: 'start',
+      actionType: 'Start',
+      salesforceObject: '',
+      fieldMappings: [],
+      conditions: [],
+      order: 1,
+      previousNodeId: '',
+      nextNodeIds: [],
+      formVersionId: formVersionId,
+      label: 'Start'
+    };
+    
+    nodes.push({
+      id: 'start',
+      type: 'custom',
+      position: { x: 208, y: 50 },
+      data: {
+        label: 'Start',
+        displayLabel: 'Start',
+        type: 'trigger',
+        action: 'Start',
+        order: 1,
+        conditions: [],
+        fieldMappings: [],
+        formVersionId: formVersionId
+      },
+      draggable: true,
+    });
+    
+    mappings.push(startNode);
+    
+    // Create/Update nodes for each object
+    let previousNodeId = 'start';
+    let order = 2;
+    
+    objectInfo.forEach((obj, index) => {
+      const nodeId = `create_update_${Math.floor(Math.random() * 10000)}`;
+      const label = `Create/Update`;
+      
+      // Create field mappings for this object
+      const fieldMappings = obj.fields.map(field => ({
+        formFieldId: '', // This will be populated after form fields are created
+        fieldType: typeMapping[field.type]?.[0] || 'shorttext',
+        salesforceField: field.name,
+        picklistValue: '',
+      }));
+      
+      const createUpdateNode = {
+        nodeId,
+        actionType: 'CreateUpdate',
+        salesforceObject: obj.objectName,
+        fieldMappings,
+        conditions: [],
+        order,
+        previousNodeId: previousNodeId,
+        nextNodeIds: [],
+      };
+      
+      nodes.push({
+        id: nodeId,
+        type: 'custom',
+        position: { x: 190 + (index * 20), y: 145 + (index * 20) },
+        data: {
+          label,
+          displayLabel: 'Create/Update',
+          type: 'action',
+          action: 'Create/Update',
+          order,
+          conditions: [],
+          fieldMappings,
+          salesforceObject: obj.objectName,
+        },
+        draggable: true,
+      });
+      
+      mappings.push(createUpdateNode);
+      
+      // Create edge from previous node to this one
+      edges.push({
+        id: `e${previousNodeId}-${nodeId}`,
+        source: previousNodeId,
+        sourceHandle: 'bottom',
+        target: nodeId,
+        targetHandle: 'top',
+      });
+      
+      previousNodeId = nodeId;
+      order++;
+    });
+    
+    // End node
+    const endNode = {
+      nodeId: 'end',
+      actionType: 'End',
+      salesforceObject: '',
+      fieldMappings: [],
+      conditions: [],
+      order,
+      previousNodeId: previousNodeId,
+      nextNodeIds: [],
+    };
+    
+    nodes.push({
+      id: 'end',
+      type: 'custom',
+      position: { x: 213, y: 520 },
+      data: {
+        label: 'End',
+        displayLabel: 'End',
+        type: 'end',
+        action: 'End',
+        order,
+        conditions: [],
+        fieldMappings: [],
+      },
+      draggable: true,
+    });
+    
+    mappings.push(endNode);
+    
+    // Create edge from last create/update to end
+    edges.push({
+      id: `e${previousNodeId}-end`,
+      source: previousNodeId,
+      sourceHandle: 'bottom',
+      target: 'end',
+      targetHandle: 'top',
+    });
+    
+    // Update nextNodeIds for all nodes
+    mappings.forEach((node, index) => {
+      if (index < mappings.length - 1) {
+        node.nextNodeIds = [mappings[index + 1].nodeId];
+      }
+    });
+    
+    return {
+      nodes,
+      mappings,
+      edges,
+    };
+  };
+
   const handleFormNameSubmit = async () => {
     if (!formName.trim()) {
       setFormNameError('Form name is required.');
@@ -196,10 +369,13 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
       if (!userId || !instanceUrl) {
         throw new Error('Missing userId or instanceUrl. Please log in.');
       }
+
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error('Failed to obtain access token.');
+
+      // Create the form version and fields
       const { formVersion, formFields, allFields } = prepareFormData();
-      const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
+      const formResponse = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,9 +387,80 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
           formData: { formVersion, formFields },
         }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to create form.');
-      const newFormVersionId = data.formVersionId;
+
+      const formData = await formResponse.json();
+      if (!formResponse.ok) throw new Error(formData.error || 'Failed to create form.');
+
+      const newFormVersionId = formData.formVersionId;
+      const formFieldIds = formData.formFieldIds || {};
+
+      // Check if objectInfo has valid fields
+      const hasValidObjectInfo = objectInfo.some((obj) => obj.fields && obj.fields.length > 0);
+
+      if (hasValidObjectInfo) {
+        // Create the mapping records
+        const { nodes, mappings, edges } = prepareMappingData(newFormVersionId, objectInfo);
+        console.log('allFields :: ',allFields);
+        
+        // Update field mappings with actual form field IDs
+        mappings.forEach((node) => {
+          if (node.actionType === 'CreateUpdate') {
+            node.formVersionId = newFormVersionId;
+            node.label = `Create/Update`;
+
+            node.fieldMappings = node.fieldMappings.map((mapping) => {
+              // Find the matching form field by salesforceField
+              const formField = allFields.find((f) => {
+                // Match by label or salesforceField name
+                return (
+                  f.name === mapping.salesforceField ||
+                  (f.Properties__c?.description && f.Properties__c.description.includes(mapping.salesforceField))
+                );
+              });
+
+              // Get the formFieldId from formFieldIds using the field's Unique_Key__c
+              const formFieldId = formField && formField.id ? formFieldIds[formField.id] || '' : '';
+
+              return {
+                ...mapping,
+                formFieldId, // Assign the correct formFieldId
+              };
+            });
+          } else {
+            // For start and end nodes
+            node.formVersionId = newFormVersionId;
+            node.label = node.nodeId === 'start' ? 'Start' : 'End';
+          }
+
+          // Ensure order is integer
+          node.order = parseInt(node.order);
+        });
+
+        const mappingResponse = await fetch(process.env.REACT_APP_SAVE_MAPPINGS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId,
+            instanceUrl: instanceUrl.replace(/https?:\/\//, ''),
+            flowId: newFormVersionId,
+            nodes,
+            edges,
+            mappings,
+          }),
+        });
+
+        const mappingData = await mappingResponse.json();
+        if (!mappingResponse.ok) {
+          console.error('Failed to create mappings:', mappingData.error);
+          throw new Error(mappingData.error || 'Failed to create mappings.');
+        }
+      }
+
+      await refreshData();
+
       navigate(`/form-builder/${newFormVersionId}`, {
         state: { fields: allFields },
       });
@@ -235,7 +482,7 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
             className="text-gray-500 hover:text-gray-700"
             aria-label="Close"
           >
-            ×
+            x
           </button>
         </div>
         <input
