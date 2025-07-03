@@ -356,7 +356,6 @@ function PublicFormViewer() {
     try {
       const submissionData = {};
       const filesToUpload = {};
-      console.log('here');
       
       for (const key of Object.keys(formValues)) {
       const field = formData.Fields.find((f) => f.Unique_Key__c === key);
@@ -374,6 +373,7 @@ function PublicFormViewer() {
         submissionData[key] = formValues[key];
       }
     }
+    console.log('Access token ',accessToken);
     
     
       const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
@@ -430,6 +430,38 @@ function PublicFormViewer() {
       setToggles({});
       setCurrentPage(0);
     } catch (error) {
+      if(error.message.includes('INVALID_JWT_FORMAT')){
+        let decrypted;
+        try {
+            decrypted = decrypt(linkId);
+        } catch (e) {
+          throw new Error(e.message || 'Invalid link format');
+        }
+
+        const [ userId, formVersionId ] = decrypted.split('$');
+        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId,
+            
+          }),
+        });
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || tokenData.error) {
+          throw new Error(tokenData.error || 'Failed to fetch access token');
+        }
+        const token = tokenData.access_token;
+        console.log('New access token fetched:', token);
+        
+        setAccessToken(token);
+        console.log('Retrying submission with new token...',accessToken);
+        
+        handleSubmit(e); // Retry submission with new token
+      }
       console.error('Error submitting form:', error);
       setErrors({ submit: error.message || 'Failed to submit form' });
     } finally {

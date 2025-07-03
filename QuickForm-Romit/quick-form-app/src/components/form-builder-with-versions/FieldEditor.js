@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import FormCalculationWidget from './FormCalculationWidget';
-import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb,FaTrash,FaArrowsAltV } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb, FaTrash, FaArrowsAltV } from 'react-icons/fa';
 import { AiOutlineStar, AiOutlineHeart } from 'react-icons/ai';
-import { BiBoltCircle } from 'react-icons/bi'; 
+import { BiBoltCircle } from 'react-icons/bi';
 import EmojiPicker from 'emoji-picker-react';
 import { getCountryList } from './getCountries';
 
@@ -20,7 +20,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [columns, setColumns] = useState(selectedField?.columns || []);
   const [salutations, setSalutations] = useState(selectedField?.salutations || ['Mr.', 'Mrs.', 'Ms.', 'Dr.']);
   const [enableSalutation, setEnableSalutation] = useState(selectedField?.enableSalutation || false);
- const [ratingType, setRatingType] = useState(selectedField?.ratingType || 'emoji');
+  const [ratingType, setRatingType] = useState(selectedField?.ratingType || 'emoji');
   const [ratingRange, setRatingRange] = useState(selectedField?.ratingRange || 5);
   const [ratingValues, setRatingValues] = useState(
     selectedField?.ratingValues || Array(selectedField?.ratingRange || 5).fill('').map((_, i) => `Rating ${i + 1}`)
@@ -132,7 +132,13 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [shuffleOptions, setShuffleOptions] = useState(selectedField?.shuffleOptions || false);
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(selectedField?.dropdownRelatedValues || {});
-  
+
+  // NEW : Default value / Hidden Feature / Unique Name
+  const [defaultValue, setDefaultValue] = useState(selectedField?.defaultValue || '');
+  const [isHidden, setIsHidden] = useState(selectedField?.isHidden || false);
+  const [uniqueName, setUniqueName] = useState(selectedField?.uniqueName || '');
+  const [uniqueNameError, setUniqueNameError] = useState('');
+
   useEffect(() => {
     if (selectedField) {
       setLabel(selectedField.label || '');
@@ -144,7 +150,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setLabelAlignment(selectedField.labelAlignment || 'top');
       setRows(selectedField.rows || ['Criteria 1', 'Criteria 2', 'Criteria 3']);
       setColumns(selectedField.columns || ['1', '2', '3', '4', '5']);
-      setOptions(selectedField.options || ['Option 1', 'Option 2','Option 3'])
+      setOptions(selectedField.options || ['Option 1', 'Option 2', 'Option 3'])
       setRatingType(selectedField.ratingType || 'emoji');
       setRatingRange(selectedField.ratingRange || 5);
       setRatingValues(
@@ -177,6 +183,12 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setAllowMultipleSelections(selectedField.allowMultipleSelections || false);
       setShuffleOptions(selectedField.shuffleOptions || false);
       setDropdownRelatedValues(selectedField.dropdownRelatedValues || {});
+      // NEW: Set default value / Hidden Feature / Unique Name
+      setDefaultValue(selectedField.defaultValue || '');
+      setIsHidden(selectedField.isHidden || false);
+      setUniqueName(selectedField.uniqueName || '');
+      setUniqueNameError('');
+
       // Set default predefined option set based on options
       if (selectedField.options?.join(',') === 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday') {
         setPredefinedOptionSet('days');
@@ -231,7 +243,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setRatingValues(newRatingValues);
       setRatingEmojis(newRatingEmojis);
       onUpdateField(selectedField.id, { ratingRange: value, ratingValues: newRatingValues, ratingEmojis: newRatingEmojis });
-    } 
+    }
   };
 
   const handleRatingValueChange = (index, value) => {
@@ -290,6 +302,11 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { columns: newColumns });
   };
 
+  // Handler for hidden feature
+  const handleHiddenChange = (e) => {
+    setIsHidden(e.target.checked);
+    onUpdateField(selectedField.id, { isHidden: e.target.checked });
+  };
   const handleAddColumn = () => {
     const newColumns = [...columns, `${columns.length + 1}`];
     setColumns(newColumns);
@@ -499,6 +516,29 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setIsDisabled(e.target.checked);
     onUpdateField(selectedField.id, { isDisabled: e.target.checked });
   };
+  // Handler for unique name input
+  const handleUniqueNameChange = (e) => {
+    let value = e.target.value.trim();
+
+    // Remove leading and trailing curly braces (if any)
+    const innerRaw = value.replace(/^{|}$/g, '');
+
+    // Remove spaces from the inner content
+    const innerCleaned = innerRaw.replace(/\s/g, '');
+
+    // Final value with curly braces
+    const finalValue = `{${innerCleaned}}`;
+
+    // Validation: must not contain spaces in inner part
+    if (/\s/.test(innerRaw)) {
+      setUniqueNameError('Unique name cannot contain spaces.');
+    } else {
+      setUniqueNameError('');
+      setUniqueName(finalValue);
+      onUpdateField(selectedField.id, { uniqueName: finalValue });
+    }
+  };
+
 
   const handleShowHelpTextChange = (e) => {
     setShowHelpText(e.target.checked);
@@ -672,7 +712,11 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
     }
   };
-
+  // Handler for default value
+  const handleDefaultValueChange = (e) => {
+    setDefaultValue(e.target.value);
+    onUpdateField(selectedField.id, { defaultValue: e.target.value });
+  };
   const handleOptionChange = (index, value) => {
     const newOptions = [...options];
     const oldOption = newOptions[index];
@@ -736,7 +780,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { currencyType: value });
   };
 
-   const handleDragStart = (index) => {
+  const handleDragStart = (index) => {
     setDragIndex(index);
   };
 
@@ -762,7 +806,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   // Supported field types for placeholders
   const placeholderSupportedTypes = [
     'shorttext', 'longtext', 'number', 'phone', 'email', 'price', 'fullname',
-    'address', 'link', 'date', 'datetime', 'time', 'fileupload', 
+    'address', 'link', 'date', 'datetime', 'time', 'fileupload',
     'dropdown', 'signature', 'terms', 'displaytext', 'formcalculation'
   ];
 
@@ -808,22 +852,20 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       {/* Tabs for Settings and Widget */}
       <div className="flex border-b mb-4">
         <button
-          className={`px-4 py-2 font-medium text-sm ${
-            activeTab === 'settings'
+          className={`px-4 py-2 font-medium text-sm ${activeTab === 'settings'
               ? 'border-b-2 border-blue-500 text-blue-600'
               : 'text-gray-500 hover:text-blue-600'
-          }`}
+            }`}
           onClick={() => setActiveTab('settings')}
         >
           Settings
         </button>
         {isFormCalculation && (
           <button
-            className={`px-4 py-2 font-medium text-sm ${
-              activeTab === 'widget'
+            className={`px-4 py-2 font-medium text-sm ${activeTab === 'widget'
                 ? 'border-b-2 border-blue-500 text-blue-600'
                 : 'text-gray-500 hover:text-blue-600'
-            }`}
+              }`}
             onClick={() => setActiveTab('widget')}
           >
             Widget
@@ -939,6 +981,17 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         </select>
                       </div>
                     )}
+                    {/* Default Value Feature */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
+                      <input
+                        type="text"
+                        value={defaultValue}
+                        onChange={handleDefaultValueChange}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="Enter default value"
+                      />
+                    </div>
                     <div className="mb-4">
                       <label className="inline-flex items-center">
                         <input
@@ -951,39 +1004,52 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </label>
                     </div>
                     <div className="mb-4">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={isDisabled}
-                      onChange={handleDisabledChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
-                  </label>
-                </div>
-                <div className="mb-4">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={showHelpText}
-                      onChange={handleShowHelpTextChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Show Help Text</span>
-                  </label>
-                  {showHelpText && (
-                    <div className="mt-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
-                      <textarea
-                        value={helpText}
-                        onChange={handleHelpTextChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter help text"
-                        rows="4"
-                      />
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isDisabled}
+                          onChange={handleDisabledChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
+                      </label>
                     </div>
-                  )}
-                </div>
+                    {/* Hidden Feature */}
+                    <div className="mb-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isHidden}
+                          onChange={handleHiddenChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Hidden Field</span>
+                      </label>
+                    </div>
+                    <div className="mb-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={showHelpText}
+                          onChange={handleShowHelpTextChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Show Help Text</span>
+                      </label>
+                      {showHelpText && (
+                        <div className="mt-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
+                          <textarea
+                            value={helpText}
+                            onChange={handleHelpTextChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Enter help text"
+                            rows="4"
+                          />
+                        </div>
+                      )}
+
+                    </div>
                   </>
                 )}
               </div>
@@ -1048,84 +1114,84 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </button>
                     </div>
                   )}
-                 {isOptionsSupported && selectedField.type === 'dropdown' && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
-                  <select
-                    value={predefinedOptionSet}
-                    onChange={handlePredefinedOptionSetChange}
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                  >
-                    <option value="">Custom</option>
-                    <option value="days">Days of the Week</option>
-                    <option value="week">Weeks</option>
-                    <option value="gender">Gender</option>
-                  </select>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
-                  {options.map((opt, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center mb-2 gap-2"
-                      draggable={shuffleOptions}
-                      onDragStart={() => handleDragStart(idx)}
-                      onDragOver={(e) => handleDragOver(e, idx)}
-                      onDrop={() => handleDrop(idx)}
-                    >
-                      {shuffleOptions && (
-                        <FaArrowsAltV className="cursor-move text-gray-500" />
-                      )}
-                      <input
-                        type="text"
-                        value={opt}
-                        onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
+                  {isOptionsSupported && selectedField.type === 'dropdown' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
+                      <select
+                        value={predefinedOptionSet}
+                        onChange={handlePredefinedOptionSetChange}
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder={`Option ${idx + 1}`}
-                      />
-                      <input
-                        type="text"
-                        value={dropdownRelatedValues[opt] || ''}
-                        onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
-                        className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Related value"
-                      />
-                      <button
-                        onClick={() => handleDropdownRemoveOption(idx)}
-                        className="text-red-500 hover:text-red-700"
                       >
-                        <FaTrash />
+                        <option value="">Custom</option>
+                        <option value="days">Days of the Week</option>
+                        <option value="week">Weeks</option>
+                        <option value="gender">Gender</option>
+                      </select>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
+                      {options.map((opt, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center mb-2 gap-2"
+                          draggable={shuffleOptions}
+                          onDragStart={() => handleDragStart(idx)}
+                          onDragOver={(e) => handleDragOver(e, idx)}
+                          onDrop={() => handleDrop(idx)}
+                        >
+                          {shuffleOptions && (
+                            <FaArrowsAltV className="cursor-move text-gray-500" />
+                          )}
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder={`Option ${idx + 1}`}
+                          />
+                          <input
+                            type="text"
+                            value={dropdownRelatedValues[opt] || ''}
+                            onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
+                            className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Related value"
+                          />
+                          <button
+                            onClick={() => handleDropdownRemoveOption(idx)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={handleDropdownAddOption}
+                        className="text-blue-600 hover:underline"
+                      >
+                        + Add Item
                       </button>
+                      <div className="mt-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={allowMultipleSelections}
+                            onChange={handleAllowMultipleSelectionsChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
+                        </label>
+                      </div>
+                      <div className="mt-2">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={shuffleOptions}
+                            onChange={handleShuffleOptionsChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
+                        </label>
+                      </div>
                     </div>
-                  ))}
-                  <button
-                    onClick={handleDropdownAddOption}
-                    className="text-blue-600 hover:underline"
-                  >
-                    + Add Item
-                  </button>
-                  <div className="mt-4">
-                    <label className="inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={allowMultipleSelections}
-                        onChange={handleAllowMultipleSelectionsChange}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
-                    </label>
-                  </div>
-                  <div className="mt-2">
-                    <label className="inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={shuffleOptions}
-                        onChange={handleShuffleOptionsChange}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
-                    </label>
-                  </div>
-                </div>
-              )}
+                  )}
                   {isScaleRating && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
@@ -1186,30 +1252,30 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         </button>
                       </div>
                       {showMultiRowModal && (
-                          <div className="bg-white p-4 rounded-lg w-96">
-                            <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
-                            <textarea
-                              value={multiRowInput}
-                              onChange={(e) => setMultiRowInput(e.target.value)}
-                              className="w-full p-2 border rounded-lg"
-                              rows="5"
-                              placeholder="Enter one row per line"
-                            />
-                            <div className="flex justify-end gap-2 mt-4">
-                              <button
-                                onClick={() => setShowMultiRowModal(false)}
-                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={handleMultiRowSave}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                              >
-                                Save
-                              </button>
-                            </div>
+                        <div className="bg-white p-4 rounded-lg w-96">
+                          <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
+                          <textarea
+                            value={multiRowInput}
+                            onChange={(e) => setMultiRowInput(e.target.value)}
+                            className="w-full p-2 border rounded-lg"
+                            rows="5"
+                            placeholder="Enter one row per line"
+                          />
+                          <div className="flex justify-end gap-2 mt-4">
+                            <button
+                              onClick={() => setShowMultiRowModal(false)}
+                              className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleMultiRowSave}
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              Save
+                            </button>
                           </div>
+                        </div>
                       )}
                       <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Columns</label>
                       {columns.map((colLabel, colIdx) => (
@@ -1240,32 +1306,32 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                     </div>
                   )}
                   {showMultiColumnModal && (
-                      <div className="bg-white p-4 rounded-lg w-96">
-                        <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
-                        <textarea
-                          value={multiColumnInput}
-                          onChange={(e) => setMultiColumnInput(e.target.value)}
-                          className="w-full p-2 border rounded-lg"
-                          rows="5"
-                          placeholder="Enter one column per line"
-                        />
-                        <div className="flex justify-end gap-2 mt-4">
-                          <button
-                            onClick={() => setShowMultiColumnModal(false)}
-                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleMultiColumnSave}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            Save
-                          </button>
-                        </div>
+                    <div className="bg-white p-4 rounded-lg w-96">
+                      <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
+                      <textarea
+                        value={multiColumnInput}
+                        onChange={(e) => setMultiColumnInput(e.target.value)}
+                        className="w-full p-2 border rounded-lg"
+                        rows="5"
+                        placeholder="Enter one column per line"
+                      />
+                      <div className="flex justify-end gap-2 mt-4">
+                        <button
+                          onClick={() => setShowMultiColumnModal(false)}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleMultiColumnSave}
+                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
                       </div>
-                  )} 
-                 {isRating && (
+                    </div>
+                  )}
+                  {isRating && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Rating Type</label>
                       <div className="flex gap-4">
@@ -1333,10 +1399,10 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             className="text-2xl w-12 text-center text-gray-700 hover:text-blue-500"
                           >
                             {ratingType === 'emoji' ? ratingEmojis[idx] :
-                            ratingType === 'star' ? <AiOutlineStar /> :
-                            ratingType === 'heart' ? <AiOutlineHeart /> :
-                            ratingType === 'bulb' ? <FaRegLightbulb /> :
-                            ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
+                              ratingType === 'star' ? <AiOutlineStar /> :
+                                ratingType === 'heart' ? <AiOutlineHeart /> :
+                                  ratingType === 'bulb' ? <FaRegLightbulb /> :
+                                    ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
                           </button>
                           {ratingType === 'emoji' && showEmojiPicker === idx && (
                             <div className="absolute top-10 left-0 z-10">
@@ -1766,84 +1832,84 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                     </div>
                   )}
                   {isShortText && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
-                    <input
-                      type="number"
-                      value={shortTextMaxChars}
-                      onChange={handleShortTextMaxCharsChange}
-                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      placeholder="Enter max characters (max 255)"
-                      min="1"
-                      max="255"
-                    />
-                  </div>
-                )}
-                {isLongText && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
-                    <label className="inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={isRichText}
-                        onChange={handleIsRichTextChange}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
-                    </label>
-                    <div className="mt-2">
+                    <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
                       <input
                         type="number"
-                        value={longTextMaxChars}
-                        onChange={handleLongTextMaxCharsChange}
+                        value={shortTextMaxChars}
+                        onChange={handleShortTextMaxCharsChange}
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter max characters (max 131072)"
+                        placeholder="Enter max characters (max 255)"
                         min="1"
-                        max="131072"
+                        max="255"
                       />
                     </div>
-                  </div>
-                )}
-                {isNumber && (
-                  <div className="mb-4">
-                    <label className="inline-flex items-center mb-2">
-                      <input
-                        type="checkbox"
-                        checked={numberValueLimits.enabled}
-                        onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
-                    </label>
-                    {numberValueLimits.enabled && (
-                      <div className="flex gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Minimum Value</label>
-                          <input
-                            type="number"
-                            value={numberValueLimits.min}
-                            onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter min value"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Maximum Value</label>
-                          <input
-                            type="number"
-                            value={numberValueLimits.max}
-                            onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter max value"
-                          />
-                        </div>
+                  )}
+                  {isLongText && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isRichText}
+                          onChange={handleIsRichTextChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
+                      </label>
+                      <div className="mt-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
+                        <input
+                          type="number"
+                          value={longTextMaxChars}
+                          onChange={handleLongTextMaxCharsChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter max characters (max 131072)"
+                          min="1"
+                          max="131072"
+                        />
                       </div>
-                    )}
-                  </div>
-                )}
-                {/* NEW: Phone-specific properties */}
-                {isPhone && (
+                    </div>
+                  )}
+                  {isNumber && (
+                    <div className="mb-4">
+                      <label className="inline-flex items-center mb-2">
+                        <input
+                          type="checkbox"
+                          checked={numberValueLimits.enabled}
+                          onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
+                      </label>
+                      {numberValueLimits.enabled && (
+                        <div className="flex gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Minimum Value</label>
+                            <input
+                              type="number"
+                              value={numberValueLimits.min}
+                              onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter min value"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Maximum Value</label>
+                            <input
+                              type="number"
+                              value={numberValueLimits.max}
+                              onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter max value"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* NEW: Phone-specific properties */}
+                  {isPhone && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Phone Settings</label>
                       <div className="flex flex-col gap-2">
@@ -1965,7 +2031,24 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
             </button>
             {expandedSection === 'advanced' && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                
+                {/* Unique Name Feature */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unique Name</label>
+                  <input
+                    type="text"
+                    value={uniqueName}
+                    onChange={handleUniqueNameChange}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? 'border-red-500' : ''}`}
+                    placeholder="{uniqueName}"
+                    maxLength={50}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This can be used to pre-populate fields from a URL and pass data to another form automatically. It can't include spaces.
+                  </p>
+                  {uniqueNameError && (
+                    <p className="text-xs text-red-500 mt-1">{uniqueNameError}</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

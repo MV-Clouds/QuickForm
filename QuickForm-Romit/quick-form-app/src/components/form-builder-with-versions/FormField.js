@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { DatePicker } from 'rsuite';
 import SignatureCanvas from 'react-signature-canvas';
-import { FaInfoCircle, FaTrash, FaCut, FaCopy,FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaInfoCircle, FaTrash, FaCut, FaCopy,FaChevronDown, FaChevronUp , FaEyeSlash} from 'react-icons/fa';
 import 'rsuite/dist/rsuite.min.css';
 import { AiOutlineStar, AiFillStar, AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { FaRegLightbulb, FaLightbulb, FaBolt } from 'react-icons/fa';
@@ -179,26 +179,43 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
   );
 };
 
-function FieldWrapper({ children, alignment, showHelpText, helpText, labelContent }) {
+function FieldWrapper({ children, alignment, showHelpText, helpText, labelContent , isHidden }) {
   const alignmentStyles = {
     top: 'flex flex-col gap-1 w-full',
     left: 'flex items-center gap-2 w-full',
     right: 'flex flex-row-reverse items-center gap-2 w-full',
     center: 'flex flex-col items-center gap-1 w-full',
   };
+  // If hidden, render nothing (or you can render a placeholder for admin)
+  if (isHidden) {
+    return (
+      <div className="relative opacity-60 pointer-events-none select-none">
+        <div className="absolute left-2 top-2 text-gray-400 z-10">
+          <FaEyeSlash title="Hidden Field" />
+        </div>
+        {labelContent}
+        {children}
+      </div>
+    );
+    // Or: return null; // To completely hide
+  }
 
   return (
     <div className={`p-2 ${alignmentStyles[alignment || 'top']}`}>
       {labelContent && (
         <div className="flex items-center gap-2">
           {labelContent}
-          {showHelpText && helpText && (
-            <div className="relative group">
+           {showHelpText && helpText && (
+            <span className="relative inline-block">
               <FaInfoCircle className="text-gray-500 hover:text-gray-700 cursor-pointer" />
-              <div className="absolute hidden group-hover:block bg-gray-800 text-white text-sm rounded p-2 w-48 z-10">
+              <span className="absolute left-1/2 z-20 -translate-x-1/2 mt-2 w-48 bg-gray-800 text-white text-xs rounded p-2 shadow-lg opacity-0 pointer-events-none transition-opacity duration-200
+                group-hover:opacity-100 group-hover:pointer-events-auto
+                hover:opacity-100 hover:pointer-events-auto"
+                style={{ top: '100%' }}
+              >
                 {helpText}
-              </div>
-            </div>
+              </span>
+            </span>
           )}
         </div>
       )}
@@ -241,7 +258,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     checkboxRelatedValues = {}, radioRelatedValues = {}, phoneInputMask = '(999) 999-9999', enableCountryCode = false, selectedCountryCode = 'US',
     // NEW: Add price-specific properties
     priceLimits = { enabled: false, min: '', max: '' }, currencyType = 'USD',allowMultipleSelections = false,
-    dropdownRelatedValues = {},
+    dropdownRelatedValues = {},isHidden = false,
   } = field;
 
   const ratingOptions = {
@@ -511,11 +528,12 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     }
   };
 
-  const handleCut = (e) => {
-    e.stopPropagation();
-    setClipboard({ field, operation: 'cut' });
-    onUpdateField(id, { isCut: true });
-  };
+ const handleCut = (e) => {
+  e.stopPropagation();
+  if (clipboard.operation === 'cut') return; // Prevent cutting another field
+  setClipboard({ field, operation: 'cut' });
+  onUpdateField(id, { isCut: true });
+};
 
   const handleCopy = (e) => {
     e.stopPropagation();
@@ -560,17 +578,29 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </div>
       )}
       {children}
-      {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && (
+       {/* Paste Above/Below buttons, only if not cut/blurred */}
+    {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && !isCut && (
+      <div className="flex flex-col gap-1 w-full">
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handlePaste();
+            handlePaste('above');
           }}
-          className="w-full mt-1 text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
+          className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
         >
-          ------Paste here-------
+          ------Paste above-------
         </button>
-      )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePaste('below');
+          }}
+          className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
+        >
+          ------Paste below-------
+        </button>
+      </div>
+    )}
     </div>
   );
 
@@ -691,6 +721,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Date'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -739,6 +770,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Date and Time'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -788,6 +820,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Time'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -835,6 +868,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <FieldWrapper {...wrapperProps} labelContent={
               <label className={`text-gray-700 text-2xl font-bold ${alignment === 'left' ? 'text-left' : alignment === 'right' ? 'text-right' : 'text-center'} w-full`}>
                 {heading || 'Form'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
               </label>
             }>
@@ -850,6 +884,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Short Text'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -873,6 +908,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper labelContent={
             <label className="text-gray-700">
               {label || 'Long Text'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -886,29 +922,30 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 placeholder={placeholder.main || 'Enter long text'}
               />
             ) : (
-              <textarea
-                className="w-full p-2 border rounded"
-                rows="4"
-                placeholder={placeholder.main || 'Enter long text'}
-                maxLength={longTextMaxChars || 131072}
-                value={plainTextValue}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (!longTextMaxChars || value.length <= longTextMaxChars) {
-                    setPlainTextValue(value);
-                    setRichTextValue(textToHtml(value));
-                    if (onUpdateField) {
-                      onUpdateField(id, { value: textToHtml(value) });
+              <div>
+                <textarea
+                  className="w-full p-2 border rounded"
+                  rows="4"
+                  placeholder={placeholder.main || 'Enter long text'}
+                  maxLength={longTextMaxChars || 131072}
+                  value={plainTextValue}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!longTextMaxChars || value.length <= longTextMaxChars) {
+                      setPlainTextValue(value);
+                      setRichTextValue(textToHtml(value));
+                      if (onUpdateField) {
+                        onUpdateField(id, { value: textToHtml(value) });
+                      }
                     }
-                  }
-                }}
-                readOnly={isDisabled}
-              />
-            )}
-            {longTextMaxChars && (
-              <p className="text-sm text-gray-500 mt-1">
-                Characters: {plainTextValue.length}/{longTextMaxChars}
-              </p>
+                  }}
+                  readOnly={isDisabled}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Words: {plainTextValue.trim() ? plainTextValue.trim().split(/\s+/).length : 0}</span>
+                  <span>Characters: {plainTextValue.length}{longTextMaxChars ? ` / ${longTextMaxChars}` : ''}</span>
+                </div>
+              </div>
             )}
           </FieldWrapper>
         </SelectionWrapper>
@@ -920,6 +957,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Number'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -950,6 +988,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             labelContent={
               <label className="text-gray-700">
                 {label || 'Phone'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
               </label>
             }
@@ -1028,6 +1067,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Email'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1074,6 +1114,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             labelContent={
               <label className="text-gray-700">
                 {label || 'Checkbox'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
               </label>
             }
@@ -1114,6 +1155,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Radio'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1153,6 +1195,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         <FieldWrapper {...wrapperProps} labelContent={
           <label className="text-gray-700">
             {label || 'Dropdown'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
         }>
@@ -1203,6 +1246,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'File Upload'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1225,6 +1269,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <FieldWrapper {...wrapperProps} labelContent={
               <label className="text-gray-700">
                 {label || 'Image Uploader'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
               </label>
             }>
@@ -1264,6 +1309,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <span className="text-gray-700">
               {label || 'Toggle Button'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </span>
           }>
@@ -1283,6 +1329,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Price'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1316,6 +1363,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Full Name'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1362,6 +1410,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Address'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1"></span>}
             </label>
           }>
@@ -1440,6 +1489,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Link'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1459,6 +1509,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Signature'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1491,6 +1542,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Terms and Conditions'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1523,6 +1575,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Display Text'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
             </label>
           }>
             <p className="p-2 bg-gray-100 rounded">{placeholder.main || 'This is display text'}</p>
@@ -1536,6 +1589,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Calculation'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1556,6 +1610,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Rating'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
@@ -1593,6 +1648,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper {...wrapperProps} labelContent={
             <label className="text-gray-700">
               {label || 'Scale Rating'}
+              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>

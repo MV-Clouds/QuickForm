@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { MdUndo, MdRedo } from 'react-icons/md';
 import { FaEye } from 'react-icons/fa';
 import useUndo from 'use-undo';
@@ -9,9 +9,14 @@ import MainMenuBar from './MainMenuBar';
 import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
+import MappingFields from '../form-mapping/MappingFields'
+import { useSalesforceData } from '../Context/MetadataContext';
 
-function MainFormBuilder() {
-  const { formVersionId } = useParams();
+function MainFormBuilder({showMapping}) {
+  // const { formVersionId } = useParams();
+  const location = useLocation();
+  const { formVersionId: urlFormVersionId } = useParams();
+  const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -22,7 +27,13 @@ function MainFormBuilder() {
   const [fetchFormError, setFetchFormError] = useState(null);
   const [currentFormVersion, setCurrentFormVersion] = useState(null);
   const navigate = useNavigate();
+  const [showFormNamePopup, setShowFormNamePopup] = useState(!formVersionId);
+  const [formName, setFormName] = useState('');
+  const [formNameError, setFormNameError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const { refreshData } = useSalesforceData();
+
+  const [formRecords, setFormRecords] = useState([]);
 
   const [
     fieldsState,
@@ -93,7 +104,6 @@ function MainFormBuilder() {
         },
         body: JSON.stringify({
           userId,
-          instanceUrl,
           formData: { formVersion, formFields },
         }),
       });
@@ -138,6 +148,7 @@ function MainFormBuilder() {
       if (data.FormRecords) {
         try {
           formRecords = JSON.parse(data.FormRecords);
+          setFormRecords(formRecords);
         } catch (e) {
           console.warn('Failed to parse FormRecords:', e);
         }
@@ -276,7 +287,7 @@ function MainFormBuilder() {
       pages.push({ fields: currentPage, pageNumber });
     }
     const formVersion = {
-      Name: headerField?.heading || 'Contact Form',
+      Name: isNewForm ? formName : headerField?.heading || 'Contact Form',
       Description__c: '',
       Stage__c: 'Draft',
       Publish_Link__c: '',
@@ -343,6 +354,7 @@ function MainFormBuilder() {
         throw new Error(JSON.stringify(data) || 'Failed to save form.');
       }
       alert('Form saved successfully!');
+      await refreshData();
       if (hasChanges || !formVersion.Id) {
         const newFormVersionId = data.formVersionId;
         setCurrentFormVersion({ ...formVersion, Id: newFormVersionId, Fields: formFields });
@@ -646,16 +658,21 @@ function MainFormBuilder() {
     setFields(headerField ? [headerField, ...flattenedFields] : flattenedFields);
   };
 
-  const handleAddPage = () => {
-    setHasChanges(true);
-    const nonHeaderFields = fields.filter((f) => f.type !== 'header');
-    const headerField = fields.find((f) => f.type === 'header');
+ const handleAddPage = () => {
+  setHasChanges(true);
+  setFields(prevFields => {
+    const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
+    const headerField = prevFields.find((f) => f.type === 'header');
     const updatedFields = [
-      ...fields,
+      ...prevFields,
       { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
     ];
-    setFields(headerField ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')] : updatedFields);
-  };
+    return headerField
+      ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
+      : updatedFields;
+  });
+};
+
 
   const handleCut = (field) => {
     setHasChanges(true);
@@ -706,10 +723,13 @@ function MainFormBuilder() {
   };
 
   const selectedField = getSelectedField();
-
+  
   return (
     <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} formVersionId={selectedVersionId}/>
+      <MainMenuBar isSidebarOpen={isSidebarOpen} 
+        toggleSidebar={toggleSidebar} 
+        formRecords={formRecords}
+        selectedVersionId={selectedVersionId} />
       <div
         className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
           isSidebarOpen ? 'ml-64' : 'ml-16'
@@ -849,7 +869,7 @@ function MainFormBuilder() {
                 ></path>
               </svg>
             </div>
-          ) : (
+          ) : showMapping ? <MappingFields /> : (
             <div className="flex w-full mt-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">

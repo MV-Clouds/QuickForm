@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSalesforceData } from '../Context/MetadataContext';
 import FormName from './FormName';
 
 const Home = () => {
+  const { 
+    metadata, 
+    formRecords, 
+    isLoading: contextLoading, 
+    error: contextError,
+    fetchSalesforceData 
+  } = useSalesforceData();
+
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hoveredOption, setHoveredOption] = useState(null);
@@ -64,63 +73,6 @@ const Home = () => {
     }
   };
 
-  // Fetch forms from DynamoDB via Lambda
-  const fetchForms = async (userId, instanceUrl) => {
-    try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch metadata');
-      }
-
-      // Parse FormRecords
-      let formRecords = [];
-      if (data.FormRecords) {
-        try {
-          formRecords = JSON.parse(data.FormRecords);
-        } catch (e) {
-          console.warn('Failed to parse FormRecords:', e);
-        }
-      }
-
-      setForms(formRecords);
-    } catch (error) {
-      console.error('Error fetching forms:', error);
-      setFetchError(error.message || 'Failed to load forms');
-    }
-  };
-
-  // Warm up fetchMetadata Lambda function
-  const warmFetchMetadata = async (userId, instanceUrl, token) => {
-    try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-        }),
-      });
-    } catch (error) {
-      console.error('Error warming fetchMetadata Lambda:', error);
-    }
-  };
-
   // Warm up fetchFieldsForObject Lambda function
   const warmFetchFieldsForObject = async (userId, instanceUrl, token) => {
     try {
@@ -161,14 +113,18 @@ const Home = () => {
 
       const token = await fetchAccessToken(userId, instanceUrl);
       if (token) {
-        await Promise.all([
-          fetchForms(userId, instanceUrl),
-          warmFetchMetadata(userId, instanceUrl, token),
-          warmFetchFieldsForObject(userId, instanceUrl, token),
-        ]);
+        setIsLoading(true);
+        try {
+          await Promise.all([
+            fetchSalesforceData(userId, instanceUrl),
+            warmFetchFieldsForObject(userId, instanceUrl, token),
+          ]);
+        } finally {
+          setIsLoading(false);
+        }
       }
     } else {
-      setFetchError('Missing userId or instanceUrl. Please log in.');
+      console.error('Missing userId or instanceUrl. Please log in.');
     }
   };
 
@@ -249,6 +205,7 @@ const Home = () => {
                 ) + 1
               ).toString(),
               Stage__c: 'Draft',
+              Object_Info__c: form.Object_Info__c,
             },
             formFields: (publishedVersion.Fields || []).map((field, index) => ({
               Name: field.Name,
@@ -282,16 +239,20 @@ const Home = () => {
   };
 
   const getFormDisplayName = (form) => {
-   const publishedVersion = form.FormVersions.find(
-    (version) => version.Stage__c === 'Publish'
-  );
+    const publishedVersion = form.FormVersions.find(
+      (version) => version.Stage__c === 'Publish'
+    );
     if (!publishedVersion) {
       return form.FormVersions.find(
         (version) => version.Stage__c === 'Draft'
       )?.Name || 'Unnamed Form';
     }
-  return publishedVersion?.Name || 'Unnamed Form';
+    return publishedVersion?.Name || 'Unnamed Form';
   };
+
+  // Combine loading states
+  const isDataLoading = isLoading || contextLoading;
+  const error = contextError;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -320,52 +281,26 @@ const Home = () => {
               <p className="text-lg text-gray-500 mb-6">Create beautiful forms in seconds</p>
               <button
                 onClick={handleCreateForm}
-                disabled={isLoading}
+                disabled={isDataLoading}
                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
               >
-                {isLoading ? (
-                  <>
-                    <svg
-                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="-ml-1 mr-3 h-5 w-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                      />
-                    </svg>
-                    Create New Form
-                  </>
-                )}
+              <>
+                <svg
+                  className="-ml-1 mr-3 h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                Create New Form
+              </>
               </button>
             </div>
           </div>
@@ -376,10 +311,14 @@ const Home = () => {
           <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
             <h3 className="text-lg leading-6 font-medium text-gray-900">Your Forms</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {forms.length} {forms.length === 1 ? 'form' : 'forms'} found
+              {formRecords.length} {formRecords.length === 1 ? 'form' : 'forms'} found
             </p>
           </div>
-          {forms.length === 0 ? (
+          {error ? (
+            <div className="px-4 py-12 text-center text-red-500">
+              Error loading forms: {error}
+            </div>
+          ) : formRecords.length === 0 ? (
             <div className="px-4 py-12 text-center">
               <svg
                 className="mx-auto h-12 w-12 text-gray-400"
@@ -418,7 +357,7 @@ const Home = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {forms.map((form) => (
+                  {formRecords.map((form) => (
                     <tr key={form.Id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -608,18 +547,18 @@ const Home = () => {
         )}
       </div>
       {isFormNameOpen && (
-  <FormName
-    onClose={() => setIsFormNameOpen(false)}
-    fields={[
-      {
-        id: 'default-header',
-        type: 'header',
-        heading: 'Contact Form',
-        alignment: 'center',
-      },
-    ]}
-  />
-)}
+        <FormName
+          onClose={() => setIsFormNameOpen(false)}
+          fields={[
+            {
+              id: 'default-header',
+              type: 'header',
+              heading: 'Contact Form',
+              alignment: 'center',
+            },
+          ]}
+        />
+      )}
     </div>
   );
 

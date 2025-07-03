@@ -1,8 +1,38 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar, formVersionId }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId }) {
   const navigate = useNavigate();
+
+  const handleMappingClick = () => {
+    // Find the selected form version
+    try {
+      const currentFormRecord = formRecords.find((record) =>
+        record.FormVersions.some((version) => version.Id === selectedVersionId)
+      );
+
+      const currentVersion = currentFormRecord?.FormVersions.find(
+        (version) => version.Id === selectedVersionId
+      );
+
+      if (!currentVersion) {
+        console.warn('No matching form version found');
+        return;
+      }
+
+      // Extract values
+      const formVersionId = currentVersion.Id;
+      console.log('form version ',formVersionId);
+      
+      // Navigate
+      navigate(`/mapping/${selectedVersionId}`);
+    } catch (error) {
+      console.log('error in navigate ');
+      
+    }
+    
+  };
+
   return (
     <aside
       className={`fixed top-0 left-0 z-20 h-screen transition-all ease-in-out duration-300 ${
@@ -109,7 +139,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formVersionId }) {
                       <a
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/fields"
+                        href="/form-builder"
                       >
                         <span className="mr-4">
                           <svg
@@ -162,11 +192,17 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formVersionId }) {
                       </a>
                     </div>
                     <div className="w-full">
-                      <a
+                      <button
+                        onClick={()=>handleMappingClick()}
+                        className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
+                        data-state="closed"
+                      >
+                      {/* <a
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
                         href="/mapping"
-                      >
+                        onClick={()=>handleMappingClick()}
+                      > */}
                         <span className="mr-4">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -188,14 +224,15 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formVersionId }) {
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Mapping
                         </p>
-                      </a>
+                      {/* </a> */}
+                      </button>
                     </div>
                   </li>
                   <li className="w-full">
                     <div className="w-full">
                       <button
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
-                        onClick={() => formVersionId && navigate(`/conditions/${formVersionId}`)}
+                        onClick={() => selectedVersionId && navigate(`/conditions/${selectedVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg

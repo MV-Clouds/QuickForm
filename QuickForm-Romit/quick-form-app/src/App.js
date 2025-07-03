@@ -7,52 +7,59 @@ import ProtectedRoute from './components/login-page/protectedRoute';
 import MainFormBuilder from './components/form-builder-with-versions/MainFormBuilder';
 import PublicFormViewer from './components/form-publish/PublicFormViewer';
 import Conditions from './components/conditions/Conditions';
+import { SalesforceDataProvider } from './components/Context/MetadataContext';;
 
 function App() {
   return (
     // Set up the router for navigation
-    <Router>
-      <div className="App">
-        <Routes>
-          {/* Public route for login */}
-          <Route path="/" element={<Login />} />
+    <SalesforceDataProvider>
+      <Router>
+        <div className="App">
+          <Routes>
+            {/* Public route for login */}
+            <Route path="/" element={<Login />} />
 
-          {/* Protected route for form creation wizard */}
-          <Route
-            path="/wizard"
-            element={<ProtectedRoute element={<CreateFormWizard />} />}
-          />
+            {/* Protected route for form creation wizard */}
+            <Route
+              path="/wizard"
+              element={<ProtectedRoute element={<CreateFormWizard />} />}
+            />
 
-          {/* Protected route for Home component */}
-          <Route
-            path="/home"
-            element={<ProtectedRoute element={<Home />} />}
-          />
+            {/* Protected route for Home component */}
+            <Route
+              path="/home"
+              element={<ProtectedRoute element={<Home />} />}
+            />
 
-          {/* Duplicate protected route for Home (to support /app/home path) */}
-          <Route
-            path="/app/home"
-            element={<ProtectedRoute element={<Home />} />}
-          />
+            {/* Duplicate protected route for Home (to support /app/home path) */}
+            <Route
+              path="/app/home"
+              element={<ProtectedRoute element={<Home />} />}
+            />
 
-          {/* Protected route for main form builder */}
-          <Route
-            path="/form-builder"
-            element={<ProtectedRoute element={<MainFormBuilder />} />}
-          />
-          {/* Protected route for main form builder with formVersionId */}
-          <Route
-            path="/form-builder/:formVersionId"
-            element={<ProtectedRoute element={<MainFormBuilder />} />}
-          />
-          <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
-          <Route
-            path="/conditions/:formVersionId"
-            element={<ProtectedRoute element={<Conditions />} />}
-          />
-        </Routes>
-      </div>
-    </Router>
+            {/* Protected route for main form builder */}
+            <Route
+              path="/form-builder"
+              element={<ProtectedRoute element={<MainFormBuilder />} />}
+            />
+            {/* Protected route for main form builder with formVersionId */}
+            <Route
+              path="/form-builder/:formVersionId"
+              element={<ProtectedRoute element={<MainFormBuilder />} />}
+            />
+            <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
+            <Route
+              path="/conditions/:formVersionId"
+              element={<ProtectedRoute element={<Conditions />} />}
+            />
+            <Route
+              path="/mapping/:formVersionId"
+              element={<ProtectedRoute element={<MainFormBuilder showMapping />} />}
+            />
+          </Routes>
+        </div>
+      </Router>
+    </SalesforceDataProvider>
   );
 }
 
