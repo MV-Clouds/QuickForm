@@ -10,13 +10,14 @@ import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
 import MappingFields from '../form-mapping/MappingFields'
-
+import { useSalesforceData } from '../Context/MetadataContext';
 
 function MainFormBuilder({showMapping}) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
+  const { refreshData } = useSalesforceData();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -230,7 +231,8 @@ function MainFormBuilder({showMapping}) {
       setIsLoadingForm(false);
     }
   };
-
+ 
+  
   const handleVersionChange = (e) => {
     const newVersionId = e.target.value;
     setSelectedVersionId(newVersionId);
@@ -399,6 +401,7 @@ function MainFormBuilder({showMapping}) {
         throw new Error(JSON.stringify(data) || 'Failed to save form.');
       }
       alert('Form saved successfully!');
+      await refreshData();
       if (hasChanges || !formVersion.Id) {
         const newFormVersionId = data.formVersionId;
         setCurrentFormVersion({ ...formVersion, Id: newFormVersionId, Fields: formFields });
@@ -579,7 +582,7 @@ function MainFormBuilder({showMapping}) {
         type: fieldType,
         sectionId: sectionId || null,
         sectionSide: sectionSide || null,
-        validation: getDefaultValidation(fieldType), // <-- Add this line to include validation key
+        validation: getDefaultValidation(fieldType), 
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
@@ -672,6 +675,7 @@ function MainFormBuilder({showMapping}) {
       setShowSidebar(true);
     }
   };
+  
 
   const handleDeletePage = (pageIndex) => {
     setHasChanges(true);
@@ -717,36 +721,6 @@ function MainFormBuilder({showMapping}) {
   });
 };
 
-
-  const handleCut = (field) => {
-    setHasChanges(true);
-    setClipboard({ field, operation: 'cut' });
-    handleUpdateField(field.id, { isCut: true });
-  };
-
-  const handleCopy = (field) => {
-    setClipboard({ field, operation: 'copy' });
-  };
-
-  const handlePaste = (pageIndex, dropIndex, sectionId, sectionSide) => {
-    setHasChanges(true);
-    if (!clipboard.field) return;
-
-    const newField = {
-      ...clipboard.field,
-      id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      isCut: false,
-      sectionId: sectionId || null,
-      sectionSide: sectionSide || null,
-    };
-
-    if (clipboard.operation === 'cut') {
-      handleDeleteField(clipboard.field.id, false);
-    }
-
-    handleDrop(null, pageIndex, dropIndex, null, sectionId, sectionSide, newField);
-    setClipboard({ field: null, operation: null });
-  };
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

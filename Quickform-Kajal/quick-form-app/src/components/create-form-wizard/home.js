@@ -128,6 +128,8 @@ const Home = () => {
 
   useEffect(() => {
     initializePage();
+    console.log('form record--> ',formRecords);
+    
   }, []);
 
   const handleCreateForm = () => {

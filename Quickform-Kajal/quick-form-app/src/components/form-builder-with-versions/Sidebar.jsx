@@ -73,6 +73,7 @@ function Sidebar() {
 
   const handleDragStart = (e, type) => {
     e.dataTransfer.setData('fieldType', type);
+    e.dataTransfer.setData('fieldiD', '');
   };
 
   // Toggle section: open the clicked section and close others

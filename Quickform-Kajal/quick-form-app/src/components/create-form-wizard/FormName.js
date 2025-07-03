@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
 
 const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
-  const { refreshData, setFormRecords } = useSalesforceData();
+  const { refreshData } = useSalesforceData();
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
