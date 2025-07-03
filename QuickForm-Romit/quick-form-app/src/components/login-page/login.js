@@ -11,7 +11,7 @@ const Login = () => {
   useEffect(() => {
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login flag
     if (isLoggedIn) {
-      navigate('/home'); // Redirect to home if already logged in
+      navigate('/guest'); // Redirect to home if already logged in
     }
 
     // Add message event listener
@@ -32,7 +32,7 @@ const Login = () => {
           sessionStorage.setItem('isLoggedIn', 'true'); // Set login flag
           sessionStorage.setItem('userId', event.data.userId); // Store userId
           sessionStorage.setItem('instanceUrl', event.data.instanceUrl); // Store instanceUrl
-          navigate('/home'); // Redirect to home
+          navigate('/guest'); // Redirect to home
         } else if (event.data === 'login_failed') {
           alert('Login failed. Please try again.'); // Show error
         }
@@ -87,7 +87,7 @@ const Login = () => {
       if (popup && !popup.closed) {
         popup.close(); // Close popup immediately if already logged in
       }
-      navigate('/home'); // Redirect to home
+      navigate('/guest'); // Redirect to home
     }
   };
 

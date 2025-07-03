@@ -8,49 +8,56 @@ export const SalesforceDataProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchData = async () => {
-    const userId = sessionStorage.getItem('userId');
-    const instanceUrl = sessionStorage.getItem('instanceUrl');
-    
-    if (userId && instanceUrl) {
-      try {
-        setIsLoading(true);
-        const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-        const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl }),
-        });
+  const fetchSalesforceData = async (userId, instanceUrl) => {
+    if (!userId || !instanceUrl) {
+      setError('Missing userId or instanceUrl');
+      return;
+    }
 
-        const data = await response.json();
-        setMetadata(JSON.parse(data.metadata || '[]'));
-        setFormRecords(JSON.parse(data.FormRecords || '[]'));
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setIsLoading(false);
+    try {
+      setIsLoading(true);
+      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch metadata');
       }
+
+      const data = await response.json();
+      const parsedMetadata = JSON.parse(data.metadata || '[]');
+      const parsedFormRecords = JSON.parse(data.FormRecords || '[]');
+
+      setMetadata(parsedMetadata);
+      setFormRecords(parsedFormRecords);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Fetch data automatically when provider mounts
   useEffect(() => {
-    fetchData();
-  }, []); 
-
-  // Add refresh capability
-  const refreshData = async () => {
-    await fetchData();
-  };
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl) {
+      fetchSalesforceData(userId, instanceUrl);
+    }
+  }, []);
 
   return (
-    <MetadataContext.Provider value={{
-      metadata,
-      formRecords,
-      isLoading,
-      error,
-      refreshData,
-    }}>
+    <MetadataContext.Provider
+      value={{
+        metadata,
+        formRecords,
+        isLoading,
+        error,
+        fetchSalesforceData, // Expose fetchSalesforceData
+      }}
+    >
       {children}
     </MetadataContext.Provider>
   );

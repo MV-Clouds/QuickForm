@@ -130,7 +130,7 @@ const Home = () => {
 
   useEffect(() => {
     initializePage();
-  }, []);
+  }, [formRecords]);
 
   const handleCreateForm = () => {
     setIsModalOpen(true);
@@ -156,7 +156,7 @@ const Home = () => {
       setIsFormNameOpen(true);
     } else if (option === 'templates') {
       setIsLoading(false);
-      alert('Use a Template is not implemented yet.');
+      navigate('/template');
     }
   };
 

@@ -11,8 +11,75 @@ import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
 import MappingFields from '../form-mapping/MappingFields'
 import { useSalesforceData } from '../Context/MetadataContext';
+import ThankYouPageBuilder from '../Thankyou/TY';
 
-function MainFormBuilder({showMapping}) {
+const themes = [
+  {
+    name: 'Remove Theme'
+  },
+  {
+    name: 'Classic Blue',
+    color: 'bg-blue-600',
+    preview: 'bg-gradient-to-r from-blue-500 to-blue-700',
+    textColor: 'text-white',
+    inputBg: 'bg-white',
+    inputText: 'text-blue-900',
+    buttonBg: 'bg-gradient-to-r from-blue-500 to-blue-900',
+    buttonText: 'text-white',
+  },
+  {
+    name: 'Sunset Pink',
+    color: 'bg-pink-500',
+    preview: 'bg-gradient-to-r from-pink-400 to-pink-600',
+    textColor: 'text-white',
+    inputBg: 'bg-pink-100',
+    inputText: 'text-white',
+    buttonBg: 'bg-gradient-to-r from-pink-400 to-pink-600',
+    buttonText: 'text-white',
+  },
+  {
+    name: 'Midnight Black',
+    color: 'bg-gray-900',
+    preview: 'bg-gradient-to-r from-gray-800 to-black',
+    textColor: 'text-white',
+    inputBg: 'bg-gray-800',
+    inputText: 'text-white',
+    buttonBg: 'bg-gradient-to-r from-gray-700 to-gray-800',
+    buttonText: 'text-white',
+  },
+  {
+    name: 'Royal Purple',
+    color: 'bg-purple-600',
+    preview: 'bg-gradient-to-r from-purple-500 to-purple-700',
+    textColor: 'text-white',
+    inputBg: 'bg-white',
+    inputText: 'text-purple-900',
+    buttonBg: 'bg-gradient-to-r from-purple-500 to-purple-700',
+    buttonText: 'text-white',
+  },
+  {
+    name: 'Crimson Red',
+    color: 'bg-red-600',
+    preview: 'bg-gradient-to-r from-red-500 to-red-700',
+    textColor: 'text-white',
+    inputBg: 'bg-white',
+    inputText: 'text-red-900',
+    buttonBg: 'bg-gradient-to-r from-red-500 to-red-700',
+    buttonText: 'text-white',
+  },
+  {
+    name: 'Sky Indigo',
+    color: 'bg-indigo-600',
+    preview: 'bg-gradient-to-r from-indigo-500 to-indigo-700',
+    textColor: 'text-white',
+    inputBg: 'bg-white',
+    inputText: 'text-indigo-900',
+    buttonBg: 'bg-gradient-to-r from-indigo-500 to-indigo-700',
+    buttonText: 'text-white',
+  },
+];
+
+function MainFormBuilder({showMapping , showThankYou }) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -34,6 +101,7 @@ function MainFormBuilder({showMapping}) {
   const { refreshData } = useSalesforceData();
 
   const [formRecords, setFormRecords] = useState([]);
+  const [selectedTheme, setSelectedTheme] = useState(themes[0]);
 
   const [
     fieldsState,
@@ -869,7 +937,7 @@ function MainFormBuilder({showMapping}) {
                 ></path>
               </svg>
             </div>
-          ) : showMapping ? <MappingFields /> : (
+          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> :  showMapping ? <MappingFields /> : (
             <div className="flex w-full mt-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
@@ -889,12 +957,17 @@ function MainFormBuilder({showMapping}) {
                     selectedSectionSide={selectedSectionSide}
                     setClipboard={setClipboard}
                     clipboard={clipboard}
+                    selectedTheme={selectedTheme}
                   />
                 </div>
               </div>
               <div className="w-1/4 pl-2">
                 {showSidebar && !selectedFieldId && !selectedFooter ? (
-                  <Sidebar />
+                  <Sidebar 
+                  selectedTheme={selectedTheme}
+                  onThemeSelect={setSelectedTheme}
+                  themes={themes}
+                  />
                 ) : (
                   <div className="bg-white dark:bg-gray-800 rounded-lg">
                     {(selectedFieldId || selectedFooter) && (
