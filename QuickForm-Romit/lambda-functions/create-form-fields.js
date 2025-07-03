@@ -267,17 +267,18 @@ export const handler = async (event) => {
       const queryData = await queryResponse.json();
       const existingFields = queryData.records || [];
 
-      for (const field of existingFields) {
-        const deleteResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Field__c/${field.Id}`, {
+      if (existingFields.length > 0) {
+        const ids = existingFields.map((field) => field.Id).join(',');
+        const deleteResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects?ids=${encodeURIComponent(ids)}&allOrNone=true`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
       
-        if (!deleteResponse.ok && deleteResponse.status !== 204) {
+        if (!deleteResponse.ok) {
           const errorData = await deleteResponse.json();
-          throw new Error(errorData[0]?.message || `Failed to delete Form_Field__c record ${field.Id}`);
+          throw new Error(errorData[0]?.message || 'Failed to delete Form_Field__c records');
         }
       }
       console.log(`Deleted ${existingFields.length} existing Form_Field__c records`);
