@@ -1704,7 +1704,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <div
               className={`w-1/2 min-h-[100px] rounded ${leftField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
               onDrop={(e) => handleSectionDrop(e, 'left')}
-              onDragOver={() => handleDragOver()}
+              onDragOver={handleDragOver}
               onDoubleClick={() => handleSectionDoubleClick('left')}
             >
               {leftField ? (
