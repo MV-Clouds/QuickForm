@@ -1,5 +1,3 @@
-"use client"
-// import { ContentLayout } from "@/components/admin-panel/content-layout";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ThankYouQF.css'
 const QuickForm = () => {

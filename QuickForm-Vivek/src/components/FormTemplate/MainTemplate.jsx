@@ -8,6 +8,7 @@ const MainTemplate = () => {
     const [showModal, setShowModal] = useState(true);
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
+        const [loading, setLoading] = useState(false); // <-- Add this
     const navigate = useNavigate();
     useEffect(() => {
         async function fetchData() {
@@ -38,6 +39,7 @@ const MainTemplate = () => {
     }, [userId, instanceUrl]);
 
     const fetchSelectTemplate = async (selectedTemplate) => {
+         setLoading(true); 
         console.log('Fetch token' , token);
         console.log({
                     userId,
@@ -62,8 +64,10 @@ const MainTemplate = () => {
             const res = await queryResponse.json();
             setData(res);
             console.log('Query Response', res);
+            res ? setLoading(false) : ''; // <-- Hide loading before navigating
             navigate(`/form-builder/${res.formVersionId}`);
         } catch (error) {
+            setLoading(false); // <-- Hide loading on error
             console.error('Error fetching template:', error);
         }
     };
@@ -79,6 +83,7 @@ const MainTemplate = () => {
                 <FormTemplate
                     onTemplateSelect={fetchSelectTemplate}
                     onClose={handleClose}
+                    loading={loading} // <-- Pass loading
                 />
             )}
             {/*+ other UI here */}

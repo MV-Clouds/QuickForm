@@ -1123,13 +1123,13 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {localOptions.map((opt, idx) => (
                 <div key={opt} className="flex items-center gap-2">
                   <input type="checkbox" className="mr-2" disabled={isDisabled} />
-                  <input
-                    type="text"
-                    value={opt}
-                    onChange={(e) => handleOptionChange(idx, e.target.value)}
-                    className={`p-1 border rounded flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                    placeholder={`Option ${idx + 1}`}
-                  />
+                  <div
+                    // type="text"
+                    // value={opt}
+                    // onChange={(e) => handleOptionChange(idx, e.target.value)}
+                    className={`p-1 rounded flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                    // placeholder={`Option ${idx + 1}`}
+                  >{opt}</div>
                   <button
                     onClick={() => handleRemoveOption(idx)}
                     className={`text-red-500 hover:text-red-700 ${selectedTheme?.buttonText || ''}`}
@@ -1163,13 +1163,13 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {localOptions.map((opt, idx) => (
                 <div key={opt} className="flex items-center gap-2">
                   <input type="radio" name={`radio-${id}`} className="mr-2" disabled={isDisabled} />
-                  <input
-                    type="text"
-                    value={opt}
-                    onChange={(e) => handleOptionChange(idx, e.target.value)}
-                    className={`p-1 border rounded flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                    placeholder={`Option ${idx + 1}`}
-                  />
+                  <div
+                    // type="text"
+                    // value={opt}
+                    // onChange={(e) => handleOptionChange(idx, e.target.value)}
+                    className={`p-1 flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                    // placeholder={`Option ${idx + 1}`}
+                  >{opt}</div>
                   <button
                     onClick={() => handleRemoveOption(idx)}
                     className={`text-red-500 hover:text-red-700 ${selectedTheme?.buttonText || ''}`}

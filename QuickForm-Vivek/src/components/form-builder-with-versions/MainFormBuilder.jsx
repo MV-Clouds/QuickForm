@@ -9,7 +9,7 @@ import MainMenuBar from './MainMenuBar';
 import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
-
+import ThankYouPageBuilder from '@/components/Thankyou/TY'
 // THEMES ARRAY
 const themes = [
   {
@@ -77,7 +77,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder() {
+function MainFormBuilder({ showThankYou }) {
   const { formVersionId } = useParams();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
@@ -172,6 +172,7 @@ function MainFormBuilder() {
         },
         body: JSON.stringify({
           userId,
+          instanceUrl,
           formData: { formVersion, formFields },
         }),
       });
@@ -216,7 +217,7 @@ function MainFormBuilder() {
       if (data.FormRecords) {
         try {
           formRecords = JSON.parse(data.FormRecords);
-          
+
         } catch (e) {
           console.warn('Failed to parse FormRecords:', e);
         }
@@ -228,7 +229,7 @@ function MainFormBuilder() {
         formVersion = form.FormVersions.find(
           (version) => version.Source === 'Form_Version__c' && version.Id === formVersionId
         );
-        
+
         if (formVersion) {
           formVersion.Form__c = form.Id;
           targetFormId = form.Id;
@@ -277,7 +278,7 @@ function MainFormBuilder() {
               id: field.Unique_Key__c,
             };
           });
-          
+
           reconstructedFields.push(...fieldsInPage);
           if (index < Object.keys(pages).length - 1) {
             reconstructedFields.push({
@@ -286,7 +287,8 @@ function MainFormBuilder() {
             });
           }
         });
-        
+        console.log('form versions' , formVersions);
+        console.log('form fields ===>' , formFields);
       setFields([headerField, ...reconstructedFields]);
     } catch (error) {
       console.error('Error fetching form data:', error);
@@ -309,8 +311,8 @@ function MainFormBuilder() {
   };
   useEffect(() => {
     console.log(fieldsState);
-    
-  },[fieldsState]);
+
+  }, [fieldsState]);
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -363,7 +365,7 @@ function MainFormBuilder() {
         }),
       });
       const data = await response.json();
-      
+
       if (!response.ok) throw new Error(data.error || 'Failed to create form.');
       const newFormVersionId = data.formVersionId;
       setCurrentFormVersion({ ...formVersion, Id: newFormVersionId, Fields: formFields });
@@ -378,9 +380,9 @@ function MainFormBuilder() {
     }
   };
 
-  const prepareFormData = (isNewForm = false) => {    
+  const prepareFormData = (isNewForm = false) => {
     const headerField = fields.find((f) => f.type === 'header');
-    const nonHeaderFields = fields.filter((f) => f.type !== 'header');    
+    const nonHeaderFields = fields.filter((f) => f.type !== 'header');
     const pages = [];
     let currentPage = [];
     let pageNumber = 1;
@@ -402,7 +404,7 @@ function MainFormBuilder() {
       Stage__c: 'Draft',
       Publish_Link__c: '',
     };
-    
+
     if (!isNewForm && currentFormVersion?.Form__c) {
       formVersion.Form__c = currentFormVersion.Form__c;
     }
@@ -412,7 +414,7 @@ function MainFormBuilder() {
       formVersion.Id = formVersionId;
       formVersion.Version__c = '1';
     }
-    else if (formVersionId && currentFormVersion && hasChanges && !formVersion.Stage__c==='Draft') {
+    else if (formVersionId && currentFormVersion && hasChanges && !formVersion.Stage__c === 'Draft') {
       const currentVersionNum = parseFloat(currentFormVersion.Version__c) || 1;
       formVersion.Version__c = (currentVersionNum + 1).toFixed(0);
     } else if (formVersionId) {
@@ -421,10 +423,10 @@ function MainFormBuilder() {
     } else {
       formVersion.Version__c = '1';
     }
-    
+
     const formFields = pages.flatMap((page) =>
       page.fields.map((field, index) => ({
-        Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1) ,
+        Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
         Field_Type__c: field.type,
         Page_Number__c: page.pageNumber,
         Order_Number__c: index + 1,
@@ -432,7 +434,7 @@ function MainFormBuilder() {
         Unique_Key__c: field.id,
       }))
     );
-    
+
     return { formVersion, formFields };
   };
 
@@ -447,7 +449,7 @@ function MainFormBuilder() {
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error('Failed to obtain access token.');
       const { formVersion, formFields } = prepareFormData();
-      
+
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -768,20 +770,20 @@ function MainFormBuilder() {
     setFields(headerField ? [headerField, ...flattenedFields] : flattenedFields);
   };
 
- const handleAddPage = () => {
-  setHasChanges(true);
-  setFields(prevFields => {
-    const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
-    const headerField = prevFields.find((f) => f.type === 'header');
-    const updatedFields = [
-      ...prevFields,
-      { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
-    ];
-    return headerField
-      ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
-      : updatedFields;
-  });
-};
+  const handleAddPage = () => {
+    setHasChanges(true);
+    setFields(prevFields => {
+      const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
+      const headerField = prevFields.find((f) => f.type === 'header');
+      const updatedFields = [
+        ...prevFields,
+        { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
+      ];
+      return headerField
+        ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
+        : updatedFields;
+    });
+  };
 
 
   const handleCut = (field) => {
@@ -832,19 +834,18 @@ function MainFormBuilder() {
     return null;
   };
 
-  const selectedField = getSelectedField();  
+  const selectedField = getSelectedField();
   return (
     <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen} 
-        toggleSidebar={toggleSidebar} 
+      <MainMenuBar isSidebarOpen={isSidebarOpen}
+        toggleSidebar={toggleSidebar}
         selectedObjects={selectedObjects}
         selectedFields={selectedFields}
         fieldsData={fieldsData}
         formVersionId={selectedVersionId} />
       <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-16'
-        }`}
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
+          }`}
       >
         <div className="bg-[#6A9AB0] text-white h-1/3"></div>
         <div className="bg-white h-2/3"></div>
@@ -912,9 +913,8 @@ function MainFormBuilder() {
               <button
                 onClick={saveFormToSalesforce}
                 disabled={isSaving || currentFormVersion?.Stage__c !== 'Draft'}
-                className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${
-                  isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
-                }`}
+                className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
+                  }`}
                 title="Save Form"
               >
                 {isSaving ? (
@@ -980,7 +980,7 @@ function MainFormBuilder() {
                 ></path>
               </svg>
             </div>
-          ) : (
+          ) : showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : (
             <div className="flex w-full mt-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
@@ -1006,7 +1006,7 @@ function MainFormBuilder() {
               </div>
               <div className="w-1/4 pl-2">
                 {showSidebar && !selectedFieldId && !selectedFooter ? (
-                  <Sidebar 
+                  <Sidebar
                     selectedTheme={selectedTheme}
                     onThemeSelect={setSelectedTheme}
                     themes={themes}

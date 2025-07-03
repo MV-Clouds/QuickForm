@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, SearchIcon, StarIcon, ArrowRightIcon, PlusIcon, GitMergeIcon, SmartphoneIcon, CreditCardIcon, ListIcon, FolderIcon, UsersIcon, SparklesIcon, SquareIcon, UploadIcon, CircleIcon, CheckSquareIcon, ChevronDownIcon, PhoneIcon, MailIcon, UserIcon, BookTemplateIcon } from 'lucide-react';
 import { GetFormTemplate, useForms } from './getFormTemplate'
 import './style.css'
-const TemplatePicker = ({ onClose, onTemplateSelect }) => {
+const TemplatePicker = ({ onClose, onTemplateSelect , loading }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -70,8 +70,9 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
   ];
 
   const handleUseTemplate = (template) => {
-    onTemplateSelect(template);
-    // onClose();
+    if (!loading) {
+      onTemplateSelect(template);
+    }    // onClose();
   };
 
   return (
@@ -333,16 +334,30 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
                           )}
                         </div>
 
-                        {/* Use Template Button */}
+                         {/* Use Template Button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleUseTemplate(template);
                           }}
-                          className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                          className={`mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors ${
+                            loading ? 'opacity-60 cursor-not-allowed' : ''
+                          }`}
+                          disabled={loading}
                         >
-                          {template.id === 'blank' ? 'Start Blank' : 'Use Template'}
+                          {loading ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                              </svg>
+                              Loading...
+                            </>
+                          ) : (
+                            template.id === 'blank' ? 'Start Blank' : 'Use Template'
+                          )}
                         </button>
+
                       </div>
                     </div>
                   ))}
@@ -468,14 +483,26 @@ const TemplatePicker = ({ onClose, onTemplateSelect }) => {
 
             <div className="p-6 border-t border-gray-200 bg-gray-50">
               <div className="grid grid-cols-2 gap-3">
-                <button
+                 <button
                   onClick={() => {
-                    onTemplateSelect(selectedTemplate);
-                    // onClose();
+                    if (!loading) onTemplateSelect(selectedTemplate);
                   }}
-                  className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  className={`inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors ${
+                    loading ? 'opacity-60 cursor-not-allowed' : ''
+                  }`}
+                  disabled={loading}
                 >
-                  Use Template
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                      </svg>
+                      Loading...
+                    </>
+                  ) : (
+                    'Use Template'
+                  )}
                 </button>
                 <button
                   onClick={() => {

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState } from 'react';
-
 const ChatBotContext = createContext();
 
 export const useChatBot = () => useContext(ChatBotContext);
