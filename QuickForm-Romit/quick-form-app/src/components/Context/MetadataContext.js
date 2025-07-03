@@ -40,6 +40,14 @@ export const SalesforceDataProvider = ({ children }) => {
     }
   };
 
+   const refreshData = async () => {
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl) {
+      fetchSalesforceData(userId, instanceUrl);
+    }
+  };
+
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -55,6 +63,7 @@ export const SalesforceDataProvider = ({ children }) => {
         formRecords,
         isLoading,
         error,
+        refreshData,
         fetchSalesforceData, // Expose fetchSalesforceData
       }}
     >

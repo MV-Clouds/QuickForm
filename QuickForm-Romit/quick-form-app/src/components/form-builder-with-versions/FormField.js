@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { DatePicker } from 'rsuite';
 import SignatureCanvas from 'react-signature-canvas';
-import { FaInfoCircle, FaTrash, FaCut, FaCopy,FaChevronDown, FaChevronUp , FaEyeSlash} from 'react-icons/fa';
+import { FaInfoCircle, FaTrash, FaCut, FaCopy, FaChevronDown, FaChevronUp, FaEyeSlash } from 'react-icons/fa';
 import 'rsuite/dist/rsuite.min.css';
 import { AiOutlineStar, AiFillStar, AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { FaRegLightbulb, FaLightbulb, FaBolt } from 'react-icons/fa';
@@ -17,7 +17,7 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
   const [editingColumn, setEditingColumn] = useState(null);
   const [rowValues, setRowValues] = useState(rows);
   const [columnValues, setColumnValues] = useState(columns);
- 
+
   const handleChange = (rowIndex, value, isCheckbox = false) => {
     let newSelected;
     if (inputType === 'checkbox') {
@@ -179,7 +179,7 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
   );
 };
 
-function FieldWrapper({ children, alignment, showHelpText, helpText, labelContent , isHidden }) {
+function FieldWrapper({ children, alignment, showHelpText, helpText, labelContent, isHidden }) {
   const alignmentStyles = {
     top: 'flex flex-col gap-1 w-full',
     left: 'flex items-center gap-2 w-full',
@@ -205,7 +205,7 @@ function FieldWrapper({ children, alignment, showHelpText, helpText, labelConten
       {labelContent && (
         <div className="flex items-center gap-2">
           {labelContent}
-           {showHelpText && helpText && (
+          {showHelpText && helpText && (
             <span className="relative inline-block">
               <FaInfoCircle className="text-gray-500 hover:text-gray-700 cursor-pointer" />
               <span className="absolute left-1/2 z-20 -translate-x-1/2 mt-2 w-48 bg-gray-800 text-white text-xs rounded p-2 shadow-lg opacity-0 pointer-events-none transition-opacity duration-200
@@ -236,9 +236,9 @@ const textToHtml = (text) => {
   return text ? `<p>${text.replace(/\n/g, '<br>')}</p>` : '';
 };
 
-function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste }) {
+function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme }) {
   const {
-    type, id, label, options: initialOptions, labelAlignment = 'top', heading, leftField, rightField, isRequired = false,
+    type, id, label, options: initialOptions, labelAlignment = 'top', heading, leftField, rightField, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
     helpText = '', alignment = 'center', isCut = false, sectionId, enableSalutation = false,
     salutations = ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], selectedSalutation = '',
@@ -257,8 +257,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     isRichText = false, longTextMaxChars, numberValueLimits = { enabled: false, min: '', max: '' },
     checkboxRelatedValues = {}, radioRelatedValues = {}, phoneInputMask = '(999) 999-9999', enableCountryCode = false, selectedCountryCode = 'US',
     // NEW: Add price-specific properties
-    priceLimits = { enabled: false, min: '', max: '' }, currencyType = 'USD',allowMultipleSelections = false,
-    dropdownRelatedValues = {},isHidden = false,
+    priceLimits = { enabled: false, min: '', max: '' }, currencyType = 'USD', allowMultipleSelections = false,
+    dropdownRelatedValues = {}, isHidden = false,
   } = field;
 
   const ratingOptions = {
@@ -306,10 +306,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   const [phoneValue, setPhoneValue] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState(field.value || (allowMultipleSelections ? [] : ''));
-  const dropdownRef = useRef(null); 
+  const dropdownRef = useRef(null);
   const [isChecked, setIsChecked] = useState(field.value || false);
 
-   useEffect(() => {
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsDropdownOpen(false);
@@ -478,14 +478,14 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       onUpdateField(id, { value });
     }
   };
-  
+
   const handleSectionDrop = (e, side) => {
+    if (!e) return; // Prevent errors if e is null
     e.preventDefault();
     e.stopPropagation();
-    const fieldType = e.dataTransfer.getData('text/plain');
+    const fieldType = e.dataTransfer.getData('fieldType');
     const fieldId = e.dataTransfer.getData('fieldId');
-
-    if (fieldType === 'section') {
+    if (fieldType === "section") {
       console.warn('Cannot nest section fields');
       return;
     }
@@ -495,14 +495,19 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     }
 
     const newFieldId = fieldId || `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newField = fieldId
-      ? fields.find((f) => f.id === fieldId)
-      : {
-          id: newFieldId,
-          type: fieldType,
-          sectionId: id,
-          sectionSide: side,
-        };
+    let newField;
+    if (fieldId) {
+      // Deep clone the field so it doesn't become null after deletion
+      const original = fields.find((f) => f.id === fieldId);
+      newField = original ? JSON.parse(JSON.stringify(original)) : null;
+    } else {
+      newField = {
+        id: newFieldId,
+        type: fieldType,
+        sectionId: id,
+        sectionSide: side,
+      };
+    }
 
     if (newField) {
       const updatedField = {
@@ -528,12 +533,12 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     }
   };
 
- const handleCut = (e) => {
-  e.stopPropagation();
-  if (clipboard.operation === 'cut') return; // Prevent cutting another field
-  setClipboard({ field, operation: 'cut' });
-  onUpdateField(id, { isCut: true });
-};
+  const handleCut = (e) => {
+    e.stopPropagation();
+    if (clipboard.operation === 'cut') return; // Prevent cutting another field
+    setClipboard({ field, operation: 'cut' });
+    onUpdateField(id, { isCut: true });
+  };
 
   const handleCopy = (e) => {
     e.stopPropagation();
@@ -549,7 +554,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {isSelected && type !== 'pagebreak' && (
+      {isSelected && type !== 'pagebreak' && type !== 'header' && (
         <div className="absolute top-0 right-0 flex gap-1 z-20" style={{ transform: 'translate(0, -50%)' }}>
           <button
             onClick={handleCut}
@@ -578,29 +583,29 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </div>
       )}
       {children}
-       {/* Paste Above/Below buttons, only if not cut/blurred */}
-    {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && !isCut && (
-      <div className="flex flex-col gap-1 w-full">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePaste('above');
-          }}
-          className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
-        >
-          ------Paste above-------
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePaste('below');
-          }}
-          className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
-        >
-          ------Paste below-------
-        </button>
-      </div>
-    )}
+      {/* Paste Above/Below buttons, only if not cut/blurred */}
+      {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && !isCut && (
+        <div className="flex flex-col gap-1 w-full">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePaste('above');
+            }}
+            className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
+          >
+            ------Paste above-------
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePaste('below');
+            }}
+            className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
+          >
+            ------Paste below-------
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -687,7 +692,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       }
     }
   };
-  
+
   const toggleOption = (option) => {
     let newSelectedOptions;
     if (allowMultipleSelections) {
@@ -719,7 +724,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Date'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -737,7 +742,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 disabledDate={shouldDisableDate}
                 renderCell={renderCell}
                 placeholder={placeholder.main || 'Select a date'}
-                className="w-full"
+                className={`w-full ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                 isoWeek={weekStartDay === 'Monday'}
                 locale={{
                   localizedMonthName: (month) => customMonthLabels[month.getMonth()] || month.toLocaleString('en', { month: 'long' }),
@@ -768,7 +773,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`${selectedTheme?.textColor || 'text-gray-700'}`}>
               {label || 'Date and Time'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -786,7 +791,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 disabledDate={shouldDisableDate}
                 renderCell={renderCell}
                 placeholder={placeholder.main || 'Select date and time'}
-                className="w-full"
+                className={`w-full ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                 isoWeek={weekStartDay === 'Monday'}
                 locale={{
                   localizedMonthName: (month) => customMonthLabels[month.getMonth()] || month.toLocaleString('en', { month: 'long' }),
@@ -818,7 +823,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Time'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -834,7 +839,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 defaultValue={defaultTime ? formatDateForRsuite(`1970-01-01T${defaultTime}`) : null}
                 disabled={isDisabled}
                 placeholder={placeholder.main || 'Select a time'}
-                className="w-full"
+                className={`w-full ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                 showMeridian={timeFormat === 'hh:mm a'}
                 disabledTime={(date) => {
                   if (!restrictAmPm) return {};
@@ -866,23 +871,38 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         <div className="relative group">
           <SelectionWrapper>
             <FieldWrapper {...wrapperProps} labelContent={
-              <label className={`text-gray-700 text-2xl font-bold ${alignment === 'left' ? 'text-left' : alignment === 'right' ? 'text-right' : 'text-center'} w-full`}>
+              <div className={`text-2xl font-bold ${alignment === 'left' ? 'text-left' : alignment === 'right' ? 'text-right' : 'text-center'} w-full ${selectedTheme?.textColor || 'text-gray-700'}`}>
                 {heading || 'Form'}
-              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
+                {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
-              </label>
+              </div>
             }>
               <div className="flex flex-col items-center" />
             </FieldWrapper>
           </SelectionWrapper>
         </div>
       );
-
+    case 'heading':
+      return (
+        <div className="relative group">
+          <SelectionWrapper>
+            <FieldWrapper {...wrapperProps} labelContent={
+              <div className={`text-2xl font-bold ${alignment === 'left' ? 'text-left' : alignment === 'right' ? 'text-right' : 'text-center'} w-full ${selectedTheme?.textColor || 'text-gray-700'}`}>
+                {heading || 'Form'}
+                {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
+                {isRequired && <span className="text-red-500 ml-1">*</span>}
+              </div>
+            }>
+              <div className="flex flex-col items-center" />
+            </FieldWrapper>
+          </SelectionWrapper>
+        </div>
+      );
     case 'shorttext':
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={` ${selectedTheme?.textColor || 'text-gray-700'}`}>
               {label || 'Short Text'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -890,7 +910,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <input
               type="text"
-              className="p-2 border rounded"
+              className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
               placeholder={placeholder.main || 'Enter short text'}
               maxLength={shortTextMaxChars || 255}
               readOnly={isDisabled}
@@ -906,7 +926,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper labelContent={
-            <label className="text-gray-700">
+            <label className={` ${selectedTheme?.textColor || 'text-gray-700color'}`}>
               {label || 'Long Text'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -924,7 +944,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             ) : (
               <div>
                 <textarea
-                  className="w-full p-2 border rounded"
+                  className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   rows="4"
                   placeholder={placeholder.main || 'Enter long text'}
                   maxLength={longTextMaxChars || 131072}
@@ -955,7 +975,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Number'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -963,7 +983,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <input
               type="number"
-              className="p-2 border rounded"
+              className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
               placeholder={placeholder.main || 'Enter number'}
               value={numberValue}
               min={numberValueLimits.enabled ? numberValueLimits.min : undefined}
@@ -986,9 +1006,9 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper
             {...wrapperProps}
             labelContent={
-              <label className="text-gray-700">
+              <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
                 {label || 'Phone'}
-              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
+                {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
               </label>
             }
@@ -1032,7 +1052,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                           onUpdateField(id, { value: newPhoneValue });
                         }
                       }}
-                      className="p-2 border rounded w-full text-sm"
+                      className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                       placeholder={placeholder?.main || 'Enter phone number'}
                       disabled={isDisabled}
                       inputProps={{ 'aria-label': 'Phone number input' }}
@@ -1050,7 +1070,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                       onUpdateField(id, { value: newPhoneValue });
                     }
                   }}
-                  className="p-2 border rounded w-full text-sm"
+                  className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={placeholder?.main || 'Enter phone number'}
                   disabled={isDisabled}
                   inputProps={{ 'aria-label': 'Phone number input' }}
@@ -1065,7 +1085,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Email'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1074,7 +1094,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <div className="flex flex-col gap-3">
               <input
                 type="email"
-                className="p-2 border rounded"
+                className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                 placeholder={placeholder.main || 'example@domain.com'}
                 maxLength={maxChars || undefined}
                 pattern={allowedDomains ? `.*@(${allowedDomains.split(',').map(d => d.trim()).join('|')})$` : undefined}
@@ -1084,7 +1104,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {enableConfirmation && (
                 <input
                   type="email"
-                  className="p-2 border rounded"
+                  className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder="Confirm email"
                   value={confirmationEmail}
                   onChange={(e) => setConfirmationEmail(e.target.value)}
@@ -1094,7 +1114,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {enableVerification && (
                 <input
                   type="text"
-                  className="p-2 border rounded"
+                  className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder="Enter verification code"
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value)}
@@ -1112,9 +1132,9 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper
             {...wrapperProps}
             labelContent={
-              <label className="text-gray-700">
+              <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
                 {label || 'Checkbox'}
-              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
+                {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
               </label>
             }
@@ -1123,16 +1143,16 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {localOptions.map((opt, idx) => (
                 <div key={opt} className="flex items-center gap-2">
                   <input type="checkbox" className="mr-2" disabled={isDisabled} />
-                  <input
-                    type="text"
-                    value={opt}
-                    onChange={(e) => handleOptionChange(idx, e.target.value)}
-                    className="p-1 border rounded flex-grow"
-                    placeholder={`Option ${idx + 1}`}
-                  />
+                  <div
+                    // type="text"
+                    // value={opt}
+                    // onChange={(e) => handleOptionChange(idx, e.target.value)}
+                    className={`p-1 rounded flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                  // placeholder={`Option ${idx + 1}`}
+                  >{opt}</div>
                   <button
                     onClick={() => handleRemoveOption(idx)}
-                    className="text-red-500 hover:text-red-700"
+                    className={`text-red-500 hover:text-red-700 ${selectedTheme?.buttonText || ''}`}
                   >
                     <FaTrash size={12} />
                   </button>
@@ -1140,7 +1160,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               ))}
               <button
                 onClick={handleAddOption}
-                className="text-blue-600 text-xs hover:underline mt-1"
+                className={`text-blue-600 text-xs hover:underline mt-1 ${selectedTheme?.buttonText || ''}`}
               >
                 + Add Item
               </button>
@@ -1153,7 +1173,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Radio'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1163,16 +1183,16 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {localOptions.map((opt, idx) => (
                 <div key={opt} className="flex items-center gap-2">
                   <input type="radio" name={`radio-${id}`} className="mr-2" disabled={isDisabled} />
-                  <input
-                    type="text"
-                    value={opt}
-                    onChange={(e) => handleOptionChange(idx, e.target.value)}
-                    className="p-1 border rounded flex-grow"
-                    placeholder={`Option ${idx + 1}`}
-                  />
+                  <div
+                    // type="text"
+                    // value={opt}
+                    // onChange={(e) => handleOptionChange(idx, e.target.value)}
+                    className={`p-1 flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                  // placeholder={`Option ${idx + 1}`}
+                  >{opt}</div>
                   <button
                     onClick={() => handleRemoveOption(idx)}
-                    className="text-red-500 hover:text-red-700"
+                    className={`text-red-500 hover:text-red-700 ${selectedTheme?.buttonText || ''}`}
                   >
                     <FaTrash size={12} />
                   </button>
@@ -1180,7 +1200,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               ))}
               <button
                 onClick={handleAddOption}
-                className="text-blue-600 text-xs hover:underline mt-1"
+                className={`text-blue-600 text-xs hover:underline mt-1 ${selectedTheme?.buttonText || ''}`}
               >
                 + Add Item
               </button>
@@ -1190,52 +1210,51 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       );
 
     case 'dropdown':
-    return (
-      <SelectionWrapper>
-        <FieldWrapper {...wrapperProps} labelContent={
-          <label className="text-gray-700">
-            {label || 'Dropdown'}
+      return (
+        <SelectionWrapper>
+          <FieldWrapper {...wrapperProps} labelContent={
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
+              {label || 'Dropdown'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
-            {isRequired && <span className="text-red-500 ml-1">*</span>}
-          </label>
-        }>
-          <div className="relative w-full" ref={dropdownRef}>
-            <div
-              className={`w-full p-2 border rounded cursor-pointer flex justify-between items-center ${isDisabled ? 'bg-gray-200' : 'bg-white'}`}
-              onClick={() => !isDisabled && setIsDropdownOpen(!isDropdownOpen)}
-            >
-              <span>
-                {allowMultipleSelections
-                  ? selectedOptions.length > 0
-                    ? selectedOptions.map(opt => localOptions.find(o => (dropdownRelatedValues[o] || o) === opt) || opt).join(', ')
-                    : placeholder.main || 'Select options'
-                  : selectedOptions
-                    ? localOptions.find(opt => (dropdownRelatedValues[opt] || opt) === selectedOptions) || selectedOptions
-                    : placeholder.main || 'Select an option'}
-              </span>
-              {isDropdownOpen ? <FaChevronUp className="text-gray-500" /> : <FaChevronDown className="text-gray-500" />}
-            </div>
-            {isDropdownOpen && (
-              <div className="absolute w-full mt-1 bg-white border rounded shadow-lg z-10 max-h-40 overflow-y-auto">
-                {localOptions.map((opt, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-2 hover:bg-blue-100 cursor-pointer ${
-                      allowMultipleSelections
-                        ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
-                        : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
-                    }`}
-                    onClick={() => toggleOption(dropdownRelatedValues[opt] || opt)}
-                  >
-                    {opt}
-                  </div>
-                ))}
+              {isRequired && <span className="text-red-500 ml-1">*</span>}
+            </label>
+          }>
+            <div className="relative w-full" ref={dropdownRef}>
+              <div
+                className={`w-full p-2 border rounded cursor-pointer flex justify-between items-center ${isDisabled ? 'bg-gray-200' : 'bg-white'} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                onClick={() => !isDisabled && setIsDropdownOpen(!isDropdownOpen)}
+              >
+                <span>
+                  {allowMultipleSelections
+                    ? selectedOptions.length > 0
+                      ? selectedOptions.map(opt => localOptions.find(o => (dropdownRelatedValues[o] || o) === opt) || opt).join(', ')
+                      : placeholder.main || 'Select options'
+                    : selectedOptions
+                      ? localOptions.find(opt => (dropdownRelatedValues[opt] || opt) === selectedOptions) || selectedOptions
+                      : placeholder.main || 'Select an option'}
+                </span>
+                {isDropdownOpen ? <FaChevronUp className="text-gray-500" /> : <FaChevronDown className="text-gray-500" />}
               </div>
-            )}
-            {allowMultipleSelections && (
-              <p className="text-sm text-gray-500 mt-1">Multiple selections enabled</p>
-            )}
-          </div>
+              {isDropdownOpen && (
+                <div className="absolute w-full mt-1 bg-white border rounded shadow-lg z-10 max-h-40 overflow-y-auto">
+                  {localOptions.map((opt, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-2 hover:bg-blue-100 cursor-pointer ${allowMultipleSelections
+                          ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                          : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                        }`}
+                      onClick={() => toggleOption(dropdownRelatedValues[opt] || opt)}
+                    >
+                      {opt}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {allowMultipleSelections && (
+                <p className="text-sm text-gray-500 mt-1">Multiple selections enabled</p>
+              )}
+            </div>
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1244,7 +1263,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'File Upload'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1252,7 +1271,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <input
               type="file"
-              className="p-2 border rounded"
+              className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
               ref={fileInputRef}
               onChange={handleImageChange}
               accept={allowedFileTypes ? allowedFileTypes.split(',').map(type => `.${type.trim()}`).join(',') : undefined}
@@ -1263,51 +1282,51 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-      case 'imageuploader':
-        return (
-          <SelectionWrapper>
-            <FieldWrapper {...wrapperProps} labelContent={
-              <label className="text-gray-700">
-                {label || 'Image Uploader'}
+    case 'imageuploader':
+      return (
+        <SelectionWrapper>
+          <FieldWrapper {...wrapperProps} labelContent={
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
+              {label || 'Image Uploader'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
-                {isRequired && <span className="text-red-500 ml-1">*</span>}
-              </label>
-            }>
-              <div className="relative w-1/2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={handleImageChange}
-                  disabled={isDisabled}
-                />
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Uploaded"
-                      className="h-32 object-contain border rounded"
-                    />
-                  </div>
-                ) : (
-                  <div
-                    className={`h-32 text-sm p-2 border rounded bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 cursor-pointer ${isDisabled ? 'cursor-not-allowed opacity-50' : ''}`}
-                    onClick={() => !isDisabled && fileInputRef.current?.click()}
-                  >
-                    Click to Upload Image
-                  </div>
-                )}
-              </div>
-            </FieldWrapper>
-          </SelectionWrapper>
-        );
+              {isRequired && <span className="text-red-500 ml-1">*</span>}
+            </label>
+          }>
+            <div className="relative w-1/2">
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleImageChange}
+                disabled={isDisabled}
+              />
+              {imagePreview ? (
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt="Uploaded"
+                    className="h-32 object-contain border rounded"
+                  />
+                </div>
+              ) : (
+                <div
+                  className={`h-32 text-sm p-2 border rounded bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 cursor-pointer ${isDisabled ? 'cursor-not-allowed opacity-50' : ''} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                  onClick={() => !isDisabled && fileInputRef.current?.click()}
+                >
+                  Click to Upload Image
+                </div>
+              )}
+            </div>
+          </FieldWrapper>
+        </SelectionWrapper>
+      );
 
     case 'toggle':
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <span className="text-gray-700">
+            <span className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Toggle Button'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1315,9 +1334,9 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <label className="inline-flex items-center cursor-pointer">
               <input type="checkbox" className="sr-only peer" disabled={isDisabled} checked={isChecked} onChange={handleToggleChange} />
-              <div className={`w-11 h-6 bg-gray-200 rounded-full peer ${isChecked ? 'peer-checked:bg-blue-600' : ''}`}>
-              <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isChecked ? 'translate-x-5' : 'translate-x-1'}`} />
-            </div>
+              <div className={`w-11 h-6 bg-gray-200 rounded-full peer ${isChecked ? 'peer-checked:bg-blue-600' : ''} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isChecked ? 'translate-x-5' : 'translate-x-1'}`} />
+              </div>
             </label>
           </FieldWrapper>
         </SelectionWrapper>
@@ -1327,7 +1346,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Price'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1335,13 +1354,13 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <div className="flex items-center gap-2">
               {/* NEW: Display currency symbol */}
-              <span className="text-gray-700">{currencyType}</span>
+              <span className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>{currencyType}</span>
               <input
                 type="number"
                 min={priceLimits.enabled ? priceLimits.min : "0"}
                 max={priceLimits.enabled ? priceLimits.max : undefined}
                 step="0.01"
-                className="p-2 border rounded w-full"
+                className={`p-2 border rounded w-full ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                 placeholder={placeholder.main || 'Enter price'}
                 onChange={handlePriceChange}
                 readOnly={isDisabled}
@@ -1361,7 +1380,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Full Name'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1373,7 +1392,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   <select
                     value={selectedSalutation}
                     onChange={(e) => onUpdateField(id, { selectedSalutation: e.target.value })}
-                    className="w-full p-2 border rounded"
+                    className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                     disabled={isDisabled}
                   >
                     <option value="" disabled>{placeholder.salutation || 'Select Salutation'}</option>
@@ -1386,7 +1405,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               <div className={enableSalutation ? 'w-2/5' : 'w-1/2'}>
                 <input
                   type="text"
-                  className="w-full p-2 border rounded"
+                  className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={placeholder.first || 'First Name'}
                   readOnly={isDisabled}
                 />
@@ -1394,7 +1413,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               <div className={enableSalutation ? 'w-2/5' : 'w-1/2'}>
                 <input
                   type="text"
-                  className="w-full p-2 border rounded"
+                  className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={placeholder.last || 'Last Name'}
                   readOnly={isDisabled}
                 />
@@ -1408,7 +1427,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Address'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1"></span>}
@@ -1417,10 +1436,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <div className="flex flex-col gap-3">
               {visibleSubFields.street && (
                 <div className="w-full">
-                  <label className="text-xs text-gray-500">{subLabels.street}</label>
+                  <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.street}</label>
                   <input
                     type="text"
-                    className="w-full p-2 border rounded"
+                    className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                     placeholder={placeholder.street || 'Street Address'}
                     readOnly={isDisabled}
                   />
@@ -1430,10 +1449,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 <div className="flex gap-3">
                   {visibleSubFields.city && (
                     <div className="w-1/2">
-                      <label className="text-xs text-gray-500">{subLabels.city}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.city}</label>
                       <input
                         type="text"
-                        className="w-full p-2 border rounded"
+                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                         placeholder={placeholder.city || 'City'}
                         readOnly={isDisabled}
                       />
@@ -1441,10 +1460,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   )}
                   {visibleSubFields.state && (
                     <div className="w-1/2">
-                      <label className="text-xs text-gray-500">{subLabels.state}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.state}</label>
                       <input
                         type="text"
-                        className="w-full p-2 border rounded"
+                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                         placeholder={placeholder.state || 'State'}
                         readOnly={isDisabled}
                       />
@@ -1456,10 +1475,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 <div className="flex gap-3">
                   {visibleSubFields.country && (
                     <div className="w-1/2">
-                      <label className="text-xs text-gray-500">{subLabels.country}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.country}</label>
                       <input
                         type="text"
-                        className="w-full p-2 border rounded"
+                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                         placeholder={placeholder.country || 'Country'}
                         readOnly={isDisabled}
                       />
@@ -1467,10 +1486,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   )}
                   {visibleSubFields.postal && (
                     <div className="w-1/2">
-                      <label className="text-xs text-gray-500">{subLabels.postal}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.postal}</label>
                       <input
                         type="text"
-                        className="w-full p-2 border rounded"
+                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                         placeholder={placeholder.postal || 'Postal Code'}
                         readOnly={isDisabled}
                       />
@@ -1487,7 +1506,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Link'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1495,7 +1514,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <input
               type="url"
-              className="p-2 border rounded"
+              className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
               placeholder={placeholder.main || 'Enter link'}
               readOnly={isDisabled}
             />
@@ -1507,7 +1526,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Signature'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1522,7 +1541,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               <div className="flex gap-2">
                 <button
                   onClick={clearSignature}
-                  className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  className={`px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 ${selectedTheme?.buttonText || ''}`}
                   disabled={isDisabled}
                 >
                   Clear
@@ -1540,7 +1559,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Terms and Conditions'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1557,7 +1576,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   href={termsLinkUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  className={`text-blue-600 hover:underline ${selectedTheme?.buttonText || ''}`}
                 >
                   {placeholder.main || 'I agree to the terms and conditions'}
                 </a>
@@ -1573,12 +1592,12 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Display Text'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
             </label>
           }>
-            <p className="p-2 bg-gray-100 rounded">{placeholder.main || 'This is display text'}</p>
+            <p className={`p-2 bg-gray-100 rounded ${selectedTheme?.inputBg || ''}`}>{placeholder.main || 'This is display text'}</p>
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1587,7 +1606,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Calculation'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1595,7 +1614,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           }>
             <input
               type="text"
-              className="p-2 border rounded"
+              className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
               placeholder={placeholder.main || 'Calculation result will appear here'}
               value={formula}
               readOnly
@@ -1608,7 +1627,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Rating'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1621,7 +1640,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                     key={option.value}
                     onClick={() => handleRatingClick(option.value)}
                     disabled={isDisabled}
-                    className={`text-2xl ${selectedRating === option.value ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 focus:outline-none`}
+                    className={`text-2xl ${selectedRating === option.value ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 focus:outline-none ${selectedTheme?.buttonText || ''}`}
                   >
                     {ratingType === 'star' ? (
                       selectedRating === option.value ? <AiFillStar /> : <AiOutlineStar />
@@ -1646,7 +1665,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
-            <label className="text-gray-700">
+            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
               {label || 'Scale Rating'}
               {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1685,7 +1704,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <div
               className={`w-1/2 min-h-[100px] rounded ${leftField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
               onDrop={(e) => handleSectionDrop(e, 'left')}
-              onDragOver={handleDragOver}
+              onDragOver={() => handleDragOver()}
               onDoubleClick={() => handleSectionDoubleClick('left')}
             >
               {leftField ? (
@@ -1702,6 +1721,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   setClipboard={setClipboard}
                   clipboard={clipboard}
                   handlePaste={() => handlePaste(pageIndex, null, id, 'left')}
+                  selectedTheme={selectedTheme}
                 />
               ) : (
                 <p className="text-gray-500 text-center">Drag field here</p>
@@ -1727,6 +1747,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   setClipboard={setClipboard}
                   clipboard={clipboard}
                   handlePaste={() => handlePaste(pageIndex, null, id, 'right')}
+                  selectedTheme={selectedTheme}
                 />
               ) : (
                 <p className="text-gray-500 text-center">Drag field here</p>
