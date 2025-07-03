@@ -6,7 +6,7 @@ const categorizedFieldTypes = [
   {
     category: 'Recommended',
     fields: [
-      { type: 'header', label: 'Header' },
+      { type: 'heading', label: 'Heading' },
       { type: 'shorttext', label: 'Short Text' },
       { type: 'number', label: 'Number' },
       { type: 'displaytext', label: 'Display Text' },
@@ -74,6 +74,7 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
 
   const handleDragStart = (e, type) => {
     e.dataTransfer.setData('fieldType', type);
+    e.dataTransfer.setData('fieldId', '');     // Set fieldId as empty for new fields
   };
 
   const toggleSection = (category) => {
