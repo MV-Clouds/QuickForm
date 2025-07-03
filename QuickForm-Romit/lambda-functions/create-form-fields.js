@@ -206,21 +206,31 @@ export const handler = async (event) => {
         }
 
         const otherVersionsData = await otherVersionsRes.json();
-        for (const otherVersion of otherVersionsData.records || []) {
-          const updateResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${otherVersion.Id}`, {
+        if (otherVersionsData.records?.length > 0) {
+          const compositeRequest = {
+            allOrNone: true,
+            records: otherVersionsData.records.map((otherVersion) => ({
+              attributes: { type: 'Form_Version__c' },
+              Id: otherVersion.Id,
+              Stage__c: 'Locked',
+            })),
+          };
+        
+          const compositeResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
             method: 'PATCH',
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ Stage__c: 'Locked' }),
+            body: JSON.stringify(compositeRequest),
           });
-
-          if (!updateResponse.ok) {
-            const errorData = await updateResponse.json();
-            throw new Error(errorData[0]?.message || `Failed to update Form_Version__c ${otherVersion.Id}`);
+        
+          if (!compositeResponse.ok) {
+            const errorData = await compositeResponse.json();
+            throw new Error(errorData[0]?.message || 'Failed to update other Form_Version__c records');
           }
         }
+
         const updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
           method: 'PATCH',
           headers: {
@@ -264,7 +274,7 @@ export const handler = async (event) => {
             Authorization: `Bearer ${token}`,
           },
         });
-
+      
         if (!deleteResponse.ok && deleteResponse.status !== 204) {
           const errorData = await deleteResponse.json();
           throw new Error(errorData[0]?.message || `Failed to delete Form_Field__c record ${field.Id}`);
@@ -335,36 +345,51 @@ export const handler = async (event) => {
 
     // Step 4: Create Form_Field__c records
     const createdFormFields = [];
-    for (const formField of formData.formFields) {
-      const formFieldResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Field__c`, {
+    const formFieldIds = {};
+    if (formData.formFields.length > 0) {
+      const compositeRequest = {
+        allOrNone: true,
+        records: formData.formFields.map((formField) => ({
+          attributes: { type: 'Form_Field__c' },
+          ...formField,
+          Form_Version__c: formVersionId,
+        })),
+      };
+
+      const formFieldResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formField,
-          Form_Version__c: formVersionId,
-        }),
+        body: JSON.stringify(compositeRequest),
       });
 
       if (!formFieldResponse.ok) {
         const errorData = await formFieldResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to create Form_Field__c record');
+        throw new Error(errorData[0]?.message || 'Failed to create Form_Field__c records');
       }
 
       const formFieldData = await formFieldResponse.json();
-      createdFormFields.push({
-        Id: formFieldData.id,
-        Name: formField.Name,
-        Field_Type__c: formField.Field_Type__c,
-        Page_Number__c: formField.Page_Number__c,
-        Order_Number__c: formField.Order_Number__c,
-        Properties__c: formField.Properties__c,
-        Unique_Key__c: formField.Unique_Key__c,
+      formFieldData.forEach((result, index) => {
+        if (result.success) {
+          const formField = formData.formFields[index];
+          createdFormFields.push({
+            Id: result.id,
+            Name: formField.Name,
+            Field_Type__c: formField.Field_Type__c,
+            Page_Number__c: formField.Page_Number__c,
+            Order_Number__c: formField.Order_Number__c,
+            Properties__c: formField.Properties__c,
+            Unique_Key__c: formField.Unique_Key__c,
+          });
+          formFieldIds[formField.Unique_Key__c] = result.id;
+        } else {
+          throw new Error(result.errors[0]?.message || 'Failed to create a Form_Field__c record');
+        }
       });
     }
-    console.log(`Created ${createdFormFields.length} Form_Field__c records`);
+
 
     // Step 5: Update DynamoDB SalesforceMetadata table
     const currentTime = new Date().toISOString();
@@ -470,7 +495,7 @@ export const handler = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId }),
+      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId, formFieldIds }),
     };
   } catch (error) {
     console.error('Error saving form to Salesforce:', error);
