@@ -4,14 +4,14 @@ import FormErrorBoundary from '../server/chat-bot-rag-langchain/FormBoundary';
 import Home from '@/components/create-form-wizard/home';
 import MainFormBuilder from '@/components/form-builder-with-versions/MainFormBuilder';
 import NotificationSettings from '@/components/NotificationSettings/NotificationSettingsModal';
-import ThankYou from '@/components/Thankyou/ThankYou';
+// import ThankYou from '@/components/Thankyou/ThankYou';
 import ChatBot from '@/components/chat-bot/chat-bot-new';
-import Sidebar from '@/components/Bar';
+// import Sidebar from '@/components/Bar';
 import FormTemplate from '@/components/FormTemplate/MainTemplate';
-import { ChatBotProvider } from '@/components/FormCreation/ChatBotContext';
-import Mainflow from '@/components/mainFlow';
-import GuestPage from '@/components/LandingPage/GuestPage';
-import GuestPageC from '@/components/LandingPage/GuestPageC';
+import { ChatBotProvider } from '@/components/form-builder-with-versions/ChatBotContext';
+// import Mainflow from '@/components/mainFlow';
+// import GuestPage from '@/components/LandingPage/GuestPage';
+// import GuestPageC from '@/components/LandingPage/GuestPageC';
 import GuestPageD from '@/components/LandingPage/GuestPageD';
 import CreateFormWizard from '@/components/create-form-wizard/createFormWizard';
 import Login from '@/components/login-page/login';
@@ -26,8 +26,8 @@ export default function AllRoutes() {
         <ChatBotProvider>
           <ChatBot />
           <Routes>
-            <Route path='/guest' element={<GuestPage />} />
-            <Route path='/guest2' element={<GuestPageC />} />
+            {/* <Route path='/guest' element={<GuestPage />} />
+            <Route path='/guest2' element={<GuestPageC />} /> */}
             <Route path='/' element={<GuestPageD />} />
             <Route path='/notification' element={<ProtectedRoute element={<NotificationSettings />} />} />
             <Route path='/thankyou/:formVersionId' element={<MainFormBuilder showThankYou />} />

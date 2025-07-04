@@ -37,16 +37,16 @@ function PublicFormViewer() {
       try {
         let decrypted;
         try {
-          decrypted = JSON.parse(decrypt(linkId));
+          decrypted = decrypt(linkId);
         } catch (e) {
           throw new Error(e.message || 'Invalid link format');
         }
 
-        const { userId, formVersionId } = decrypted;
-        if (!userId || !formVersionId) {
+        const [userId, formId] = decrypted.split('$');
+        if (!userId || !formId) {
           throw new Error('Invalid link data');
         }
-        setLinkData({ userId, formVersionId });
+        setLinkData({ userId, formId });
 
         const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
           method: 'POST',
@@ -55,7 +55,7 @@ function PublicFormViewer() {
           },
           body: JSON.stringify({
             userId,
-            
+
           }),
         });
 
@@ -73,7 +73,7 @@ function PublicFormViewer() {
           },
           body: JSON.stringify({
             userId,
-            formVersionId,
+            formId,
             accessToken: token,
           }),
         });
@@ -82,8 +82,8 @@ function PublicFormViewer() {
         if (!response.ok) {
           throw new Error(data.error || 'Failed to fetch form');
         }
-
-        setFormData(data.formVersion);
+        const formVersion = data.formVersion;
+        setFormData(formVersion);
         const initialValues = {};
         const initialSignatures = {};
         const initialFilePreviews = {};
@@ -91,7 +91,7 @@ function PublicFormViewer() {
         const initialSelectedOptions = {};
         const initialToggles = {};
 
-        data.formVersion.Fields.forEach((field) => {
+        formVersion.Fields.forEach((field) => {
           const properties = JSON.parse(field.Properties__c || '{}');
           const fieldType = field.Field_Type__c;
 
@@ -123,7 +123,7 @@ function PublicFormViewer() {
 
         // Split fields into pages based on Page_Number__c and sort by Order_Number__c
         const pageMap = {};
-        data.formVersion.Fields.forEach((field) => {
+        formVersion.Fields.forEach((field) => {
           const pageNum = field.Page_Number__c || 1;
           if (!pageMap[pageNum]) {
             pageMap[pageNum] = [];
@@ -136,7 +136,7 @@ function PublicFormViewer() {
           .map((pageNum) => {
             return pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0));
           });
-        setPages(sortedPages.length > 0 ? sortedPages : [data.formVersion.Fields]);
+        setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
       } catch (error) {
         console.error('Error fetching form:', error);
         setFetchError(error.message || 'Failed to load form');
@@ -149,6 +149,7 @@ function PublicFormViewer() {
   }, [linkId]);
 
   const handleChange = (fieldId, value, isFile = false) => {
+    
     setFormValues((prev) => ({ ...prev, [fieldId]: isFile ? value : value }));
     setErrors((prev) => ({ ...prev, [fieldId]: null }));
   };
@@ -221,12 +222,12 @@ function PublicFormViewer() {
       const isRequired = properties.isRequired;
       if (isRequired) {
         if (value === '' || value == null ||
-            (Array.isArray(value) && value.length === 0) ||
-            (fieldType === 'fileupload' && !value) ||
-            (fieldType === 'imageuploader' && !value) ||
-            (fieldType === 'signature' && !signatures[field.Unique_Key__c]) ||
-            (fieldType === 'terms' && !value) ||
-            (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))) {
+          (Array.isArray(value) && value.length === 0) ||
+          (fieldType === 'fileupload' && !value) ||
+          (fieldType === 'imageuploader' && !value) ||
+          (fieldType === 'signature' && !signatures[field.Unique_Key__c]) ||
+          (fieldType === 'terms' && !value) ||
+          (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))) {
           newErrors[field.Unique_Key__c] = `${fieldLabel} is required`;
         }
       }
@@ -356,28 +357,26 @@ function PublicFormViewer() {
     try {
       const submissionData = {};
       const filesToUpload = {};
-      console.log('here');
-      
-      for (const key of Object.keys(formValues)) {
-      const field = formData.Fields.find((f) => f.Unique_Key__c === key);
-      const fieldType = field?.Field_Type__c;
 
-      if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-        filesToUpload[key] = formValues[key];
-        submissionData[key] = formValues[key].name;
-      } else if (fieldType === 'signature' && signatures[key]) {
-        const signatureBlob = await (await fetch(signatures[key])).blob();
-        const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-        filesToUpload[key] = signatureFile;
-        submissionData[key] = `${key}.png`;
-      } else {
-        submissionData[key] = formValues[key];
+      for (const key of Object.keys(formValues)) {
+        const field = formData.Fields.find((f) => f.Unique_Key__c === key);
+        const fieldType = field?.Field_Type__c;
+
+        if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
+          filesToUpload[key] = formValues[key];
+          submissionData[key] = formValues[key].name;
+        } else if (fieldType === 'signature' && signatures[key]) {
+          const signatureBlob = await (await fetch(signatures[key])).blob();
+          const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
+          filesToUpload[key] = signatureFile;
+          submissionData[key] = `${key}.png`;
+        } else {
+          submissionData[key] = formValues[key];
+        }
       }
-    }
-    console.log(submissionData);
-    console.log(filesToUpload);
-    
-    
+      console.log('Access token ', accessToken);
+
+
       const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
         method: 'POST',
         headers: {
@@ -432,6 +431,38 @@ function PublicFormViewer() {
       setToggles({});
       setCurrentPage(0);
     } catch (error) {
+      if (error.message.includes('INVALID_JWT_FORMAT')) {
+        let decrypted;
+        try {
+          decrypted = decrypt(linkId);
+        } catch (e) {
+          throw new Error(e.message || 'Invalid link format');
+        }
+
+        const [userId, formVersionId] = decrypted.split('$');
+        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId,
+
+          }),
+        });
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || tokenData.error) {
+          throw new Error(tokenData.error || 'Failed to fetch access token');
+        }
+        const token = tokenData.access_token;
+        console.log('New access token fetched:', token);
+
+        setAccessToken(token);
+        console.log('Retrying submission with new token...', accessToken);
+
+        handleSubmit(e); // Retry submission with new token
+      }
       console.error('Error submitting form:', error);
       setErrors({ submit: error.message || 'Failed to submit form' });
     } finally {
@@ -535,9 +566,9 @@ function PublicFormViewer() {
                     ['bold', 'italic', 'underline', 'strike'],
                     ['blockquote', 'code-block'],
                     [{ 'header': 1 }, { 'header': 2 }],
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    [{ 'script': 'sub'}, { 'script': 'super' }],
-                    [{ 'indent': '-1'}, { 'indent': '+1' }],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    [{ 'script': 'sub' }, { 'script': 'super' }],
+                    [{ 'indent': '-1' }, { 'indent': '+1' }],
                     [{ 'direction': 'rtl' }],
                     [{ 'size': ['small', false, 'large', 'huge'] }],
                     [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
@@ -1118,7 +1149,7 @@ function PublicFormViewer() {
             <div className="flex flex-col gap-2">
               <SignatureCanvas
                 ref={(ref) => (signatureRefs.current[fieldId] = ref)}
-                canvasProps={{ 
+                canvasProps={{
                   className: `border rounded w-full h-32 ${hasError ? 'border-red-500' : 'border-gray-300'}`,
                   style: { backgroundColor: '#fff' }
                 }}
@@ -1184,18 +1215,22 @@ function PublicFormViewer() {
       case 'displaytext':
         return (
           <div className="mb-4">
-            <p className="text-gray-700">{properties.placeholder?.main || properties.label || 'Display Text'}</p>
+            <div
+              className="text-gray-700"
+              dangerouslySetInnerHTML={{
+                __html: properties?.value || 'Display Text'
+              }}
+            />
           </div>
         );
 
       case 'header':
         return (
           <div className="mb-6">
-            <h2 className={`text-2xl font-bold text-gray-800 ${
-              properties.alignment === 'left' ? 'text-left' : 
-              properties.alignment === 'right' ? 'text-right' : 
-              'text-center'
-            }`}>
+            <h2 className={`text-2xl font-bold text-gray-800 ${properties.alignment === 'left' ? 'text-left' :
+              properties.alignment === 'right' ? 'text-right' :
+                'text-center'
+              }`}>
               {properties.heading || 'Form Header'}
             </h2>
           </div>
@@ -1346,16 +1381,47 @@ function PublicFormViewer() {
           <div className="mb-4 border p-4 rounded">
             <h3 className="text-lg font-semibold mb-2">{fieldLabel}</h3>
             <div className="grid grid-cols-2 gap-4">
+              {/* Left Field */}
               <div>
-                {properties.leftField && (
-                  <p className="text-gray-600">Left Section: {properties.leftField.id}</p>
+                {properties.leftField ? (
+                  <div className="p-2 border rounded bg-gray-50">
+                    <div className="text-xs text-gray-500 mb-1">Type: {properties.leftField.type}</div>
+                    <input
+                      type="text"
+                      className="w-full p-2 border rounded"
+                      value={formValues[properties.leftField.id] || ''}
+                      onChange={e =>
+                        handleChange(properties.leftField.id, e.target.value)
+                      }
+                      placeholder={properties.leftField.label || 'Left Field'}
+                      disabled={properties.leftField.isDisabled}
+                    />
+                  </div>
+                ) : (
+                <div></div>
                 )}
               </div>
+              {/* Right Field */}
               <div>
-                {properties.rightField && (
-                  <p className="text-gray-600">Right Section: {properties.rightField.id}</p>
+                {properties.rightField ? (
+                  <div className="p-2 border rounded bg-gray-50">
+                    <div className="text-xs text-gray-500 mb-1">Type: </div>
+                    <input
+                      type={properties.rightField.type}
+                      className="w-full p-2 border rounded"
+                      value={formValues[properties.rightField.id] || ''}
+                      onChange={e =>
+                        handleChange(properties.rightField.id, e.target.value)
+                      }
+                      placeholder={properties.rightField.label || 'Right Field'}
+                      disabled={properties.rightField.isDisabled}
+                    />
+                  </div>
+                ) : (
+                <div></div>
                 )}
               </div>
+
             </div>
             {renderHelpText()}
             {renderError()}
@@ -1385,11 +1451,10 @@ function PublicFormViewer() {
               type="button"
               onClick={handlePreviousPage}
               disabled={currentPage === 0}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                currentPage === 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              className={`py-2 px-4 rounded-md font-medium transition ${currentPage === 0
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               aria-label="Previous Page"
             >
               Previous
@@ -1401,11 +1466,10 @@ function PublicFormViewer() {
               type="button"
               onClick={handleNextPage}
               disabled={currentPage === pages.length - 1}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                currentPage === pages.length - 1
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              className={`py-2 px-4 rounded-md font-medium transition ${currentPage === pages.length - 1
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               aria-label="Next Page"
             >
               Next
@@ -1423,9 +1487,8 @@ function PublicFormViewer() {
             <button
               type="submit"
               disabled={isSubmitting || !accessToken}
-              className={`w-full py-2 px-4 bg-blue-600 text-white rounded-md font-medium transition ${
-                isSubmitting || !accessToken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
-              }`}
+              className={`w-full py-2 px-4 bg-blue-600 text-white rounded-md font-medium transition ${isSubmitting || !accessToken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
+                }`}
               aria-label="Submit Form"
             >
               {isSubmitting ? (

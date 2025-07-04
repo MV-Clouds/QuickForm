@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Maximize2, Minimize2, ChevronDown, ChevronUp } from 'lucide-react'
 import ReactMarkdown from 'react-markdown';
 import BotButton from './bot-button'
-import { useChatBot } from '../FormCreation/ChatBotContext';
+import { useChatBot } from '../form-builder-with-versions/ChatBotContext';
 
 export default function ConvoBotPopup() {
     const { latestFieldsState, sendActivityToBot } = useChatBot();

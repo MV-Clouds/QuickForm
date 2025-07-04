@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { FaTimes } from 'react-icons/fa';
 import FormField from './FormField';
+import { ReceiptEuro } from 'lucide-react';
 
 function FormBuilder({
   fields,
@@ -63,10 +64,10 @@ function FormBuilder({
   };
 
   const handleFieldClick = (fieldId, sectionSide = null) => {
-    setSelectedFieldId(fieldId);
-    setSelectedSectionSide(sectionSide);
-    setSelectedFooter(null);
-    setShowSidebar(false);
+      setSelectedFieldId(fieldId);
+      setSelectedSectionSide(sectionSide);
+      setSelectedFooter(null);
+      setShowSidebar(false);
   };
 
   const handleFooterClick = (pageIndex, buttonType) => {

@@ -145,25 +145,25 @@ function MainFormBuilder({ showThankYou }) {
     }
   };
 
-  const handlePublish = async () => {
+   const handlePublish = async () => {
     try {
       setIsLoadingForm(true);
       setHasChanges(false);
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
       const token = (await fetchAccessToken(userId, instanceUrl));
-      const linkData = {
-        userId,
-        formVersionId: selectedVersionId,
-      };
-      const encryptedLinkId = encrypt(JSON.stringify(linkData));
+      const rawString = `${userId}$${formId}`;
+      const encryptedLinkId = encrypt(rawString);
       const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';
       formVersion.Id = selectedVersionId;
       formVersion.Form__c = formId;
-      formVersion.Publish_Link__c = publishLink;
+      const formUpdate = {
+        Id: formId,
+        Publish_Link__c: publishLink,
+      };
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -174,6 +174,7 @@ function MainFormBuilder({ showThankYou }) {
           userId,
           instanceUrl,
           formData: { formVersion, formFields },
+          formUpdate,
         }),
       });
 
@@ -190,7 +191,6 @@ function MainFormBuilder({ showThankYou }) {
       setIsLoadingForm(false);
     }
   };
-
   const fetchFormData = async (userId, instanceUrl) => {
     try {
       setIsLoadingForm(true);
@@ -1005,13 +1005,13 @@ function MainFormBuilder({ showThankYou }) {
                 </div>
               </div>
               <div className="w-1/4 pl-2">
-                {showSidebar && !selectedFieldId && !selectedFooter ? (
+                {(showSidebar && !selectedFieldId && !selectedFooter) || (fields.find(f=>f.id===selectedFieldId)?.type === 'section')  ? (
                   <Sidebar
                     selectedTheme={selectedTheme}
                     onThemeSelect={setSelectedTheme}
                     themes={themes}
                   />
-                ) : (
+                ) :(
                   <div className="bg-white dark:bg-gray-800 rounded-lg">
                     {(selectedFieldId || selectedFooter) && (
                       <FieldEditor
