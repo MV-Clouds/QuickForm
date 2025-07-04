@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
 import FormName from './FormName';
-
+const LoadingSpinner = () => (
+  <div className="flex justify-center items-center">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+  </div>
+);
 const Home = () => {
   const { 
     metadata, 
@@ -11,8 +15,8 @@ const Home = () => {
     error: contextError,
     fetchSalesforceData 
   } = useSalesforceData();
-
-  const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isFormActionLoading, setIsFormActionLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hoveredOption, setHoveredOption] = useState(null);
   const [forms, setForms] = useState([]);
@@ -113,31 +117,33 @@ const Home = () => {
 
       const token = await fetchAccessToken(userId, instanceUrl);
       if (token) {
-        setIsLoading(true);
         try {
           await Promise.all([
             fetchSalesforceData(userId, instanceUrl),
             warmFetchFieldsForObject(userId, instanceUrl, token),
           ]);
         } finally {
-          setIsLoading(false);
+          setIsInitializing(false);
         }
+      }
+      else{
+        setIsInitializing(false);
       }
     } else {
       console.error('Missing userId or instanceUrl. Please log in.');
+      setIsInitializing(false);
     }
   };
 
   useEffect(() => {
     initializePage();
-  }, [formRecords]);
+  }, []);
 
   const handleCreateForm = () => {
     setIsModalOpen(true);
   };
 
   const handleOptionSelect = (option) => {
-    setIsLoading(true);
     setIsModalOpen(false);
 
     const params = new URLSearchParams(window.location.search);
@@ -152,15 +158,14 @@ const Home = () => {
     if (option === 'salesforce') {
       navigate('/wizard');
     } else if (option === 'scratch') {
-      setIsLoading(false);
       setIsFormNameOpen(true);
     } else if (option === 'templates') {
-      setIsLoading(false);
       navigate('/template');
     }
   };
 
   const handleEditForm = async (form) => {
+    setIsFormActionLoading(true);
     const draftVersion = form.FormVersions.find(
       (version) => version.Stage__c === 'Draft'
     );
@@ -228,6 +233,8 @@ const Home = () => {
     } catch (error) {
       console.error('Error creating new version:', error);
       setFetchError('Failed to create new version');
+    } finally {
+      setIsFormActionLoading(false);
     }
   };
 
@@ -251,7 +258,7 @@ const Home = () => {
   };
 
   // Combine loading states
-  const isDataLoading = isLoading || contextLoading;
+  const isDataLoading = isInitializing || contextLoading;
   const error = contextError;
 
   return (
@@ -314,7 +321,12 @@ const Home = () => {
               {formRecords.length} {formRecords.length === 1 ? 'form' : 'forms'} found
             </p>
           </div>
-          {error ? (
+          {isInitializing  ? (
+            <div className="px-4 py-12 text-center">
+              <LoadingSpinner />
+              <p className="mt-2 text-sm text-gray-500">Loading your forms...</p>
+            </div>
+          ) : error ? (
             <div className="px-4 py-12 text-center text-red-500">
               Error loading forms: {error}
             </div>
@@ -391,13 +403,21 @@ const Home = () => {
                           ? `V${form.FormVersions.find((v) => v.Stage__c === 'Publish').Version__c}`
                           : 'None'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleEditForm(form)}
-                          className="text-blue-600 hover:text-blue-900 mr-4"
-                        >
-                          Edit
-                        </button>
+                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {isFormActionLoading  ? (
+                          <div className="inline-flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                            Loading...
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleEditForm(form)}
+                            className="text-blue-600 hover:text-blue-900 mr-4"
+                            disabled={isFormActionLoading }
+                          >
+                            Edit
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

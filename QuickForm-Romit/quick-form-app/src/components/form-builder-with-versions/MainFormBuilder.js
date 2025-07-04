@@ -172,6 +172,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
         },
         body: JSON.stringify({
           userId,
+          instanceUrl,
           formData: { formVersion, formFields },
         }),
       });
