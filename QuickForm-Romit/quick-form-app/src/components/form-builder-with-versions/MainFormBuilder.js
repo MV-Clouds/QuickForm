@@ -155,7 +155,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
       const token = (await fetchAccessToken(userId, instanceUrl));
-      const rawString = `${userId}$${selectedVersionId}`;
+      const rawString = `${userId}$${formId}`;
       const encryptedLinkId = encrypt(rawString);
       const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
 
@@ -163,7 +163,10 @@ function MainFormBuilder({showMapping , showThankYou }) {
       formVersion.Stage__c = 'Publish';
       formVersion.Id = selectedVersionId;
       formVersion.Form__c = formId;
-      formVersion.Publish_Link__c = publishLink;
+      const formUpdate = {
+        Id: formId,
+        Publish_Link__c: publishLink,
+      };
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -174,6 +177,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
           userId,
           instanceUrl,
           formData: { formVersion, formFields },
+          formUpdate,
         }),
       });
 

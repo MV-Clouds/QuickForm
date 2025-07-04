@@ -42,11 +42,11 @@ function PublicFormViewer() {
           throw new Error(e.message || 'Invalid link format');
         }
 
-        const [ userId, formVersionId ] = decrypted.split('$');
-        if (!userId || !formVersionId) {
+        const [ userId, formId ] = decrypted.split('$');
+        if (!userId || !formId) {
           throw new Error('Invalid link data');
         }
-        setLinkData({ userId, formVersionId });
+        setLinkData({ userId, formId });
 
         const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
           method: 'POST',
@@ -73,7 +73,7 @@ function PublicFormViewer() {
           },
           body: JSON.stringify({
             userId,
-            formVersionId,
+            formId,
             accessToken: token,
           }),
         });
@@ -82,8 +82,8 @@ function PublicFormViewer() {
         if (!response.ok) {
           throw new Error(data.error || 'Failed to fetch form');
         }
-
-        setFormData(data.formVersion);
+        const formVersion = data.formVersion;
+        setFormData(formVersion);
         const initialValues = {};
         const initialSignatures = {};
         const initialFilePreviews = {};
@@ -91,7 +91,7 @@ function PublicFormViewer() {
         const initialSelectedOptions = {};
         const initialToggles = {};
 
-        data.formVersion.Fields.forEach((field) => {
+        formVersion.Fields.forEach((field) => {
           const properties = JSON.parse(field.Properties__c || '{}');
           const fieldType = field.Field_Type__c;
 
@@ -123,7 +123,7 @@ function PublicFormViewer() {
 
         // Split fields into pages based on Page_Number__c and sort by Order_Number__c
         const pageMap = {};
-        data.formVersion.Fields.forEach((field) => {
+        formVersion.Fields.forEach((field) => {
           const pageNum = field.Page_Number__c || 1;
           if (!pageMap[pageNum]) {
             pageMap[pageNum] = [];
@@ -136,7 +136,7 @@ function PublicFormViewer() {
           .map((pageNum) => {
             return pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0));
           });
-        setPages(sortedPages.length > 0 ? sortedPages : [data.formVersion.Fields]);
+        setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
       } catch (error) {
         console.error('Error fetching form:', error);
         setFetchError(error.message || 'Failed to load form');

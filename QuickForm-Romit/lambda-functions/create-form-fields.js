@@ -7,7 +7,7 @@ export const handler = async (event) => {
   try {
     // Extract data from the Lambda event
     const body = JSON.parse(event.body || '{}');
-    const { userId, instanceUrl, formData } = body;
+    const { userId, instanceUrl, formData, formUpdate  } = body;
     const token = event.headers.Authorization?.split(' ')[1]; // Extract Bearer token
 
     // Validate required parameters
@@ -239,6 +239,7 @@ export const handler = async (event) => {
           },
           body: JSON.stringify({
             Active_Version__c: `V${formVersion.Version__c}`,
+            Publish_Link__c: formUpdate?.Publish_Link__c || '',
           }),
         });
       
@@ -443,7 +444,6 @@ export const handler = async (event) => {
       Name: formData.formVersion.Name,
       Description__c: formData.formVersion.Description__c || '',
       Version__c: formData.formVersion.Version__c || '1',
-      Publish_Link__c: formData.formVersion.Publish_Link__c || '',
       Stage__c: formData.formVersion.Stage__c || 'Draft',
       Submission_Count__c: formData.formVersion.Submission_Count__c || 0,
       Object_Info__c: formData.formVersion.Object_Info__c || [],
@@ -465,6 +465,7 @@ export const handler = async (event) => {
       updatedFormRecords[formIndex] = {
         ...updatedFormRecords[formIndex],
         Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
+        Publish_Link__c: formUpdate?.Publish_Link__c || '',
         FormVersions: [newFormVersionRecord, ...otherVersions],
       };
     } else {
