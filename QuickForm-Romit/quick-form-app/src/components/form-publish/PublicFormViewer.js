@@ -318,6 +318,8 @@ function PublicFormViewer() {
             }
           }
           break;
+          default:
+            break;
       }
     });
 
@@ -1214,7 +1216,12 @@ function PublicFormViewer() {
       case 'displaytext':
         return (
           <div className="mb-4">
-            <p className="text-gray-700">{properties.placeholder?.main || properties.label || 'Display Text'}</p>
+            <div
+              className="text-gray-700"
+              dangerouslySetInnerHTML={{
+                __html: properties?.value || 'Display Text'
+              }}
+            />
           </div>
         );
 
@@ -1377,13 +1384,41 @@ function PublicFormViewer() {
             <h3 className="text-lg font-semibold mb-2">{fieldLabel}</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                {properties.leftField && (
-                  <p className="text-gray-600">Left Section: {properties.leftField.id}</p>
+                {properties.leftField ? (
+                  <div className="p-2 border rounded bg-gray-50">
+                    <div className="text-xs text-gray-500 mb-1">Type: {properties.leftField.type}</div>
+                    <input
+                      type="text"
+                      className="w-full p-2 border rounded"
+                      value={formValues[properties.leftField.id] || ''}
+                      onChange={e =>
+                        handleChange(properties.leftField.id, e.target.value)
+                      }
+                      placeholder={properties.leftField.label || 'Left Field'}
+                      disabled={properties.leftField.isDisabled}
+                    />
+                  </div>
+                ) : (
+                <div></div>
                 )}
               </div>
               <div>
-                {properties.rightField && (
-                  <p className="text-gray-600">Right Section: {properties.rightField.id}</p>
+                {properties.rightField ? (
+                  <div className="p-2 border rounded bg-gray-50">
+                    <div className="text-xs text-gray-500 mb-1">Type: </div>
+                    <input
+                      type={properties.rightField.type}
+                      className="w-full p-2 border rounded"
+                      value={formValues[properties.rightField.id] || ''}
+                      onChange={e =>
+                        handleChange(properties.rightField.id, e.target.value)
+                      }
+                      placeholder={properties.rightField.label || 'Right Field'}
+                      disabled={properties.rightField.isDisabled}
+                    />
+                  </div>
+                ) : (
+                <div></div>
                 )}
               </div>
             </div>

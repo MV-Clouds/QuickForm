@@ -63,7 +63,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [helpText, setHelpText] = useState(selectedField?.helpText || '');
 
   // State for header and footer properties
-  const [headerText, setHeaderText] = useState(selectedField?.heading || 'Form');
+  const [headerText, setHeaderText] = useState('Form');
   const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
   const [footerText, setFooterText] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.text || selectedFooter.buttonType.charAt(0).toUpperCase() + selectedFooter.buttonType.slice(1)) : '');
   const [footerBgColor, setFooterBgColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.bgColor || (selectedFooter.buttonType === 'previous' ? 'bg-gray-600' : 'bg-blue-600')) : '');
@@ -138,6 +138,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [isHidden, setIsHidden] = useState(selectedField?.isHidden || false);
   const [uniqueName, setUniqueName] = useState(selectedField?.uniqueName || '');
   const [uniqueNameError, setUniqueNameError] = useState('');
+  const [headingText, setHeadingText] = useState(selectedField?.heading || 'Form Head');
+  const [headingAlignment, setHeadingAlignment] = useState(selectedField?.alignment || 'center');
 
   useEffect(() => {
     if (selectedField) {
@@ -555,7 +557,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setHeaderText(e.target.value);
     onUpdateField(selectedField.id, { heading: e.target.value });
   };
-
+  //handle for form heading
+  const handleHeadingTextChange = (e) => {
+    setHeadingText(e.target.value);
+    onUpdateField(selectedField.id, { heading: e.target.value });
+  };
+  const handleHeadingAlignmentChange = (e) => {
+    setHeadingAlignment(e.target.value);
+    onUpdateField(selectedField.id, { alignment: e.target.value });
+  };
   const handleHeaderAlignmentChange = (e) => {
     setHeaderAlignment(e.target.value);
     onUpdateField(selectedField.id, { alignment: e.target.value });
@@ -819,7 +829,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isRating = selectedField?.type === 'rating';
   const isAddress = selectedField?.type === 'address';
   const isFullname = selectedField?.type === 'fullname';
-  const isHeader = selectedField?.type === 'header';
+  const isHeader = selectedField?.type === 'header'; // for Main Form Header
   const isEmail = selectedField?.type === 'email';
   const isFileUpload = selectedField?.type === 'fileupload';
   const isTerms = selectedField?.type === 'terms';
@@ -831,7 +841,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isNumber = selectedField?.type === 'number';
   const isPhone = selectedField?.type === 'phone';
   const isPrice = selectedField?.type === 'price';
-  const selectedCountryCode = selectedField.selectedCountryCode || 'US';
+  const isHeading = selectedField?.type === 'heading'; // For Headings in form
+  const selectedCountryCode = selectedField?.selectedCountryCode || 'US';
   // Get dynamic country list
   const countries = getCountryList();
 
@@ -911,7 +922,31 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </select>
                     </div>
                   </>
-                ) : (
+                ) : isHeading ?  
+                <>
+                 <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
+                      <input
+                        type="text"
+                        value={headingText}
+                        onChange={handleHeadingTextChange}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="Enter header text"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Alignment</label>
+                      <select
+                        value={headingAlignment}
+                        onChange={handleHeadingAlignmentChange}
+                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+                </> : (
                   <>
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
@@ -1112,6 +1147,38 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       >
                         + Add Item
                       </button>
+                    </div>
+                  )}
+                  {selectedField?.type === 'imageuploader' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={selectedField.imageWidth || ''}
+                        onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="e.g. 200"
+                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={selectedField.imageHeight || ''}
+                        onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="e.g. 100"
+                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
+                      <select
+                        value={selectedField.imageAlign || 'center'}
+                        onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
+                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
                     </div>
                   )}
                   {isOptionsSupported && selectedField.type === 'dropdown' && (
@@ -1938,7 +2005,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           <div>
                             <label className="text-xs text-gray-500">Default Country Code</label>
                             <select
-                              value={selectedCountryCode}
+                              value={selectedCountryCode || 'US'}
                               onChange={(e) => {
                                 const value = e.target.value;
                                 onUpdateField(selectedField.id, { selectedCountryCode: value });
