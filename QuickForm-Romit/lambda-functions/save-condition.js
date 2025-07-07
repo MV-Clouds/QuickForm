@@ -5,8 +5,9 @@ const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   try {
+    console.log('Function 2');
     const body = JSON.parse(event.body || '{}');
-    const { userId, instanceUrl, condition, formVersionId } = body;
+    const { userId, instanceUrl, condition, formVersionId, conditionId } = body;
     const token = event.headers.Authorization?.split(' ')[1];
 
     if (!userId || !instanceUrl || !condition || !token || !formVersionId) {
@@ -42,7 +43,7 @@ export const handler = async (event) => {
 
     const conditionData = JSON.parse(condition.Condition_Data__c);
     const newCondition = {
-      Id: `local_${Date.now()}`,
+      Id: conditionId || `local_${Date.now()}`,
       type: conditionData.type,
       ifField: conditionData.ifField,
       operator: conditionData.operator || 'equals',
@@ -57,21 +58,33 @@ export const handler = async (event) => {
             dependentField: conditionData.dependentField,
             dependentValues: conditionData.dependentValues,
           }
+        : conditionData.type === 'skip_hide_page'
+        ? {
+            thenAction: conditionData.thenAction,
+            sourcePage: conditionData.sourcePage,
+            targetPage: conditionData.targetPage,
+          }
         : {
             thenAction: conditionData.thenAction,
             thenFields: conditionData.thenFields,
             ...(conditionData.thenAction === 'set mask' ? { maskPattern: conditionData.maskPattern } : {}),
+            ...(conditionData.thenAction === 'unmask' ? { maskPattern: null } : {}),
           }),
     };
 
-    const updatedConditions = [...existingConditions, newCondition];
+    const updatedConditions = conditionId
+      ? existingConditions.map((c) => {
+          const existingConditionData = c.Condition_Data__c ? JSON.parse(c.Condition_Data__c || '{}') : c;
+          return c.Id === conditionId ? { ...c, Condition_Data__c: JSON.stringify(newCondition) } : c;
+        })
+      : [...existingConditions, { Id: newCondition.Id, Condition_Data__c: JSON.stringify(newCondition) }];
 
     const sfCondition = {
       Form_Version__c: formVersionId,
       Condition_Data__c: JSON.stringify(updatedConditions),
     };
 
-    let conditionId;
+    let salesforceConditionId;
     if (existingConditionId) {
       const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
         method: 'PATCH',
@@ -86,7 +99,7 @@ export const handler = async (event) => {
         const errorData = await response.json();
         throw new Error(errorData[0]?.message || 'Failed to update condition');
       }
-      conditionId = existingConditionId;
+      salesforceConditionId = existingConditionId;
     } else {
       const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c`, {
         method: 'POST',
@@ -102,10 +115,12 @@ export const handler = async (event) => {
         throw new Error(errorData[0]?.message || 'Failed to save condition');
       }
       const conditionData = await response.json();
-      conditionId = conditionData.id;
+      salesforceConditionId = conditionData.id;
     }
 
-    newCondition.Id = conditionId + '_' + newCondition.Id;
+    if (!conditionId) {
+      newCondition.Id = `${salesforceConditionId}_${newCondition.Id}`; // Only append Salesforce ID for new conditions
+    }
 
     const existingMetadataRes = await dynamoClient.send(
       new GetItemCommand({

@@ -235,7 +235,7 @@ export const handler = async (event) => {
             Properties__c: field.Properties__c,
             Unique_Key__c: field.Unique_Key__c,
           })),
-          Conditions: (version.Form_Conditions__r?.records || []).map(condition => ({
+          Conditions: (version.Form_Condition__r?.records || []).map(condition => ({
             Id: condition.Id,
             Condition_Type__c: condition.Condition_Type__c,
             Condition_Data__c: condition.Condition_Data__c,
