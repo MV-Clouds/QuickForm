@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Tabs, Select, Button, Input } from 'antd';
+import { Tabs, Select, Button, Input, Modal } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import MainMenuBar from '../form-builder-with-versions/MainMenuBar'; // Replaced Sidebar with MainMenuBar
-import { FaPlus, FaSave, FaTrash, FaEdit } from 'react-icons/fa';
+import { FaPlus, FaSave, FaTrash, FaEdit, FaEye } from 'react-icons/fa';
+import ReactFlow, {
+  ReactFlowProvider,
+  Controls,
+  Background,
+  applyNodeChanges,
+  applyEdgeChanges,
+} from 'react-flow-renderer';
 
 const { TabPane } = Tabs;
 const { Option } = Select;
@@ -28,8 +35,15 @@ const Conditions = () => {
     dependentField: '',
     dependentValues: [],
     maskPattern: '',
+    sourcePage: '',
+    targetPage: '',
   });
   const [editingConditionId, setEditingConditionId] = useState(null);
+  const [pages, setPages] = useState([]);
+  const [nodes, setNodes] = useState([]);
+  const [edges, setEdges] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   // Animation variants for Framer Motion
   const containerVariants = {
@@ -104,6 +118,88 @@ const Conditions = () => {
         setConditions(parsedConditions);
         console.log('Parsed Conditions:', parsedConditions);
         
+        const uniquePageNumbers = [...new Set(formVersion.Fields.map((field) => field.Page_Number__c))].sort((a, b) => a - b);
+        console.log('Unique Page Numbers:', uniquePageNumbers);
+        const derivedPages = uniquePageNumbers.map((pageNum, index) => ({
+          Id: `page_${pageNum}`,
+          Name: `Page ${pageNum}`,
+          Fields: formVersion.Fields.filter((f) => f.Page_Number__c === pageNum).map((f) => f.Unique_Key__c),
+        }));
+        console.log('Dervied Pages:', derivedPages);
+        
+        setPages(derivedPages);
+
+        // Initialize nodes for pages
+        const columns = Math.ceil(Math.sqrt(derivedPages.length));
+        const rows = Math.ceil(derivedPages.length / columns);
+        const pageNodes = derivedPages.map((page, index) => {
+          const row = Math.floor(index / columns);
+          const col = index % columns;
+          const offsetX = (Math.random() - 0.5) * 50;
+          const offsetY = (Math.random() - 0.5) * 50;
+          return {
+            id: page.Id,
+            type: 'default',
+            data: { label: page.Name },
+            position: { x: col * 350 + 150 + offsetX, y: row * 250 + 100 + offsetY },
+          };
+        });
+        setNodes(pageNodes);
+
+        // Initialize edges with variable positioning
+        const pageEdges = parsedConditions
+          .filter((c) => c.type === 'skip_hide_page')
+          .map((condition, idx) => {
+            const sourceNode = pageNodes.find((n) => n.id === condition.sourcePage);
+            const targetNode = pageNodes.find((n) => n.id === condition.targetPage);
+            if (!sourceNode || !targetNode) return null;
+
+            // Group edges by source-target pair to calculate offsets
+            const sameEdges = parsedConditions
+              .filter((c) => c.type === 'skip_hide_page' && c.sourcePage === condition.sourcePage && c.targetPage === condition.targetPage);
+            const edgeIndex = sameEdges.findIndex((c) => c.Id === condition.Id);
+            const offset = edgeIndex * 50 - ((sameEdges.length - 1) * 50) / 2; // Spread edges vertically
+
+            return {
+              id: condition.Id,
+              source: condition.sourcePage,
+              target: condition.targetPage,
+              label: `${condition.thenAction} ${derivedPages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}`,
+              type: 'smoothstep',
+              animated: true,
+              style: {
+                stroke: condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f',
+                strokeWidth: 2,
+                zIndex: 10 + idx,
+              },
+              markerEnd: { type: 'arrowclosed' },
+              sourceX: sourceNode.position.x + (offset || 0),
+              sourceY: sourceNode.position.y + 50 + (offset || 0), // Offset from node center
+              targetX: targetNode.position.x + (offset || 0),
+              targetY: targetNode.position.y - 50 + (offset || 0), // Offset from node center
+            };
+          })
+          .filter(Boolean); // Remove null entries
+
+        const defaultEdges = derivedPages.slice(0, -1).map((page, index) => {
+          const sourceNode = pageNodes.find((n) => n.id === page.Id);
+          const targetNode = pageNodes.find((n) => n.id === derivedPages[index + 1].Id);
+          return {
+            id: `default_${page.Id}_to_${derivedPages[index + 1].Id}`,
+            source: page.Id,
+            target: derivedPages[index + 1].Id,
+            label: 'Next',
+            type: 'smoothstep',
+            animated: false,
+            style: { stroke: '#999', strokeWidth: 2, strokeDasharray: '5,5', zIndex: 5 },
+            markerEnd: { type: 'arrowclosed' },
+            sourceX: sourceNode.position.x,
+            sourceY: sourceNode.position.y + 50,
+            targetX: targetNode.position.x,
+            targetY: targetNode.position.y - 50,
+          };
+        });
+        setEdges([...pageEdges, ...defaultEdges]);
         
 
       } catch (err) {
@@ -157,24 +253,39 @@ const Conditions = () => {
                 conditionData.dependentField === newCondition.dependentField &&
                 JSON.stringify(conditionData.dependentValues) !== JSON.stringify(newCondition.dependentValues)) {
         return `Contradictory condition found: Cannot set different dependent values for the same controlling field and value.`;
+      } else if (newCondition.type === 'skip_hide_page' && isSameIf) {
+        if (conditionData.thenAction === newCondition.thenAction && conditionData.targetPage === newCondition.targetPage) {
+          return `Contradictory condition found: Cannot ${newCondition.thenAction} the same page with the same condition.`;
+        }
+        if (newCondition.thenAction === 'hide' && (newCondition.targetPage === pages[0]?.Id || newCondition.targetPage === pages[pages.length - 1]?.Id)) {
+          return 'Cannot hide the first or last page.';
+        }
       }
     }
     return null;
   };
 
   const editCondition = (condition) => {
+    console.log('Editing condition:', condition);
+    
     setNewCondition({
       type: condition.type,
       ifField: condition.ifField || '',
       operator: condition.operator || '',
       value: condition.value || '',
-      thenAction: condition.thenAction || (condition.type === 'enable_require_mask' ? 'require' : 'show'),
-      thenFields: Array.isArray(condition.thenFields) ? condition.thenFields : [condition.thenFields].filter(Boolean),
+      thenAction: condition.thenAction || (condition.type === 'enable_require_mask' ? 'require' : condition.type === 'skip_hide_page' ? 'skip to' : 'show'),
+      thenFields: condition.type !== 'dependent' && condition.type !== 'skip_hide_page' ? (Array.isArray(condition.thenFields) ? condition.thenFields : [condition.thenFields].filter(Boolean)) : [],
       dependentField: condition.dependentField || '',
       dependentValues: condition.dependentValues || [],
       maskPattern: condition.maskPattern || '',
+      sourcePage: condition.sourcePage || '',
+      targetPage: condition.targetPage || '',
     });
     setEditingConditionId(condition.Id);
+    if (condition.type === 'skip_hide_page') {
+      setSelectedNode(condition.sourcePage);
+      setIsModalVisible(true);
+    }
   };
 
   const saveCondition = async (conditionId = null) => {
@@ -228,7 +339,32 @@ const Conditions = () => {
             dependentValues: newCondition.dependentValues,
           }),
         };
-      } else {
+      } else if (newCondition.type === 'skip_hide_page') {
+          console.log('Processing skip/hide page condition:', newCondition);
+          if (!newCondition.ifField || !newCondition.operator || !newCondition.targetPage || !newCondition.sourcePage) {
+            throw new Error('Missing required fields for skip/hide page condition');
+          }
+          const derivedPages = [...new Set(fields.map((field) => field.Page_Number__c))].sort((a, b) => a - b).map((pageNum) => ({
+            Id: `page_${pageNum}`,
+            Name: `Page ${pageNum}`,
+          }));
+          if (newCondition.thenAction === 'hide' && (newCondition.targetPage === derivedPages[0]?.Id || newCondition.targetPage === derivedPages[derivedPages.length - 1]?.Id)) {
+            throw new Error('Cannot hide the first or last page');
+          }
+          conditionData = {
+            Form_Version__c: formVersionId,
+            Condition_Data__c: JSON.stringify({
+              Id: editingConditionId || `local_${Date.now()}`,
+              type: 'skip_hide_page',
+              ifField: newCondition.ifField,
+              operator: newCondition.operator,
+              value: newCondition.operator === 'is null' || newCondition.operator === 'is not null' ? null : newCondition.value,
+              thenAction: newCondition.thenAction,
+              sourcePage: newCondition.sourcePage,
+              targetPage: newCondition.targetPage,
+            }),
+          };
+        } else {
         // enable_require_mask
         if (!newCondition.ifField || !newCondition.operator || !newCondition.thenFields.length) {
           throw new Error('Missing required fields for enable/require/mask condition');
@@ -319,6 +455,7 @@ const Conditions = () => {
 
       if (!response.ok) throw new Error('Failed to delete condition');
       setConditions(conditions.filter((c) => c.Id !== conditionId));
+      setEdges(edges.filter((e) => e.id !== conditionId));
     } catch (err) {
       setError(err.message);
     }
@@ -400,6 +537,29 @@ const Conditions = () => {
     const updatedValues = newCondition.dependentValues.filter((_, i) => i !== index);
     setNewCondition({ ...newCondition, dependentValues: updatedValues });
   };
+  const onNodeClick = (event, node) => {
+    setSelectedNode(node.id);
+    setNewCondition((prev) => ({
+      ...prev,
+      sourcePage: node.id,
+      targetPage: '',
+      ifField: '',
+      operator: '',
+      value: '',
+      thenAction: 'skip to',
+    }));
+    setEditingConditionId(null);
+    setIsModalVisible(true);
+  };
+
+  const onNodesChange = (changes) => setNodes((nds) => applyNodeChanges(changes, nds));
+  const onEdgesChange = (changes) => setEdges((eds) => applyEdgeChanges(changes, eds));
+  const onEdgeClick = (event, edge) => {
+    const condition = conditions.find((c) => c.Id === edge.id);
+    if (condition) {
+      editCondition(condition);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -450,11 +610,12 @@ const Conditions = () => {
                   ifField: '',
                   operator: '',
                   value: '',
-                  thenAction: key === 'enable_require_mask' ? 'require' : 'show',
-                  thenFields: [],
+                  thenAction: key === 'enable_require_mask' ? 'require' : key === 'skip_hide_page' ? 'skip to' : 'show',                  thenFields: [],
                   dependentField: '',
                   dependentValues: [],
                   maskPattern: '',
+                  sourcePage: '',
+                  targetPage: '',
                 }));
               }}
             >
@@ -1029,6 +1190,317 @@ const Conditions = () => {
                         </motion.div>
                       ))}
                   </AnimatePresence>
+                </motion.div>
+              </TabPane>
+              <TabPane tab="Skip To / Hide Page" key="skip_hide_page">
+                <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
+                  <h2 className="text-xl font-semibold mb-3">Page Navigation Flow</h2>
+                  <div style={{ position: 'relative', height: '500px', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+                    {/* Legend in upper-right corner */}
+                    <div style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', padding: '5px', borderRadius: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                      <p style={{ margin: 0, fontSize: '12px' }}><span style={{ color: '#1a73e8', marginRight: '5px' }}>---</span> Skip To</p>
+                      <p style={{ margin: 0, fontSize: '12px' }}><span style={{ color: '#ff4d4f', marginRight: '5px' }}>---</span> Hide</p>
+                    </div>
+                    <ReactFlowProvider>
+                      <ReactFlow
+                        nodes={nodes}
+                        edges={edges.map((edge) => ({
+                          ...edge,
+                          type: 'customBezier', // Use custom edge type with eye button
+                        }))}
+                        edgeTypes={{
+                          customBezier: ({ id, source, target, sourceX, sourceY, targetX, targetY, data, ...rest }) => {
+                            const isConditionEdge = !id.startsWith('default_');
+                            const offset = edges.filter((e) => e.source === source && e.target === target).findIndex((e) => e.id === id) * 20 - 
+                                          ((edges.filter((e) => e.source === source && e.target === target).length - 1) * 20) / 2;
+                            const midX = (sourceX || nodes.find((n) => n.id === source).position.x) + ((targetX || nodes.find((n) => n.id === target).position.x) - (sourceX || nodes.find((n) => n.id === source).position.x)) / 2 + offset;
+                            const midY = (sourceY || nodes.find((n) => n.id === source).position.y + 50) + ((targetY || nodes.find((n) => n.id === target).position.y - 50) - (sourceY || nodes.find((n) => n.id === source).position.y + 50)) / 2 + offset;
+                            const path = `M ${sourceX || nodes.find((n) => n.id === source).position.x} ${sourceY || nodes.find((n) => n.id === source).position.y + 50} 
+                                          C ${(sourceX || nodes.find((n) => n.id === source).position.x) + 100 + offset} ${(sourceY || nodes.find((n) => n.id === source).position.y + 50) + offset},
+                                            ${(targetX || nodes.find((n) => n.id === target).position.x) - 100 + offset} ${(targetY || nodes.find((n) => n.id === target).position.y - 50) + offset},
+                                            ${targetX || nodes.find((n) => n.id === target).position.x} ${targetY || nodes.find((n) => n.id === target).position.y - 50}`;
+                            return (
+                              <>
+                                <path
+                                  id={id}
+                                  className="react-flow__edge-path"
+                                  d={path}
+                                  style={rest.style}
+                                  markerEnd={rest.markerEnd}
+                                />
+                                {/* Eye button in the middle of the edge */}
+                                {isConditionEdge && (
+                                  <foreignObject
+                                    x={midX - 15}
+                                    y={midY - 15}
+                                    width="30"
+                                    height="30"
+                                    style={{ overflow: 'visible' }}
+                                  >
+                                    <Button
+                                      icon={<FaEye />}
+                                      size="small"
+                                      style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+                                      onClick={() => {
+                                        const condition = conditions.find((c) => c.Id === id);
+                                        if (condition) editCondition(condition);
+                                      }}
+                                    />
+                                  </foreignObject>
+                                )}
+                              </>
+                            );
+                          },
+                        }}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onNodeClick={onNodeClick}
+                        onEdgeClick={(event, edge) => {}} // Disable full edge click
+                        fitView
+                        nodesDraggable={false}
+                      >
+                        <Background color="#aaa" gap={16} />
+                      </ReactFlow>
+                    </ReactFlowProvider>
+                  </div>
+                  <Modal
+                    title={`${editingConditionId ? 'Edit' : 'Add'} Condition for ${pages.find((p) => p.Id === selectedNode)?.Name || 'Page'}`}
+                    visible={isModalVisible}
+                    onCancel={() => {
+                      setIsModalVisible(false);
+                      setNewCondition((prev) => ({
+                        ...prev,
+                        ifField: '',
+                        operator: '',
+                        value: '',
+                        thenAction: 'skip to',
+                        targetPage: '',
+                        sourcePage: selectedNode,
+                      }));
+                      setEditingConditionId(null);
+                      setSelectedNode(null);
+                    }}
+                    footer={null}
+                    width={600}
+                  >
+                    {editingConditionId && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="mb-4 p-3 bg-gray-100 rounded"
+                      >
+                        <h4 className="text-md font-semibold">Current Condition:</h4>
+                        <p>
+                          <strong>If:</strong>{' '}
+                          {fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Name || 'Unknown'}{' '}
+                          {newCondition.operator} {newCondition.value || 'N/A'}
+                        </p>
+                        <p>
+                          <strong>Then:</strong> {newCondition.thenAction}{' '}
+                          {pages.find((p) => p.Id === newCondition.targetPage)?.Name || 'Unknown'}
+                        </p>
+                      </motion.div>
+                    )}
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700">If Field</label>
+                      <Select
+                        value={newCondition.ifField}
+                        onChange={(value) => setNewCondition({ ...newCondition, ifField: value, operator: '', value: '' })}
+                        placeholder="Select field"
+                        style={{ width: '100%' }}
+                      >
+                        {validIfFields
+                          .filter((f) => {
+                            const page = pages.find((p) => p.Id === selectedNode);
+                            const pageNum = page ? parseInt(page.Id.replace('page_', '')) : null;
+                            return pageNum && fields.find((field) => field.Unique_Key__c === f.Unique_Key__c)?.Page_Number__c === pageNum;
+                          })
+                          .map((field) => (
+                            <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                              {field.Name}
+                            </Option>
+                          ))}
+                      </Select>
+                    </div>
+                    {newCondition.ifField && (
+                      <>
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-gray-700">Operator</label>
+                          <Select
+                            value={newCondition.operator}
+                            onChange={(value) => setNewCondition({ ...newCondition, operator: value })}
+                            placeholder="Select operator"
+                            style={{ width: '100%' }}
+                          >
+                            {getOperators(fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c).map((op) => (
+                              <Option key={op} value={op}>
+                                {op}
+                              </Option>
+                            ))}
+                          </Select>
+                        </div>
+                        {newCondition.operator && !['is null', 'is not null'].includes(newCondition.operator) && (
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700">Value</label>
+                            {['checkbox', 'radio', 'dropdown'].includes(
+                              fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c
+                            ) ? (
+                              <Select
+                                value={newCondition.value}
+                                onChange={(value) => setNewCondition({ ...newCondition, value })}
+                                placeholder="Select value"
+                                style={{ width: '100%' }}
+                              >
+                                {getFieldOptions(newCondition.ifField).map((option) => (
+                                  <Option key={option} value={option}>
+                                    {option}
+                                  </Option>
+                                ))}
+                              </Select>
+                            ) : ['date', 'datetime', 'date-time', 'time'].includes(
+                                fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c
+                              ) ? (
+                              <Input
+                                type={
+                                  fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date'
+                                    ? 'date'
+                                    : fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time'
+                                    ? 'time'
+                                    : 'datetime-local'
+                                }
+                                value={newCondition.value}
+                                onChange={(e) => setNewCondition({ ...newCondition, value: e.target.value })}
+                                placeholder={
+                                  fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'date'
+                                    ? 'YYYY-MM-DD'
+                                    : fields.find((f) => f.Unique_Key__c === newCondition.ifField)?.Field_Type__c === 'time'
+                                    ? 'HH:MM'
+                                    : 'YYYY-MM-DD HH:MM'
+                                }
+                                style={{ width: '100%' }}
+                              />
+                            ) : (
+                              <Input
+                                value={newCondition.value}
+                                onChange={(e) => setNewCondition({ ...newCondition, value: e.target.value })}
+                                placeholder="Enter value"
+                              />
+                            )}
+                          </div>
+                        )}
+                        <div className="mb-3 flex items-center">
+                          <div style={{ width: '120px', marginRight: '8px' }}>
+                            <label className="block text-sm font-medium text-gray-700">Then</label>
+                            <Select
+                              value={newCondition.thenAction}
+                              onChange={(value) => setNewCondition({ ...newCondition, thenAction: value })}
+                              style={{ width: '100%' }}
+                            >
+                              <Option value="skip to">Skip To</Option>
+                              <Option value="hide">Hide</Option>
+                            </Select>
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label className="block text-sm font-medium text-gray-700">Page</label>
+                            <Select
+                              value={newCondition.targetPage}
+                              onChange={(value) => setNewCondition({ ...newCondition, targetPage: value })}
+                              placeholder="Select target page"
+                              style={{ width: '100%' }}
+                            >
+                              {pages
+                                .filter((p) => p.Id !== selectedNode)
+                                .filter((p) => !(newCondition.thenAction === 'hide' && (p.Id === pages[0]?.Id || p.Id === pages[pages.length - 1]?.Id)))
+                                .map((page) => (
+                                  <Option key={page.Id} value={page.Id}>
+                                    {page.Name}
+                                  </Option>
+                                ))}
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button
+                            type="primary"
+                            onClick={() => {
+                              saveCondition(editingConditionId).then(() => {
+                                setEdges((eds) => {
+                                  const condition = newCondition;
+                                  const newEdge = {
+                                    id: condition.Id || editingConditionId || `local_${Date.now()}`,
+                                    source: condition.sourcePage,
+                                    target: condition.targetPage,
+                                    label: `${condition.thenAction} ${pages.find((p) => p.Id === condition.targetPage)?.Name || 'Page'}`,
+                                    type: 'smoothstep',
+                                    animated: condition.thenAction === 'skip to',
+                                    style: { stroke: condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f', strokeWidth: 2, zIndex: 10 },
+                                    markerEnd: { type: 'arrowclosed' },
+                                  };
+                                  return editingConditionId
+                                    ? eds.map((e) => (e.id === editingConditionId ? newEdge : e))
+                                    : [...eds, newEdge];
+                                });
+                                setNewCondition({
+                                  type: 'skip_hide_page',
+                                  ifField: '',
+                                  operator: '',
+                                  value: '',
+                                  thenAction: 'skip to',
+                                  thenFields: [],
+                                  dependentField: '',
+                                  dependentValues: [],
+                                  maskPattern: '',
+                                  sourcePage: selectedNode,
+                                  targetPage: '',
+                                });
+                                setEditingConditionId(null);
+                                setSelectedNode(null);
+                                setIsModalVisible(false);
+                              });
+                            }}
+                            disabled={
+                              !newCondition.ifField ||
+                              !newCondition.operator ||
+                              !newCondition.targetPage ||
+                              !newCondition.sourcePage
+                            }
+                          >
+                            <FaSave style={{ marginRight: '4px' }} /> {editingConditionId ? 'Update Edge' : 'Add Edge'}
+                          </Button>
+                          {editingConditionId && (
+                            <Button
+                              type="danger"
+                              onClick={() => {
+                                deleteCondition(editingConditionId);
+                                setIsModalVisible(false);
+                              }}
+                            >
+                              <FaTrash style={{ marginRight: '4px' }} /> Delete
+                            </Button>
+                          )}
+                          <Button
+                            type="default"
+                            onClick={() => {
+                              setNewCondition((prev) => ({
+                                ...prev,
+                                ifField: '',
+                                operator: '',
+                                value: '',
+                                thenAction: 'skip to',
+                                targetPage: '',
+                                sourcePage: selectedNode,
+                              }));
+                              setEditingConditionId(null);
+                              setSelectedNode(null);
+                              setIsModalVisible(false);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </Modal>
                 </motion.div>
               </TabPane>
             </Tabs>
