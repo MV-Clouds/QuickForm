@@ -66,7 +66,9 @@ function FormBuilder({
     setSelectedFieldId(fieldId);
     setSelectedSectionSide(sectionSide);
     setSelectedFooter(null);
-    setShowSidebar(false);
+    const isSectionField = fields.find((field) => field.id === fieldId && field.type === 'section');
+   setShowSidebar(!isSectionField || sectionSide !== null);
+    // setShowSidebar(false);
   };
 
   const handleFooterClick = (pageIndex, buttonType) => {

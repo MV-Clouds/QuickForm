@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from 'react-router-dom';
 import { ReactFlowProvider } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
@@ -65,7 +65,6 @@ const MappingFields = () => {
   const [formFields, setFormFields] = useState([]);
   const [salesforceObjects, setSalesforceObjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true); // Start with loading true
-  const [fetchError, setFetchError] = useState(null);
   const [token, setToken] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -88,7 +87,7 @@ const MappingFields = () => {
       draggable: true,
     },
   ];
-  
+
   const initialEdges = [];
 
   const showToast = (message, type = 'error') => {
@@ -100,7 +99,7 @@ const MappingFields = () => {
 
   // Initialize Salesforce objects from metadata
   useEffect(() => {
-    if (metadata && metadata.length > 0) {      
+    if (metadata && metadata.length > 0) {
       const objects = metadata.map(obj => ({
         name: obj.name,
         label: obj.label,
@@ -117,15 +116,39 @@ const MappingFields = () => {
       const formVersion = formRecords
         .flatMap(form => form.FormVersions || [])
         .find(version => version.Id === formVersionId);
-      
+
       if (formVersion && formVersion.Fields) {
-        const normalizedFields = formVersion.Fields.map(field => ({
-          id: field.Id || field.id || `field_${field.Name || field.name}`,
-          name: field.Name || field.name || field.label || "Unknown",
-          type: field.Field_Type__c || field.type,
-          Properties__c: field.Properties__c || '{}', // Include Properties__c for picklist validation
-          Unique_Key__c: field.Unique_Key__c || field.id,
-        }));
+        const normalizedFields = formVersion.Fields.reduce((acc, field) => {
+          const properties = field.Properties__c ? JSON.parse(field.Properties__c) : {};
+          const baseField = {
+            id: field.Id || field.id || `field_${field.Name || field.name}`,
+            name: field.Name || field.name || field.label || "Unknown",
+            type: field.Field_Type__c || field.type,
+            Properties__c: field.Properties__c || '{}',
+            Unique_Key__c: field.Unique_Key__c || field.id,
+            parentFieldId: null, // No parent for top-level fields
+          };
+
+          // Add the parent field to the accumulator
+          acc.push(baseField);
+
+          // Check for subFields and add them as separate entries
+          if (properties.subFields && typeof properties.subFields === 'object') {
+            Object.entries(properties.subFields).forEach(([subFieldKey, subFieldData]) => {
+              const subField = {
+                id: subFieldData.id || `${baseField.id}_${subFieldKey}`,
+                name: subFieldData.label || subFieldKey,
+                type: subFieldData.type || baseField.type, // Inherit type if not specified
+                Properties__c: JSON.stringify(subFieldData),
+                Unique_Key__c: subFieldData.id || `${baseField.Unique_Key__c}_${subFieldKey}`,
+                parentFieldId: baseField.id, // Reference to parent field
+              };
+              acc.push(subField);
+            });
+          }
+
+          return acc;
+        }, []);
         setFormFields(normalizedFields);
       } else {
         console.warn('Form version not found or has no fields');
@@ -210,7 +233,7 @@ const MappingFields = () => {
         }
       }
 
-         for (const edge of outgoingEdges) {
+      for (const edge of outgoingEdges) {
         const conditionNodeId = edge.target;
         const conditionNode = nodes.find((n) => n.id === conditionNodeId);
         if (!conditionNode || conditionNode.data.action !== "Condition") {
@@ -557,8 +580,8 @@ const MappingFields = () => {
         mappings: allMappings,
       };
 
-      console.log('payload  :: ',payload);
-      
+      console.log('payload  :: ', payload);
+
       const response = await fetch(saveMappingsUrl, {
         method: "POST",
         headers,
@@ -613,164 +636,164 @@ const MappingFields = () => {
 
       const parsedMappings = Array.isArray(data.mappings)
         ? data.mappings.reduce((acc, mapping) => {
-            const nodeId = mapping.nodeId;
-            if (!nodeId) {
-              console.warn('Skipping mapping with missing nodeId:', mapping);
-              return acc;
+          const nodeId = mapping.nodeId;
+          if (!nodeId) {
+            console.warn('Skipping mapping with missing nodeId:', mapping);
+            return acc;
+          }
+
+          let conditionsData = {};
+          if (mapping.conditions && typeof mapping.conditions === 'object') {
+            conditionsData = mapping.conditions;
+          } else if (mapping.Conditions__c) {
+            conditionsData = JSON.parse(mapping.Conditions__c);
+          }
+
+          let fieldMappings = [];
+          if (mapping.Field_Mappings__c) {
+            try {
+              fieldMappings = typeof mapping.Field_Mappings__c === 'string'
+                ? JSON.parse(mapping.Field_Mappings__c)
+                : mapping.Field_Mappings__c;
+            } catch (e) {
+              console.error('Error parsing field mappings:', e);
+              fieldMappings = [];
             }
+          } else if (mapping.fieldMappings) {
+            fieldMappings = Array.isArray(mapping.fieldMappings)
+              ? mapping.fieldMappings
+              : [];
+          }
 
-            let conditionsData = {};
-            if (mapping.conditions && typeof mapping.conditions === 'object') {
-              conditionsData = mapping.conditions;
-            } else if (mapping.Conditions__c) {
-              conditionsData = JSON.parse(mapping.Conditions__c);
-            }
+          fieldMappings = fieldMappings.map(fm => ({
+            formFieldId: fm.formFieldId || fm.Form_Field_Id__c || '',
+            fieldType: fm.fieldType || fm.Field_Type__c || '',
+            salesforceField: fm.salesforceField || fm.Salesforce_Field__c || '',
+            picklistValue: fm.picklistValue || fm.Picklist_Value__c || ''
+          }));
 
-            let fieldMappings = [];
-            if (mapping.Field_Mappings__c) {
-              try {
-                fieldMappings = typeof mapping.Field_Mappings__c === 'string' 
-                  ? JSON.parse(mapping.Field_Mappings__c)
-                  : mapping.Field_Mappings__c;
-              } catch (e) {
-                console.error('Error parsing field mappings:', e);
-                fieldMappings = [];
-              }
-            } else if (mapping.fieldMappings) {
-              fieldMappings = Array.isArray(mapping.fieldMappings) 
-                ? mapping.fieldMappings 
-                : [];
-            }
+          let loopConfig = {};
+          if (mapping.loopConfig && typeof mapping.loopConfig === 'object') {
+            loopConfig = mapping.loopConfig;
+          } else if (mapping.Loop_Config__c) {
+            loopConfig = JSON.parse(mapping.Loop_Config__c);
+          }
 
-            fieldMappings = fieldMappings.map(fm => ({
-              formFieldId: fm.formFieldId || fm.Form_Field_Id__c || '',
-              fieldType: fm.fieldType || fm.Field_Type__c || '',
-              salesforceField: fm.salesforceField || fm.Salesforce_Field__c || '',
-              picklistValue: fm.picklistValue || fm.Picklist_Value__c || ''
-            }));
+          let formatterConfig = {};
+          if (mapping.formatterConfig && typeof mapping.formatterConfig === 'object') {
+            formatterConfig = mapping.formatterConfig;
+          } else if (mapping.Formatter_Config__c) {
+            formatterConfig = JSON.parse(mapping.Formatter_Config__c);
+          }
 
-            let loopConfig = {};
-            if (mapping.loopConfig && typeof mapping.loopConfig === 'object') {
-              loopConfig = mapping.loopConfig;
-            } else if (mapping.Loop_Config__c) {
-               loopConfig = JSON.parse(mapping.Loop_Config__c);
-            }
-
-            let formatterConfig = {};
-            if (mapping.formatterConfig && typeof mapping.formatterConfig === 'object') {
-              formatterConfig = mapping.formatterConfig;
-            } else if (mapping.Formatter_Config__c) {
-               formatterConfig = JSON.parse(mapping.Formatter_Config__c);
-            }
-
-            const actionType =
-              mapping.actionType === "CreateUpdate" || mapping.Type__c === "CreateUpdate"
-                ? "Create/Update"
-                : mapping.actionType === "Start" || mapping.Type__c === "Start"
+          const actionType =
+            mapping.actionType === "CreateUpdate" || mapping.Type__c === "CreateUpdate"
+              ? "Create/Update"
+              : mapping.actionType === "Start" || mapping.Type__c === "Start"
                 ? "Start"
                 : mapping.actionType === "End" || mapping.Type__c === "End"
-                ? "End"
-                : mapping.actionType || mapping.Type__c;
+                  ? "End"
+                  : mapping.actionType || mapping.Type__c;
 
-            const nodeType =
-              actionType === "Start" || actionType === "End"
-                ? actionType.toLowerCase()
-                : actionType === "Condition" ||
-                  actionType === "Path" ||
-                  actionType === "Loop" ||
-                  actionType === "Formatter"
+          const nodeType =
+            actionType === "Start" || actionType === "End"
+              ? actionType.toLowerCase()
+              : actionType === "Condition" ||
+                actionType === "Path" ||
+                actionType === "Loop" ||
+                actionType === "Formatter"
                 ? "utility"
                 : "action";
 
-            return {
-              ...acc,
-              [nodeId]: {
-                nodeId,
-                actionType,
-                label: mapping.label || mapping.Name || actionType,
-                order: parseInt(mapping.order || mapping.Order__c, 10) || 0,
-                formVersionId: mapping.formVersionId || mapping.Form_Version__c || "",
-                previousNodeId: mapping.previousNodeId || mapping.Previous_Node_Id__c || null,
-                nextNodeIds: (mapping.nextNodeIds || mapping.Next_Node_Id__c)
-                  ? Array.isArray(mapping.nextNodeIds)
-                    ? mapping.nextNodeIds
-                    : mapping.nextNodeIds.split(",")
+          return {
+            ...acc,
+            [nodeId]: {
+              nodeId,
+              actionType,
+              label: mapping.label || mapping.Name || actionType,
+              order: parseInt(mapping.order || mapping.Order__c, 10) || 0,
+              formVersionId: mapping.formVersionId || mapping.Form_Version__c || "",
+              previousNodeId: mapping.previousNodeId || mapping.Previous_Node_Id__c || null,
+              nextNodeIds: (mapping.nextNodeIds || mapping.Next_Node_Id__c)
+                ? Array.isArray(mapping.nextNodeIds)
+                  ? mapping.nextNodeIds
+                  : mapping.nextNodeIds.split(",")
+                : [],
+              salesforceObject: mapping.salesforceObject || mapping.Salesforce_Object__c || "",
+              fieldMappings: fieldMappings || [],
+              conditions: Array.isArray(conditionsData.conditions) ? conditionsData.conditions : [],
+              logicType: conditionsData.logicType || "AND",
+              customLogic: conditionsData.customLogic || "",
+              pathOption: conditionsData.pathOption || "Rules",
+              returnLimit: conditionsData.returnLimit || "",
+              sortField: conditionsData.sortField || "",
+              sortOrder: conditionsData.sortOrder || "ASC",
+              enableConditions:
+                actionType === "Create/Update" ? !!conditionsData.conditions?.length : false,
+              loopConfig: {
+                loopCollection: loopConfig.loopCollection || "",
+                currentItemVariableName: loopConfig.currentItemVariableName || "",
+                maxIterations: loopConfig.maxIterations || "",
+                loopVariables: loopConfig.loopVariables || {
+                  currentIndex: false,
+                  counter: false,
+                  indexBase: "0",
+                },
+                exitConditions: Array.isArray(loopConfig.exitConditions)
+                  ? loopConfig.exitConditions
                   : [],
-                salesforceObject: mapping.salesforceObject || mapping.Salesforce_Object__c || "",
-                fieldMappings: fieldMappings || [],
-                conditions: Array.isArray(conditionsData.conditions) ? conditionsData.conditions : [],
-                logicType: conditionsData.logicType || "AND",
-                customLogic: conditionsData.customLogic || "",
-                pathOption: conditionsData.pathOption || "Rules",
-                returnLimit: conditionsData.returnLimit || "",
-                sortField: conditionsData.sortField || "",
-                sortOrder: conditionsData.sortOrder || "ASC",
-                enableConditions:
-                  actionType === "Create/Update" ? !!conditionsData.conditions?.length : false,
-                loopConfig: {
-                  loopCollection: loopConfig.loopCollection || "",
-                  currentItemVariableName: loopConfig.currentItemVariableName || "",
-                  maxIterations: loopConfig.maxIterations || "",
-                  loopVariables: loopConfig.loopVariables || {
-                    currentIndex: false,
-                    counter: false,
-                    indexBase: "0",
-                  },
-                  exitConditions: Array.isArray(loopConfig.exitConditions)
-                    ? loopConfig.exitConditions
-                    : [],
-                  logicType: loopConfig.logicType || "AND",
-                  customLogic: loopConfig.customLogic || "",
-                },
-                formatterConfig: {
-                  formatType: formatterConfig.formatType || "date",
-                  operation: formatterConfig.operation || "",
-                  inputField: formatterConfig.inputField || "",
-                  outputVariable: formatterConfig.outputVariable || "",
-                  options: formatterConfig.options || {},
-                  inputField2: formatterConfig.inputField2 || "",
-                  useCustomInput: formatterConfig.useCustomInput || false,
-                  customValue: formatterConfig.customValue || "",
-                },
-                id: mapping.id || mapping.Id || "",
-                type: nodeType,
-                displayLabel: mapping.label || mapping.Name || actionType,
+                logicType: loopConfig.logicType || "AND",
+                customLogic: loopConfig.customLogic || "",
               },
-            };
-          }, {})
+              formatterConfig: {
+                formatType: formatterConfig.formatType || "date",
+                operation: formatterConfig.operation || "",
+                inputField: formatterConfig.inputField || "",
+                outputVariable: formatterConfig.outputVariable || "",
+                options: formatterConfig.options || {},
+                inputField2: formatterConfig.inputField2 || "",
+                useCustomInput: formatterConfig.useCustomInput || false,
+                customValue: formatterConfig.customValue || "",
+              },
+              id: mapping.id || mapping.Id || "",
+              type: nodeType,
+              displayLabel: mapping.label || mapping.Name || actionType,
+            },
+          };
+        }, {})
         : {};
 
       const updatedNodes = Array.isArray(data.nodes)
         ? data.nodes.map((node) => {
-            const mapping = parsedMappings[node.id];
-            if (!mapping) {
-              return node;
-            }
-            return {
-              ...node,
-              type: "custom",
-              data: {
-                ...node.data,
-                label: mapping.label,
-                displayLabel: mapping.displayLabel || mapping.label,
-                action: mapping.actionType,
-                type: mapping.type,
-                order: mapping.order,
-                salesforceObject: mapping.salesforceObject,
-                fieldMappings: mapping.fieldMappings,
-                conditions: mapping.conditions,
-                logicType: mapping.logicType,
-                customLogic: mapping.customLogic,
-                pathOption: mapping.pathOption,
-                returnLimit: mapping.returnLimit,
-                sortField: mapping.sortField,
-                sortOrder: mapping.sortOrder,
-                enableConditions: mapping.enableConditions,
-                loopConfig: mapping.loopConfig,
-                formatterConfig: mapping.formatterConfig,
-              },
-            };
-          })
+          const mapping = parsedMappings[node.id];
+          if (!mapping) {
+            return node;
+          }
+          return {
+            ...node,
+            type: "custom",
+            data: {
+              ...node.data,
+              label: mapping.label,
+              displayLabel: mapping.displayLabel || mapping.label,
+              action: mapping.actionType,
+              type: mapping.type,
+              order: mapping.order,
+              salesforceObject: mapping.salesforceObject,
+              fieldMappings: mapping.fieldMappings,
+              conditions: mapping.conditions,
+              logicType: mapping.logicType,
+              customLogic: mapping.customLogic,
+              pathOption: mapping.pathOption,
+              returnLimit: mapping.returnLimit,
+              sortField: mapping.sortField,
+              sortOrder: mapping.sortOrder,
+              enableConditions: mapping.enableConditions,
+              loopConfig: mapping.loopConfig,
+              formatterConfig: mapping.formatterConfig,
+            },
+          };
+        })
         : [];
 
       return {
@@ -786,7 +809,6 @@ const MappingFields = () => {
 
   const initializeData = async () => {
     setIsLoading(true);
-    setFetchError(null);
 
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -818,10 +840,10 @@ const MappingFields = () => {
         setEdges(initialEdges);
         setMappings({});
       }
-      console.log('existingMappingsData :: ',existingMappingsData);
-      console.log('existingMappingsData.mappings:: ',existingMappingsData.mappings);
-      
-      
+      console.log('existingMappingsData :: ', existingMappingsData);
+      console.log('existingMappingsData.mappings:: ', existingMappingsData.mappings);
+
+
     } catch (error) {
       showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
     } finally {
@@ -914,7 +936,7 @@ const MappingFields = () => {
                     nodeLabel={selectedNode.data.action}
                     nodes={nodes}
                     edges={edges}
-                    
+
                   />
                 )}
               </div>

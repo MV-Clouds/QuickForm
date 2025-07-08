@@ -84,6 +84,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
+  const { refreshData } = useSalesforceData();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -98,10 +99,9 @@ function MainFormBuilder({showMapping , showThankYou }) {
   const [formName, setFormName] = useState('');
   const [formNameError, setFormNameError] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const { refreshData } = useSalesforceData();
+  const [selectedTheme, setSelectedTheme] = useState(themes[0]);
 
   const [formRecords, setFormRecords] = useState([]);
-  const [selectedTheme, setSelectedTheme] = useState(themes[0]);
 
   const [
     fieldsState,
@@ -228,14 +228,12 @@ function MainFormBuilder({showMapping , showThankYou }) {
       }
 
       let formVersion = null;
-      let targetFormId = null;
       for (const form of formRecords) {
         formVersion = form.FormVersions.find(
           (version) => version.Source === 'Form_Version__c' && version.Id === formVersionId
         );
         if (formVersion) {
           formVersion.Form__c = form.Id;
-          targetFormId = form.Id;
           setFormVersions(form.FormVersions);
           setFormId(form.Id);
           break;
@@ -263,7 +261,19 @@ function MainFormBuilder({showMapping , showThankYou }) {
         if (!pages[pageNumber]) {
           pages[pageNumber] = [];
         }
-        pages[pageNumber].push(field);
+        let properties;
+        try {
+          properties = JSON.parse(field.Properties__c || '{}');
+        } catch (e) {
+          console.warn(`Failed to parse Properties__c for field ${field.Unique_Key__c}:`, e);
+          properties = {};
+        }
+        pages[pageNumber].push({
+          ...properties,
+          id: field.Unique_Key__c,
+          validation: properties.validation || getDefaultValidation(field.Field_Type__c),
+          subFields: properties.subFields || getDefaultSubFields(field.Field_Type__c),
+        });
       });
 
       Object.keys(pages).forEach((pageNum) => {
@@ -274,13 +284,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
       Object.keys(pages)
         .sort((a, b) => a - b)
         .forEach((pageNum, index) => {
-          const fieldsInPage = pages[pageNum].map((field) => {
-            const properties = JSON.parse(field.Properties__c || '{}');
-            return {
-              ...properties,
-              id: field.Unique_Key__c,
-            };
-          });
+          const fieldsInPage = pages[pageNum];
           reconstructedFields.push(...fieldsInPage);
           if (index < Object.keys(pages).length - 1) {
             reconstructedFields.push({
@@ -385,14 +389,53 @@ function MainFormBuilder({showMapping , showThankYou }) {
       formVersion.Version__c = '1';
     }
     const formFields = pages.flatMap((page) =>
-      page.fields.map((field, index) => ({
-        Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
-        Field_Type__c: field.type,
-        Page_Number__c: page.pageNumber,
-        Order_Number__c: index + 1,
-        Properties__c: JSON.stringify(field),
-        Unique_Key__c: field.id,
-      }))
+      page.fields.map((field, index) => {
+        // Handle section fields
+        if (field.type === 'section') {
+          const sectionProperties = {
+            ...field,
+            subFields: {
+              leftField: field.subFields?.leftField ? {
+                ...field.subFields.leftField,
+                label: field.subFields.leftField.label ||
+                  field.subFields.leftField.type?.charAt(0).toUpperCase() +
+                  field.subFields.leftField.type?.slice(1) || 'Left Field'
+              } : null,
+              rightField: field.subFields?.rightField ? {
+                ...field.subFields.rightField,
+                label: field.subFields.rightField.label ||
+                  field.subFields.rightField.type?.charAt(0).toUpperCase() +
+                  field.subFields.rightField.type?.slice(1) || 'Right Field'
+              } : null
+            }
+          };
+
+          return {
+            Name: field.label || 'Section',
+            Field_Type__c: 'section',
+            Page_Number__c: page.pageNumber,
+            Order_Number__c: index + 1,
+            Properties__c: JSON.stringify(sectionProperties),
+            Unique_Key__c: field.id,
+          };
+        }
+
+        // Handle regular fields
+        const properties = {
+          ...field,
+          label: field.label || field.type?.charAt(0).toUpperCase() + field.type?.slice(1) || 'Field',
+          subFields: field.subFields || getDefaultSubFields(field.type) || {}
+        };
+
+        return {
+          Name: properties.label,
+          Field_Type__c: field.type,
+          Page_Number__c: page.pageNumber,
+          Order_Number__c: index + 1,
+          Properties__c: JSON.stringify(properties),
+          Unique_Key__c: field.id,
+        };
+      })
     );
     
     return { formVersion, formFields };
@@ -556,6 +599,84 @@ function MainFormBuilder({showMapping , showThankYou }) {
     };
     return validations[field] || validations['default'];
   };
+
+  const getDefaultSubFields = (fieldType) => {
+    const field = fieldType.toLowerCase().replace(/\s+/g, '');
+    const subFields = {
+      fullname: {
+        salutation: {
+          enabled: false,
+          options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'],
+          value: '',
+          placeholder: 'Select Salutation',
+          label: 'Salutation',
+        },
+        firstName: {
+          value: '',
+          placeholder: 'First Name',
+          label: 'First Name',
+        },
+        lastName: {
+          value: '',
+          placeholder: 'Last Name',
+          label: 'Last Name',
+        },
+      },
+      address: {
+        street: {
+          visiblesubFields: true,
+          label: 'Street Address',
+          value: '',
+          placeholder: 'Enter street',
+        },
+        city: {
+          visible: true,
+          label: 'City',
+          value: '',
+          placeholder: 'Enter city',
+        },
+        state: {
+          visible: true,
+          label: 'State',
+          value: '',
+          placeholder: 'Enter state',
+        },
+        country: {
+          visible: true,
+          label: 'Country',
+          value: '',
+          placeholder: 'Enter country',
+        },
+        postal: {
+          visible: true,
+          label: 'Postal Code',
+          value: '',
+          placeholder: 'Enter postal code',
+        },
+      },
+      section: {
+        leftField: null,
+        rightField: null,
+      },
+      phone: {
+        countryCode: {
+          enabled: true,
+          value: 'US',
+          options: [],
+          label: 'Country Code',
+        },
+        phoneNumber: {
+          value: '',
+          placeholder: 'Enter phone number',
+          phoneMask: '(999) 999-9999',
+          label: 'Phone Number',
+        }
+      },
+      default: {},
+    };
+    return subFields[field] || subFields['default'];
+  };
+
   const handleDrop = (
     fieldType,
     pageIndex,
@@ -603,15 +724,21 @@ function MainFormBuilder({showMapping , showThankYou }) {
       setShowSidebar(false);
     } else if (fieldType) {
       const newFieldId = `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const defaultValidation = getDefaultValidation(fieldType);
+      const defaultSubFields = getDefaultSubFields(fieldType);
       const newFieldObj = {
         id: newFieldId,
         type: fieldType,
         sectionId: sectionId || null,
         sectionSide: sectionSide || null,
-        validation: getDefaultValidation(fieldType), // <-- Add this line to include validation key
+        validation: defaultValidation,
+        subFields: defaultSubFields,
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
+      setSelectedFieldId(newFieldId);
+      setSelectedSectionSide(sectionSide || null);
+      setShowSidebar(false);
     }
 
     const flattenedFields = [];
@@ -622,8 +749,8 @@ function MainFormBuilder({showMapping , showThankYou }) {
       }
     });
 
-    const headerField = fields.find(f => f.type === 'header');
-    const finalFields = headerField ? [headerField, ...flattenedFields.filter(f => f.type !== 'header')] : flattenedFields;
+    const headerField = fields.find((f) => f.type === 'header');
+    const finalFields = headerField ? [headerField, ...flattenedFields.filter((f) => f.type !== 'header')] : flattenedFields;
 
     setFields(finalFields);
   };
@@ -666,11 +793,27 @@ function MainFormBuilder({showMapping , showThankYou }) {
         return { ...field, ...updates };
       }
       if (field.type === 'section') {
-        if (field.leftField?.id === fieldId) {
-          return { ...field, leftField: { ...field.leftField, ...updates } };
+        // Updated to check subFields instead of direct leftField/rightField
+        const updatedSubFields = { ...field.subFields };
+        let hasUpdate = false;
+
+        if (field.subFields?.leftField?.id === fieldId) {
+          updatedSubFields.leftField = {
+            ...field.subFields.leftField,
+            ...updates
+          };
+          hasUpdate = true;
         }
-        if (field.rightField?.id === fieldId) {
-          return { ...field, rightField: { ...field.rightField, ...updates } };
+        if (field.subFields?.rightField?.id === fieldId) {
+          updatedSubFields.rightField = {
+            ...field.subFields.rightField,
+            ...updates
+          };
+          hasUpdate = true;
+        }
+
+        if (hasUpdate) {
+          return { ...field, subFields: updatedSubFields };
         }
       }
       return field;
@@ -747,36 +890,6 @@ function MainFormBuilder({showMapping , showThankYou }) {
 };
 
 
-  const handleCut = (field) => {
-    setHasChanges(true);
-    setClipboard({ field, operation: 'cut' });
-    handleUpdateField(field.id, { isCut: true });
-  };
-
-  const handleCopy = (field) => {
-    setClipboard({ field, operation: 'copy' });
-  };
-
-  const handlePaste = (pageIndex, dropIndex, sectionId, sectionSide) => {
-    setHasChanges(true);
-    if (!clipboard.field) return;
-
-    const newField = {
-      ...clipboard.field,
-      id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      isCut: false,
-      sectionId: sectionId || null,
-      sectionSide: sectionSide || null,
-    };
-
-    if (clipboard.operation === 'cut') {
-      handleDeleteField(clipboard.field.id, false);
-    }
-
-    handleDrop(null, pageIndex, dropIndex, null, sectionId, sectionSide, newField);
-    setClipboard({ field: null, operation: null });
-  };
-
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
@@ -784,19 +897,30 @@ function MainFormBuilder({showMapping , showThankYou }) {
   const getSelectedField = () => {
     if (!selectedFieldId) return null;
     for (const field of fields) {
-      if (field.id === selectedFieldId) {
-        return field.type === 'section' ? null : field;
+      // Top-level field check
+      if (field.id === selectedFieldId && field.type !== 'section') {
+        return field;
       }
+      // Section field check - updated to use subFields
       if (field.type === 'section') {
-        if (field.leftField?.id === selectedFieldId) return field.leftField;
-        if (field.rightField?.id === selectedFieldId) return field.rightField;
+        const leftField = field.subFields?.leftField;
+        const rightField = field.subFields?.rightField;
+
+        if (leftField?.id === selectedFieldId && leftField?.sectionSide === selectedSectionSide) {
+          return leftField;
+        }
+        if (rightField?.id === selectedFieldId && rightField?.sectionSide === selectedSectionSide) {
+          return rightField;
+        }
       }
     }
+
+    console.warn(`No field found for selectedFieldId: ${selectedFieldId}, selectedSectionSide: ${selectedSectionSide}`);
     return null;
   };
 
   const selectedField = getSelectedField();
-  
+
   return (
     <div className="flex h-screen">
       <MainMenuBar isSidebarOpen={isSidebarOpen} 
