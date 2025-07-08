@@ -1,16 +1,14 @@
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   try {
-    // Extract data from the Lambda event
     const body = JSON.parse(event.body || '{}');
-    const { userId, instanceUrl, formData } = body;
-    const token = event.headers.Authorization?.split(' ')[1]; // Extract Bearer token
+    const { userId, instanceUrl, formData, formUpdate } = body;
+    const token = event.headers.Authorization?.split(' ')[1];
 
-    // Validate required parameters
     if (!userId || !instanceUrl || !formData || !token) {
       return {
         statusCode: 400,
@@ -21,22 +19,19 @@ export const handler = async (event) => {
 
     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
     const salesforceBaseUrl = `https://${cleanedInstanceUrl}/services/data/v60.0`;
-    console.log('Salesforce first base url'+salesforceBaseUrl);
 
     let formVersionId;
-    let formId; // To store Form__c ID
+    let formId;
     const { Id, Form__c, ...formVersion } = formData.formVersion;
 
     // Step 1: Determine Form__c ID
     if (Id) {
-      // For updates, use the provided Form__c or fetch from DynamoDB
       formId = Form__c;
       if (!formId) {
         const metadataRes = await dynamoClient.send(
           new GetItemCommand({
             TableName: METADATA_TABLE_NAME,
             Key: {
-              InstanceUrl: { S: cleanedInstanceUrl },
               UserId: { S: userId },
             },
           })
@@ -66,13 +61,11 @@ export const handler = async (event) => {
         console.log(`Found Form__c Id: ${formId} for Form_Version__c ${Id} from DynamoDB`);
       }
     } else if (formVersion.Version__c !== '1') {
-      // For new versions (e.g., 2, 3), find the previous version's Form__c from DynamoDB
       const previousVersion = (parseInt(formVersion.Version__c) - 1).toString();
       const metadataRes = await dynamoClient.send(
         new GetItemCommand({
           TableName: METADATA_TABLE_NAME,
           Key: {
-            InstanceUrl: { S: cleanedInstanceUrl },
             UserId: { S: userId },
           },
         })
@@ -103,7 +96,6 @@ export const handler = async (event) => {
       }
       console.log(`Found Form__c Id: ${formId} for previous version ${previousVersion} from DynamoDB`);
     } else {
-      // For version 1, create a new Form__c
       const formResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c`, {
         method: 'POST',
         headers: {
@@ -128,12 +120,11 @@ export const handler = async (event) => {
         new GetItemCommand({
           TableName: METADATA_TABLE_NAME,
           Key: {
-            InstanceUrl: { S: cleanedInstanceUrl },
             UserId: { S: userId },
           },
         })
       );
-    
+
       let existingFormRecords = [];
       if (existingMetadataRes.Item?.FormRecords?.S) {
         try {
@@ -143,7 +134,6 @@ export const handler = async (event) => {
         }
       }
 
-      // Update DynamoDB immediately with the new Form__c
       const currentTime = new Date().toISOString();
       const newFormRecord = {
         Id: formId,
@@ -156,24 +146,22 @@ export const handler = async (event) => {
       const updatedFormRecords = [...existingFormRecords, newFormRecord];
 
       await dynamoClient.send(
-      new PutItemCommand({
-        TableName: METADATA_TABLE_NAME,
-        Item: {
-          InstanceUrl: { S: cleanedInstanceUrl },
-          UserId: { S: userId },
-          Metadata: { S: existingMetadataRes.Item?.Metadata?.S || '{}' },
-          FormRecords: { S: JSON.stringify(updatedFormRecords) },
-          CreatedAt: { S: existingMetadataRes.Item?.CreatedAt?.S || currentTime },
-          UpdatedAt: { S: currentTime },
-        },
-      })
-    );
+        new PutItemCommand({
+          TableName: METADATA_TABLE_NAME,
+          Item: {
+            UserId: { S: userId },
+            InstanceUrl: { S: cleanedInstanceUrl },
+            Metadata: { S: existingMetadataRes.Item?.Metadata?.S || '{}' },
+            FormRecords: { S: JSON.stringify(updatedFormRecords) },
+            CreatedAt: { S: existingMetadataRes.Item?.CreatedAt?.S || currentTime },
+            UpdatedAt: { S: currentTime },
+          },
+        })
+      );
     }
 
-    // Step 2: Handle Form_Version__c record (update or insert)
+    // Step 2: Handle Form_Version__c record
     if (Id) {
-      // Update existing Form_Version__c record
-      console.log('SalesforceBaseUrl'+salesforceBaseUrl);
       const formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${Id}`, {
         method: 'PATCH',
         headers: {
@@ -191,7 +179,6 @@ export const handler = async (event) => {
       formVersionId = Id;
       console.log(`Updated Form_Version__c record with Id: ${formVersionId}`);
 
-      // If publishing, update other versions
       if (formVersion.Stage__c === 'Publish') {
         const otherVersionsQuery = `SELECT Id, Stage__c FROM Form_Version__c WHERE Form__c = '${formId}' AND Id != '${formVersionId}' AND Stage__c = 'Publish'`;
         const otherVersionsUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(otherVersionsQuery)}`;
@@ -209,21 +196,31 @@ export const handler = async (event) => {
         }
 
         const otherVersionsData = await otherVersionsRes.json();
-        for (const otherVersion of otherVersionsData.records || []) {
-          const updateResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${otherVersion.Id}`, {
+        if (otherVersionsData.records?.length > 0) {
+          const compositeRequest = {
+            allOrNone: true,
+            records: otherVersionsData.records.map((otherVersion) => ({
+              attributes: { type: 'Form_Version__c' },
+              Id: otherVersion.Id,
+              Stage__c: 'Locked',
+            })),
+          };
+
+          const compositeResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
             method: 'PATCH',
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ Stage__c: 'Locked' }),
+            body: JSON.stringify(compositeRequest),
           });
 
-          if (!updateResponse.ok) {
-            const errorData = await updateResponse.json();
-            throw new Error(errorData[0]?.message || `Failed to update Form_Version__c ${otherVersion.Id}`);
+          if (!compositeResponse.ok) {
+            const errorData = await compositeResponse.json();
+            throw new Error(errorData[0]?.message || 'Failed to update other Form_Version__c records');
           }
         }
+
         const updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
           method: 'PATCH',
           headers: {
@@ -232,16 +229,16 @@ export const handler = async (event) => {
           },
           body: JSON.stringify({
             Active_Version__c: `V${formVersion.Version__c}`,
+            Publish_Link__c: formUpdate?.Publish_Link__c || '',
           }),
         });
-      
+
         if (!updateFormResponse.ok) {
           const errorData = await updateFormResponse.json();
           throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
         }
       }
 
-      // Delete existing Form_Field__c records
       const query = `SELECT Id FROM Form_Field__c WHERE Form_Version__c = '${formVersionId}'`;
       const queryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`;
       const queryResponse = await fetch(queryUrl, {
@@ -260,25 +257,24 @@ export const handler = async (event) => {
       const queryData = await queryResponse.json();
       const existingFields = queryData.records || [];
 
-      for (const field of existingFields) {
-        const deleteResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Field__c/${field.Id}`, {
+      if (existingFields.length > 0) {
+        const ids = existingFields.map((field) => field.Id).join(',');
+        const deleteResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects?ids=${encodeURIComponent(ids)}&allOrNone=true`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
-        if (!deleteResponse.ok && deleteResponse.status !== 204) {
+        if (!deleteResponse.ok) {
           const errorData = await deleteResponse.json();
-          throw new Error(errorData[0]?.message || `Failed to delete Form_Field__c record ${field.Id}`);
+          throw new Error(errorData[0]?.message || 'Failed to delete Form_Field__c records');
         }
       }
       console.log(`Deleted ${existingFields.length} existing Form_Field__c records`);
     } else {
-      // Enforce one Draft per Form__c
       const draftQuery = `SELECT Id FROM Form_Version__c WHERE Form__c = '${formId}' AND Stage__c = 'Draft'`;
       const draftQueryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(draftQuery)}`;
-      console.log(draftQueryUrl);
       const draftQueryRes = await fetch(draftQueryUrl, {
         method: 'GET',
         headers: {
@@ -293,12 +289,10 @@ export const handler = async (event) => {
       }
 
       const draftData = await draftQueryRes.json();
-      if (draftData.records?.length > 1) {
-        console.log(formVersion.Stage__c)
+      if (draftData.records?.length > 0) {
         throw new Error('A Draft version already exists for this Form__c');
       }
 
-      // Create new Form_Version__c record
       const formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c`, {
         method: 'POST',
         headers: {
@@ -338,46 +332,74 @@ export const handler = async (event) => {
 
     // Step 4: Create Form_Field__c records
     const createdFormFields = [];
-    for (const formField of formData.formFields) {
-      const formFieldResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Field__c`, {
+    const formFieldIds = {};
+    if (formData.formFields.length > 0) {
+      const compositeRequest = {
+        allOrNone: true,
+        records: formData.formFields.map((formField) => {
+          let properties;
+          try {
+            properties = JSON.parse(formField.Properties__c);
+          } catch (e) {
+            console.warn(`Failed to parse Properties__c for field ${formField.Unique_Key__c}:`, e);
+            properties = {};
+          }
+          // Remove subFields from validation to avoid duplication
+          if (properties.validation && properties.validation.subFields) {
+            delete properties.validation.subFields;
+          }
+          return {
+            attributes: { type: 'Form_Field__c' },
+            ...formField,
+            Form_Version__c: formVersionId,
+            Properties__c: JSON.stringify({
+              ...properties,
+              subFields: properties.subFields || {},
+            }),
+          };
+        }),
+      };
+
+      const formFieldResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formField,
-          Form_Version__c: formVersionId,
-        }),
+        body: JSON.stringify(compositeRequest),
       });
 
       if (!formFieldResponse.ok) {
         const errorData = await formFieldResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to create Form_Field__c record');
+        throw new Error(errorData[0]?.message || 'Failed to create Form_Field__c records');
       }
 
       const formFieldData = await formFieldResponse.json();
-      createdFormFields.push({
-        Id: formFieldData.id,
-        Name: formField.Name,
-        Field_Type__c: formField.Field_Type__c,
-        Page_Number__c: formField.Page_Number__c,
-        Order_Number__c: formField.Order_Number__c,
-        Properties__c: formField.Properties__c,
-        Unique_Key__c: formField.Unique_Key__c,
+      formFieldData.forEach((result, index) => {
+        if (result.success) {
+          const formField = formData.formFields[index];
+          createdFormFields.push({
+            Id: result.id,
+            Name: formField.Name,
+            Field_Type__c: formField.Field_Type__c,
+            Page_Number__c: formField.Page_Number__c,
+            Order_Number__c: formField.Order_Number__c,
+            Properties__c: formField.Properties__c,
+            Unique_Key__c: formField.Unique_Key__c,
+          });
+          formFieldIds[formField.Unique_Key__c] = result.id;
+        } else {
+          throw new Error(result.errors[0]?.message || 'Failed to create a Form_Field__c record');
+        }
       });
     }
-    console.log(`Created ${createdFormFields.length} Form_Field__c records`);
 
     // Step 5: Update DynamoDB SalesforceMetadata table
     const currentTime = new Date().toISOString();
-
-    // Fetch existing metadata
     const existingMetadataRes = await dynamoClient.send(
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
         },
       })
@@ -405,21 +427,30 @@ export const handler = async (event) => {
       createdAt = existingMetadataRes.Item.CreatedAt?.S || currentTime;
     }
 
-    // Construct new or updated form record
+    let existingConditions = [];
+    if (Id) {
+      const existingFormVersion = existingFormRecords
+        .flatMap(form => form.FormVersions)
+        .find(version => version.Id === Id);
+      if (existingFormVersion && existingFormVersion.Conditions) {
+        existingConditions = existingFormVersion.Conditions;
+      }
+    }
+
     const newFormVersionRecord = {
       Id: formVersionId,
       FormId: formId,
       Name: formData.formVersion.Name,
       Description__c: formData.formVersion.Description__c || '',
       Version__c: formData.formVersion.Version__c || '1',
-      Publish_Link__c: formData.formVersion.Publish_Link__c || '',
       Stage__c: formData.formVersion.Stage__c || 'Draft',
       Submission_Count__c: formData.formVersion.Submission_Count__c || 0,
+      Object_Info__c: formData.formVersion.Object_Info__c || [],
       Fields: createdFormFields,
+      Conditions: existingConditions,
       Source: 'Form_Version__c',
     };
 
-    // Update FormRecords: Find or create Form__c record
     let updatedFormRecords = [...existingFormRecords];
     const formIndex = updatedFormRecords.findIndex(f => f.Id === formId);
     if (formIndex >= 0) {
@@ -432,6 +463,7 @@ export const handler = async (event) => {
       updatedFormRecords[formIndex] = {
         ...updatedFormRecords[formIndex],
         Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
+        Publish_Link__c: formUpdate?.Publish_Link__c || '',
         FormVersions: [newFormVersionRecord, ...otherVersions],
       };
     } else {
@@ -444,13 +476,12 @@ export const handler = async (event) => {
       });
     }
 
-    // Write to DynamoDB
     await dynamoClient.send(
       new PutItemCommand({
         TableName: METADATA_TABLE_NAME,
         Item: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
+          InstanceUrl: { S: cleanedInstanceUrl },
           Metadata: { S: existingMetadata ? JSON.stringify(existingMetadata) : '{}' },
           FormRecords: { S: JSON.stringify(updatedFormRecords) },
           CreatedAt: { S: createdAt },
@@ -463,7 +494,7 @@ export const handler = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId }),
+      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId, formFieldIds }),
     };
   } catch (error) {
     console.error('Error saving form to Salesforce:', error);
@@ -480,8 +511,8 @@ async function updateDynamoDB(instanceUrl, userId, formRecords, currentTime, exi
     new PutItemCommand({
       TableName: METADATA_TABLE_NAME,
       Item: {
-        InstanceUrl: { S: instanceUrl },
         UserId: { S: userId },
+        InstanceUrl: { S: instanceUrl },
         Metadata: { S: JSON.stringify(existingMetadata) },
         FormRecords: { S: JSON.stringify(formRecords) },
         CreatedAt: { S: currentTime },

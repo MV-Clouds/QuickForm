@@ -12,7 +12,7 @@ import { encrypt } from './crypto';
 import MappingFields from '../form-mapping/MappingFields'
 import { useSalesforceData } from '../Context/MetadataContext';
 
-function MainFormBuilder({showMapping}) {
+function MainFormBuilder({ showMapping }) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -125,6 +125,7 @@ function MainFormBuilder({showMapping}) {
     }
   };
 
+
   const fetchFormData = async (userId, instanceUrl) => {
     try {
       setIsLoadingForm(true);
@@ -152,8 +153,6 @@ function MainFormBuilder({showMapping}) {
         try {
           formRecords = JSON.parse(data.FormRecords);
           setFormRecords(formRecords);
-          console.log('Form Records==> ',formRecords);
-          
         } catch (e) {
           console.warn('Failed to parse FormRecords:', e);
         }
@@ -195,7 +194,19 @@ function MainFormBuilder({showMapping}) {
         if (!pages[pageNumber]) {
           pages[pageNumber] = [];
         }
-        pages[pageNumber].push(field);
+        let properties;
+        try {
+          properties = JSON.parse(field.Properties__c || '{}');
+        } catch (e) {
+          console.warn(`Failed to parse Properties__c for field ${field.Unique_Key__c}:`, e);
+          properties = {};
+        }
+        pages[pageNumber].push({
+          ...properties,
+          id: field.Unique_Key__c,
+          validation: properties.validation || getDefaultValidation(field.Field_Type__c),
+          subFields: properties.subFields || getDefaultSubFields(field.Field_Type__c),
+        });
       });
 
       Object.keys(pages).forEach((pageNum) => {
@@ -206,13 +217,7 @@ function MainFormBuilder({showMapping}) {
       Object.keys(pages)
         .sort((a, b) => a - b)
         .forEach((pageNum, index) => {
-          const fieldsInPage = pages[pageNum].map((field) => {
-            const properties = JSON.parse(field.Properties__c || '{}');
-            return {
-              ...properties,
-              id: field.Unique_Key__c,
-            };
-          });
+          const fieldsInPage = pages[pageNum];
           reconstructedFields.push(...fieldsInPage);
           if (index < Object.keys(pages).length - 1) {
             reconstructedFields.push({
@@ -231,8 +236,7 @@ function MainFormBuilder({showMapping}) {
       setIsLoadingForm(false);
     }
   };
- 
-  
+
   const handleVersionChange = (e) => {
     const newVersionId = e.target.value;
     setSelectedVersionId(newVersionId);
@@ -245,8 +249,8 @@ function MainFormBuilder({showMapping}) {
   };
   useEffect(() => {
     console.log(fieldsState);
-    
-  },[fieldsState]);
+
+  }, [fieldsState]);
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -300,7 +304,7 @@ function MainFormBuilder({showMapping}) {
       });
       const data = await response.json();
       console.log('Form creation response:', data);
-      
+
       if (!response.ok) throw new Error(data.error || 'Failed to create form.');
       const newFormVersionId = data.formVersionId;
       setCurrentFormVersion({ ...formVersion, Id: newFormVersionId, Fields: formFields });
@@ -339,7 +343,7 @@ function MainFormBuilder({showMapping}) {
       Stage__c: 'Draft',
       Publish_Link__c: '',
     };
-    
+
     if (!isNewForm && currentFormVersion?.Form__c) {
       formVersion.Form__c = currentFormVersion.Form__c;
     }
@@ -348,8 +352,7 @@ function MainFormBuilder({showMapping}) {
     } else if (isFirstSave && formVersionId) {
       formVersion.Id = formVersionId;
       formVersion.Version__c = '1';
-    }
-    else if (formVersionId && currentFormVersion && hasChanges && !formVersion.Stage__c==='Draft') {
+    } else if (formVersionId && currentFormVersion && hasChanges && !formVersion.Stage__c === 'Draft') {
       const currentVersionNum = parseFloat(currentFormVersion.Version__c) || 1;
       formVersion.Version__c = (currentVersionNum + 1).toFixed(0);
     } else if (formVersionId) {
@@ -364,11 +367,14 @@ function MainFormBuilder({showMapping}) {
         Field_Type__c: field.type,
         Page_Number__c: page.pageNumber,
         Order_Number__c: index + 1,
-        Properties__c: JSON.stringify(field),
+        Properties__c: JSON.stringify({
+          ...field,
+          subFields: field.subFields || getDefaultSubFields(field.type) || {},
+        }),
         Unique_Key__c: field.id,
       }))
     );
-    
+
     return { formVersion, formFields };
   };
 
@@ -383,7 +389,7 @@ function MainFormBuilder({showMapping}) {
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error('Failed to obtain access token.');
       const { formVersion, formFields } = prepareFormData();
-      
+
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -530,6 +536,79 @@ function MainFormBuilder({showMapping}) {
     };
     return validations[field] || validations['default'];
   };
+
+  const getDefaultSubFields = (fieldType) => {
+    const field = fieldType.toLowerCase().replace(/\s+/g, '');
+    const subFields = {
+      fullname: {
+        salutation: {
+          enabled: false,
+          options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'],
+          value: '',
+          placeholder: 'Select Salutation',
+        },
+        firstName: {
+          value: '',
+          placeholder: 'First Name',
+        },
+        lastName: {
+          value: '',
+          placeholder: 'Last Name',
+        },
+      },
+      address: {
+        street: {
+          visiblesubFields: true,
+          label: 'Street Address',
+          value: '',
+          placeholder: 'Enter street',
+        },
+        city: {
+          visible: true,
+          label: 'City',
+          value: '',
+          placeholder: 'Enter city',
+        },
+        state: {
+          visible: true,
+          label: 'State',
+          value: '',
+          placeholder: 'Enter state',
+        },
+        country: {
+          visible: true,
+          label: 'Country',
+          value: '',
+          placeholder: 'Enter country',
+        },
+        postal: {
+          visible: true,
+          label: 'Postal Code',
+          value: '',
+          placeholder: 'Enter postal code',
+        },
+      },
+      section: {
+        leftField: null,
+        rightField: null,
+      },
+      phone: {
+        countryCode: {
+          enabled: true,
+          value: 'US',
+          options: [],
+        },
+        phoneNumber: {
+          value: '',
+          placeholder: 'Enter phone number',
+          phoneMask: '(999) 999-9999'
+        }
+      },
+      default: {},
+    };
+    return subFields[field] || subFields['default'];
+  };
+
   const handleDrop = (
     fieldType,
     pageIndex,
@@ -559,12 +638,11 @@ function MainFormBuilder({showMapping}) {
     }
 
     const targetPage = pages[pageIndex];
-
-    const insertIndex = (dropIndex !== null && dropIndex !== undefined) ? dropIndex + 1 : targetPage.fields.length;
+    const insertIndex = dropIndex !== null && dropIndex !== undefined ? dropIndex + 1 : targetPage.fields.length;
 
     if (newField && fieldId) {
-      pages.forEach(page => {
-        page.fields = page.fields.filter(f => f.id !== fieldId);
+      pages.forEach((page) => {
+        page.fields = page.fields.filter((f) => f.id !== fieldId);
       });
       targetPage.fields.splice(insertIndex, 0, { ...newField, isCut: false });
       setSelectedFieldId(newField.id);
@@ -577,15 +655,21 @@ function MainFormBuilder({showMapping}) {
       setShowSidebar(false);
     } else if (fieldType) {
       const newFieldId = `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const defaultValidation = getDefaultValidation(fieldType);
+      const defaultSubFields = getDefaultSubFields(fieldType);
       const newFieldObj = {
         id: newFieldId,
         type: fieldType,
         sectionId: sectionId || null,
         sectionSide: sectionSide || null,
-        validation: getDefaultValidation(fieldType), 
+        validation: defaultValidation,
+        subFields: defaultSubFields,
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
+      setSelectedFieldId(newFieldId);
+      setSelectedSectionSide(sectionSide || null);
+      setShowSidebar(false);
     }
 
     const flattenedFields = [];
@@ -596,8 +680,8 @@ function MainFormBuilder({showMapping}) {
       }
     });
 
-    const headerField = fields.find(f => f.type === 'header');
-    const finalFields = headerField ? [headerField, ...flattenedFields.filter(f => f.type !== 'header')] : flattenedFields;
+    const headerField = fields.find((f) => f.type === 'header');
+    const finalFields = headerField ? [headerField, ...flattenedFields.filter((f) => f.type !== 'header')] : flattenedFields;
 
     setFields(finalFields);
   };
@@ -640,11 +724,27 @@ function MainFormBuilder({showMapping}) {
         return { ...field, ...updates };
       }
       if (field.type === 'section') {
-        if (field.leftField?.id === fieldId) {
-          return { ...field, leftField: { ...field.leftField, ...updates } };
+        // Updated to check subFields instead of direct leftField/rightField
+        const updatedSubFields = { ...field.subFields };
+        let hasUpdate = false;
+
+        if (field.subFields?.leftField?.id === fieldId) {
+          updatedSubFields.leftField = {
+            ...field.subFields.leftField,
+            ...updates
+          };
+          hasUpdate = true;
         }
-        if (field.rightField?.id === fieldId) {
-          return { ...field, rightField: { ...field.rightField, ...updates } };
+        if (field.subFields?.rightField?.id === fieldId) {
+          updatedSubFields.rightField = {
+            ...field.subFields.rightField,
+            ...updates
+          };
+          hasUpdate = true;
+        }
+
+        if (hasUpdate) {
+          return { ...field, subFields: updatedSubFields };
         }
       }
       return field;
@@ -675,7 +775,7 @@ function MainFormBuilder({showMapping}) {
       setShowSidebar(true);
     }
   };
-  
+
 
   const handleDeletePage = (pageIndex) => {
     setHasChanges(true);
@@ -706,20 +806,20 @@ function MainFormBuilder({showMapping}) {
     setFields(headerField ? [headerField, ...flattenedFields] : flattenedFields);
   };
 
- const handleAddPage = () => {
-  setHasChanges(true);
-  setFields(prevFields => {
-    const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
-    const headerField = prevFields.find((f) => f.type === 'header');
-    const updatedFields = [
-      ...prevFields,
-      { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
-    ];
-    return headerField
-      ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
-      : updatedFields;
-  });
-};
+  const handleAddPage = () => {
+    setHasChanges(true);
+    setFields(prevFields => {
+      const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
+      const headerField = prevFields.find((f) => f.type === 'header');
+      const updatedFields = [
+        ...prevFields,
+        { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
+      ];
+      return headerField
+        ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
+        : updatedFields;
+    });
+  };
 
 
   const toggleSidebar = () => {
@@ -728,30 +828,41 @@ function MainFormBuilder({showMapping}) {
 
   const getSelectedField = () => {
     if (!selectedFieldId) return null;
+
     for (const field of fields) {
-      if (field.id === selectedFieldId) {
-        return field.type === 'section' ? null : field;
+      // Top-level field check
+      if (field.id === selectedFieldId && field.type !== 'section') {
+        return field;
       }
+      // Section field check - updated to use subFields
       if (field.type === 'section') {
-        if (field.leftField?.id === selectedFieldId) return field.leftField;
-        if (field.rightField?.id === selectedFieldId) return field.rightField;
+        const leftField = field.subFields?.leftField;
+        const rightField = field.subFields?.rightField;
+
+        if (leftField?.id === selectedFieldId && leftField?.sectionSide === selectedSectionSide) {
+          return leftField;
+        }
+        if (rightField?.id === selectedFieldId && rightField?.sectionSide === selectedSectionSide) {
+          return rightField;
+        }
       }
     }
+
+    console.warn(`No field found for selectedFieldId: ${selectedFieldId}, selectedSectionSide: ${selectedSectionSide}`);
     return null;
   };
 
   const selectedField = getSelectedField();
-  
+
   return (
     <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen} 
-        toggleSidebar={toggleSidebar} 
+      <MainMenuBar isSidebarOpen={isSidebarOpen}
+        toggleSidebar={toggleSidebar}
         formRecords={formRecords}
         selectedVersionId={selectedVersionId} />
       <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-16'
-        }`}
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
+          }`}
       >
         <div className="bg-[#6A9AB0] text-white h-1/3"></div>
         <div className="bg-white h-2/3"></div>
@@ -819,9 +930,8 @@ function MainFormBuilder({showMapping}) {
               <button
                 onClick={saveFormToSalesforce}
                 disabled={isSaving || currentFormVersion?.Stage__c !== 'Draft'}
-                className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${
-                  isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
-                }`}
+                className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
+                  }`}
                 title="Save Form"
               >
                 {isSaving ? (

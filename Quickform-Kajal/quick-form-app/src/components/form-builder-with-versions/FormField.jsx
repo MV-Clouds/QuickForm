@@ -238,7 +238,7 @@ const textToHtml = (text) => {
 
 function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme }) {
   const {
-    type, id, label, options: initialOptions, labelAlignment = 'top', heading, leftField, rightField, isRequired,
+    type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, leftField, rightField, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
     helpText = '', alignment = 'center', isCut = false, sectionId, enableSalutation = false,
     salutations = ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], selectedSalutation = '',
@@ -367,6 +367,14 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     }
   };
 
+  const handleSubFieldChange = (subFieldKey, updates) => {
+    const updatedSubFields = {
+      ...subFields,
+      [subFieldKey]: { ...subFields[subFieldKey], ...updates },
+    };
+    onUpdateField(id, { subFields: updatedSubFields });
+  };
+
   const handleImageChange = (e) => {
     const files = e.target.files;
     if (files) {
@@ -480,11 +488,11 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   };
 
   const handleSectionDrop = (e, side) => {
-    if (!e) return; // Prevent errors if e is null
     e.preventDefault();
     e.stopPropagation();
     const fieldType = e.dataTransfer.getData('fieldType');
     const fieldId = e.dataTransfer.getData('fieldId');
+
     if (fieldType === "section") {
       console.warn('Cannot nest section fields');
       return;
@@ -496,10 +504,16 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
 
     const newFieldId = fieldId || `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     let newField;
+
     if (fieldId) {
-      // Deep clone the field so it doesn't become null after deletion
-      const original = fields.find((f) => f.id === fieldId);
-      newField = original ? JSON.parse(JSON.stringify(original)) : null;
+      // Find the original field in the form fields array
+      const original = fields.find(f => f.id === fieldId);
+      if (!original) return;
+
+      // Create a deep clone of the field
+      newField = JSON.parse(JSON.stringify(original));
+      newField.sectionId = id;
+      newField.sectionSide = side;
     } else {
       newField = {
         id: newFieldId,
@@ -509,15 +523,17 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       };
     }
 
-    if (newField) {
-      const updatedField = {
-        ...field,
-        [side === 'left' ? 'leftField' : 'rightField']: { ...newField, sectionId: id, sectionSide: side },
-      };
-      onUpdateField(id, updatedField);
-      if (fieldId) {
-        onDeleteField(fieldId, false);
-      }
+    // Update the section's subFields with the new field
+    const updatedSubFields = {
+      ...subFields,
+      [side === 'left' ? 'leftField' : 'rightField']: newField
+    };
+
+    onUpdateField(id, { subFields: updatedSubFields });
+
+    // If we're moving an existing field, delete the original
+    if (fieldId) {
+      onDeleteField(fieldId, false);
     }
   };
 
@@ -525,11 +541,19 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     e.preventDefault();
   };
 
+  // const handleSectionDoubleClick = (side) => {
+  //   if (side === 'left' && leftField) {
+  //     onClick(leftField.id, side);
+  //   } else if (side === 'right' && rightField) {
+  //     onClick(rightField.id, side);
+  //   }
+  // };
+
   const handleSectionDoubleClick = (side) => {
-    if (side === 'left' && leftField) {
-      onClick(leftField.id, side);
-    } else if (side === 'right' && rightField) {
-      onClick(rightField.id, side);
+    if (side === 'left' && subFields.leftField) {
+      onClick(subFields.leftField.id, side);
+    } else if (side === 'right' && subFields.rightField) {
+      onClick(subFields.rightField.id, side);
     }
   };
 
@@ -1014,46 +1038,40 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             }
           >
             <div className="flex flex-col gap-3">
-              {enableCountryCode ? (
+              {subFields.countryCode?.enabled ? (
                 <div className="flex items-center gap-3">
-                  {/* Country Code Selector */}
                   <div className="w-1/3">
                     <PhoneInput
-                      country={selectedCountryCode ? selectedCountryCode.toLowerCase() : 'us'}
-                      value="" // Empty value to prevent phone number handling
+                      country={subFields.countryCode?.value ? subFields.countryCode.value.toLowerCase() : 'us'}
+                      value=""
                       onChange={(phone, countryData) => {
                         const newCountryCode = countryData.countryCode.toUpperCase();
-                        if (onUpdateField) {
-                          onUpdateField(id, { selectedCountryCode: newCountryCode });
-                        }
+                        handleSubFieldChange('countryCode', { value: newCountryCode });
                       }}
-                      inputClass="p-2 border rounded text-sm w-full" // Visible, full-width input
+                      inputClass="p-2 border rounded text-sm w-full"
                       buttonClass="border rounded p-1 bg-white"
                       dropdownClass="border rounded max-h-64 overflow-y-auto"
                       containerClass="flex items-center w-full"
-                      inputProps={{ 'aria-label': 'Country code selector', readOnly: true }} // Read-only to prevent typing
+                      inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
                       disabled={isDisabled}
-                      placeholder=""
+                      placeholder={subFields.countryCode?.placeholder || 'Select country code'}
                       enableSearch
                       searchPlaceholder="Search country"
                       searchNotFound="No country found"
                       preferredCountries={['us', 'ca', 'gb']}
                     />
                   </div>
-                  {/* Phone Number Input */}
                   <div className="w-2/3">
                     <InputMask
-                      mask={phoneInputMask}
-                      value={phoneValue}
-                      onChange={(e) => {
-                        const newPhoneValue = e.target.value;
-                        setPhoneValue(newPhoneValue);
-                        if (onUpdateField) {
-                          onUpdateField(id, { value: newPhoneValue });
-                        }
-                      }}
+                      mask={subFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                      value={subFields.phoneNumber?.value || ''}
+                      onChange={(e) => handleSubFieldChange('phoneNumber', {
+                        value: e.target.value,
+                        // Keep the existing mask when updating value
+                        phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999'
+                      })}
                       className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                      placeholder={placeholder?.main || 'Enter phone number'}
+                      placeholder={subFields.phoneNumber?.placeholder || 'Enter phone number'}
                       disabled={isDisabled}
                       inputProps={{ 'aria-label': 'Phone number input' }}
                     />
@@ -1061,17 +1079,15 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 </div>
               ) : (
                 <InputMask
-                  mask={phoneInputMask}
-                  value={phoneValue}
-                  onChange={(e) => {
-                    const newPhoneValue = e.target.value;
-                    setPhoneValue(newPhoneValue);
-                    if (onUpdateField) {
-                      onUpdateField(id, { value: newPhoneValue });
-                    }
-                  }}
+                  mask={subFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                  value={subFields.phoneNumber?.value || ''}
+                  onChange={(e) => handleSubFieldChange('phoneNumber', {
+                    value: e.target.value,
+                    // Keep the existing mask when updating value
+                    phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999'
+                  })}
                   className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                  placeholder={placeholder?.main || 'Enter phone number'}
+                  placeholder={subFields.phoneNumber?.placeholder || 'Enter phone number'}
                   disabled={isDisabled}
                   inputProps={{ 'aria-label': 'Phone number input' }}
                 />
@@ -1241,8 +1257,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                     <div
                       key={idx}
                       className={`p-2 hover:bg-blue-100 cursor-pointer ${allowMultipleSelections
-                          ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
-                          : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                        ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                        : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
                         }`}
                       onClick={() => toggleOption(dropdownRelatedValues[opt] || opt)}
                     >
@@ -1387,34 +1403,38 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             </label>
           }>
             <div className="flex gap-3">
-              {enableSalutation && (
+              {subFields.salutation?.enabled && (
                 <div className="w-1/5">
                   <select
-                    value={selectedSalutation}
-                    onChange={(e) => onUpdateField(id, { selectedSalutation: e.target.value })}
+                    value={subFields.salutation?.value || ''}
+                    onChange={(e) => handleSubFieldChange('salutation', { value: e.target.value })}
                     className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                     disabled={isDisabled}
                   >
-                    <option value="" disabled>{placeholder.salutation || 'Select Salutation'}</option>
-                    {salutations.map((sal, idx) => (
+                    <option value="" disabled>{subFields.salutation?.placeholder || 'Select Salutation'}</option>
+                    {(subFields.salutation?.options || ['Mr.', 'Mrs.', 'Ms.', 'Dr.']).map((sal, idx) => (
                       <option key={idx} value={sal}>{sal}</option>
                     ))}
                   </select>
                 </div>
               )}
-              <div className={enableSalutation ? 'w-2/5' : 'w-1/2'}>
+              <div className={subFields.salutation?.enabled ? 'w-2/5' : 'w-1/2'}>
                 <input
                   type="text"
                   className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                  placeholder={placeholder.first || 'First Name'}
+                  placeholder={subFields.firstName?.placeholder || 'First Name'}
+                  value={subFields.firstName?.value || ''}
+                  onChange={(e) => handleSubFieldChange('firstName', { value: e.target.value })}
                   readOnly={isDisabled}
                 />
               </div>
-              <div className={enableSalutation ? 'w-2/5' : 'w-1/2'}>
+              <div className={subFields.salutation?.enabled ? 'w-2/5' : 'w-1/2'}>
                 <input
                   type="text"
                   className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                  placeholder={placeholder.last || 'Last Name'}
+                  placeholder={subFields.lastName?.placeholder || 'Last Name'}
+                  value={subFields.lastName?.value || ''}
+                  onChange={(e) => handleSubFieldChange('lastName', { value: e.target.value })}
                   readOnly={isDisabled}
                 />
               </div>
@@ -1434,63 +1454,83 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             </label>
           }>
             <div className="flex flex-col gap-3">
-              {visibleSubFields.street && (
+              {subFields.street?.visible && (
                 <div className="w-full">
-                  <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.street}</label>
+                  <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
+                    {subFields.street?.label || 'Street Address'}
+                  </label>
                   <input
                     type="text"
                     className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                    placeholder={placeholder.street || 'Street Address'}
+                    placeholder={subFields.street?.placeholder || 'Street Address'}
+                    value={subFields.street?.value || ''}
+                    onChange={(e) => handleSubFieldChange('street', { value: e.target.value })}
                     readOnly={isDisabled}
                   />
                 </div>
               )}
-              {(visibleSubFields.city || visibleSubFields.state) && (
+              {(subFields.city?.visible || subFields.state?.visible) && (
                 <div className="flex gap-3">
-                  {visibleSubFields.city && (
+                  {subFields.city?.visible && (
                     <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.city}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
+                        {subFields.city?.label || 'City'}
+                      </label>
                       <input
                         type="text"
                         className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={placeholder.city || 'City'}
+                        placeholder={subFields.city?.placeholder || 'City'}
+                        value={subFields.city?.value || ''}
+                        onChange={(e) => handleSubFieldChange('city', { value: e.target.value })}
                         readOnly={isDisabled}
                       />
                     </div>
                   )}
-                  {visibleSubFields.state && (
+                  {subFields.state?.visible && (
                     <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.state}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
+                        {subFields.state?.label || 'State'}
+                      </label>
                       <input
                         type="text"
                         className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={placeholder.state || 'State'}
+                        placeholder={subFields.state?.placeholder || 'State'}
+                        value={subFields.state?.value || ''}
+                        onChange={(e) => handleSubFieldChange('state', { value: e.target.value })}
                         readOnly={isDisabled}
                       />
                     </div>
                   )}
                 </div>
               )}
-              {(visibleSubFields.country || visibleSubFields.postal) && (
+              {(subFields.country?.visible || subFields.postal?.visible) && (
                 <div className="flex gap-3">
-                  {visibleSubFields.country && (
+                  {subFields.country?.visible && (
                     <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.country}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
+                        {subFields.country?.label || 'Country'}
+                      </label>
                       <input
                         type="text"
                         className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={placeholder.country || 'Country'}
+                        placeholder={subFields.country?.placeholder || 'Country'}
+                        value={subFields.country?.value || ''}
+                        onChange={(e) => handleSubFieldChange('country', { value: e.target.value })}
                         readOnly={isDisabled}
                       />
                     </div>
                   )}
-                  {visibleSubFields.postal && (
+                  {subFields.postal?.visible && (
                     <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>{subLabels.postal}</label>
+                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
+                        {subFields.postal?.label || 'Postal Code'}
+                      </label>
                       <input
                         type="text"
                         className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={placeholder.postal || 'Postal Code'}
+                        placeholder={subFields.postal?.placeholder || 'Postal Code'}
+                        value={subFields.postal?.value || ''}
+                        onChange={(e) => handleSubFieldChange('postal', { value: e.target.value })}
                         readOnly={isDisabled}
                       />
                     </div>
@@ -1702,19 +1742,33 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         <SelectionWrapper isSection>
           <div className="flex gap-2">
             <div
-              className={`w-1/2 min-h-[100px] rounded ${leftField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
+              className={`w-1/2 min-h-[100px] rounded ${subFields.leftField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
               onDrop={(e) => handleSectionDrop(e, 'left')}
               onDragOver={handleDragOver}
               onDoubleClick={() => handleSectionDoubleClick('left')}
             >
-              {leftField ? (
+              {subFields.leftField ? (
                 <FormField
-                  field={leftField}
+                  field={subFields.leftField}
                   isSelected={isSelected && sectionSide === 'left'}
                   onClick={onClick}
                   onDrop={onDrop}
-                  onUpdateField={onUpdateField}
-                  onDeleteField={onDeleteField}
+                  onUpdateField={(fieldId, updates) => {
+                    // Update the left field within subFields
+                    const updatedSubFields = {
+                      ...subFields,
+                      leftField: { ...subFields.leftField, ...updates }
+                    };
+                    onUpdateField(id, { subFields: updatedSubFields });
+                  }}
+                  onDeleteField={(fieldId) => {
+                    // Remove the left field
+                    const updatedSubFields = {
+                      ...subFields,
+                      leftField: null
+                    };
+                    onUpdateField(id, { subFields: updatedSubFields });
+                  }}
                   pageIndex={pageIndex}
                   sectionSide="left"
                   fields={fields}
@@ -1724,23 +1778,37 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   selectedTheme={selectedTheme}
                 />
               ) : (
-                <p className="text-gray-500 text-center">Drag field here</p>
+                <p className="text-gray-500 text-center p-4">Drop field here</p>
               )}
             </div>
             <div
-              className={`w-1/2 rounded ${rightField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
+              className={`w-1/2 min-h-[100px] rounded ${subFields.rightField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
               onDrop={(e) => handleSectionDrop(e, 'right')}
               onDragOver={handleDragOver}
               onDoubleClick={() => handleSectionDoubleClick('right')}
             >
-              {rightField ? (
+              {subFields.rightField ? (
                 <FormField
-                  field={rightField}
+                  field={subFields.rightField}
                   isSelected={isSelected && sectionSide === 'right'}
                   onClick={onClick}
                   onDrop={onDrop}
-                  onUpdateField={onUpdateField}
-                  onDeleteField={onDeleteField}
+                  onUpdateField={(fieldId, updates) => {
+                    // Update the right field within subFields
+                    const updatedSubFields = {
+                      ...subFields,
+                      rightField: { ...subFields.rightField, ...updates }
+                    };
+                    onUpdateField(id, { subFields: updatedSubFields });
+                  }}
+                  onDeleteField={(fieldId) => {
+                    // Remove the right field
+                    const updatedSubFields = {
+                      ...subFields,
+                      rightField: null
+                    };
+                    onUpdateField(id, { subFields: updatedSubFields });
+                  }}
                   pageIndex={pageIndex}
                   sectionSide="right"
                   fields={fields}
@@ -1750,7 +1818,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   selectedTheme={selectedTheme}
                 />
               ) : (
-                <p className="text-gray-500 text-center">Drag field here</p>
+                <p className="text-gray-500 text-center p-4">Drop field here</p>
               )}
             </div>
           </div>
@@ -1763,3 +1831,4 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
 }
 
 export default FormField;
+

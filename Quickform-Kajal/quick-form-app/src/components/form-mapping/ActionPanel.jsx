@@ -58,7 +58,7 @@ const ActionPanel = ({
   const [pathOption, setPathOption] = useState("Rules");
 
   const typeMapping = {
-    string: ["shorttext", "longtext"],
+    string: ["shorttext", "longtext","number","price","date","datetime","time","email","phone","dropdown", "checkbox", "radio", "picklist"],
     double: ["number", "price"],
     currency: ["price", "number"],
     boolean: ["checkbox"],
