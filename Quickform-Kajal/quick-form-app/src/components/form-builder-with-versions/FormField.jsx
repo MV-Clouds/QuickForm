@@ -238,13 +238,10 @@ const textToHtml = (text) => {
 
 function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme }) {
   const {
-    type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, leftField, rightField, isRequired,
+    type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
-    helpText = '', alignment = 'center', isCut = false, sectionId, enableSalutation = false,
-    salutations = ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], selectedSalutation = '',
+    helpText = '', alignment = 'center', isCut = false, sectionId,
     maxChars, allowedDomains, enableConfirmation = false, enableVerification = false,
-    subLabels = { street: 'Street Address', city: 'City', state: 'State', country: 'Country', postal: 'Postal Code' },
-    visibleSubFields = { street: true, city: true, state: true, country: true, postal: true },
     maxFileSize, allowedFileTypes, multipleFiles = false,
     makeAsLink = false, termsLinkUrl = '',
     dateSeparator = '-', dateFormat = 'MM/dd/yyyy', defaultDate = '', weekStartDay = 'Sunday',
@@ -255,8 +252,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     datetimeRange = { start: '', end: '' },
     timeFormat = 'HH:mm', defaultTime = '', restrictAmPm = '', ratingRange = 5, shortTextMaxChars,
     isRichText = false, longTextMaxChars, numberValueLimits = { enabled: false, min: '', max: '' },
-    checkboxRelatedValues = {}, radioRelatedValues = {}, phoneInputMask = '(999) 999-9999', enableCountryCode = false, selectedCountryCode = 'US',
-    // NEW: Add price-specific properties
+    checkboxRelatedValues = {}, radioRelatedValues = {},
     priceLimits = { enabled: false, min: '', max: '' }, currencyType = 'USD', allowMultipleSelections = false,
     dropdownRelatedValues = {}, isHidden = false,
   } = field;
@@ -303,7 +299,6 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   const [numberValue, setNumberValue] = useState('');
   const datePickerRef = useRef(null);
   const quillRef = useRef(null);
-  const [phoneValue, setPhoneValue] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState(field.value || (allowMultipleSelections ? [] : ''));
   const dropdownRef = useRef(null);
@@ -403,26 +398,6 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     }
   };
 
-  const handleOptionChange = (index, newValue) => {
-    const newOptions = [...localOptions];
-    const oldOption = newOptions[index];
-    newOptions[index] = newValue;
-
-    // Update related values for checkbox or radio
-    const relatedValuesKey = type === 'checkbox' ? 'checkboxRelatedValues' : 'radioRelatedValues';
-    const relatedValues = type === 'checkbox' ? checkboxRelatedValues : radioRelatedValues;
-    const newRelatedValues = { ...relatedValues };
-    if (oldOption !== newValue && newRelatedValues[oldOption]) {
-      newRelatedValues[newValue] = newRelatedValues[oldOption];
-      delete newRelatedValues[oldOption];
-    }
-
-    setLocalOptions(newOptions);
-    if (onUpdateField) {
-      onUpdateField(id, { options: newOptions, [relatedValuesKey]: newRelatedValues });
-    }
-  };
-
   const handleAddOption = () => {
     const newOptions = [...localOptions, `Option ${localOptions.length + 1}`];
     const relatedValuesKey = type === 'checkbox' ? 'checkboxRelatedValues' : 'radioRelatedValues';
@@ -488,66 +463,58 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   };
 
   const handleSectionDrop = (e, side) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const fieldType = e.dataTransfer.getData('fieldType');
-    const fieldId = e.dataTransfer.getData('fieldId');
+  e.preventDefault();
+  e.stopPropagation();
+  const fieldType = e.dataTransfer.getData('fieldType');
+  const fieldId = e.dataTransfer.getData('fieldId');
+  
+  if (fieldType === "section") {
+    console.warn('Cannot nest section fields');
+    return;
+  }
+  if (fieldType === 'divider' || fieldType === 'pagebreak') {
+    console.warn('Cannot add divider or pagebreak to section');
+    return;
+  }
 
-    if (fieldType === "section") {
-      console.warn('Cannot nest section fields');
-      return;
-    }
-    if (fieldType === 'divider' || fieldType === 'pagebreak') {
-      console.warn('Cannot add divider or pagebreak to section');
-      return;
-    }
-
-    const newFieldId = fieldId || `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    let newField;
-
-    if (fieldId) {
-      // Find the original field in the form fields array
-      const original = fields.find(f => f.id === fieldId);
-      if (!original) return;
-
-      // Create a deep clone of the field
-      newField = JSON.parse(JSON.stringify(original));
-      newField.sectionId = id;
-      newField.sectionSide = side;
-    } else {
-      newField = {
-        id: newFieldId,
-        type: fieldType,
-        sectionId: id,
-        sectionSide: side,
-      };
-    }
-
-    // Update the section's subFields with the new field
-    const updatedSubFields = {
-      ...subFields,
-      [side === 'left' ? 'leftField' : 'rightField']: newField
+  const newFieldId = fieldId || `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  let newField;
+  
+  if (fieldId) {
+    // Find the original field in the form fields array
+    const original = fields.find(f => f.id === fieldId);
+    if (!original) return;
+    
+    // Create a deep clone of the field
+    newField = JSON.parse(JSON.stringify(original));
+    newField.sectionId = id;
+    newField.sectionSide = side;
+  } else {
+    newField = {
+      id: newFieldId,
+      type: fieldType,
+      sectionId: id,
+      sectionSide: side,
     };
+  }
 
-    onUpdateField(id, { subFields: updatedSubFields });
-
-    // If we're moving an existing field, delete the original
-    if (fieldId) {
-      onDeleteField(fieldId, false);
-    }
+  // Update the section's subFields with the new field
+  const updatedSubFields = {
+    ...subFields,
+    [side === 'left' ? 'leftField' : 'rightField']: newField
   };
+
+  onUpdateField(id, { subFields: updatedSubFields });
+  
+  // If we're moving an existing field, delete the original
+  if (fieldId) {
+    onDeleteField(fieldId, false);
+  }
+};
 
   const handleDragOver = (e) => {
     e.preventDefault();
   };
-
-  // const handleSectionDoubleClick = (side) => {
-  //   if (side === 'left' && leftField) {
-  //     onClick(leftField.id, side);
-  //   } else if (side === 'right' && rightField) {
-  //     onClick(rightField.id, side);
-  //   }
-  // };
 
   const handleSectionDoubleClick = (side) => {
     if (side === 'left' && subFields.leftField) {
@@ -1065,7 +1032,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                     <InputMask
                       mask={subFields.phoneNumber?.phoneMask || '(999) 999-9999'}
                       value={subFields.phoneNumber?.value || ''}
-                      onChange={(e) => handleSubFieldChange('phoneNumber', {
+                      onChange={(e) => handleSubFieldChange('phoneNumber', { 
                         value: e.target.value,
                         // Keep the existing mask when updating value
                         phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999'
@@ -1078,10 +1045,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   </div>
                 </div>
               ) : (
-                <InputMask
+              <InputMask
                   mask={subFields.phoneNumber?.phoneMask || '(999) 999-9999'}
                   value={subFields.phoneNumber?.value || ''}
-                  onChange={(e) => handleSubFieldChange('phoneNumber', {
+                  onChange={(e) => handleSubFieldChange('phoneNumber', { 
                     value: e.target.value,
                     // Keep the existing mask when updating value
                     phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999'
@@ -1257,8 +1224,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                     <div
                       key={idx}
                       className={`p-2 hover:bg-blue-100 cursor-pointer ${allowMultipleSelections
-                        ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
-                        : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                          ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                          : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
                         }`}
                       onClick={() => toggleOption(dropdownRelatedValues[opt] || opt)}
                     >
@@ -1392,7 +1359,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-    case 'fullname':
+     case 'fullname':
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
@@ -1443,7 +1410,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-    case 'address':
+     case 'address':
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={
@@ -1562,7 +1529,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-    case 'signature':
+    case 'signature': 
       return (
         <SelectionWrapper>
           <FieldWrapper {...wrapperProps} labelContent={

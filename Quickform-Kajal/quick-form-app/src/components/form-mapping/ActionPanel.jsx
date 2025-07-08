@@ -58,7 +58,7 @@ const ActionPanel = ({
   const [pathOption, setPathOption] = useState("Rules");
 
   const typeMapping = {
-    string: ["shorttext", "longtext","number","price","date","datetime","time","email","phone","dropdown", "checkbox", "radio", "picklist"],
+    string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
     double: ["number", "price"],
     currency: ["price", "number"],
     boolean: ["checkbox"],
@@ -68,7 +68,7 @@ const ActionPanel = ({
     phone: ["phone"],
     picklist: ["dropdown", "checkbox", "radio", "picklist"],
     multipicklist: ["dropdown", "checkbox", "radio", "picklist"],
-    textarea: ["shorttext", "longtext"],
+    textarea: ["shorttext", "longtext", "fullname", "section", "address",],
     url: ["shorttext"],
     percent: ["number"],
     time: ["time"],
@@ -84,8 +84,8 @@ const ActionPanel = ({
       nodeMapping.conditions?.length > 0
         ? nodeMapping.conditions.map(c => ({ ...c, logic: undefined }))
         : (nodeMapping.pathOption === "Rules" || isFindNode || isFilterNode || (isCreateUpdateNode && nodeMapping.enableConditions)
-            ? [{ field: "", operator: "=", value: "", value2: "" }]
-            : [])
+          ? [{ field: "", operator: "=", value: "", value2: "" }]
+          : [])
     );
     setLogicType(nodeMapping.logicType || "AND");
     setCustomLogic(nodeMapping.customLogic || "");
@@ -343,76 +343,76 @@ const ActionPanel = ({
     { value: "Fallback", label: "Fallback" },
   ];
 
-const handleMappingChange = (index, key, value, extra = {}) => {
-  const newMappings = [...localMappings];
-  const currentMapping = newMappings[index];
-  
-  // Handle picklist value selection
-  if (key === 'picklistValue') {
-    newMappings[index] = { 
-      ...currentMapping, 
-      picklistValue: value,
-      formFieldId: "", // Clear form field if picklist value is selected
-      fieldType: "picklist"
-    };
-    setLocalMappings(newMappings);
-    setSaveError(null);
-    return;
-  }
-  
-  if (key === 'formFieldId' || key === 'salesforceField') {
-    let formField = null;
-    let salesforceField = null;
-    
-    if (key === 'formFieldId') {
-      formField = safeFormFields.find(f => f.id === value);
-      salesforceField = currentMapping.salesforceField 
-        ? (safeSalesforceObjects
+  const handleMappingChange = (index, key, value, extra = {}) => {
+    const newMappings = [...localMappings];
+    const currentMapping = newMappings[index];
+
+    // Handle picklist value selection
+    if (key === 'picklistValue') {
+      newMappings[index] = {
+        ...currentMapping,
+        picklistValue: value,
+        formFieldId: "", // Clear form field if picklist value is selected
+        fieldType: "picklist"
+      };
+      setLocalMappings(newMappings);
+      setSaveError(null);
+      return;
+    }
+
+    if (key === 'formFieldId' || key === 'salesforceField') {
+      let formField = null;
+      let salesforceField = null;
+
+      if (key === 'formFieldId') {
+        formField = safeFormFields.find(f => f.id === value);
+        salesforceField = currentMapping.salesforceField
+          ? (safeSalesforceObjects
             .find(obj => obj.name === selectedObject)
             ?.fields?.find(f => f.name === currentMapping.salesforceField) || null)
-        : null;
-    } else { // salesforceField
-      salesforceField = safeSalesforceObjects
-        .find(obj => obj.name === selectedObject)
-        ?.fields?.find(f => f.name === value) || null;
-      formField = currentMapping.formFieldId 
-        ? (safeFormFields.find(f => f.id === currentMapping.formFieldId) || null)
-        : null;
-    }
-    
-    // Validate field types
-    if (formField && salesforceField) {
-      const allowedTypes = typeMapping[salesforceField.type] || [];
-      let isValid = allowedTypes.includes(formField.type);
-      
-      // Special handling for checkbox/radio with picklist
-      if ((formField.type === 'checkbox' || formField.type === 'radio') && 
+          : null;
+      } else { // salesforceField
+        salesforceField = safeSalesforceObjects
+          .find(obj => obj.name === selectedObject)
+          ?.fields?.find(f => f.name === value) || null;
+        formField = currentMapping.formFieldId
+          ? (safeFormFields.find(f => f.id === currentMapping.formFieldId) || null)
+          : null;
+      }
+
+      // Validate field types
+      if (formField && salesforceField) {
+        const allowedTypes = typeMapping[salesforceField.type] || [];
+        let isValid = allowedTypes.includes(formField.type);
+
+        // Special handling for checkbox/radio with picklist
+        if ((formField.type === 'checkbox' || formField.type === 'radio') &&
           (salesforceField.type === 'picklist' || salesforceField.type === 'multipicklist')) {
-        try {
-          const properties = JSON.parse(formField.Properties__c || '{}');
-          isValid = properties.options && properties.options.length > 1;
-        } catch (e) {
-          isValid = false;
+          try {
+            const properties = JSON.parse(formField.Properties__c || '{}');
+            isValid = properties.options && properties.options.length > 1;
+          } catch (e) {
+            isValid = false;
+          }
+        }
+
+        if (!isValid) {
+          setSaveError(`Type mismatch: Form field type ${formField.type} is not compatible with Salesforce field type ${salesforceField.type}`);
+          return;
+        } else {
+          setSaveError(null);
         }
       }
-      
-      if (!isValid) {
-        setSaveError(`Type mismatch: Form field type ${formField.type} is not compatible with Salesforce field type ${salesforceField.type}`);
-        return;
-      } else {
-        setSaveError(null);
-      }
     }
-  }
-  
-  newMappings[index] = { 
-    ...currentMapping, 
-    [key]: value, 
-    ...extra,
-    ...(key === 'formFieldId' ? { picklistValue: "" } : {}) // Clear picklist value if form field is selected
+
+    newMappings[index] = {
+      ...currentMapping,
+      [key]: value,
+      ...extra,
+      ...(key === 'formFieldId' ? { picklistValue: "" } : {}) // Clear picklist value if form field is selected
+    };
+    setLocalMappings(newMappings);
   };
-  setLocalMappings(newMappings);
-};
 
   const handleConditionChange = (index, key, value, conditionType = "conditions") => {
     const setState = conditionType === "exitConditions" ? setExitConditions : setConditions;
@@ -460,7 +460,7 @@ const handleMappingChange = (index, key, value, extra = {}) => {
     }));
   };
 
-  const handleObjectSelect = (selectedOption) => {    
+  const handleObjectSelect = (selectedOption) => {
     if (!selectedOption) {
       setSelectedObject("");
       return;
@@ -631,7 +631,7 @@ const handleMappingChange = (index, key, value, extra = {}) => {
 
     const validMappings = localMappings.filter((m) => {
       if (!m.salesforceField) return false;
-      
+
       // Either form field or picklist value must be set
       return m.formFieldId || m.picklistValue;
     });
@@ -707,7 +707,7 @@ const handleMappingChange = (index, key, value, extra = {}) => {
       };
       return updatedMappings;
     });
-    
+
     setSaveError(null);
     console.log("Mappings saved successfully for node:", nodeId);
     onClose();
@@ -716,84 +716,97 @@ const handleMappingChange = (index, key, value, extra = {}) => {
   const safeFormFields = Array.isArray(formFields) ? formFields : [];
   const safeSalesforceObjects = Array.isArray(salesforceObjects) ? salesforceObjects : [];
 
-const formFieldOptions = (mappingIndex) => {
-  const currentSalesforceField = localMappings[mappingIndex]?.salesforceField;
-  const sfField = selectedObject 
-    ? safeSalesforceObjects
+  const formFieldOptions = (mappingIndex) => {
+    const currentSalesforceField = mappingIndex !== undefined ? localMappings[mappingIndex]?.salesforceField : null;
+    const sfField = currentSalesforceField && selectedObject
+      ? safeSalesforceObjects
         .find(obj => obj.name === selectedObject)
         ?.fields?.find(f => f.name === currentSalesforceField)
-    : null;
+      : null;
 
-  // If no Salesforce field is selected or it's not a picklist/multipicklist, return all form fields
-  if (!sfField || (sfField.type !== 'picklist' && sfField.type !== 'multipicklist')) {
-    return safeFormFields.map(field => ({
-      value: field.id,
-      label: field.name || 'Unknown',
-      isDisabled: sfField ? !(typeMapping[sfField.type] || []).includes(field.type) : false
-    }));
-  }
+    const allowedTypes = sfField ? (typeMapping[sfField?.type] || typeMapping.string) : typeMapping.string;
 
-  // For picklist/multipicklist fields, return grouped options
-  const groups = [];
+    const groups = safeFormFields
+      .filter(f => !f.parentFieldId)
+      .map(parent => {
+        const properties = parent.Properties__c ? JSON.parse(parent.Properties__c) : {};
+        const subFieldsData = properties.subFields || {};
+        const subFields = Object.entries(subFieldsData).map(([key, subField]) => {
+          const subFieldLabel = subField.label || subField.type || key.replace(/([A-Z])/g, ' $1').trim() || 'Unknown';
+          const subFieldId = subField.id || `${parent.id}_${key}`;
+          return {
+            value: subFieldId,
+            label: subField.enabled !== false ? subFieldLabel : `${subFieldLabel} (Disabled)`,
+            isFormField: true,
+            isSubField: true,
+            type: subField.type || parent.type
+          };
+        }).filter(sub => allowedTypes.includes(sub.type));
 
-  // Add Picklist Values group
-  if (sfField.values && Array.isArray(sfField.values) && sfField.values.length > 0) {
-    groups.push({
-      label: 'Picklist Values',
-      options: sfField.values.map(val => ({
-        value: val,
-        label: val,
-        isPicklistValue: true
-      }))
-    });
-  } else {
-    groups.push({
-      label: 'Picklist Values',
-      options: [{ value: '', label: 'No picklist values available', isDisabled: true }]
-    });
-  }
+        return {
+          label: parent.name || 'Unknown',
+          options: [
+            {
+              value: parent.id,
+              label: parent.name || 'Unknown',
+              isFormField: true,
+              isSubField: false,
+              type: parent.type
+            },
+            ...subFields
+          ].filter(opt => allowedTypes.includes(opt.type))
+        };
+      }).filter(group => group.options.length > 0);
 
-  // Add Form Fields group
-  const compatibleFormFields = safeFormFields.filter(f => {
-    const allowedTypes = typeMapping[sfField.type] || [];
-    let isValid = allowedTypes.includes(f.type);
-
-    if ((f.type === 'checkbox' || f.type === 'radio') && 
-        (sfField.type === 'picklist' || sfField.type === 'multipicklist')) {
-      try {
-        const properties = JSON.parse(f.Properties__c || '{}');
-        isValid = properties.options && properties.options.length > 1;
-      } catch (e) {
-        isValid = false;
-      }
-    }
-    return isValid;
-  });
-
-  groups.push({
-    label: 'Form Fields',
-    options: compatibleFormFields.length > 0
-      ? compatibleFormFields.map(f => ({
+    const orphanSubFields = safeFormFields
+      .filter(f => f.parentFieldId && !safeFormFields.some(p => p.id === f.parentFieldId))
+      .map(f => {
+        const properties = f.Properties__c ? JSON.parse(f.Properties__c) : {};
+        const subFieldLabel = properties.label || f.type || f.name || 'Unknown';
+        return {
           value: f.id,
-          label: f.name || 'Unknown',
-          isFormField: true
-        }))
-      : [{ value: '', label: 'No compatible form fields available', isDisabled: true }]
-  });
+          label: subFieldLabel,
+          isFormField: true,
+          isSubField: true,
+          type: f.type
+        };
+      })
+      .filter(sub => allowedTypes.includes(sub.type));
 
-  return groups;
-};
+    if (orphanSubFields.length > 0) {
+      groups.push({
+        label: 'Other Fields',
+        options: orphanSubFields
+      });
+    }
+
+    if (sfField && (sfField.type === 'picklist' || sfField.type === 'multipicklist')) {
+      const picklistGroup = {
+        label: 'Picklist Values',
+        options: sfField.values && Array.isArray(sfField.values) && sfField.values.length > 0
+          ? sfField.values.map(val => ({
+            value: val,
+            label: val,
+            isPicklistValue: true
+          }))
+          : [{ value: '', label: 'No picklist values available', isDisabled: true }]
+      };
+      groups.unshift(picklistGroup);
+    }
+
+    return groups;
+  };
 
   const objectOptions = safeSalesforceObjects.map((obj) => ({ value: obj.name || "", label: obj.name || "Unknown" }));
-  
+
   const fieldOptions = selectedObject
-  ? safeSalesforceObjects
+    ? safeSalesforceObjects
       .find((obj) => obj.name === selectedObject)
       ?.fields?.map((f) => ({
-          value: f.name, 
-          label: f.label || f.name || "Unknown Field", 
-        })) || []
-  : [];
+        value: f.name,
+        label: f.label || f.name || "Unknown Field",
+      })) || []
+    : [];
 
   const sortOrderOptions = [
     { value: "ASC", label: "Ascending" },
@@ -803,21 +816,21 @@ const formFieldOptions = (mappingIndex) => {
   const renderConditions = (conditionType = "conditions", isExit = false) => {
     const conditionsList = isExit ? exitConditions : conditions;
 
-     // Helper function to get operators for a condition
+    // Helper function to get operators for a condition
     const getOperatorsForCondition = (conditionIndex) => {
       if (isExit) {
         return operatorGroups.default; // For exit conditions, use default operators
       }
-      
+
       const condition = conditionsList[conditionIndex];
       if (!condition.field || !selectedObject) {
         return operatorGroups.default;
       }
-      
+
       // Find the Salesforce field type
       const sfObject = safeSalesforceObjects.find(obj => obj.name === selectedObject);
       if (!sfObject) return operatorGroups.default;
-      
+
       const sfField = sfObject.fields?.find(f => f.name === condition.field);
       if (!sfField) return operatorGroups.default;
       const operatorGroup = fieldTypeToOperatorGroup[sfField.type] || 'default';
@@ -933,8 +946,8 @@ const formFieldOptions = (mappingIndex) => {
                   />
                 )}
               </div>
-           
-               <div className="col-span-2">
+
+              <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Operator</label>
                 <Select
                   value={getOperatorsForCondition(index).find((opt) => opt.value === condition.operator) || null}
@@ -1025,7 +1038,7 @@ const formFieldOptions = (mappingIndex) => {
       transition={{ duration: 0.4 }}
       className="absolute right-0 h-full w-1/3 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-10"
     >
- 
+
       <div className="p-6">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
           <motion.h2
@@ -1415,12 +1428,12 @@ const formFieldOptions = (mappingIndex) => {
             >
               <div className="space-y-4">
                 {localMappings.map((mapping, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
-                    >
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+                  >
                     <div className="flex items-start gap-3">
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Field</label>
@@ -1462,18 +1475,19 @@ const formFieldOptions = (mappingIndex) => {
                         <label className="block text-sm font-medium text-gray-700 mb-1">Form Field</label>
                         <Select
                           value={
-                            localMappings[index].picklistValue 
-                              ? { 
-                                  value: localMappings[index].picklistValue, 
-                                  label: localMappings[index].picklistValue,
-                                  isPicklistValue: true 
+                            localMappings[index].picklistValue
+                              ? {
+                                value: localMappings[index].picklistValue,
+                                label: localMappings[index].picklistValue,
+                                isPicklistValue: true
+                              }
+                              : safeFormFields.find(f => f.id === localMappings[index].formFieldId || f.Unique_Key__c === localMappings[index].formFieldId)
+                                ? {
+                                  value: localMappings[index].formFieldId,
+                                  label: safeFormFields.find(f => f.id === localMappings[index].formFieldId || f.Unique_Key__c === localMappings[index].formFieldId).name || 'Unknown',
+                                  isFormField: true,
+                                  isSubField: !!safeFormFields.find(f => f.id === localMappings[index].formFieldId || f.Unique_Key__c === localMappings[index].formFieldId)?.parentFieldId
                                 }
-                              : safeFormFields.find(f => f.id === localMappings[index].formFieldId) 
-                                ? { 
-                                    value: localMappings[index].formFieldId, 
-                                    label: safeFormFields.find(f => f.id === localMappings[index].formFieldId).name || 'Unknown',
-                                    isFormField: true 
-                                  }
                                 : null
                           }
                           onChange={(selected) => {
@@ -1484,12 +1498,12 @@ const formFieldOptions = (mappingIndex) => {
                             if (selected.isPicklistValue) {
                               handleMappingChange(index, 'picklistValue', selected.value);
                             } else {
-                              const field = safeFormFields.find(f => f.id === selected.value);
+                              const field = safeFormFields.find(f => f.id === selected.value || f.Unique_Key__c === selected.value);
                               handleMappingChange(index, 'formFieldId', selected.value, { fieldType: field ? field.type : '' });
                             }
                           }}
                           options={formFieldOptions(index)}
-                          placeholder={formFieldOptions.length ? "Select Form Field" : "No Form Fields Available"}
+                          placeholder={formFieldOptions(index).length ? "Select Form Field or Picklist Value" : "No Options Available"}
                           styles={{
                             container: (base) => ({
                               ...base,
@@ -1516,23 +1530,27 @@ const formFieldOptions = (mappingIndex) => {
                               fontSize: '0.75rem',
                               fontWeight: 'bold',
                               textTransform: 'uppercase',
-                              color: '#6b7280',
+                              color: '#1f2937',
                               backgroundColor: '#f9fafb',
-                              padding: '4px 8px',
+                              padding: '8px 12px',
                               borderBottom: '1px solid #e5e7eb',
                             }),
                             option: (base, { data, isDisabled }) => ({
                               ...base,
-                              backgroundColor: data.isPicklistValue ? '#f0f9ff' : base.backgroundColor,
-                              color: isDisabled ? '#ccc' : (data.isPicklistValue ? '#0369a1' : base.color),
+                              backgroundColor: data.isPicklistValue ? '#f0f9ff' : (data.isSubField ? '#f3f4f6' : base.backgroundColor),
+                              color: isDisabled ? '#ccc' : (data.isPicklistValue ? '#0369a1' : (data.isSubField ? '#374151' : base.color)),
+                              paddingLeft: data.isSubField ? '24px' : '12px',
                               cursor: isDisabled ? 'not-allowed' : 'default',
                               ':active': {
-                                backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : base[':active'].backgroundColor),
+                                backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor)),
+                              },
+                              ':hover': {
+                                backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : (data.isSubField ? '#e5e7eb' : '#f3f4f6')),
                               },
                             }),
                           }}
                           isClearable
-                          isDisabled={!formFieldOptions.length}
+                          isDisabled={!formFieldOptions(index).length}
                           classNamePrefix="select"
                           getOptionIsDisabled={(option) => option.isDisabled === true}
                           formatGroupLabel={(group) => (
@@ -1652,7 +1670,7 @@ const formFieldOptions = (mappingIndex) => {
                 />
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              {/* <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
                 <Select
                   value={safeFormFields.find((f) => f.id === formatterConfig.inputField) ? 
@@ -1683,6 +1701,77 @@ const formFieldOptions = (mappingIndex) => {
                   isClearable
                   classNamePrefix="select"
                 />
+              </div> */}
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
+                <Select
+                  value={
+                    safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField)
+                      ? {
+                        value: formatterConfig.inputField,
+                        label: safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField).name || 'Unknown',
+                        isFormField: true,
+                        isSubField: !!safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField)?.parentFieldId
+                      }
+                      : null
+                  }
+                  onChange={(selected) => handleFormatterChange("inputField", selected ? selected.value : "")}
+                  options={formFieldOptions()}
+                  placeholder={formFieldOptions().length ? "Select Form Field" : "No Form Fields Available"}
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    placeholder: (base) => ({
+                      ...base,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                    groupHeading: (base) => ({
+                      ...base,
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      color: '#1f2937',
+                      backgroundColor: '#f9fafb',
+                      padding: '8px 12px',
+                      borderBottom: '1px solid #e5e7eb',
+                    }),
+                    option: (base, { data, isDisabled }) => ({
+                      ...base,
+                      backgroundColor: data.isSubField ? '#f3f4f6' : base.backgroundColor,
+                      color: isDisabled ? '#ccc' : (data.isSubField ? '#374151' : base.color),
+                      paddingLeft: data.isSubField ? '24px' : '12px',
+                      cursor: isDisabled ? 'not-allowed' : 'default',
+                      ':active': {
+                        backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor),
+                      },
+                      ':hover': {
+                        backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : '#f3f4f6'),
+                      },
+                    }),
+                  }}
+                  isClearable
+                  classNamePrefix="select"
+                  formatGroupLabel={(group) => (
+                    <div className="flex items-center">
+                      <span>{group.label}</span>
+                    </div>
+                  )}
+                />
               </div>
 
               {(formatterConfig.operation === "date_difference" || formatterConfig.operation === "math_operation") && (
@@ -1691,7 +1780,7 @@ const formFieldOptions = (mappingIndex) => {
                   animate={{ opacity: 1, height: "auto" }}
                   className="space-y-4"
                 >
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  {/* <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
                     <Select
                       value={formFieldOptions.find((opt) => opt.value === formatterConfig.inputField2) || null}
@@ -1723,6 +1812,78 @@ const formFieldOptions = (mappingIndex) => {
                       isClearable
                       isDisabled={!formFieldOptions.length || formatterConfig.useCustomInput}
                       classNamePrefix="select"
+                    />
+                  </div> */}
+
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
+                    <Select
+                      value={
+                        safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2)
+                          ? {
+                            value: formatterConfig.inputField2,
+                            label: safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2).name || 'Unknown',
+                            isFormField: true,
+                            isSubField: !!safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2)?.parentFieldId
+                          }
+                          : null
+                      }
+                      onChange={(selected) => handleFormatterChange("inputField2", selected ? selected.value : "")}
+                      options={formFieldOptions()}
+                      placeholder={formFieldOptions().length ? "Select Second Form Field" : "No Form Fields Available"}
+                      styles={{
+                        container: (base) => ({
+                          ...base,
+                          borderRadius: "0.375rem",
+                          borderColor: "#e5e7eb",
+                          fontSize: "0.875rem",
+                        }),
+                        control: (base) => ({
+                          ...base,
+                          minHeight: "34px",
+                        }),
+                        placeholder: (base) => ({
+                          ...base,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }),
+                        menu: (base) => ({
+                          ...base,
+                          zIndex: 9999,
+                        }),
+                        groupHeading: (base) => ({
+                          ...base,
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                          textTransform: 'uppercase',
+                          color: '#1f2937',
+                          backgroundColor: '#f9fafb',
+                          padding: '8px 12px',
+                          borderBottom: '1px solid #e5e7eb',
+                        }),
+                        option: (base, { data, isDisabled }) => ({
+                          ...base,
+                          backgroundColor: data.isSubField ? '#f3f4f6' : base.backgroundColor,
+                          color: isDisabled ? '#ccc' : (data.isSubField ? '#374151' : base.color),
+                          paddingLeft: data.isSubField ? '24px' : '12px',
+                          cursor: isDisabled ? 'not-allowed' : 'default',
+                          ':active': {
+                            backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor),
+                          },
+                          ':hover': {
+                            backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : '#f3f4f6'),
+                          },
+                        }),
+                      }}
+                      isClearable
+                      isDisabled={!formFieldOptions().length || formatterConfig.useCustomInput}
+                      classNamePrefix="select"
+                      formatGroupLabel={(group) => (
+                        <div className="flex items-center">
+                          <span>{group.label}</span>
+                        </div>
+                      )}
                     />
                   </div>
 

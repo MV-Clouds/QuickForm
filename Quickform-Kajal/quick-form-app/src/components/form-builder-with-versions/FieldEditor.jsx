@@ -139,9 +139,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [relatedValues, setRelatedValues] = useState(selectedField?.[`${selectedField?.type}RelatedValues`] || {});
   const [predefinedOptionSet, setPredefinedOptionSet] = useState('');
 
-  // State for phone-specific properties
-  const [phoneInputMask, setPhoneInputMask] = useState(selectedField?.phoneInputMask || '(999) 999-9999');
-  const [enableCountryCode, setEnableCountryCode] = useState(selectedField?.enableCountryCode || false);
   // State for price-specific properties
   const [priceLimits, setPriceLimits] = useState(selectedField?.priceLimits || { enabled: false, min: '', max: '' });
   const [currencyType, setCurrencyType] = useState(selectedField?.currencyType || 'USD');
@@ -208,8 +205,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setLongTextMaxChars(selectedField.longTextMaxChars || '');
       setNumberValueLimits(selectedField.numberValueLimits || { enabled: false, min: '', max: '' });
       setRelatedValues(selectedField[`${selectedField.type}RelatedValues`] || {});
-      setPhoneInputMask(selectedField.phoneInputMask || '(999) 999-9999');
-      setEnableCountryCode(selectedField.enableCountryCode || false);
       setPriceLimits(selectedField.priceLimits || { enabled: false, min: '', max: '' });
       setCurrencyType(selectedField.currencyType || 'USD');
       setAllowMultipleSelections(selectedField.allowMultipleSelections || false);
@@ -793,19 +788,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
   };
 
-  // Handlers for phone-specific properties
-  const handlePhoneInputMaskChange = (e) => {
-    const value = e.target.value;
-    setPhoneInputMask(value);
-    onUpdateField(selectedField.id, { phoneInputMask: value });
-  };
-
-  const handleEnableCountryCodeChange = (e) => {
-    const value = e.target.checked;
-    setEnableCountryCode(value);
-    onUpdateField(selectedField.id, { enableCountryCode: value });
-  };
-
   // Handlers for price-specific properties
   const handlePriceLimitsChange = (key, value) => {
     const newLimits = { ...priceLimits, [key]: value };
@@ -894,7 +876,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isNumber = selectedField?.type === 'number';
   const isPhone = selectedField?.type === 'phone';
   const isPrice = selectedField?.type === 'price';
-  const selectedCountryCode = selectedField?.selectedCountryCode || 'US';
   const countries = getCountryList();
 
   return (

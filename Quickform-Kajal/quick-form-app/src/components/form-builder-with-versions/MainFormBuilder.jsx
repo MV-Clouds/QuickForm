@@ -24,7 +24,6 @@ function MainFormBuilder({ showMapping }) {
   const [isFirstSave, setIsFirstSave] = useState(false);
   const [isLoadingForm, setIsLoadingForm] = useState(false);
   const [formVersions, setFormVersions] = useState([]);
-  const [isNewVersion, setIsNewVersion] = useState(false);
   const [fetchFormError, setFetchFormError] = useState(null);
   const [currentFormVersion, setCurrentFormVersion] = useState(null);
   const navigate = useNavigate();
@@ -159,14 +158,12 @@ function MainFormBuilder({ showMapping }) {
       }
 
       let formVersion = null;
-      let targetFormId = null;
       for (const form of formRecords) {
         formVersion = form.FormVersions.find(
           (version) => version.Source === 'Form_Version__c' && version.Id === formVersionId
         );
         if (formVersion) {
           formVersion.Form__c = form.Id;
-          targetFormId = form.Id;
           setFormVersions(form.FormVersions);
           setFormId(form.Id);
           break;
@@ -362,21 +359,58 @@ function MainFormBuilder({ showMapping }) {
       formVersion.Version__c = '1';
     }
     const formFields = pages.flatMap((page) =>
-      page.fields.map((field, index) => ({
-        Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
-        Field_Type__c: field.type,
-        Page_Number__c: page.pageNumber,
-        Order_Number__c: index + 1,
-        Properties__c: JSON.stringify({
+      page.fields.map((field, index) => {
+        // Handle section fields
+        if (field.type === 'section') {
+          const sectionProperties = {
+            ...field,
+            subFields: {
+              leftField: field.subFields?.leftField ? {
+                ...field.subFields.leftField,
+                label: field.subFields.leftField.label ||
+                  field.subFields.leftField.type?.charAt(0).toUpperCase() +
+                  field.subFields.leftField.type?.slice(1) || 'Left Field'
+              } : null,
+              rightField: field.subFields?.rightField ? {
+                ...field.subFields.rightField,
+                label: field.subFields.rightField.label ||
+                  field.subFields.rightField.type?.charAt(0).toUpperCase() +
+                  field.subFields.rightField.type?.slice(1) || 'Right Field'
+              } : null
+            }
+          };
+
+          return {
+            Name: field.label || 'Section',
+            Field_Type__c: 'section',
+            Page_Number__c: page.pageNumber,
+            Order_Number__c: index + 1,
+            Properties__c: JSON.stringify(sectionProperties),
+            Unique_Key__c: field.id,
+          };
+        }
+
+        // Handle regular fields
+        const properties = {
           ...field,
-          subFields: field.subFields || getDefaultSubFields(field.type) || {},
-        }),
-        Unique_Key__c: field.id,
-      }))
+          label: field.label || field.type?.charAt(0).toUpperCase() + field.type?.slice(1) || 'Field',
+          subFields: field.subFields || getDefaultSubFields(field.type) || {}
+        };
+
+        return {
+          Name: properties.label,
+          Field_Type__c: field.type,
+          Page_Number__c: page.pageNumber,
+          Order_Number__c: index + 1,
+          Properties__c: JSON.stringify(properties),
+          Unique_Key__c: field.id,
+        };
+      })
     );
 
     return { formVersion, formFields };
   };
+
 
   const saveFormToSalesforce = async () => {
     if (!isEditable) return;
@@ -546,14 +580,17 @@ function MainFormBuilder({ showMapping }) {
           options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'],
           value: '',
           placeholder: 'Select Salutation',
+          label: 'Salutation',
         },
         firstName: {
           value: '',
           placeholder: 'First Name',
+          label: 'First Name',
         },
         lastName: {
           value: '',
           placeholder: 'Last Name',
+          label: 'Last Name',
         },
       },
       address: {
@@ -597,11 +634,13 @@ function MainFormBuilder({ showMapping }) {
           enabled: true,
           value: 'US',
           options: [],
+          label: 'Country Code',
         },
         phoneNumber: {
           value: '',
           placeholder: 'Enter phone number',
-          phoneMask: '(999) 999-9999'
+          phoneMask: '(999) 999-9999',
+          label: 'Phone Number',
         }
       },
       default: {},
