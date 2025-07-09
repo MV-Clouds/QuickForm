@@ -44,6 +44,8 @@ const Conditions = () => {
   const [edges, setEdges] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [previewConditionId, setPreviewConditionId] = useState(null);
+  const [isPreviewModalVisible, setIsPreviewModalVisible] = useState(false);
 
   // Animation variants for Framer Motion
   const containerVariants = {
@@ -104,16 +106,7 @@ const Conditions = () => {
         console.log('Form Version Data:', formVersion);
         setFields(formVersion.Fields || []);
         const parsedConditions = Array.isArray(formVersion.Conditions)
-          ? formVersion.Conditions.flatMap((condition) => {
-              try {
-                return condition.Condition_Data__c
-                  ? JSON.parse(condition.Condition_Data__c || '[]')
-                  : [];
-              } catch (err) {
-                console.error('Error parsing Condition_Data__c:', err);
-                return [];
-              }
-            })
+          ? formVersion.Conditions.flat()
           : [];
         setConditions(parsedConditions);
         console.log('Parsed Conditions:', parsedConditions);
@@ -145,41 +138,42 @@ const Conditions = () => {
           };
         });
         setNodes(pageNodes);
-
-        // Initialize edges with variable positioning
-        const pageEdges = parsedConditions
+        const conditionGroups = parsedConditions
           .filter((c) => c.type === 'skip_hide_page')
-          .map((condition, idx) => {
-            const sourceNode = pageNodes.find((n) => n.id === condition.sourcePage);
-            const targetNode = pageNodes.find((n) => n.id === condition.targetPage);
-            if (!sourceNode || !targetNode) return null;
+          .reduce((acc, condition) => {
+              const key = `${condition.sourcePage}-${condition.thenAction}-${condition.targetPage}`;            if (!acc[key]) {
+              acc[key] = { source: condition.sourcePage, target: condition.targetPage, thenAction: condition.thenAction, conditions: [] };
+            }
+            acc[key].conditions.push(condition);
+            return acc;
+          }, {});
+        // Initialize edges with variable positioning
+        const pageEdges = Object.values(conditionGroups).map((group, idx) => {
+          const sourceNode = pageNodes.find((n) => n.id === group.source);
+          const targetNode = pageNodes.find((n) => n.id === group.target);
+          if (!sourceNode || !targetNode) return null;
 
-            // Group edges by source-target pair to calculate offsets
-            const sameEdges = parsedConditions
-              .filter((c) => c.type === 'skip_hide_page' && c.sourcePage === condition.sourcePage && c.targetPage === condition.targetPage);
-            const edgeIndex = sameEdges.findIndex((c) => c.Id === condition.Id);
-            const offset = edgeIndex * 50 - ((sameEdges.length - 1) * 50) / 2; // Spread edges vertically
-
-            return {
-              id: condition.Id,
-              source: condition.sourcePage,
-              target: condition.targetPage,
-              label: `${condition.thenAction} ${derivedPages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}`,
-              type: 'smoothstep',
-              animated: true,
-              style: {
-                stroke: condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f',
-                strokeWidth: 2,
-                zIndex: 10 + idx,
-              },
-              markerEnd: { type: 'arrowclosed' },
-              sourceX: sourceNode.position.x + (offset || 0),
-              sourceY: sourceNode.position.y + 50 + (offset || 0), // Offset from node center
-              targetX: targetNode.position.x + (offset || 0),
-              targetY: targetNode.position.y - 50 + (offset || 0), // Offset from node center
-            };
-          })
-          .filter(Boolean); // Remove null entries
+          const offset = (idx - (Object.values(conditionGroups).filter(g => g.source === group.source && g.thenAction === group.thenAction).length - 1) / 2) * 50;
+          return {
+            id: `${group.source}-${group.thenAction}-${group.target}`,
+            source: group.source,
+            target: group.target,
+            label: group.conditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', '),
+            type: 'smoothstep',
+            animated: group.thenAction === 'skip to',
+            style: {
+              stroke: group.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f',
+              strokeWidth: 2,
+              zIndex: 10 + idx,
+            },
+            markerEnd: { type: 'arrowclosed' },
+            data: { conditions: group.conditions },
+            sourceX: sourceNode.position.x + offset,
+            sourceY: sourceNode.position.y + 50 + offset,
+            targetX: targetNode.position.x + offset,
+            targetY: targetNode.position.y - 50 + offset,
+          };
+        }).filter(Boolean);
 
         const defaultEdges = derivedPages.slice(0, -1).map((page, index) => {
           const sourceNode = pageNodes.find((n) => n.id === page.Id);
@@ -412,6 +406,58 @@ const Conditions = () => {
           ? prev.map((c) => (c.Id === conditionId ? data.condition : c))
           : [...prev, data.condition]
       );
+      
+      if (newCondition.type === 'skip_hide_page') {
+        const edgeId = `${newCondition.sourcePage}-${newCondition.thenAction}-${newCondition.targetPage}`;
+        setEdges((prevEdges) => {
+          console.log('Previous Edges:', prevEdges);
+          
+          const existingEdge = prevEdges.find((e) => e.id === edgeId);
+          if (existingEdge) {
+            const updatedConditions = conditionId
+            ? existingEdge.data.conditions.map((c) => (c.Id === conditionId ? data.condition : c)) // Edit existing condition
+            : [...existingEdge.data.conditions, data.condition];
+            const newEdges = prevEdges.map((e) =>
+              e.id === edgeId
+                ? {
+                    ...e,
+                    data: { conditions: updatedConditions },
+                    label: updatedConditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', '),
+                    animated: updatedConditions.some((c) => c.thenAction === 'skip to'),
+                    style: {
+                      stroke: updatedConditions.some((c) => c.thenAction === 'skip to') ? '#1a73e8' : '#ff4d4f',
+                      strokeWidth: 2,
+                      zIndex: prevEdges.findIndex((e) => e.id === edgeId) + 10,
+                    },
+                  }
+                : e
+            );
+            console.log('Updated Edges:', newEdges);
+            return newEdges;
+          } else {
+            const newEdge = {
+              id: edgeId,
+              source: newCondition.sourcePage,
+              target: newCondition.targetPage,
+              label: `${data.condition.thenAction} ${pages.find((p) => p.Id === data.condition.targetPage)?.Name || 'Unknown'}`,
+              type: 'smoothstep',
+              animated: data.condition.thenAction === 'skip to',
+              style: { stroke: data.condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f', strokeWidth: 2, zIndex: 10 },
+              markerEnd: { type: 'arrowclosed' },
+              data: { conditions: [data.condition] },
+              sourceX: nodes.find((n) => n.id === newCondition.sourcePage).position.x,
+              sourceY: nodes.find((n) => n.id === newCondition.sourcePage).position.y + 50,
+              targetX: nodes.find((n) => n.id === newCondition.targetPage).position.x,
+              targetY: nodes.find((n) => n.id === newCondition.targetPage).position.y - 50,
+            };
+            // Filter out existing edges with the same source and thenAction to enforce max one skip-to and one hide edge
+            return [
+              ...prevEdges.filter(e => !(e.source === newCondition.sourcePage && e.id.startsWith(`${newCondition.sourcePage}-${newCondition.thenAction}-`) && e.id !== `default_${newCondition.sourcePage}_to_`)),
+              newEdge
+            ];
+          }
+        });
+      }
       setNewCondition({
         type: newCondition.type,
         ifField: '',
@@ -422,8 +468,14 @@ const Conditions = () => {
         dependentField: '',
         dependentValues: [],
         maskPattern: '',
+        sourcePage: newCondition.type === 'skip_hide_page' ? selectedNode : '',
+        targetPage: newCondition.type === 'skip_hide_page' ? '' : '',
       });
       setEditingConditionId(null);
+      if (newCondition.type === 'skip_hide_page') {
+        setSelectedNode(null);
+        setIsModalVisible(false);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -455,7 +507,28 @@ const Conditions = () => {
 
       if (!response.ok) throw new Error('Failed to delete condition');
       setConditions(conditions.filter((c) => c.Id !== conditionId));
-      setEdges(edges.filter((e) => e.id !== conditionId));
+      setEdges((prevEdges) => {
+        const updatedEdges = prevEdges.map((edge) => {
+          if (edge.data?.conditions.some((c) => c.Id === conditionId)) {
+            const updatedConditions = edge.data.conditions.filter((c) => c.Id !== conditionId);
+            return {
+              ...edge,
+              data: { conditions: updatedConditions },
+              label: updatedConditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', '),
+              animated: updatedConditions.some((c) => c.thenAction === 'skip to'),
+              style: {
+                stroke: updatedConditions.some((c) => c.thenAction === 'skip to') ? '#1a73e8' : '#ff4d4f',
+                strokeWidth: 2,
+                zIndex: prevEdges.findIndex((e) => e.id === edge.id) + 10,
+              },
+            };
+          }
+          return edge;
+        }).filter((edge) => {
+          return edge.id.startsWith('default_') || (edge.data?.conditions && edge.data.conditions.length > 0);
+        });
+        return updatedEdges;
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -555,10 +628,34 @@ const Conditions = () => {
   const onNodesChange = (changes) => setNodes((nds) => applyNodeChanges(changes, nds));
   const onEdgesChange = (changes) => setEdges((eds) => applyEdgeChanges(changes, eds));
   const onEdgeClick = (event, edge) => {
-    const condition = conditions.find((c) => c.Id === edge.id);
+    setPreviewConditionId(edge.id);
+    setIsPreviewModalVisible(true);
+  };
+
+  const editConditionFromPreview = (conditionId) => {
+    const condition = conditions.find((c) => c.Id === conditionId);
     if (condition) {
       editCondition(condition);
+      setIsPreviewModalVisible(false);
+      setIsModalVisible(true);
     }
+  };
+
+  const deleteConditionFromPreview = async (conditionId) => {
+    await deleteCondition(conditionId);
+    setEdges((prevEdges) => {
+      const edge = prevEdges.find((e) => e.id === previewConditionId);
+      const updatedConditions = edge?.data?.conditions.filter((c) => c.Id !== conditionId);
+      if (!updatedConditions) {
+        setIsPreviewModalVisible(false);
+        return prevEdges.filter((e) => e.id !== previewConditionId);
+      }
+      return prevEdges.map((e) =>
+        e.id === previewConditionId
+          ? { ...e, data: { conditions: updatedConditions }, label: updatedConditions?.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', ') }
+          : e
+      );
+    });
   };
 
   return (
@@ -1242,8 +1339,8 @@ const Conditions = () => {
                                       size="small"
                                       style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
                                       onClick={() => {
-                                        const condition = conditions.find((c) => c.Id === id);
-                                        if (condition) editCondition(condition);
+                                        setPreviewConditionId(id);
+                                        setIsPreviewModalVisible(true);
                                       }}
                                     />
                                   </foreignObject>
@@ -1424,22 +1521,6 @@ const Conditions = () => {
                             type="primary"
                             onClick={() => {
                               saveCondition(editingConditionId).then(() => {
-                                setEdges((eds) => {
-                                  const condition = newCondition;
-                                  const newEdge = {
-                                    id: condition.Id || editingConditionId || `local_${Date.now()}`,
-                                    source: condition.sourcePage,
-                                    target: condition.targetPage,
-                                    label: `${condition.thenAction} ${pages.find((p) => p.Id === condition.targetPage)?.Name || 'Page'}`,
-                                    type: 'smoothstep',
-                                    animated: condition.thenAction === 'skip to',
-                                    style: { stroke: condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f', strokeWidth: 2, zIndex: 10 },
-                                    markerEnd: { type: 'arrowclosed' },
-                                  };
-                                  return editingConditionId
-                                    ? eds.map((e) => (e.id === editingConditionId ? newEdge : e))
-                                    : [...eds, newEdge];
-                                });
                                 setNewCondition({
                                   type: 'skip_hide_page',
                                   ifField: '',
@@ -1500,6 +1581,45 @@ const Conditions = () => {
                         </div>
                       </>
                     )}
+                  </Modal>
+                  <Modal
+                    title={`Conditions for Edge ${pages.find((p) => p.Id === edges.find((e) => e.id === previewConditionId)?.source)?.Name} to ${pages.find((p) => p.Id === edges.find((e) => e.id === previewConditionId)?.target)?.Name}`}
+                    visible={isPreviewModalVisible}
+                    onCancel={() => {
+                      setPreviewConditionId(null);
+                      setIsPreviewModalVisible(false);
+                    }}
+                    footer={null}
+                    width={600}
+                  >
+                    <AnimatePresence>
+                      {edges.find((e) => e.id === previewConditionId)?.data.conditions.map((condition) => (
+                        <motion.div
+                          key={condition.Id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
+                        >
+                          <div>
+                            <p>
+                              <strong>If:</strong> {fields.find((f) => f.Unique_Key__c === condition.ifField)?.Name || 'Unknown'} {condition.operator} {condition.value || 'N/A'}
+                            </p>
+                            <p>
+                              <strong>Then:</strong> {condition.thenAction} {pages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}
+                            </p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button size="small" onClick={() => editConditionFromPreview(condition.Id)}>
+                              <FaEdit />
+                            </Button>
+                            <Button size="small" onClick={() => deleteConditionFromPreview(condition.Id)}>
+                              <FaTrash />
+                            </Button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </Modal>
                 </motion.div>
               </TabPane>
