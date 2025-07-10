@@ -186,8 +186,8 @@ export const handler = async (event) => {
 
     // 6. Fetch Form__c records
     let formRecords = [];
-    const query = `SELECT Id, Name, Active_Version__c,
-                     (SELECT Id, Name, Form__c, Description__c, Object_Info__c, Version__c, Publish_Link__c, Stage__c, Submission_Count__c,
+    const query = `SELECT Id, Name, Active_Version__c, Publish_Link__c,
+                     (SELECT Id, Name, Form__c, Description__c, Object_Info__c, Version__c, Stage__c, Submission_Count__c,
                        (SELECT Id, Name, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c 
                         FROM Form_Fields__r),
                         (SELECT Id, Condition_Type__c, Condition_Data__c 

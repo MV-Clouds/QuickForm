@@ -45,39 +45,48 @@ export const handler = async (event) => {
     const newCondition = {
       Id: conditionId || `local_${Date.now()}`,
       type: conditionData.type,
-      ifField: conditionData.ifField,
-      operator: conditionData.operator || 'equals',
-      value: conditionData.value || null,
-      ...(conditionData.type === 'show_hide'
+      ...(conditionData.type === 'dependent'
         ? {
-            thenAction: conditionData.thenAction,
-            thenFields: conditionData.thenFields,
-          }
-        : conditionData.type === 'dependent'
-        ? {
+            ifField: conditionData.ifField,
+            value: conditionData.value || null,
             dependentField: conditionData.dependentField,
             dependentValues: conditionData.dependentValues,
           }
-        : conditionData.type === 'skip_hide_page'
-        ? {
-            thenAction: conditionData.thenAction,
-            sourcePage: conditionData.sourcePage,
-            targetPage: conditionData.targetPage,
-          }
         : {
-            thenAction: conditionData.thenAction,
-            thenFields: conditionData.thenFields,
-            ...(conditionData.thenAction === 'set mask' ? { maskPattern: conditionData.maskPattern } : {}),
-            ...(conditionData.thenAction === 'unmask' ? { maskPattern: null } : {}),
+            conditions: conditionData.conditions.map((cond) => ({
+              ifField: cond.ifField,
+              operator: cond.operator || 'equals',
+              value: cond.value || null,
+            })),
+            logic: conditionData.logic || 'AND',
+            ...(conditionData.type === 'show_hide'
+              ? {
+                  thenAction: conditionData.thenAction,
+                  thenFields: conditionData.thenFields,
+                }
+              : conditionData.type === 'skip_hide_page'
+              ? {
+                  thenAction: conditionData.thenAction,
+                  sourcePage: conditionData.sourcePage,
+                  targetPage: conditionData.targetPage,
+                }
+              : {
+                  thenAction: conditionData.thenAction,
+                  thenFields: conditionData.thenFields,
+                  ...(conditionData.thenAction === 'set mask' ? { maskPattern: conditionData.maskPattern } : {}),
+                  ...(conditionData.thenAction === 'unmask' ? { maskPattern: null } : {}),
+                }),
           }),
     };
-
+    
     const updatedConditions = conditionId
       ? existingConditions.map((c) => {
-          const existingConditionData = c.Condition_Data__c ? JSON.parse(c.Condition_Data__c || '{}') : c;
-          return c.Id === conditionId ? { ...c, Condition_Data__c: JSON.stringify(newCondition) } : c;
+          const parsed = c.Condition_Data__c ? JSON.parse(c.Condition_Data__c) : c;
+          return c.Id === conditionId ? newCondition : parsed;
         })
-      : [...existingConditions, { Id: newCondition.Id, Condition_Data__c: JSON.stringify(newCondition) }];
+      : [...existingConditions.map((c) => (c.Condition_Data__c ? JSON.parse(c.Condition_Data__c) : c)), newCondition];
+
+
 
     const sfCondition = {
       Form_Version__c: formVersionId,

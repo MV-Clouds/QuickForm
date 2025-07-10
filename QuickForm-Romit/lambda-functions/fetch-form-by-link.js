@@ -20,10 +20,10 @@ export const handler = async (event) => {
     };
   }
 
-  const { userId, formVersionId, accessToken } = body;
+  const { userId, formId, accessToken } = body;
 
   // Validate required parameters
-  if (!userId || !formVersionId || !accessToken) {
+  if (!userId || !formId || !accessToken) {
     return {
       statusCode: 400,
       headers: {
@@ -31,7 +31,7 @@ export const handler = async (event) => {
         'Access-Control-Allow-Origin': '*',
       },
       body: JSON.stringify({
-        error: 'Missing userId, formVersionId, or accessToken',
+        error: 'Missing userId, formId, or accessToken',
       }),
     };
   }
@@ -86,27 +86,22 @@ export const handler = async (event) => {
     }
 
     // Find the form version
-    let formVersion = null;
-    let formId = null;
-    for (const form of formRecords) {
-      const version = form.FormVersions.find(
-        (v) => v.Id === formVersionId && v.Stage__c === 'Publish'
-      );
-      if (version) {
-        formVersion = version;
-        formId = form.Id;
-        break;
-      }
-    }
-
-    if (!formVersion) {
+    // Find the matching form and its published version
+    const matchedForm = formRecords.find(f => f.Id === formId);
+    if (!matchedForm) {
       return {
         statusCode: 404,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify({ error: `Published form version not found for ID: ${formVersionId}` }),
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: `Form not found for ID: ${formId}` }),
+      };
+    }
+
+    const publishedVersion = matchedForm.FormVersions.find(v => v.Stage__c === 'Publish');
+    if (!publishedVersion) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: `No published version found for Form ID: ${formId}` }),
       };
     }
 
@@ -119,12 +114,11 @@ export const handler = async (event) => {
       body: JSON.stringify({
         success: true,
         formVersion: {
-          Id: formVersion.Id,
+          Id: publishedVersion.Id,
           Form__c: formId,
-          Name: formVersion.Name,
-          Fields: formVersion.Fields,
-          Stage__c: formVersion.Stage__c,
-          Publish_Link__c: formVersion.Publish_Link__c,
+          Name: publishedVersion.Name,
+          Fields: publishedVersion.Fields,
+          Stage__c: publishedVersion.Stage__c,
         },
       }),
     };

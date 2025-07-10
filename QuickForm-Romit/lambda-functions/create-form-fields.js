@@ -21,7 +21,6 @@ export const handler = async (event) => {
 
     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
     const salesforceBaseUrl = `https://${cleanedInstanceUrl}/services/data/v60.0`;
-    console.log('Salesforce first base url'+salesforceBaseUrl);
 
     let formVersionId;
     let formId; // To store Form__c ID
@@ -169,8 +168,6 @@ export const handler = async (event) => {
 
     // Step 2: Handle Form_Version__c record (update or insert)
     if (Id) {
-      // Update existing Form_Version__c record
-      console.log('SalesforceBaseUrl'+salesforceBaseUrl);
       const formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${Id}`, {
         method: 'PATCH',
         headers: {
@@ -287,7 +284,6 @@ export const handler = async (event) => {
       // Enforce one Draft per Form__c
       const draftQuery = `SELECT Id FROM Form_Version__c WHERE Form__c = '${formId}' AND Stage__c = 'Draft'`;
       const draftQueryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(draftQuery)}`;
-      console.log(draftQueryUrl);
       const draftQueryRes = await fetch(draftQueryUrl, {
         method: 'GET',
         headers: {
@@ -302,8 +298,7 @@ export const handler = async (event) => {
       }
 
       const draftData = await draftQueryRes.json();
-      if (draftData.records?.length > 1) {
-        console.log(formVersion.Stage__c)
+      if (draftData.records?.length > 0) {
         throw new Error('A Draft version already exists for this Form__c');
       }
 
@@ -351,11 +346,28 @@ export const handler = async (event) => {
     if (formData.formFields.length > 0) {
       const compositeRequest = {
         allOrNone: true,
-        records: formData.formFields.map((formField) => ({
-          attributes: { type: 'Form_Field__c' },
-          ...formField,
-          Form_Version__c: formVersionId,
-        })),
+        records: formData.formFields.map((formField) => {
+          let properties;
+          try {
+            properties = JSON.parse(formField.Properties__c);
+          } catch (e) {
+            console.warn(`Failed to parse Properties__c for field ${formField.Unique_Key__c}:`, e);
+            properties = {};
+          }
+          // Remove subFields from validation to avoid duplication
+          if (properties.validation && properties.validation.subFields) {
+            delete properties.validation.subFields;
+          }
+          return {
+            attributes: { type: 'Form_Field__c' },
+            ...formField,
+            Form_Version__c: formVersionId,
+            Properties__c: JSON.stringify({
+              ...properties,
+              subFields: properties.subFields || {},
+            }),
+          };
+        }),
       };
 
       const formFieldResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {

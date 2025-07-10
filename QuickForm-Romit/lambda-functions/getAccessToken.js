@@ -113,7 +113,6 @@ export const handler = async (event) => {
 
       if (!refreshResponse.ok) {
         const errorData = await refreshResponse.json();
-        console.error('Error refreshing token:', errorData);
         return {
           statusCode: 401,
           headers: {
@@ -142,7 +141,6 @@ export const handler = async (event) => {
         })
       );
     }
-
     return {
       statusCode: 200,
       headers: {
@@ -155,7 +153,6 @@ export const handler = async (event) => {
       }),
     };
   } catch (error) {
-    console.error('Error in getAccessToken:', error);
     return {
       statusCode: 500,
       headers: {
@@ -179,7 +176,6 @@ const validateAccessToken = async (access_token, instanceUrl) => {
     });
     return response.ok;
   } catch (error) {
-    console.error('Token validation failed:', error, instanceUrl);
     return false;
   }
 };
