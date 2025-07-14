@@ -58,6 +58,7 @@ export const handler = async (event) => {
               value: cond.value || null,
             })),
             logic: conditionData.logic || 'AND',
+            logicExpression: conditionData.logic === 'Custom' ? (conditionData.logicExpression || '') : '',
             ...(conditionData.type === 'show_hide'
               ? {
                   thenAction: conditionData.thenAction,

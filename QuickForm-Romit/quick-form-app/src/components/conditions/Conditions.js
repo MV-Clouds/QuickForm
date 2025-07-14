@@ -29,6 +29,7 @@ const Conditions = () => {
     type: 'show_hide',
     conditions: [{ ifField: '', operator: '', value: '' }],
     logic: 'AND', // Default logic for combining multiple conditions (not used in dependent tab)
+    logicExpression: '',
     thenAction: 'show',
     thenFields: [],
     dependentField: '',
@@ -108,7 +109,10 @@ const Conditions = () => {
         console.log('Form Version Data:', formVersion);
         setFields(formVersion.Fields || []);
         const parsedConditions = Array.isArray(formVersion.Conditions)
-          ? formVersion.Conditions.flat()
+          ? formVersion.Conditions.flat().map((c) => ({
+              ...c,
+              ...JSON.parse(c.Condition_Data__c || '{}'),
+              logicExpression: c.logic === 'Custom' ? (c.logicExpression || '') : '',            }))
           : [];
         setConditions(parsedConditions);
         console.log('Parsed Conditions:', parsedConditions);
@@ -143,10 +147,17 @@ const Conditions = () => {
         const conditionGroups = parsedConditions
           .filter((c) => c.type === 'skip_hide_page')
           .reduce((acc, condition) => {
-              const key = `${condition.sourcePage}-${condition.thenAction}-${condition.targetPage}`;            if (!acc[key]) {
-              acc[key] = { source: condition.sourcePage, target: condition.targetPage, thenAction: condition.thenAction, conditions: [] };
+            const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c) : condition;
+            const key = `${conditionData.sourcePage}-${conditionData.thenAction}-${conditionData.targetPage}`;
+            if (!acc[key]) {
+              acc[key] = { 
+                source: conditionData.sourcePage, 
+                target: conditionData.targetPage, 
+                thenAction: conditionData.thenAction, 
+                conditions: [] 
+              };
             }
-            acc[key].conditions.push(condition);
+            acc[key].conditions.push(conditionData);
             return acc;
           }, {});
         // Initialize edges with variable positioning
@@ -288,6 +299,83 @@ const Conditions = () => {
     return null;
   };
 
+  const validateCustomLogic = (logicExpression, conditionCount) => {
+    if (!logicExpression) return 'Custom logic expression is required';
+
+    // Check for valid characters (digits, AND, OR, parentheses, spaces)
+    if (!/^[0-9\s()ANDOR]+$/.test(logicExpression)) {
+      return 'Invalid characters in logic expression. Use numbers, AND, OR, parentheses, and spaces only.';
+    }
+
+    // Check for valid condition indices
+    const indices = logicExpression.match(/\d+/g) || [];
+    const uniqueIndices = [...new Set(indices.map(Number))];
+    if (uniqueIndices.length === 0) {
+      return 'Logic expression must include at least one condition index.';
+    }
+    if (uniqueIndices.some((i) => i < 1 || i > conditionCount)) {
+      return `Condition indices must be between 1 and ${conditionCount}.`;
+    }
+    if (uniqueIndices.length !== conditionCount) {
+      return `All conditions (1 to ${conditionCount}) must be included in the logic expression.`;
+    }
+
+    // Check for balanced parentheses
+    let parenCount = 0;
+    for (const char of logicExpression) {
+      if (char === '(') parenCount++;
+      if (char === ')') parenCount--;
+      if (parenCount < 0) return 'Unmatched closing parenthesis.';
+    }
+    if (parenCount !== 0) return 'Unmatched opening parenthesis.';
+
+    // Tokenize the expression
+    const tokens = logicExpression
+      .replace(/\(/g, ' ( ')
+      .replace(/\)/g, ' ) ')
+      .split(/\s+/)
+      .filter(Boolean);
+    if (tokens.length < 3) return 'Logic expression is too short.';
+
+    // Validate token sequence using a state machine
+    let expectOperand = true; // true: expect number or '(', false: expect operator or ')'
+    let parenDepth = 0;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (expectOperand) {
+        if (/^\d+$/.test(token)) {
+          expectOperand = false; // After a number, expect an operator or ')'
+        } else if (token === '(') {
+          parenDepth++;
+          // Still expect an operand (number or another '(')
+        } else {
+          return `Invalid token at position ${i + 1}: Expected number or '(', got ${token}.`;
+        }
+      } else {
+        if (['AND', 'OR'].includes(token)) {
+          expectOperand = true; // After an operator, expect a number or '('
+        } else if (token === ')') {
+          parenDepth--;
+          if (parenDepth < 0) return 'Unmatched closing parenthesis.';
+          // After ')', expect an operator or another ')' if still in parentheses
+          expectOperand = false;
+        } else {
+          return `Invalid token at position ${i + 1}: Expected 'AND', 'OR', or ')', got ${token}.`;
+        }
+      }
+    }
+
+    // Ensure the expression doesn't end expecting an operand
+    if (expectOperand) {
+      return 'Expression ends unexpectedly; missing a condition index.';
+    }
+
+    // Ensure parentheses are balanced at the end
+    if (parenDepth !== 0) return 'Unmatched opening parenthesis.';
+
+    return null;
+  };
+
   const editCondition = (condition) => {
     console.log('Editing condition:', condition);
     const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
@@ -297,6 +385,7 @@ const Conditions = () => {
         ? [{ ifField: conditionData.ifField || '', operator: 'equals', value: conditionData.value || '' }]
         : conditionData.conditions || [{ ifField: '', operator: '', value: '' }],
       logic: conditionData.type !== 'dependent' ? conditionData.logic || 'AND' : 'AND',
+      logicExpression: conditionData.logic === 'Custom' ? conditionData.logicExpression || '' : '',
       thenAction: conditionData.thenAction || (conditionData.type === 'enable_require_mask' ? 'require' : conditionData.type === 'skip_hide_page' ? 'skip to' : 'show'),
       thenFields: conditionData.type !== 'dependent' && conditionData.type !== 'skip_hide_page'
         ? (Array.isArray(conditionData.thenFields) ? conditionData.thenFields : [conditionData.thenFields].filter(Boolean))
@@ -325,6 +414,11 @@ const Conditions = () => {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
       if (!userId || !instanceUrl) throw new Error('Missing userId or instanceUrl.');
+      // Validate custom logic if selected
+      if (newCondition.logic === 'Custom') {
+        const validationError = validateCustomLogic(newCondition.logicExpression, newCondition.conditions.length);
+        if (validationError) throw new Error(validationError);
+      }
       const contradictionError = checkForContradiction(newCondition, conditions.filter(c => c.Id !== conditionId));
       if (contradictionError) {
         setError(contradictionError);
@@ -346,6 +440,7 @@ const Conditions = () => {
               value: c.value || null,
             })),
             logic: newCondition.logic,
+            logicExpression: newCondition.logic === 'Custom' ? newCondition.logicExpression : '',
             thenAction: newCondition.thenAction,
             thenFields: newCondition.thenFields,
           }),
@@ -390,6 +485,7 @@ const Conditions = () => {
               value: c.operator === 'is null' || c.operator === 'is not null' ? null : c.value,
             })),
             logic: newCondition.logic,
+            logicExpression: newCondition.logic === 'Custom' ? newCondition.logicExpression : '',
             thenAction: newCondition.thenAction,
             sourcePage: newCondition.sourcePage,
             targetPage: newCondition.targetPage,
@@ -414,6 +510,7 @@ const Conditions = () => {
               value: c.operator === 'is null' || c.operator === 'is not null' ? null : c.value,
             })),
             logic: newCondition.logic,
+            logicExpression: newCondition.logic === 'Custom' ? newCondition.logicExpression : '',
             thenAction: newCondition.thenAction,
             thenFields: newCondition.thenFields,
             ...(newCondition.thenAction === 'set mask' ? { maskPattern: newCondition.maskPattern } : {}),
@@ -502,6 +599,7 @@ const Conditions = () => {
         type: newCondition.type,
         conditions: newCondition.type === 'dependent' ? [{ ifField: '', operator: '', value: '' }] : [{ ifField: '', operator: '', value: '' }],
         logic: 'AND',
+        logicExpression: '',
         thenAction: newCondition.type === 'enable_require_mask' ? 'require' : newCondition.type === 'skip_hide_page' ? 'skip to' : 'show',
         thenFields: [],
         dependentField: '',
@@ -653,6 +751,7 @@ const Conditions = () => {
         ...(field === 'thenFields' ? { thenFields: value } : {}),
         ...(field === 'thenAction' && !['set mask', 'unmask'].includes(value) ? { maskPattern: '' } : {}),
         ...(field === 'logic' ? { logic: value } : {}),
+        ...(field === 'logicExpression' ? { logicExpression: value } : {}),
       };
     });
   };
@@ -904,7 +1003,24 @@ const Conditions = () => {
                         >
                           <Option value="AND">AND</Option>
                           <Option value="OR">OR</Option>
+                          <Option value="Custom">Custom</Option>
                         </Select>
+                        {newCondition.logic === 'Custom' && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Custom Logic Expression{' '}
+                              <span className="text-gray-500 text-xs">
+                                (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
+                              </span>
+                            </label>
+                            <Input
+                              value={newCondition.logicExpression}
+                              onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
+                              placeholder={`e.g., 1 OR (2 AND 3)`}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="mb-3 flex items-center">
@@ -920,11 +1036,12 @@ const Conditions = () => {
                         </Select>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <label className="block text-sm font-medium text-gray-700">Field</label>
+                        <label className="block text-sm font-medium text-gray-700">Field(s)</label>
                         <Select
-                          value={newCondition.thenFields[0] || ''}
-                          onChange={(value) => handleFieldChange('thenFields', [value])}
-                          placeholder="Select field to show/hide"
+                          mode="multiple"
+                          value={newCondition.thenFields}
+                          onChange={(value) => handleFieldChange('thenFields', value)}
+                          placeholder="Select field(s) to show/hide"
                           style={{ width: '100%' }}
                           disabled={! (newCondition.conditions ? newCondition.conditions[0].ifField : false)}
                         >
@@ -964,6 +1081,7 @@ const Conditions = () => {
                               type: newCondition.type,
                               conditions: [{ ifField: '', operator: '', value: '' }],
                               logic: 'AND',
+                              logicExpression: '',
                               thenAction: newCondition.type === 'enable_require_mask' ? 'require' : 'show',
                               thenFields: [],
                               dependentField: '',
@@ -998,13 +1116,30 @@ const Conditions = () => {
                           className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
                         >
                           <div>
-                            {condition.conditions?.map((cond, index) => (
-                              <p key={index}>
-                                <strong>{index === 0 ? 'If' : condition.logic}:</strong>{' '}
-                                {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                {cond.value || 'N/A'}
+                            {condition.logic === 'Custom' ? (
+                              <>
+                                <p><strong>If:</strong></p>
+                                {condition.conditions?.map((cond, index) => (
+                                  <p key={index}>
+                                    <strong>Condition {index + 1}:</strong>{' '}
+                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                    {cond.value || 'N/A'}
+                                  </p>
+                                ))}
+                                <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                              </>
+                            ) : (
+                              <p>
+                                <strong>If:</strong>{' '}
+                                {condition.conditions?.map((cond, index) => (
+                                  <span key={index}>
+                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                    {cond.value || 'N/A'}
+                                    {index < condition.conditions.length - 1 && ` ${condition.logic} `}
+                                  </span>
+                                ))}
                               </p>
-                            ))}
+                            )}
                             <p>
                               <strong>Then:</strong> {condition.thenAction}{' '}
                               {(Array.isArray(condition.thenFields)
@@ -1127,6 +1262,7 @@ const Conditions = () => {
                               type: newCondition.type,
                               conditions: [{ ifField: '', operator: '', value: '' }],
                               logic: 'AND',
+                              logicExpression: '',
                               thenAction: newCondition.type === 'enable_require_mask' ? 'require' : 'show',
                               thenFields: [],
                               dependentField: '',
@@ -1298,7 +1434,24 @@ const Conditions = () => {
                         >
                           <Option value="AND">AND</Option>
                           <Option value="OR">OR</Option>
+                          <Option value="Custom">Custom</Option>
                         </Select>
+                        {newCondition.logic === 'Custom' && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Custom Logic Expression{' '}
+                              <span className="text-gray-500 text-xs">
+                                (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
+                              </span>
+                            </label>
+                            <Input
+                              value={newCondition.logicExpression}
+                              onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
+                              placeholder={`e.g., 1 OR (2 AND 3)`}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="mb-3 flex items-center">
@@ -1377,6 +1530,7 @@ const Conditions = () => {
                               type: newCondition.type,
                               conditions: [{ ifField: '', operator: '', value: '' }],
                               logic: 'AND',
+                              logicExpression: '',
                               thenAction: newCondition.type === 'enable_require_mask' ? 'require' : 'show',
                               thenFields: [],
                               dependentField: '',
@@ -1411,13 +1565,30 @@ const Conditions = () => {
                           className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
                         >
                           <div>
-                            {condition.conditions?.map((cond, index) => (
-                              <p key={index}>
-                                <strong>{index === 0 ? 'If' : condition.logic}:</strong>{' '}
-                                {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                {cond.value || 'N/A'}
+                            {condition.logic === 'Custom' ? (
+                              <>
+                                <p><strong>If:</strong></p>
+                                {condition.conditions?.map((cond, index) => (
+                                  <p key={index}>
+                                    <strong>Condition {index + 1}:</strong>{' '}
+                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                    {cond.value || 'N/A'}
+                                  </p>
+                                ))}
+                                <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                              </>
+                            ) : (
+                              <p>
+                                <strong>If:</strong>{' '}
+                                {condition.conditions?.map((cond, index) => (
+                                  <span key={index}>
+                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                    {cond.value || 'N/A'}
+                                    {index < condition.conditions.length - 1 && ` ${condition.logic} `}
+                                  </span>
+                                ))}
                               </p>
-                            ))}
+                            )}
                             <p>
                               <strong>Then:</strong> {condition.thenAction}
                               {condition.thenAction === 'set mask' ? ` with pattern "${condition.maskPattern || 'N/A'}"` : ''}{' '}
@@ -1538,11 +1709,14 @@ const Conditions = () => {
                         <h4 className="text-md font-semibold">Current Condition:</h4>
                         {newCondition.conditions?.map((cond, index) => (
                           <p key={index}>
-                            <strong>{index === 0 ? 'If' : newCondition.logic}:</strong>{' '}
+                            <strong>Condition {index + 1} {index === 0 ? 'If' : newCondition.logic === 'Custom' ? '' : newCondition.logic}:</strong>{' '}
                             {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
                             {cond.value || 'N/A'}
                           </p>
                         ))}
+                        {newCondition.logic === 'Custom' && (
+                          <p><strong>Logic:</strong> {newCondition.logicExpression}</p>
+                        )}
                         <p>
                           <strong>Then:</strong> {newCondition.thenAction}{' '}
                           {pages.find((p) => p.Id === newCondition.targetPage)?.Name || 'Unknown'}
@@ -1662,7 +1836,24 @@ const Conditions = () => {
                         >
                           <Option value="AND">AND</Option>
                           <Option value="OR">OR</Option>
+                          <Option value="Custom">Custom</Option>
                         </Select>
+                        {newCondition.logic === 'Custom' && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Custom Logic Expression{' '}
+                              <span className="text-gray-500 text-xs">
+                                (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
+                              </span>
+                            </label>
+                            <Input
+                              value={newCondition.logicExpression}
+                              onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
+                              placeholder={`e.g., 1 OR (2 AND 3)`}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="mb-3 flex items-center">
@@ -1712,6 +1903,7 @@ const Conditions = () => {
                               type: 'skip_hide_page',
                               conditions: [{ ifField: '', operator: '', value: '' }],
                               logic: 'AND',
+                              logicExpression: '',
                               thenAction: 'skip to',
                               thenFields: [],
                               dependentField: '',
@@ -1788,13 +1980,30 @@ const Conditions = () => {
                           className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
                         >
                           <div>
-                            {condition.conditions?.map((cond, index) => (
-                              <p key={index}>
-                                <strong>{index === 0 ? 'If' : condition.logic}:</strong>{' '}
-                                {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                {cond.value || 'N/A'}
+                            {condition.logic === 'Custom' ? (
+                              <>
+                                <p><strong>If:</strong></p>
+                                {condition.conditions?.map((cond, index) => (
+                                  <p key={index}>
+                                    <strong>Condition {index + 1}:</strong>{' '}
+                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                    {cond.value || 'N/A'}
+                                  </p>
+                                ))}
+                                <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                              </>
+                            ) : (
+                              <p>
+                                <strong>If:</strong>{' '}
+                                {condition.conditions?.map((cond, index) => (
+                                  <span key={index}>
+                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                    {cond.value || 'N/A'}
+                                    {index < condition.conditions.length - 1 && ` ${condition.logic} `}
+                                  </span>
+                                ))}
                               </p>
-                            ))}
+                            )}
                             <p>
                               <strong>Then:</strong> {condition.thenAction} {pages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}
                             </p>
