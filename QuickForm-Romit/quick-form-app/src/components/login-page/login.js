@@ -7,6 +7,11 @@ const Login = () => {
   const navigate = useNavigate(); // React Router navigation
   let popup = null; // Reference to popup window
 
+  useEffect(()=>{
+    sessionStorage.setItem('userId' , '005gL000002qyRxQAI');
+    sessionStorage.setItem('instanceUrl','https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com')
+  },[])
+  
   // Check if already logged in on mount
   useEffect(() => {
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login flag
@@ -16,14 +21,14 @@ const Login = () => {
 
     // Add message event listener
     const handleMessage = (event) => {
-      if (event.origin === 'https://d2bri1qui9cr5s.cloudfront.net') {
+      if (event.origin === 'https://d2gg09yhu3xa1a.cloudfront.net') {
         if (event.data.type === 'login_error') {
           if (popup && !popup.closed) {
             popup.close(); // Close popup on error
           }
         }
       }
-      if (event.origin === 'https://vm6pandneg.execute-api.us-east-1.amazonaws.com') {
+      if (event.origin === 'https://ew2pvgsa59.execute-api.us-east-1.amazonaws.com') {
         if (event.data.type === 'login_success') {
           if (popup && !popup.closed) {
             popup.close(); // Close popup on success
@@ -56,7 +61,7 @@ const Login = () => {
   const openPopup = () => {
     if (!org) return; // Do nothing if org not selected
 
-    let base = 'https://d2bri1qui9cr5s.cloudfront.net/auth/login'; // Base login URL
+    let base = 'https://d2gg09yhu3xa1a.cloudfront.net/auth/login'; // Base login URL
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login status
 
     if (isLoggedIn) {

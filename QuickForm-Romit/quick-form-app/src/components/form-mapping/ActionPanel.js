@@ -149,6 +149,8 @@ const ActionPanel = ({
       fetchSalesforceFields(selectedObject)
         .then((data) => {
           const newFields = data.fields || [];
+          console.log('salesforce fields--> ',newFields);
+          
           setSalesforceObjects(prev => [
             ...prev.filter(obj => obj.name !== selectedObject),
             { name: selectedObject, fields: newFields }
@@ -460,34 +462,77 @@ const ActionPanel = ({
     }));
   };
 
+  // const handleObjectSelect = (selectedOption) => {
+  //   if (!selectedOption) {
+  //     setSelectedObject("");
+  //     return;
+  //   }
+
+  //   const selectedObjectName = selectedOption.value;
+  //   setSelectedObject(selectedObjectName);
+
+  //   const shouldFetchFields =
+  //     selectedObjectName &&
+  //     (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
+
+  //   if (!shouldFetchFields) return;
+
+  //   fetchSalesforceFields(selectedObjectName)
+  //     .then((data) => {
+  //       const newFields = data.fields;
+
+  //       setSalesforceObjects(prev => [
+  //         ...prev.filter(obj => obj.name !== selectedObjectName), // remove old entry if any
+  //         { name: selectedObjectName, fields: newFields }          // add fresh entry
+  //       ]);
+  //     })
+  //     .catch((error) => {
+  //       setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
+  //     });
+  // };
+
   const handleObjectSelect = (selectedOption) => {
-    if (!selectedOption) {
-      setSelectedObject("");
-      return;
-    }
+  if (!selectedOption) {
+    setSelectedObject("");
+    setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+    return;
+  }
 
-    const selectedObjectName = selectedOption.value;
-    setSelectedObject(selectedObjectName);
+  const selectedObjectName = selectedOption.value;
+  setSelectedObject(selectedObjectName);
 
-    const shouldFetchFields =
-      selectedObjectName &&
-      (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
+  const shouldFetchFields =
+    selectedObjectName &&
+    (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
 
-    if (!shouldFetchFields) return;
+  if (!shouldFetchFields) return;
 
-    fetchSalesforceFields(selectedObjectName)
-      .then((data) => {
-        const newFields = data.fields;
+  fetchSalesforceFields(selectedObjectName)
+    .then((data) => {
+      const newFields = data.fields || [];
+      console.log('salesforce fields--> ', newFields);
 
-        setSalesforceObjects(prev => [
-          ...prev.filter(obj => obj.name !== selectedObjectName), // remove old entry if any
-          { name: selectedObjectName, fields: newFields }          // add fresh entry
-        ]);
-      })
-      .catch((error) => {
-        setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
-      });
-  };
+      setSalesforceObjects(prev => [
+        ...prev.filter(obj => obj.name !== selectedObjectName),
+        { name: selectedObjectName, fields: newFields }
+      ]);
+
+      // Automatically add required fields to mappings
+      const requiredFields = newFields.filter(field => field.required);
+      if (requiredFields.length > 0 && isCreateUpdateNode) {
+        const newMappings = requiredFields.map(field => ({
+          salesforceField: field.name,
+          formFieldId: "",
+          fieldType: "",
+          picklistValue: ""
+        }));
+        setLocalMappings(newMappings);
+      }
+    })
+    .catch((error) => {
+      setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
+    });
+};
 
   const getAncestorNodes = (currentNodeId, edges, nodes) => {
     const ancestors = new Set();
@@ -522,6 +567,25 @@ const ActionPanel = ({
       return;
     }
 
+     // Check if required fields are mapped
+    if (isCreateUpdateNode && selectedObject) {
+      const requiredFields = safeSalesforceObjects
+        .find(obj => obj.name === selectedObject)
+        ?.fields?.filter(f => f.required) || [];
+      
+      const missingRequiredFields = requiredFields.filter(reqField => {
+        return !localMappings.some(mapping => 
+          mapping.salesforceField === reqField.name && 
+          (mapping.formFieldId || mapping.picklistValue)
+        );
+      });
+
+      if (missingRequiredFields.length > 0) {
+        setSaveError(`Please map all required fields: ${missingRequiredFields.map(f => f.label || f.name).join(', ')}`);
+        return;
+      }
+    }
+    
     if (isLoopNode && (!loopCollection || !currentItemVariableName)) {
       setSaveError("Please provide a loop collection and a current item variable name.");
       return;
@@ -882,7 +946,7 @@ const ActionPanel = ({
                   type="text"
                   value={customLogic}
                   onChange={(e) => setCustomLogic(e.target.value)}
-                  placeholder="e.g., 1 AND 2 OR 3"
+                  placeholder="e.g., (1 AND 2) OR 3"
                   className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
                 />
               </motion.div>
@@ -1427,7 +1491,7 @@ const ActionPanel = ({
               className="space-y-6"
             >
               <div className="space-y-4">
-                {localMappings.map((mapping, index) => (
+                {/* {localMappings.map((mapping, index) => (
                   <motion.div
                     key={index}
                     initial={{ opacity: 0, y: 10 }}
@@ -1572,7 +1636,171 @@ const ActionPanel = ({
                       )}
                     </div>
                   </motion.div>
-                ))}
+                ))} */}
+                {localMappings.map((mapping, index) => {
+                  const isRequiredField = selectedObject && safeSalesforceObjects
+                    .find(obj => obj.name === selectedObject)
+                    ?.fields?.find(f => f.name === mapping.salesforceField && f.required);
+
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Salesforce Field
+                            {isRequiredField && (
+                              <span className="ml-1 text-red-500">*</span>
+                            )}
+                          </label>
+                          <Select
+                            value={fieldOptions.find((opt) => opt.value === mapping.salesforceField) || null}
+                            onChange={(selected) => handleMappingChange(index, "salesforceField", selected ? selected.value : "")}
+                            options={fieldOptions}
+                            placeholder="Select Field"
+                            styles={{
+                              container: (base) => ({
+                                ...base,
+                                borderRadius: "0.375rem",
+                                borderColor: "#e5e7eb",
+                                fontSize: "0.875rem",
+                              }),
+                              control: (base) => ({
+                                ...base,
+                                minHeight: "34px",
+                                backgroundColor: isRequiredField ? '#f5f5f5' : base.backgroundColor,
+                              }),
+                              placeholder: (base) => ({
+                                ...base,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                zIndex: 9999,
+                              }),
+                            }}
+                            isDisabled={!selectedObject || isRequiredField}
+                            isClearable={!isRequiredField}
+                            classNamePrefix="select"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Form Field
+                            {isRequiredField && (
+                              <span className="ml-1 text-red-500">*</span>
+                            )}
+                          </label>
+                          <Select
+                            value={
+                              mapping.picklistValue
+                                ? {
+                                  value: mapping.picklistValue,
+                                  label: mapping.picklistValue,
+                                  isPicklistValue: true
+                                }
+                                : safeFormFields.find(f => f.id === mapping.formFieldId || f.Unique_Key__c === mapping.formFieldId)
+                                  ? {
+                                    value: mapping.formFieldId,
+                                    label: safeFormFields.find(f => f.id === mapping.formFieldId || f.Unique_Key__c === mapping.formFieldId).name || 'Unknown',
+                                    isFormField: true,
+                                    isSubField: !!safeFormFields.find(f => f.id === mapping.formFieldId || f.Unique_Key__c === mapping.formFieldId)?.parentFieldId
+                                  }
+                                  : null
+                            }
+                            onChange={(selected) => {
+                              if (!selected) {
+                                handleMappingChange(index, 'formFieldId', '', { fieldType: '' });
+                                return;
+                              }
+                              if (selected.isPicklistValue) {
+                                handleMappingChange(index, 'picklistValue', selected.value);
+                              } else {
+                                const field = safeFormFields.find(f => f.id === selected.value || f.Unique_Key__c === selected.value);
+                                handleMappingChange(index, 'formFieldId', selected.value, { fieldType: field ? field.type : '' });
+                              }
+                            }}
+                            options={formFieldOptions(index)}
+                            placeholder={formFieldOptions(index).length ? "Select Form Field or Picklist Value" : "No Options Available"}
+                            styles={{
+                              container: (base) => ({
+                                ...base,
+                                borderRadius: "0.375rem",
+                                borderColor: "#e5e7eb",
+                                fontSize: "0.875rem",
+                              }),
+                              control: (base) => ({
+                                ...base,
+                                minHeight: "34px",
+                              }),
+                              placeholder: (base) => ({
+                                ...base,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                zIndex: 9999,
+                              }),
+                              groupHeading: (base) => ({
+                                ...base,
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase',
+                                color: '#1f2937',
+                                backgroundColor: '#f9fafb',
+                                padding: '8px 12px',
+                                borderBottom: '1px solid #e5e7eb',
+                              }),
+                              option: (base, { data, isDisabled }) => ({
+                                ...base,
+                                backgroundColor: data.isPicklistValue ? '#f0f9ff' : (data.isSubField ? '#f3f4f6' : base.backgroundColor),
+                                color: isDisabled ? '#ccc' : (data.isPicklistValue ? '#0369a1' : (data.isSubField ? '#374151' : base.color)),
+                                paddingLeft: data.isSubField ? '24px' : '12px',
+                                cursor: isDisabled ? 'not-allowed' : 'default',
+                                ':active': {
+                                  backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor)),
+                                },
+                                ':hover': {
+                                  backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : (data.isSubField ? '#e5e7eb' : '#f3f4f6')),
+                                },
+                              }),
+                            }}
+                            isClearable
+                            isDisabled={!formFieldOptions(index).length}
+                            classNamePrefix="select"
+                            getOptionIsDisabled={(option) => option.isDisabled === true}
+                            formatGroupLabel={(group) => (
+                              <div className="flex items-center">
+                                <span>{group.label}</span>
+                              </div>
+                            )}
+                          />
+                        </div>
+                        {localMappings.length > 1 && !isRequiredField && (
+                          <button
+                            onClick={() => removeMapping(index)}
+                            className="text-red-500 hover:text-red-700 mt-7"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {isRequiredField && (
+                        <p className="text-xs text-gray-500 mt-1">This is a required field in Salesforce</p>
+                      )}
+                    </motion.div>
+                  );
+                })}
                 <button
                   onClick={addMapping}
                   className="flex items-center justify-center w-full bg-blue-50 text-blue-600 px-4 py-2 rounded-md hover:bg-blue-100 border border-blue-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"

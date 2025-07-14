@@ -100,6 +100,8 @@ const MappingFields = () => {
   // Initialize Salesforce objects from metadata
   useEffect(() => {
     if (metadata && metadata.length > 0) {
+      console.log('metadata  ',metadata);
+      
       const objects = metadata.map(obj => ({
         name: obj.name,
         label: obj.label,

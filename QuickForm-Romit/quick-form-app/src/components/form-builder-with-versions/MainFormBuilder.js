@@ -157,7 +157,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
       const token = (await fetchAccessToken(userId, instanceUrl));
       const rawString = `${userId}$${formId}`;
       const encryptedLinkId = encrypt(rawString);
-      const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
+      const publishLink = `https://d2gg09yhu3xa1a.cloudfront.net/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';
@@ -922,6 +922,208 @@ function MainFormBuilder({showMapping , showThankYou }) {
   const selectedField = getSelectedField();
 
   return (
+    // <div className="flex h-screen">
+    //   <MainMenuBar isSidebarOpen={isSidebarOpen} 
+    //     toggleSidebar={toggleSidebar} 
+    //     formRecords={formRecords}
+    //     selectedVersionId={selectedVersionId} />
+    //   <div
+    //     className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
+    //       isSidebarOpen ? 'ml-64' : 'ml-16'
+    //     }`}
+    //   >
+    //     <div className="bg-[#6A9AB0] text-white h-1/3"></div>
+    //     <div className="bg-white h-2/3"></div>
+    //     <div className="absolute top-0 inset-x-1 flex flex-col px-4">
+    //       <div className="text-white p-4 w-full flex justify-between items-center">
+    //         <div className="flex items-center gap-4">
+    //           <div className="text-left">
+    //             <h1 className="text-2xl font-semibold text-white">
+    //               {fields.find((f) => f.type === 'header')?.heading || 'Contact Form'}
+    //             </h1>
+    //             <p className="text-sm text-blue-100">{currentFormVersion?.Description__c || 'Define the form structure'}</p>
+    //             <select
+    //               value={selectedVersionId || ''}
+    //               onChange={handleVersionChange}
+    //               className="p-2 bg-white text-black rounded-md"
+    //             >
+    //               <option value="" disabled>Select Version</option>
+    //               {formVersions.map((version) => (
+    //                 <option key={version.Id} value={version.Id}>
+    //                   Version {version.Version__c} ({version.Stage__c})
+    //                 </option>
+    //               ))}
+    //             </select>
+    //           </div>
+    //         </div>
+    //         <div className="flex items-center gap-3">
+    //           <button
+    //             onClick={undo}
+    //             disabled={!canUndo}
+    //             className={`p-2 rounded ${!canUndo ? 'text-gray-300 cursor-not-allowed' : 'text-white hover:bg-blue-700'}`}
+    //             title="Undo"
+    //           >
+    //             <MdUndo size={18} />
+    //           </button>
+    //           <button
+    //             onClick={redo}
+    //             disabled={!canRedo}
+    //             className={`p-2 rounded ${!canRedo ? 'text-gray-300 cursor-not-allowed' : 'text-white hover:bg-blue-700'}`}
+    //             title="Redo"
+    //           >
+    //             <MdRedo size={18} />
+    //           </button>
+    //           <button
+    //             className="p-2 rounded text-white hover:bg-blue-700"
+    //             title="Preview"
+    //           >
+    //             <FaEye size={18} />
+    //           </button>
+    //           <button
+    //             onClick={handleAddPage}
+    //             className="p-2 bg-blue-900 text-white rounded hover:bg-blue-100 font-medium"
+    //             title="Add Page"
+    //           >
+    //             Add Page
+    //           </button>
+    //           {(currentFormVersion?.Stage__c === 'Draft' || currentFormVersion?.Stage__c === 'Locked') && (
+    //             <button
+    //               onClick={handlePublish}
+    //               disabled={isLoadingForm || currentFormVersion?.Stage__c === 'Publish'}
+    //               className="p-2 bg-green-500 text-white rounded-md disabled:bg-gray-400"
+    //             >
+    //               Publish
+    //             </button>
+    //           )}
+    //           <button
+    //             onClick={saveFormToSalesforce}
+    //             disabled={isSaving || currentFormVersion?.Stage__c !== 'Draft'}
+    //             className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${
+    //               isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
+    //             }`}
+    //             title="Save Form"
+    //           >
+    //             {isSaving ? (
+    //               <>
+    //                 <svg
+    //                   className="animate-spin h-5 w-5 text-white"
+    //                   xmlns="http://www.w3.org/2000/svg"
+    //                   fill="none"
+    //                   viewBox="0 0 24 24"
+    //                 >
+    //                   <circle
+    //                     className="opacity-25"
+    //                     cx="12"
+    //                     cy="12"
+    //                     r="10"
+    //                     stroke="currentColor"
+    //                     strokeWidth="4"
+    //                   ></circle>
+    //                   <path
+    //                     className="opacity-75"
+    //                     fill="currentColor"
+    //                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    //                   ></path>
+    //                 </svg>
+    //                 Saving...
+    //               </>
+    //             ) : (
+    //               'Save Form'
+    //             )}
+    //           </button>
+    //         </div>
+    //       </div>
+    //       {saveError && (
+    //         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mt-2">
+    //           {saveError}
+    //         </div>
+    //       )}
+    //       {fetchFormError && (
+    //         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mt-2">
+    //           {fetchFormError}
+    //         </div>
+    //       )}
+    //       {isLoadingForm ? (
+    //         <div className="flex justify-center items-center h-64">
+    //           <svg
+    //             className="animate-spin h-8 w-8 text-blue-600"
+    //             xmlns="http://www.w3.org/2000/svg"
+    //             fill="none"
+    //             viewBox="0 0 24 24"
+    //           >
+    //             <circle
+    //               className="opacity-25"
+    //               cx="12"
+    //               cy="12"
+    //               r="10"
+    //               stroke="currentColor"
+    //               strokeWidth="4"
+    //             ></circle>
+    //             <path
+    //               className="opacity-75"
+    //               fill="currentColor"
+    //               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    //             ></path>
+    //           </svg>
+    //         </div>
+    //       ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> :  showMapping ? <MappingFields /> : (
+    //         <div className="flex w-full mt-4">
+    //           <div className="w-3/4 pr-2">
+    //             <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
+    //               <FormBuilder
+    //                 fields={fields}
+    //                 onDrop={handleDrop}
+    //                 onReorder={handleReorder}
+    //                 onUpdateField={handleUpdateField}
+    //                 onDeleteField={handleDeleteField}
+    //                 onDeletePage={handleDeletePage}
+    //                 showSidebar={showSidebar}
+    //                 setShowSidebar={setShowSidebar}
+    //                 setSelectedFieldId={setSelectedFieldId}
+    //                 setSelectedSectionSide={setSelectedSectionSide}
+    //                 setSelectedFooter={setSelectedFooter}
+    //                 selectedFieldId={selectedFieldId}
+    //                 selectedSectionSide={selectedSectionSide}
+    //                 setClipboard={setClipboard}
+    //                 clipboard={clipboard}
+    //                 selectedTheme={selectedTheme}
+    //               />
+    //             </div>
+    //           </div>
+    //           <div className="w-1/4 pl-2">
+    //             {showSidebar && !selectedFieldId && !selectedFooter ? (
+    //               <Sidebar 
+    //               selectedTheme={selectedTheme}
+    //               onThemeSelect={setSelectedTheme}
+    //               themes={themes}
+    //               />
+    //             ) : (
+    //               <div className="bg-white dark:bg-gray-800 rounded-lg">
+    //                 {(selectedFieldId || selectedFooter) && (
+    //                   <FieldEditor
+    //                     selectedField={selectedField}
+    //                     selectedFooter={selectedFooter}
+    //                     onUpdateField={handleUpdateField}
+    //                     onDeleteField={handleDeleteField}
+    //                     onClose={() => {
+    //                       setSelectedFieldId(null);
+    //                       setSelectedSectionSide(null);
+    //                       setSelectedFooter(null);
+    //                       setShowSidebar(true);
+    //                     }}
+    //                     fields={fields}
+    //                   />
+    //                 )}
+    //               </div>
+    //             )}
+    //           </div>
+    //         </div>
+    //       )}
+    //     </div>
+    //   </div>
+    
+    // </div>
+    
     <div className="flex h-screen">
       <MainMenuBar isSidebarOpen={isSidebarOpen} 
         toggleSidebar={toggleSidebar} 
@@ -932,10 +1134,9 @@ function MainFormBuilder({showMapping , showThankYou }) {
           isSidebarOpen ? 'ml-64' : 'ml-16'
         }`}
       >
-        <div className="bg-[#6A9AB0] text-white h-1/3"></div>
-        <div className="bg-white h-2/3"></div>
-        <div className="absolute top-0 inset-x-1 flex flex-col px-4">
-          <div className="text-white p-4 w-full flex justify-between items-center">
+
+        <div className="inset-x-1 flex flex-col">
+          <div className="bg-gradient-to-r from-[rgba(48,140,165,1)] to-[rgba(139,213,233,1)] text-white p-4 w-full flex justify-between items-center">
             <div className="flex items-center gap-4">
               <div className="text-left">
                 <h1 className="text-2xl font-semibold text-white">
@@ -1067,7 +1268,7 @@ function MainFormBuilder({showMapping , showThankYou }) {
               </svg>
             </div>
           ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> :  showMapping ? <MappingFields /> : (
-            <div className="flex w-full mt-4">
+            <div className="flex w-full mt-4 px-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
                   <FormBuilder

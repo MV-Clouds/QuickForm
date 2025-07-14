@@ -1,4 +1,3 @@
-// PublicFormViewer.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { decrypt } from '../form-builder-with-versions/crypto';
@@ -11,8 +10,8 @@ import InputMask from 'react-input-mask';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { AiOutlineStar, AiFillStar, AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
-import { FaRegLightbulb, FaLightbulb, FaBolt, FaInfoCircle } from 'react-icons/fa';
-
+import { FaRegLightbulb, FaLightbulb, FaBolt } from 'react-icons/fa';
+      
 function PublicFormViewer() {
   const { linkId } = useParams();
   const [formData, setFormData] = useState(null);
@@ -21,12 +20,13 @@ function PublicFormViewer() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
+  const [instanceUrl, setInstanceUrl] = useState(null);
   const [linkData, setLinkData] = useState(null);
   const [signatures, setSignatures] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
-  const [selectedRatings, setSelectedRatings] = useState({});
+  const [selectedRatings, setSelectedRatings] = useState({});       
   const [selectedOptions, setSelectedOptions] = useState({});
-  const [isDropdownOpen, setIsDropdownOpen] = useState({});
+  const [isDropdownOpen, setIsDropdownOpen] = useState({});      
   const [toggles, setToggles] = useState({});
   const signatureRefs = useRef({});
   const [currentPage, setCurrentPage] = useState(0);
@@ -37,12 +37,12 @@ function PublicFormViewer() {
       try {
         let decrypted;
         try {
-            decrypted = decrypt(linkId);
+          decrypted = decrypt(linkId);
         } catch (e) {
           throw new Error(e.message || 'Invalid link format');
         }
-
-        const [ userId, formId ] = decrypted.split('$');
+ 
+        const [userId, formId] = decrypted.split('$');
         if (!userId || !formId) {
           throw new Error('Invalid link data');
         }
@@ -50,13 +50,8 @@ function PublicFormViewer() {
 
         const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId,
-            
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
         });
 
         const tokenData = await tokenResponse.json();
@@ -64,26 +59,43 @@ function PublicFormViewer() {
           throw new Error(tokenData.error || 'Failed to fetch access token');
         }
         const token = tokenData.access_token;
+        const instanceUrl = tokenData.instanceUrl;
         setAccessToken(token);
+        setInstanceUrl(instanceUrl);
 
         const response = await fetch(process.env.REACT_APP_FETCH_FORM_BY_LINK_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId,
-            formId,
-            accessToken: token,
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, formId, accessToken: token }),
         });
-
+        
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.error || 'Failed to fetch form');
         }
         const formVersion = data.formVersion;
         setFormData(formVersion);
+
+        const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            Authorization: `Bearer ${token}` 
+          },
+          body: JSON.stringify({ 
+            userId, 
+            formVersionId: formVersion.Id, 
+            instanceUrl,
+            accessToken: token 
+          }),
+        });
+            
+        const mappingsData = await mappingsResponse.json();
+        if (!mappingsResponse.ok) {
+          throw new Error(mappingsData.error || 'Failed to fetch mappings');
+        }
+        setFormData(prev => ({ ...prev, mappings: mappingsData.mappings }));
+
         const initialValues = {};
         const initialSignatures = {};
         const initialFilePreviews = {};
@@ -96,22 +108,22 @@ function PublicFormViewer() {
           const fieldType = field.Field_Type__c;
 
           if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-            initialValues[field.Unique_Key__c] = properties.defaultValue || [];
+            initialValues[field.Id] = properties.defaultValue || [];
           } else if (fieldType === 'datetime' || fieldType === 'date') {
-            initialValues[field.Unique_Key__c] = properties.defaultValue || null;
+            initialValues[field.Id] = properties.defaultValue || null;
           } else if (fieldType === 'time') {
-            initialValues[field.Unique_Key__c] = properties.defaultValue || '';
+            initialValues[field.Id] = properties.defaultValue || '';
           } else if (fieldType === 'scalerating') {
-            initialValues[field.Unique_Key__c] = {};
+            initialValues[field.Id] = {};
           } else {
-            initialValues[field.Unique_Key__c] = properties.defaultValue || '';
+            initialValues[field.Id] = properties.defaultValue || '';
           }
 
-          initialSignatures[field.Unique_Key__c] = null;
-          initialFilePreviews[field.Unique_Key__c] = null;
-          initialRatings[field.Unique_Key__c] = null;
-          initialSelectedOptions[field.Unique_Key__c] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
-          initialToggles[field.Unique_Key__c] = false;
+          initialSignatures[field.Id] = null;
+          initialFilePreviews[field.Id] = null;
+          initialRatings[field.Id] = null;
+          initialSelectedOptions[field.Id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
+          initialToggles[field.Id] = false;
         });
 
         setFormValues(initialValues);
@@ -121,7 +133,6 @@ function PublicFormViewer() {
         setSelectedOptions(initialSelectedOptions);
         setToggles(initialToggles);
 
-        // Split fields into pages based on Page_Number__c and sort by Order_Number__c
         const pageMap = {};
         formVersion.Fields.forEach((field) => {
           const pageNum = field.Page_Number__c || 1;
@@ -133,9 +144,7 @@ function PublicFormViewer() {
 
         const sortedPages = Object.keys(pageMap)
           .sort((a, b) => Number(a) - Number(b))
-          .map((pageNum) => {
-            return pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0));
-          });
+          .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
         setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
       } catch (error) {
         console.error('Error fetching form:', error);
@@ -213,115 +222,115 @@ function PublicFormViewer() {
     const newErrors = {};
 
     formData.Fields.forEach((field) => {
-      const properties = JSON.parse(field.Properties__c || '{}');
-      const value = formValues[field.Unique_Key__c];
-      const fieldType = field.Field_Type__c;
-      const fieldLabel = properties.label || field.Name;
+  const properties = JSON.parse(field.Properties__c || '{}');
+  const value = formValues[field.Id];
+  const fieldType = field.Field_Type__c;
+  const fieldLabel = properties.label || field.Name;
 
-      const isRequired = properties.isRequired;
-      if (isRequired) {
-        if (value === '' || value == null ||
-            (Array.isArray(value) && value.length === 0) ||
-            (fieldType === 'fileupload' && !value) ||
-            (fieldType === 'imageuploader' && !value) ||
-            (fieldType === 'signature' && !signatures[field.Unique_Key__c]) ||
-            (fieldType === 'terms' && !value) ||
-            (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))) {
-          newErrors[field.Unique_Key__c] = `${fieldLabel} is required`;
+  const isRequired = properties.isRequired;
+  if (isRequired) {
+    if (value === '' || value == null ||
+        (Array.isArray(value) && value.length === 0) ||
+        (fieldType === 'fileupload' && !value) ||
+        (fieldType === 'imageuploader' && !value) ||
+        (fieldType === 'signature' && !signatures[field.Id]) ||
+        (fieldType === 'terms' && !value) ||
+        (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))) {
+      newErrors[field.Id] = `${fieldLabel} is required`;
+    }
+  }
+
+  switch (fieldType) {
+    case 'number':
+      if (value !== '' && isNaN(parseFloat(value))) {
+        newErrors[field.Id] = `${fieldLabel} must be a valid number`;
+      } else if (properties.numberValueLimits?.enabled) {
+        const numValue = parseFloat(value);
+        const { min, max } = properties.numberValueLimits;
+        if (min != null && numValue < parseFloat(min)) {
+          newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
+        }
+        if (max != null && numValue > parseFloat(max)) {
+          newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
         }
       }
+      break;
 
-      switch (fieldType) {
-        case 'number':
-          if (value !== '' && isNaN(parseFloat(value))) {
-            newErrors[field.Unique_Key__c] = `${fieldLabel} must be a valid number`;
-          } else if (properties.numberValueLimits?.enabled) {
-            const numValue = parseFloat(value);
-            const { min, max } = properties.numberValueLimits;
-            if (min != null && numValue < parseFloat(min)) {
-              newErrors[field.Unique_Key__c] = `${fieldLabel} must be at least ${min}`;
-            }
-            if (max != null && numValue > parseFloat(max)) {
-              newErrors[field.Unique_Key__c] = `${fieldLabel} must be at most ${max}`;
-            }
-          }
-          break;
-
-        case 'price':
-          if (value !== '' && isNaN(parseFloat(value))) {
-            newErrors[field.Unique_Key__c] = `${fieldLabel} must be a valid number`;
-          } else if (properties.priceLimits?.enabled) {
-            const numValue = parseFloat(value);
-            const { min, max } = properties.priceLimits;
-            if (min != null && numValue < parseFloat(min)) {
-              newErrors[field.Unique_Key__c] = `${fieldLabel} must be at least ${min}`;
-            }
-            if (max != null && numValue > parseFloat(max)) {
-              newErrors[field.Unique_Key__c] = `${fieldLabel} must be at most ${max}`;
-            }
-          }
-          break;
-
-        case 'shorttext':
-          if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
-            newErrors[field.Unique_Key__c] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
-          }
-          break;
-
-        case 'longtext':
-          if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
-            newErrors[field.Unique_Key__c] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
-          }
-          break;
-
-        case 'email':
-          if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-            newErrors[field.Unique_Key__c] = `${fieldLabel} must be a valid email address`;
-          }
-          if (properties.allowedDomains && value) {
-            const domains = properties.allowedDomains.split(',').map(d => d.trim());
-            const domain = value.split('@')[1];
-            if (!domains.includes(domain)) {
-              newErrors[field.Unique_Key__c] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
-            }
-          }
-          if (properties.enableConfirmation && value !== formValues[`${field.Unique_Key__c}_confirmation`]) {
-            newErrors[`${field.Unique_Key__c}_confirmation`] = 'Email confirmation does not match';
-          }
-          break;
-
-        case 'fileupload':
-        case 'imageuploader':
-          if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
-            newErrors[field.Unique_Key__c] = `File size exceeds ${properties.maxFileSize}MB limit`;
-          }
-          if (value && properties.allowedFileTypes) {
-            const extension = value.name.split('.').pop().toLowerCase();
-            const allowed = properties.allowedFileTypes.split(',').map(type => type.trim().toLowerCase());
-            if (!allowed.includes(extension)) {
-              newErrors[field.Unique_Key__c] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
-            }
-          }
-          break;
-
-        case 'date':
-          if (properties.enableAgeVerification && value) {
-            const today = new Date();
-            const birthDate = new Date(value);
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-              age--;
-            }
-            if (age < properties.minAge) {
-              newErrors[field.Unique_Key__c] = `You must be at least ${properties.minAge} years old`;
-            }
-          }
-          break;
-          default:
-            break;
+    case 'price':
+      if (value !== '' && isNaN(parseFloat(value))) {
+        newErrors[field.Id] = `${fieldLabel} must be a valid number`;
+      } else if (properties.priceLimits?.enabled) {
+        const numValue = parseFloat(value);
+        const { min, max } = properties.priceLimits;
+        if (min != null && numValue < parseFloat(min)) {
+          newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
+        }
+        if (max != null && numValue > parseFloat(max)) {
+          newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
+        }
       }
-    });
+      break;
+
+    case 'shorttext':
+      if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
+        newErrors[field.Id] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
+      }
+      break;
+
+    case 'longtext':
+      if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
+        newErrors[field.Id] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
+      }
+      break;
+
+    case 'email':
+      if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        newErrors[field.Id] = `${fieldLabel} must be a valid email address`;
+      }
+      if (properties.allowedDomains && value) {
+        const domains = properties.allowedDomains.split(',').map(d => d.trim());
+        const domain = value.split('@')[1];
+        if (!domains.includes(domain)) {
+          newErrors[field.Id] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
+        }
+      }
+      if (properties.enableConfirmation && value !== formValues[`${field.Id}_confirmation`]) {
+        newErrors[`${field.Id}_confirmation`] = 'Email confirmation does not match';
+      }
+      break;
+
+    case 'fileupload':
+    case 'imageuploader':
+      if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
+        newErrors[field.Id] = `File size exceeds ${properties.maxFileSize}MB limit`;
+      }
+      if (value && properties.allowedFileTypes) {
+        const extension = value.name.split('.').pop().toLowerCase();
+        const allowed = properties.allowedFileTypes.split(',').map(type => type.trim().toLowerCase());
+        if (!allowed.includes(extension)) {
+          newErrors[field.Id] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
+        }
+      }
+      break;
+
+    case 'date':
+      if (properties.enableAgeVerification && value) {
+        const today = new Date();
+        const birthDate = new Date(value);
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        if (age < properties.minAge) {
+          newErrors[field.Id] = `You must be at least ${properties.minAge} years old`;
+        }
+      }
+      break;
+    default:
+      break;
+  }
+});
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -335,9 +344,7 @@ function PublicFormViewer() {
 
     const response = await fetch(process.env.REACT_APP_UPLOAD_DOCUMENT_URL, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
       body: formData,
     });
 
@@ -350,7 +357,7 @@ function PublicFormViewer() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm() || !linkData || !accessToken) {
+    if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
       return;
     }
 
@@ -358,26 +365,24 @@ function PublicFormViewer() {
     try {
       const submissionData = {};
       const filesToUpload = {};
-      
-      for (const key of Object.keys(formValues)) {
-      const field = formData.Fields.find((f) => f.Unique_Key__c === key);
-      const fieldType = field?.Field_Type__c;
 
-      if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-        filesToUpload[key] = formValues[key];
-        submissionData[key] = formValues[key].name;
-      } else if (fieldType === 'signature' && signatures[key]) {
-        const signatureBlob = await (await fetch(signatures[key])).blob();
-        const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-        filesToUpload[key] = signatureFile;
-        submissionData[key] = `${key}.png`;
-      } else {
-        submissionData[key] = formValues[key];
+      for (const key of Object.keys(formValues)) {
+        const field = formData.Fields.find((f) => f.Id === key);
+        const fieldType = field?.Field_Type__c;
+
+        if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
+          filesToUpload[key] = formValues[key];
+          submissionData[key] = formValues[key].name;
+        } else if (fieldType === 'signature' && signatures[key]) {
+          const signatureBlob = await (await fetch(signatures[key])).blob();
+          const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
+          filesToUpload[key] = signatureFile;
+          submissionData[key] = `${key}.png`;
+        } else {
+          submissionData[key] = formValues[key];
+        }
       }
-    }
-    console.log('Access token ',accessToken);
-    
-    
+
       const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
         method: 'POST',
         headers: {
@@ -408,7 +413,28 @@ function PublicFormViewer() {
         updatedSubmissionData[key] = documentId;
       }
 
-      alert('Form submitted successfully!');
+      const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: linkData.userId,
+          instanceUrl,
+          formVersionId: formData.Id,
+          formData: updatedSubmissionData,
+          nodes: formData.mappings,
+        }),
+      });
+
+      const flowData = await flowResponse.json();
+      if (!flowResponse.ok) {
+        throw new Error(flowData.error || 'Failed to execute flow');
+      }
+
+      alert('Form submitted and flow executed successfully!');
+
       const initialValues = {};
       formData.Fields.forEach((field) => {
         const properties = JSON.parse(field.Properties__c || '{}');
@@ -432,24 +458,19 @@ function PublicFormViewer() {
       setToggles({});
       setCurrentPage(0);
     } catch (error) {
-      if(error.message.includes('INVALID_JWT_FORMAT')){
+      if (error.message.includes('INVALID_JWT_FORMAT')) {
         let decrypted;
         try {
-            decrypted = decrypt(linkId);
+          decrypted = decrypt(linkId);
         } catch (e) {
           throw new Error(e.message || 'Invalid link format');
         }
 
-        const [ userId, formVersionId ] = decrypted.split('$');
+        const [userId, formId] = decrypted.split('$');
         const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId,
-            
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
         });
 
         const tokenData = await tokenResponse.json();
@@ -457,15 +478,13 @@ function PublicFormViewer() {
           throw new Error(tokenData.error || 'Failed to fetch access token');
         }
         const token = tokenData.access_token;
-        console.log('New access token fetched:', token);
-        
         setAccessToken(token);
-        console.log('Retrying submission with new token...',accessToken);
-        
-        handleSubmit(e); // Retry submission with new token
+        handleSubmit(e);
+      } else {
+        console.error('Error submitting form:', error);
+        setErrors({ submit: error.message || 'Failed to submit form' });
+      
       }
-      console.error('Error submitting form:', error);
-      setErrors({ submit: error.message || 'Failed to submit form' });
     } finally {
       setIsSubmitting(false);
     }
@@ -493,7 +512,7 @@ function PublicFormViewer() {
 
   const renderField = (field) => {
     const properties = JSON.parse(field.Properties__c || '{}');
-    const fieldId = field.Unique_Key__c;
+    const fieldId = field.Id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
     const isDisabled = properties.isDisabled || false;
@@ -1143,7 +1162,6 @@ function PublicFormViewer() {
         );
 
       case 'signature':
-
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1391,15 +1409,13 @@ function PublicFormViewer() {
                       type="text"
                       className="w-full p-2 border rounded"
                       value={formValues[properties.leftField.id] || ''}
-                      onChange={e =>
-                        handleChange(properties.leftField.id, e.target.value)
-                      }
+                      onChange={e => handleChange(properties.leftField.id, e.target.value)}
                       placeholder={properties.leftField.label || 'Left Field'}
                       disabled={properties.leftField.isDisabled}
                     />
                   </div>
                 ) : (
-                <div></div>
+                  <div></div>
                 )}
               </div>
               <div>
@@ -1410,15 +1426,13 @@ function PublicFormViewer() {
                       type={properties.rightField.type}
                       className="w-full p-2 border rounded"
                       value={formValues[properties.rightField.id] || ''}
-                      onChange={e =>
-                        handleChange(properties.rightField.id, e.target.value)
-                      }
+                      onChange={e => handleChange(properties.rightField.id, e.target.value)}
                       placeholder={properties.rightField.label || 'Right Field'}
                       disabled={properties.rightField.isDisabled}
                     />
                   </div>
                 ) : (
-                <div></div>
+                  <div></div>
                 )}
               </div>
             </div>
@@ -1433,7 +1447,7 @@ function PublicFormViewer() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 bg-white rounded-lg shadow-md">
+    <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
       <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
         <div className="page">
