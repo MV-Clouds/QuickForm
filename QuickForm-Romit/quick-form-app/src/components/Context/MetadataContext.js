@@ -29,8 +29,38 @@ export const SalesforceDataProvider = ({ children }) => {
 
       const data = await response.json();
       const parsedMetadata = JSON.parse(data.metadata || '[]');
-      const parsedFormRecords = JSON.parse(data.FormRecords || '[]');
+      const parseFormRecords = (formRecordsString) => {
+        if (!formRecordsString || formRecordsString === 'null') return [];
+        
+        try {
+          // First attempt direct parse
+          const parsed = JSON.parse(formRecordsString);
+          return parsed;
+        } catch (e) {
+          console.error('Initial parse failed, attempting recovery:', e.message);
+          
+          try {
+            // Try fixing common concatenation issues
+            const fixed = formRecordsString
+              .replace(/\](?=\s*\[)/g, '],') // Add missing comma between arrays
+              .replace(/\}(?=\s*\{)/g, '},') // Add missing comma between objects
+              .replace(/,\s*([\]}])/g, '$1'); // Remove trailing commas
+            
+            return JSON.parse(fixed);
+          } catch (recoveryError) {
+            console.error('Recovery failed:', {
+              error: recoveryError.message,
+              inputSample: formRecordsString.substring(0, 200) + '...' + formRecordsString.slice(-200),
+              length: formRecordsString.length
+            });
+            return [];
+          }
+        }
+      };
 
+      // Usage:
+      const parsedFormRecords = parseFormRecords(data.FormRecords);
+      
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
     } catch (err) {
@@ -48,13 +78,13 @@ export const SalesforceDataProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    const userId = sessionStorage.getItem('userId');
-    const instanceUrl = sessionStorage.getItem('instanceUrl');
-    if (userId && instanceUrl) {
-      fetchSalesforceData(userId, instanceUrl);
-    }
-  }, []);
+  // useEffect(() => {
+  //   const userId = sessionStorage.getItem('userId');
+  //   const instanceUrl = sessionStorage.getItem('instanceUrl');
+  //   if (userId && instanceUrl) {
+  //     fetchSalesforceData(userId, instanceUrl);
+  //   }
+  // }, []);
 
   return (
     <MetadataContext.Provider

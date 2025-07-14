@@ -118,10 +118,8 @@ const Home = () => {
       const token = await fetchAccessToken(userId, instanceUrl);
       if (token) {
         try {
-          await Promise.all([
-            fetchSalesforceData(userId, instanceUrl),
-            warmFetchFieldsForObject(userId, instanceUrl, token),
-          ]);
+          await  fetchSalesforceData(userId, instanceUrl);
+          warmFetchFieldsForObject(userId, instanceUrl, token);
         } finally {
           setIsInitializing(false);
         }

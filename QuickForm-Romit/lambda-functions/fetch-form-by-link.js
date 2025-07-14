@@ -1,8 +1,8 @@
 // fetch-form-by-link.js
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const METADATA_TABLE_NAME = 'SalesforceData';
+const METADATA_TABLE_NAME = 'SalesforceChunkData';
 
 export const handler = async (event) => {
   // Parse the request body
@@ -37,28 +37,32 @@ export const handler = async (event) => {
   }
 
   try {
-    const dataForInstance = await dynamoClient.send(
-      new GetItemCommand({
-        TableName: METADATA_TABLE_NAME,
-        Key: {
-          UserId: { S: userId },
-        },
-      })
-    );
-    const instanceUrl = dataForInstance.Item.InstanceUrl.S;
-    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
 
     // Fetch metadata from DynamoDB
-    const response = await dynamoClient.send(
-      new GetItemCommand({
-        TableName: METADATA_TABLE_NAME,
-        Key: {
-          UserId: { S: userId },
-        },
-      })
-    );
+    let allItems = [];
+    let ExclusiveStartKey = undefined;
 
-    if (!response.Item || !response.Item.FormRecords?.S) {
+    do {
+      const queryResponse = await dynamoClient.send(
+        new QueryCommand({
+          TableName: METADATA_TABLE_NAME,
+          KeyConditionExpression: 'UserId = :userId',
+          ExpressionAttributeValues: { ':userId': { S: userId } },
+          ExclusiveStartKey,
+        })
+      );
+
+      if (queryResponse.Items) {
+        allItems.push(...queryResponse.Items);
+      }
+
+      ExclusiveStartKey = queryResponse.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+
+    // Parse FormRecords from chunks
+    const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
+    if (formRecordItems.length === 0) {
       return {
         statusCode: 404,
         headers: {
@@ -72,7 +76,28 @@ export const handler = async (event) => {
     // Parse FormRecords
     let formRecords;
     try {
-      formRecords = JSON.parse(response.Item.FormRecords.S);
+      const sortedChunks = formRecordItems
+        .sort((a, b) => {
+          const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+          const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+          return aNum - bNum;
+        });
+      const expectedChunks = sortedChunks.length;
+      for (let i = 0; i < expectedChunks; i++) {
+        if (!sortedChunks.some(item => item.ChunkIndex.S === `FormRecords_${i}`)) {
+          console.warn(`Missing chunk FormRecords_${i}`);
+          return {
+            statusCode: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+            },
+            body: JSON.stringify({ error: 'Incomplete form metadata chunks' }),
+          };
+        }
+      }
+      const combinedFormRecords = sortedChunks.map(item => item.FormRecords.S).join('');
+      formRecords = JSON.parse(combinedFormRecords);
     } catch (e) {
       console.error('Failed to parse FormRecords:', e);
       return {

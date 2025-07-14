@@ -1,11 +1,10 @@
-import { DynamoDBClient, GetItemCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, QueryCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const METADATA_TABLE_NAME = 'SalesforceData';
+const METADATA_TABLE_NAME = 'SalesforceChunkData';
 
 export const handler = async (event) => {
   try {
-    console.log('Function 2');
     const body = JSON.parse(event.body || '{}');
     const { userId, instanceUrl, condition, formVersionId, conditionId } = body;
     const token = event.headers.Authorization?.split(' ')[1];
@@ -131,16 +130,64 @@ export const handler = async (event) => {
       newCondition.Id = `${salesforceConditionId}_${newCondition.Id}`; // Only append Salesforce ID for new conditions
     }
 
-    const existingMetadataRes = await dynamoClient.send(
-      new GetItemCommand({
-        TableName: METADATA_TABLE_NAME,
-        Key: { UserId: { S: userId } },
-      })
-    );
+    let allItems = [];
+    let ExclusiveStartKey = undefined;
+
+    do {
+      const queryResponse = await dynamoClient.send(
+        new QueryCommand({
+          TableName: METADATA_TABLE_NAME,
+          KeyConditionExpression: 'UserId = :userId',
+          ExpressionAttributeValues: { ':userId': { S: userId } },
+          ExclusiveStartKey,
+        })
+      );
+
+      if (queryResponse.Items) {
+        allItems.push(...queryResponse.Items);
+      }
+
+      ExclusiveStartKey = queryResponse.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
 
     let formRecords = [];
-    if (existingMetadataRes.Item?.FormRecords?.S) {
-      formRecords = JSON.parse(existingMetadataRes.Item.FormRecords.S);
+    let existingMetadata = {};
+    let createdAt = new Date().toISOString();
+
+    const metadataItem = allItems.find(item => item.ChunkIndex?.S === 'Metadata');
+    const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
+
+    if (metadataItem?.Metadata?.S) {
+      try {
+        existingMetadata = JSON.parse(metadataItem.Metadata.S);
+      } catch (e) {
+        console.warn('Failed to parse Metadata:', e);
+      }
+      createdAt = metadataItem.CreatedAt?.S || createdAt;
+    }
+
+    if (formRecordItems.length > 0) {
+      try {
+        const sortedChunks = formRecordItems
+          .sort((a, b) => {
+            const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+            const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+            return aNum - bNum;
+          });
+        const expectedChunks = sortedChunks.length;
+        for (let i = 0; i < expectedChunks; i++) {
+          if (!sortedChunks.some(item => item.ChunkIndex.S === `FormRecords_${i}`)) {
+            console.warn(`Missing chunk FormRecords_${i}`);
+            formRecords = [];
+            break;
+          }
+        }
+        const combinedFormRecords = sortedChunks.map(item => item.FormRecords.S).join('');
+        formRecords = JSON.parse(combinedFormRecords);
+      } catch (e) {
+        console.warn('Failed to parse FormRecords chunks:', e);
+        formRecords = [];
+      }
     }
 
     let formVersion = null;
@@ -160,17 +207,42 @@ export const handler = async (event) => {
       throw new Error(`Form version ${formVersionId} not found in DynamoDB`);
     }
 
-    await dynamoClient.send(
-      new PutItemCommand({
-        TableName: METADATA_TABLE_NAME,
-        Item: {
-          UserId: { S: userId },
-          InstanceUrl: { S: cleanedInstanceUrl },
-          Metadata: { S: existingMetadataRes.Item?.Metadata?.S || '{}' },
-          FormRecords: { S: JSON.stringify(formRecords) },
-          CreatedAt: { S: existingMetadataRes.Item?.CreatedAt?.S || new Date().toISOString() },
-          UpdatedAt: { S: new Date().toISOString() },
+    const formRecordsString = JSON.stringify(formRecords);
+    const CHUNK_SIZE = 370000;
+    const chunks = [];
+    for (let i = 0; i < formRecordsString.length; i += CHUNK_SIZE) {
+      chunks.push(formRecordsString.slice(i, i + CHUNK_SIZE));
+    }
+
+    let writeRequests = [
+      {
+        PutRequest: {
+          Item: {
+            UserId: { S: userId },
+            ChunkIndex: { S: 'Metadata' },
+            InstanceUrl: { S: cleanedInstanceUrl },
+            Metadata: { S: JSON.stringify(existingMetadata) },
+            CreatedAt: { S: createdAt },
+            UpdatedAt: { S: new Date().toISOString() },
+          },
         },
+      },
+      ...chunks.map((chunk, index) => ({
+        PutRequest: {
+          Item: {
+            UserId: { S: userId },
+            ChunkIndex: { S: `FormRecords_${index}` },
+            FormRecords: { S: chunk },
+            CreatedAt: { S: new Date().toISOString() },
+            UpdatedAt: { S: new Date().toISOString() },
+          },
+        },
+      })),
+    ];
+
+    await dynamoClient.send(
+      new BatchWriteItemCommand({
+        RequestItems: { [METADATA_TABLE_NAME]: writeRequests },
       })
     );
 
