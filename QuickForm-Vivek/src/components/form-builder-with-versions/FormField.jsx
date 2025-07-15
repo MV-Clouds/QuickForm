@@ -10,7 +10,6 @@ import 'react-quill/dist/quill.snow.css';
 import InputMask from 'react-input-mask';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
-
 const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', dropdownOptions = [], onChange, onUpdateRows, onUpdateColumns }) => {
   const [selectedValues, setSelectedValues] = useState({});
   const [editingRow, setEditingRow] = useState(null);
@@ -301,6 +300,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   const [plainTextValue, setPlainTextValue] = useState(field.value ? stripHtml(field.value) : '');
   const [numberValue, setNumberValue] = useState('');
   const datePickerRef = useRef(null);
+  const editingRef = useRef(null);
   const quillRef = useRef(null);
   const [phoneValue, setPhoneValue] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -697,28 +697,28 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   };
 
   const handleQuillChange = (value) => {
-  const plainText = stripHtml(value);
-  const maxChars = longTextMaxChars || 131072;
+    const plainText = stripHtml(value);
+    const maxChars = longTextMaxChars || 131072;
 
-  if (plainText.length <= maxChars) {
-    setRichTextValue(value);
-    setPlainTextValue(plainText);
-    if (onUpdateField && value !== field.value) {
-      onUpdateField(id, { value });
+    if (plainText.length <= maxChars) {
+      setRichTextValue(value);
+      setPlainTextValue(plainText);
+      if (onUpdateField && value !== field.value) {
+        onUpdateField(id, { value });
+      }
+    } else if (quillRef.current) {
+      const quill = quillRef.current.getEditor();
+      const currentText = quill.getText();
+      quill.deleteText(maxChars, currentText.length - maxChars);
+      const newValue = quill.root.innerHTML;
+      const newPlainText = stripHtml(newValue);
+      setRichTextValue(newValue);
+      setPlainTextValue(newPlainText);
+      if (onUpdateField && newValue !== field.value) {
+        onUpdateField(id, { value: newValue });
+      }
     }
-  } else if (quillRef.current) {
-    const quill = quillRef.current.getEditor();
-    const currentText = quill.getText();
-    quill.deleteText(maxChars, currentText.length - maxChars);
-    const newValue = quill.root.innerHTML;
-    const newPlainText = stripHtml(newValue);
-    setRichTextValue(newValue);
-    setPlainTextValue(newPlainText);
-    if (onUpdateField && newValue !== field.value) {
-      onUpdateField(id, { value: newValue });
-    }
-  }
-};
+  };
 
   const toggleOption = (option) => {
     let newSelectedOptions;
@@ -1173,7 +1173,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <div className="flex flex-col gap-2">
               {localOptions.map((opt, idx) => (
                 <div key={opt} className="flex items-center gap-2">
-                  <input type="checkbox" className="mr-2" disabled={isDisabled} pattern={field?.validation?.pattern} title={field?.validation?.description}/>
+                  <input type="checkbox" className="mr-2" disabled={isDisabled} pattern={field?.validation?.pattern} title={field?.validation?.description} />
                   <div
                     // type="text"
                     // value={opt}
@@ -1400,8 +1400,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             </span>
           }>
             <label className="inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" disabled={isDisabled} checked={isChecked} onChange={handleToggleChange}               pattern={field?.validation?.pattern}
-              title={field?.validation?.description}/>
+              <input type="checkbox" className="sr-only peer" disabled={isDisabled} checked={isChecked} onChange={handleToggleChange} pattern={field?.validation?.pattern}
+                title={field?.validation?.description} />
               <div className={`w-11 h-6 bg-gray-200 rounded-full peer ${isChecked ? 'peer-checked:bg-blue-600' : ''} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isChecked ? 'translate-x-5' : 'translate-x-1'}`} />
               </div>
@@ -1432,8 +1432,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 placeholder={placeholder.main || 'Enter price'}
                 onChange={handlePriceChange}
                 readOnly={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
+                pattern={field?.validation?.pattern}
+                title={field?.validation?.description}
               />
             </div>
             {/* NEW: Display price limits if enabled */}
@@ -1478,8 +1478,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={placeholder.first || 'First Name'}
                   readOnly={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
+                  pattern={field?.validation?.pattern}
+                  title={field?.validation?.description}
                 />
               </div>
               <div className={enableSalutation ? 'w-2/5' : 'w-1/2'}>
@@ -1514,7 +1514,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                     className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                     placeholder={placeholder.street || 'Street Address'}
                     readOnly={isDisabled}
-             
+
                   />
                 </div>
               )}
@@ -1645,8 +1645,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 type="checkbox"
                 className="mr-2"
                 disabled={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
+                pattern={field?.validation?.pattern}
+                title={field?.validation?.description}
               />
               {makeAsLink && termsLinkUrl ? (
                 <a
@@ -1681,6 +1681,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             >
               {isEditingDisplayText ? (
                 <ReactQuill
+                  ref={editingRef}
                   value={field.value || ''}
                   onChange={value => {
                     if (onUpdateField) onUpdateField(id, { value });
@@ -1689,12 +1690,21 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   className="bg-white"
                   modules={{
                     toolbar: [
-                      [{ 'header': '1' }, { 'header': '2' }, { 'font': [] }],
-                      [{ size: [] }],
-                      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+                      // Headers 1-6
+                      [{ 'header': [1, 2, 3, 4, 5, 6, false] }, { 'font': [] }],
+                      // [{ size: [] }],
+                      // Bold, italic, underline, strike, blockquote, code block
+                      ['bold', 'italic', 'underline', 'strike', 'blockquote', 'code-block'],
+                      // List, indent
                       [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
+                      // Superscript, subscript
+                      [{ 'script': 'super' }, { 'script': 'sub' }],
+                      // Link, image
                       ['link', 'image'],
-                      ['clean'] // remove formatting button
+                      // Fullscreen (custom button, see note below)
+                      ['fullscreen'],
+                      // Clean
+                      ['clean']
                     ]
                   }}
                   placeholder="Enter display text"

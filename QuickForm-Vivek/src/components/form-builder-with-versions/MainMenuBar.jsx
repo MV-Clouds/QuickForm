@@ -146,10 +146,10 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, selectedObjects, selectedFi
                       </a>
                     </div>
                     <div className="w-full">
-                      <a
+                      <button
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/notification"
+                        onClick={() => navigate(`/notification/${formVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg
@@ -171,7 +171,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, selectedObjects, selectedFi
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Notifications
                         </p>
-                      </a>
+                      </button>
                     </div>
                     {/* <div className="w-full">
                       <a

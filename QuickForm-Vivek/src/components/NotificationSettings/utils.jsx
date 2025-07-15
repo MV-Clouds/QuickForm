@@ -1,5 +1,3 @@
-'use client'
-
 export const formFields = [
   { id: 'fullName', label: 'Full Name' },
   { id: 'email', label: 'Email' },

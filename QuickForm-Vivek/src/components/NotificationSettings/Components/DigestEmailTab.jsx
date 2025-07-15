@@ -1,24 +1,51 @@
 'use client'
 
-import React from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import React, { useEffect } from 'react';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { Pill } from './Pill';
 import { MergeTagMenu } from './MergeTagMenu';
-import {formFields,emailTemplates} from '../utils';
+import { formFields, emailTemplates, modules, formats } from '../utils';
+import ReactQuill from 'react-quill';
+import { ChevronLeft } from 'lucide-react';
 
-export const  DigestEmailTab = ({ setActiveTab }) => {
-  const { register, handleSubmit, watch, control, setValue } = useForm({
+export const DigestEmailTab = ({ setActiveTab, updateNotificationData, sendNotificationData, editingRuleId, rules ,setEditingRuleId,formFieldsData}) => {
+  const { register, handleSubmit, watch, control, setValue, reset } = useForm({
     defaultValues: {
       digestEnabled: false,
       frequency: 'daily',
       time: '08:00',
-      recipients: [],
-      customEmails: [],
-      emailSubject: 'Daily Submission Digest',
-      emailBody: 'Hello,\n\nYou received {{submissionCount}} submissions today.\n\nBest regards,\nTeam'
+      customEmails: editingRuleId
+        ? (() => {
+            try {
+              const rule = rules.find(rule => rule.id === editingRuleId);
+              const toArr = rule && rule.receipents
+                ? JSON.parse(rule.receipents).to
+                : [];
+              // Ensure toArr is always an array of strings
+              if (Array.isArray(toArr)) {
+                return toArr.map(email => ({ value: email }));
+              } else if (typeof toArr === 'string') {
+                return [{ value: toArr }];
+              }
+              return [];
+            } catch {
+              return [];
+            }
+          })()
+        : [],
+      emailTitle: editingRuleId ? (rules.find(rule => rule.id === editingRuleId)?.title || 'Digest') : '',
+      emailSubject: editingRuleId ? JSON.parse(rules.find(rule => rule.id === editingRuleId)?.body).subject  : '',
+      emailBody: editingRuleId ? JSON.parse(rules.find(rule => rule.id === editingRuleId)?.body).body  : ''
     }
   });
-
+  useEffect(()=>{
+    console.log('edit id==>' , editingRuleId );
+    console.log('rules==>',rules);
+    console.log(customEmailFields);
+    
+    
+    
+  },[editingRuleId])
   const { fields: customEmailFields, append: appendCustomEmail, remove: removeCustomEmail } = useFieldArray({
     control,
     name: 'customEmails'
@@ -26,17 +53,42 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
 
   const [mergeTagMenu, setMergeTagMenu] = React.useState(null);
 
-  React.useEffect(() => {
-    const fetchedEmails = ['admin@example.com', 'manager@example.com'];
-    setValue('recipients', fetchedEmails);
-    fetchedEmails.forEach(email => appendCustomEmail({ value: email }));
-  }, [setValue, appendCustomEmail]);
 
-  const onSubmit = (data) => {
-    console.log('Digest Settings Saved:', {
-      ...data,
-      recipients: [...data.recipients, ...data.customEmails.map(e => e.value)]
-    });
+  const onSubmit = async (data) => {
+    const toEmails = Array.from(
+      new Set([
+        ...(data.recipients || []),
+        ...(data.customEmails ? data.customEmails.map(e => e.value) : [])
+      ])
+    ).filter(email => typeof email === 'string' && email.includes('@'));
+    console.log('To emails==>' , toEmails);
+    
+    // Build the payload for digest email
+    const payload = {
+      Title__c: data.emailTitle || '',
+      Body__c: JSON.stringify({subject: data.emailSubject || '', body: data.emailBody, attachment: 'https://dummyimage.com/600x400/000/fff' }),
+      Type__c: 'Digest Email',
+      Schedule__c: JSON.stringify({ frequency: data.frequency, time: data.time }),
+      Receipe__c: JSON.stringify({ to:  toEmails }),
+      Status__c : 'Active'
+    };
+    try {
+      let res;
+      if (editingRuleId) {
+        // If editing, update the notification
+        res = await updateNotificationData(payload);
+        console.log('Digest email updated:', res);
+      } else {
+        // If not editing, create a new notification
+        res = await sendNotificationData(payload);
+        console.log('Digest email created:', res);
+      }
+    } catch (error) {
+      // Log error for debugging
+      console.log('Error in creating/updating digest email notification:', error);
+    }
+    // Reset form and close tab
+    reset();
     setActiveTab(null);
   };
 
@@ -47,23 +99,36 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">Digest Email Settings</h2>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="border-b border-gray-300 pb-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="h-5 w-5 text-blue-500 rounded focus:ring-blue-400"
-              {...register('digestEnabled')}
-            />
-            <span className="text-gray-800">Enable Digest Emails</span>
-          </label>
+      <div className="flex items-center mb-4">
+        <button
+          type="button"
+          className="px-2 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-300 transition"
+          onClick={() => {setActiveTab(null); setEditingRuleId(null)}}
+        >
+          <ChevronLeft/>
+        </button>
+        <div className="flex-1 text-center">
+        <h2 className="text-4xl font-bold text-gray-800 mb-4 ">Digest Email Settings</h2>
         </div>
-
-        {watch('digestEnabled') && (
+      </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      
           <>
+            {/* Title Field */}
             <div className="border-b border-gray-300 pb-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">Recipients</h3>
+              <label className="block text-lg font-semibold text-gray-800 mb-2" htmlFor="emailTitle">Title</label>
+              <input
+              required
+                id="emailTitle"
+                type="text"
+                placeholder="Enter rule title"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-400 focus:border-blue-400 bg-white text-gray-800 mb-4"
+                {...register('emailTitle', { required: true })}
+              />
+            </div>
+
+            <div className="border-b border-gray-300 pb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Recipients</h3>
               <div className="flex flex-wrap gap-2 mb-3">
                 {customEmailFields.map((field, index) => (
                   <Pill
@@ -75,6 +140,7 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
               </div>
               <div className="flex gap-3 mb-3">
                 <input
+                required
                   type="email"
                   placeholder="Add email address"
                   className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-400 focus:border-blue-400 bg-white text-gray-800"
@@ -119,6 +185,7 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
                 <div className="flex-1">
                   <label className="text-gray-800">Time</label>
                   <input
+                  required
                     type="time"
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-400 focus:border-blue-400 bg-white text-gray-800"
                     {...register('time')}
@@ -135,9 +202,13 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
                   onChange={(e) => {
                     const template = emailTemplates.find(t => t.id === e.target.value);
                     if (template) handleTemplateSelect(template);
+                    else {
+                      setValue('emailSubject', '');
+                      setValue('emailBody', '');
+                    }
                   }}
                 >
-                  <option value="">Select a template</option>
+                  <option value="" >Select a template</option>
                   {emailTemplates.map(template => (
                     <option key={template.id} value={template.id}>
                       {template.name}
@@ -146,6 +217,7 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
                 </select>
               </div>
               <input
+              required
                 type="text"
                 placeholder="Subject"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-400 focus:border-blue-400 bg-white text-gray-800 mb-3"
@@ -160,20 +232,32 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
                   Insert Merge Tag
                 </button>
               </div>
-              <textarea
-                placeholder="Email body"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-400 focus:border-blue-400 bg-white text-gray-800 min-h-[100px] resize-y"
-                {...register('emailBody')}
+              <Controller
+                name="emailBody"
+                control={control}
+                rules={{ required: 'Email body is required' }}
+                render={({ field }) => (
+                  <ReactQuill
+                    theme="snow"
+                    placeholder="Email body"
+                    modules={modules}
+                    formats={formats}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    className='h-[200px] mb-12'
+                  />
+                )}
               />
             </div>
           </>
-        )}
+        
 
         <div className="flex justify-between gap-3">
           <button
             type="button"
             className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
-            onClick={() => setActiveTab(null)}
+            onClick={() => {setActiveTab(null); setEditingRuleId(null)}}
           >
             Back
           </button>
@@ -181,7 +265,7 @@ export const  DigestEmailTab = ({ setActiveTab }) => {
             type="submit"
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
           >
-            Save Digest Settings
+            {editingRuleId ? 'Update Digest Settings' : 'Save Digest Settings'}
           </button>
         </div>
       </form>

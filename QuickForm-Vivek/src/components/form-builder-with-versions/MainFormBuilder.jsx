@@ -10,6 +10,7 @@ import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
 import ThankYouPageBuilder from '@/components/Thankyou/TY'
+import NotificationSettings from '@/components/NotificationSettings/NotificationSettingsModal';
 // THEMES ARRAY
 const themes = [
   {
@@ -77,7 +78,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder({ showThankYou }) {
+function MainFormBuilder({ showThankYou, showNotifications }) {
   const { formVersionId } = useParams();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
@@ -145,7 +146,7 @@ function MainFormBuilder({ showThankYou }) {
     }
   };
 
-   const handlePublish = async () => {
+  const handlePublish = async () => {
     try {
       setIsLoadingForm(true);
       setHasChanges(false);
@@ -287,8 +288,8 @@ function MainFormBuilder({ showThankYou }) {
             });
           }
         });
-        console.log('form versions' , formVersions);
-        console.log('form fields ===>' , formFields);
+      console.log('form versions', formVersions);
+      console.log('form fields ===>', formFields);
       setFields([headerField, ...reconstructedFields]);
     } catch (error) {
       console.error('Error fetching form data:', error);
@@ -771,18 +772,24 @@ function MainFormBuilder({ showThankYou }) {
   };
 
   const handleAddPage = () => {
-    setHasChanges(true);
-    setFields(prevFields => {
-      const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
-      const headerField = prevFields.find((f) => f.type === 'header');
+    try {
+      setHasChanges(true);
+      // Always use the latest value from fieldsState.present
+      const currentFields = fieldsState.present;
+      const headerField = currentFields.find(f => f.type === 'header');
+      const nonHeaderFields = currentFields.filter(f => f.type !== 'header');
       const updatedFields = [
-        ...prevFields,
+        ...nonHeaderFields,
         { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
       ];
-      return headerField
-        ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
+      const newFields = headerField
+        ? [headerField, ...updatedFields]
         : updatedFields;
-    });
+  
+      setFields(newFields);
+    } catch (error) {
+      console.log('Error in add page');
+    }
   };
 
 
@@ -980,7 +987,7 @@ function MainFormBuilder({ showThankYou }) {
                 ></path>
               </svg>
             </div>
-          ) : showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : (
+          ) : showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotifications ? <NotificationSettings currentFields = {formVersions[0]?.Fields}/> : (
             <div className="flex w-full mt-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
@@ -1005,13 +1012,13 @@ function MainFormBuilder({ showThankYou }) {
                 </div>
               </div>
               <div className="w-1/4 pl-2">
-                {(showSidebar && !selectedFieldId && !selectedFooter) || (fields.find(f=>f.id===selectedFieldId)?.type === 'section')  ? (
+                {(showSidebar && !selectedFieldId && !selectedFooter) || (fields.find(f => f.id === selectedFieldId)?.type === 'section') ? (
                   <Sidebar
                     selectedTheme={selectedTheme}
                     onThemeSelect={setSelectedTheme}
                     themes={themes}
                   />
-                ) :(
+                ) : (
                   <div className="bg-white dark:bg-gray-800 rounded-lg">
                     {(selectedFieldId || selectedFooter) && (
                       <FieldEditor

@@ -29,30 +29,53 @@ import {
 import { Link } from 'react-router-dom';
 
 const QuickFormLanding = () => {
-  useEffect(()=>{
-    sessionStorage.setItem('userId' , '005gL000002qyRxQAI');
-    sessionStorage.setItem('instanceUrl','https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com')
-  },[])
+  const [userId, setuserid] = useState();
+  const [instance, setinstance] = useState();
+  useEffect(() => {
+    sessionStorage.setItem('userId', '005gL000002qyRxQAI');
+    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com')
+  }, [])
+  // useEffect( () => {
+  //   async function fetchdata(){
+  //     const response = await fetch('https://23kqw2kbil.execute-api.us-east-1.amazonaws.com/fetch',
+  //       {
+  //         method: 'POST',
+  //         headers: {
+  //           'Content-Type' : 'application/json'
+  //         },
+  //         body: JSON.stringify({
+  //           userId: '005gL000002qyRxQAI',
+  //           instanceUrl: 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com',
+  //         })
+  //     })
+  //     const res = await response.json();
+  //     console.log('FormData all==>', res);
+  //     // console.log(res);
+  
+  //   }
+  //   fetchdata();
+
+  // }, [])
   return (
     <div className="font-sans text-gray-800 overflow-x-hidden">
       {/* Navigation */}
       <NavBar />
-      
+
       {/* Hero Section */}
       <HeroSection />
-      
+
       {/* Features */}
       <FeaturesSection />
-      
+
       {/* Demo Showcase */}
       <DemoShowcase />
-      
+
       {/* Testimonials */}
       <TestimonialCarousel />
-      
+
       {/* CTA */}
       <CTASection />
-      
+
       {/* Footer */}
       <Footer />
     </div>
@@ -67,7 +90,7 @@ const NavBar = () => {
       <div className="container mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
@@ -86,7 +109,7 @@ const NavBar = () => {
               <motion.a
                 key={item}
                 href={`#${item.toLowerCase()}`}
-                whileHover={{ 
+                whileHover={{
                   color: '#4F46E5',
                   scale: 1.05
                 }}
@@ -103,7 +126,7 @@ const NavBar = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <button 
+          <button
             className="md:hidden text-gray-600"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
@@ -150,7 +173,7 @@ const HeroSection = () => {
   });
 
   return (
-    <section 
+    <section
       ref={ref}
       className="relative h-screen flex items-center overflow-hidden bg-gradient-to-br from-indigo-50 to-sky-50"
     >
@@ -174,7 +197,7 @@ const HeroSection = () => {
           <rect width="100%" height="100%" fill="url(#grid-pattern)" />
         </svg>
       </motion.div> */}
-      
+
       <div className="container mx-auto px-6 flex flex-col md:flex-row items-center">
         {/* Left Content */}
         <motion.div
@@ -187,22 +210,22 @@ const HeroSection = () => {
             Build Beautiful Forms <br />
             <span className="text-indigo-600">Without Code</span>
           </h1>
-          
+
           <p className="text-lg md:text-xl text-gray-600 mb-8">
             Drag, drop, and deploy forms that connect directly to your Salesforce CRM.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
             <Link to='/home'>
-            <motion.div
-              whileHover={{ scale: 1.05, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
-              whileTap={{ scale: 0.95 }}
-              className="px-8 py-3 bg-indigo-600 text-white rounded-lg font-medium transition-all duration-300 flex items-center hover:text-white "
-            >
+              <motion.div
+                whileHover={{ scale: 1.05, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+                whileTap={{ scale: 0.95 }}
+                className="px-8 py-3 bg-indigo-600 text-white rounded-lg font-medium transition-all duration-300 flex items-center hover:text-white "
+              >
                 Start Building Free
-              <ArrowRightIcon className="w-5 h-5 ml-2" />
-            </motion.div></Link>
-            
+                <ArrowRightIcon className="w-5 h-5 ml-2" />
+              </motion.div></Link>
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -212,13 +235,13 @@ const HeroSection = () => {
               Watch Demo
             </motion.button>
           </div>
-          
+
           <div className="mt-8 flex items-center">
             <div className="flex -space-x-2">
               {[1, 2, 3].map((i) => (
-                <img 
+                <img
                   key={i}
-                  src={`https://randomuser.me/api/portraits/${i % 2 === 0 ? 'women' : 'men'}/${i+20}.jpg`}
+                  src={`https://randomuser.me/api/portraits/${i % 2 === 0 ? 'women' : 'men'}/${i + 20}.jpg`}
                   alt="User"
                   className="w-10 h-10 rounded-full border-2 border-white"
                 />
@@ -237,7 +260,7 @@ const HeroSection = () => {
             </div>
           </div>
         </motion.div>
-        
+
         {/* Right Illustration */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -247,7 +270,7 @@ const HeroSection = () => {
         >
           <div className="relative w-full max-w-lg mx-auto">
             {/* Form builder illustration with animated elements */}
-            <motion.div 
+            <motion.div
               animate={{
                 y: [0, -10, 0],
               }}
@@ -263,8 +286,8 @@ const HeroSection = () => {
                 <span className="text-sm font-medium">Text Field</span>
               </div>
             </motion.div>
-            
-            <motion.div 
+
+            <motion.div
               animate={{
                 y: [0, 10, 0],
               }}
@@ -281,7 +304,7 @@ const HeroSection = () => {
                 <span className="text-sm font-medium">Success Page</span>
               </div>
             </motion.div>
-            
+
             {/* Main form mockup */}
             <div className="relative bg-white p-6 rounded-xl shadow-2xl border border-gray-100">
               <div className="flex justify-between items-center mb-6">
@@ -295,23 +318,23 @@ const HeroSection = () => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="space-y-4">
                 <div className="border border-gray-200 rounded-lg p-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                   <input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="John Doe" />
                 </div>
-                
+
                 <div className="border border-gray-200 rounded-lg p-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input type="email" className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="john@example.com" />
                 </div>
-                
+
                 <div className="border border-gray-200 rounded-lg p-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
                   <textarea className="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" placeholder="Your message..."></textarea>
                 </div>
-                
+
                 <button className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors">
                   Submit
                 </button>
@@ -383,7 +406,7 @@ const FeaturesSection = () => {
             Everything you need to create, manage, and analyze forms at scale
           </p>
         </motion.div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => (
             <motion.div
@@ -391,7 +414,7 @@ const FeaturesSection = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ 
+              whileHover={{
                 y: -5,
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
               }}
@@ -400,10 +423,10 @@ const FeaturesSection = () => {
               <div className="text-4xl mb-4">{feature.icon}</div>
               <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
               <p className="text-gray-600 mb-4">{feature.description}</p>
-              
+
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
-                whileHover={{ 
+                whileHover={{
                   height: 'auto',
                   opacity: 1,
                   transition: { duration: 0.3 }
@@ -414,7 +437,7 @@ const FeaturesSection = () => {
                   <p className="text-gray-500">{feature.details}</p>
                 </div>
               </motion.div>
-              
+
               <motion.div
                 whileHover={{ scale: 1.1 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 10 }}
@@ -489,7 +512,7 @@ const DemoShowcase = () => {
             Explore our form builder with these ready-to-use templates
           </p>
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0 }}
           animate={inView ? { opacity: 1 } : {}}
@@ -528,10 +551,10 @@ const DemoShowcase = () => {
                             <h4 className="font-medium text-lg mb-2">{form.title}</h4>
                             <p className="text-gray-500 mb-4">{form.description}</p>
                             <div className="space-y-3">
-                              <input 
-                                type="text" 
-                                placeholder="Sample field" 
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                              <input
+                                type="text"
+                                placeholder="Sample field"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
                               />
                               <select className="w-full px-3 py-2 border border-gray-300 rounded-md">
                                 <option>Sample dropdown</option>
@@ -565,7 +588,7 @@ const DemoShowcase = () => {
                           <div className="w-3/4 pl-2">
                             <div className="bg-gray-700 p-4 rounded-lg">
                               {forms.map((form) => (
-                                <motion.div 
+                                <motion.div
                                   key={form.id}
                                   whileHover={{ x: 5 }}
                                   className="bg-gray-600 p-3 rounded mb-3 last:mb-0"
@@ -664,7 +687,7 @@ const TestimonialCarousel = () => {
             Join thousands of businesses transforming their data collection
           </p>
         </motion.div>
-        
+
         <div className="max-w-4xl mx-auto">
           <AnimatePresence mode="wait">
             <motion.div
@@ -685,14 +708,14 @@ const TestimonialCarousel = () => {
                   <div className="text-indigo-200">{testimonials[currentTestimonial].title}, {testimonials[currentTestimonial].company}</div>
                 </div>
               </div>
-              
-              <button 
+
+              <button
                 onClick={prevTestimonial}
                 className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20"
               >
                 <ChevronLeftIcon className="w-5 h-5" />
               </button>
-              <button 
+              <button
                 onClick={nextTestimonial}
                 className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20"
               >
@@ -700,7 +723,7 @@ const TestimonialCarousel = () => {
               </button>
             </motion.div>
           </AnimatePresence>
-          
+
           <div className="flex justify-center mt-8 space-x-2">
             {testimonials.map((_, index) => (
               <button
@@ -711,7 +734,7 @@ const TestimonialCarousel = () => {
               />
             ))}
           </div>
-          
+
           <div className="flex flex-wrap justify-center mt-12 gap-6">
             {['acme', 'techcorp', 'global', 'innovate', 'nextgen'].map((company) => (
               <motion.div
@@ -762,9 +785,9 @@ const CTASection = () => {
           <p className="text-indigo-100 mb-8 text-xl">
             Join thousands of businesses using QuickForm to streamline their data collection
           </p>
-          
+
           {!formSubmitted ? (
-            <motion.form 
+            <motion.form
               onSubmit={handleSubmit}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -815,7 +838,7 @@ const CTASection = () => {
               className="bg-white/20 p-8 rounded-xl backdrop-blur-sm max-w-md mx-auto"
             >
               <motion.div
-                animate={{ 
+                animate={{
                   scale: [1, 1.1, 1],
                   rotate: [0, 10, -10, 0]
                 }}
@@ -828,7 +851,7 @@ const CTASection = () => {
               <p className="text-indigo-100">We've sent a confirmation email to {email}. Our team will be in touch shortly.</p>
             </motion.div>
           )}
-          
+
           <div className="mt-8 text-indigo-100">
             <p>No credit card required • 14-day free trial</p>
           </div>
@@ -856,20 +879,20 @@ const Footer = () => {
                 >
                   <span className="sr-only">{social}</span>
                   <div className="w-6 h-6 bg-white-700 rounded-full flex items-center justify-center">
-                    {social.charAt(0) === 'T' ? <TwitterIcon/> : social.charAt(0) === 'F' ? <FacebookIcon/> : <Linkedin/>  }
+                    {social.charAt(0) === 'T' ? <TwitterIcon /> : social.charAt(0) === 'F' ? <FacebookIcon /> : <Linkedin />}
                   </div>
                 </motion.a>
               ))}
             </div>
           </div>
-          
+
           <div>
             <h4 className="text-white text-lg font-bold mb-4">Product</h4>
             <ul className="space-y-2">
               {['Features', 'Pricing', 'Integrations', 'Updates'].map((item) => (
                 <li key={item}>
-                  <motion.a 
-                    href="#" 
+                  <motion.a
+                    href="#"
                     whileHover={{ color: '#FFFFFF', x: 5 }}
                     className="block transition-colors"
                   >
@@ -879,14 +902,14 @@ const Footer = () => {
               ))}
             </ul>
           </div>
-          
+
           <div>
             <h4 className="text-white text-lg font-bold mb-4">Resources</h4>
             <ul className="space-y-2">
               {['Documentation', 'Tutorials', 'Blog', 'Community'].map((item) => (
                 <li key={item}>
-                  <motion.a 
-                    href="#" 
+                  <motion.a
+                    href="#"
                     whileHover={{ color: '#FFFFFF', x: 5 }}
                     className="block transition-colors"
                   >
@@ -896,14 +919,14 @@ const Footer = () => {
               ))}
             </ul>
           </div>
-          
+
           <div>
             <h4 className="text-white text-lg font-bold mb-4">Company</h4>
             <ul className="space-y-2">
               {['About', 'Careers', 'Contact', 'Legal'].map((item) => (
                 <li key={item}>
-                  <motion.a 
-                    href="#" 
+                  <motion.a
+                    href="#"
                     whileHover={{ color: '#FFFFFF', x: 5 }}
                     className="block transition-colors"
                   >
@@ -914,7 +937,7 @@ const Footer = () => {
             </ul>
           </div>
         </div>
-        
+
         <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p>© {new Date().getFullYear()} QuickForm by MVClouds Private Limited. All rights reserved.</p>
           <div className="flex space-x-6 mt-4 md:mt-0">

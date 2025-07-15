@@ -29,7 +29,7 @@ export default function AllRoutes() {
             {/* <Route path='/guest' element={<GuestPage />} />
             <Route path='/guest2' element={<GuestPageC />} /> */}
             <Route path='/' element={<GuestPageD />} />
-            <Route path='/notification' element={<ProtectedRoute element={<NotificationSettings />} />} />
+            <Route path='/notification/:formVersionId' element={<ProtectedRoute element={<MainFormBuilder showNotifications />} />} />
             <Route path='/thankyou/:formVersionId' element={<MainFormBuilder showThankYou />} />
             <Route path='/template' element={<ProtectedRoute element={<FormTemplate />}/>} />
             <Route element={<FileUpload/>} path='/file' />
