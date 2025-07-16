@@ -237,6 +237,7 @@ export const handler = async (event) => {
                           value: c.value || null,
                         })) || [],
                         logic: cond.logic || 'AND',
+                        logicExpression: cond.logicExpression || '',
                         ...(cond.type === 'show_hide'
                           ? { thenAction: cond.thenAction, thenFields: cond.thenFields || [] }
                           : cond.type === 'skip_hide_page'
