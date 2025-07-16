@@ -8,9 +8,11 @@ import ReactFlow, {
   ReactFlowProvider,
   Controls,
   Background,
+  Handle,
   applyNodeChanges,
   applyEdgeChanges,
 } from 'react-flow-renderer';
+import './Conditions.css';
 
 const { TabPane } = Tabs;
 const { Option } = Select;
@@ -47,8 +49,7 @@ const Conditions = () => {
   const [edges, setEdges] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [previewConditionId, setPreviewConditionId] = useState(null);
-  const [isPreviewModalVisible, setIsPreviewModalVisible] = useState(false);
+  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
 
   // Animation variants for Framer Motion
   const containerVariants = {
@@ -129,20 +130,18 @@ const Conditions = () => {
         setPages(derivedPages);
 
         // Initialize nodes for pages
-        const columns = Math.ceil(Math.sqrt(derivedPages.length));
-        const rows = Math.ceil(derivedPages.length / columns);
-        const pageNodes = derivedPages.map((page, index) => {
-          const row = Math.floor(index / columns);
-          const col = index % columns;
-          const offsetX = (Math.random() - 0.5) * 50;
-          const offsetY = (Math.random() - 0.5) * 50;
-          return {
-            id: page.Id,
-            type: 'default',
-            data: { label: page.Name },
-            position: { x: col * 350 + 150 + offsetX, y: row * 250 + 100 + offsetY },
-          };
-        });
+        const pageNodes = derivedPages.map((page, index) => ({
+          id: page.Id,
+          type: 'customNode',
+          data: {
+            label: page.Name,
+            onClick: () => {
+              setSelectedNode(page.Id);
+              setIsModalVisible(true);
+            },
+          },
+          position: { x: 300, y: index * 200 + 50 }, // Linear left-to-right layout
+        }));
         setNodes(pageNodes);
         const conditionGroups = parsedConditions
           .filter((c) => c.type === 'skip_hide_page')
@@ -181,10 +180,6 @@ const Conditions = () => {
             },
             markerEnd: { type: 'arrowclosed' },
             data: { conditions: group.conditions },
-            sourceX: sourceNode.position.x + offset,
-            sourceY: sourceNode.position.y + 50 + offset,
-            targetX: targetNode.position.x + offset,
-            targetY: targetNode.position.y - 50 + offset,
           };
         }).filter(Boolean);
 
@@ -200,10 +195,6 @@ const Conditions = () => {
             animated: false,
             style: { stroke: '#999', strokeWidth: 2, strokeDasharray: '5,5', zIndex: 5 },
             markerEnd: { type: 'arrowclosed' },
-            sourceX: sourceNode.position.x,
-            sourceY: sourceNode.position.y + 50,
-            targetX: targetNode.position.x,
-            targetY: targetNode.position.y - 50,
           };
         });
         setEdges([...pageEdges, ...defaultEdges]);
@@ -786,52 +777,83 @@ const Conditions = () => {
   };
   const onNodeClick = (event, node) => {
     setSelectedNode(node.id);
-    setNewCondition((prev) => ({
-      ...prev,
-      sourcePage: node.id,
-      targetPage: '',
-      ifField: '',
-      operator: '',
-      value: '',
-      thenAction: 'skip to',
-    }));
-    setEditingConditionId(null);
     setIsModalVisible(true);
   };
 
   const onNodesChange = (changes) => setNodes((nds) => applyNodeChanges(changes, nds));
   const onEdgesChange = (changes) => setEdges((eds) => applyEdgeChanges(changes, eds));
-  const onEdgeClick = (event, edge) => {
-    setPreviewConditionId(edge.id);
-    setIsPreviewModalVisible(true);
+  const nodeTypes = {
+    customNode: ({ data, selected, id }) => (
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ scale: 1.02 }}
+        transition={{ duration: 0.2 }}
+        onClick={data.onClick} // Ensure onClick is bound
+        style={{
+          background: selected ? '#e6f7ff' : 'linear-gradient(135deg, #ffffff, #f0f4ff)',
+          border: `2px solid ${selected ? '#1890ff' : '#1a73e8'}`,
+          borderRadius: '12px',
+          padding: '16px 24px',
+          minWidth: '180px',
+          textAlign: 'center',
+          fontWeight: '600',
+          color: '#1a73e8',
+          cursor: 'pointer',
+          boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+          transition: 'all 0.3s ease',
+          fontSize: '14px',
+          pointerEvents: 'auto',
+        }}
+      >
+        <Handle
+          type="target"
+          position="top" // Changed to top for top-to-bottom flow
+          id="top"
+          style={{ background: '#555', width: '8px', height: '8px' }}
+        />
+        {data.label}
+        <Handle
+          type="source"
+          position="bottom" // Changed to bottom for top-to-bottom flow
+          id="bottom"
+          style={{ background: '#555', width: '8px', height: '8px' }}
+        />
+      </motion.div>
+    ),
   };
 
-  const editConditionFromPreview = (conditionId) => {
-    const condition = conditions.find((c) => c.Id === conditionId);
-    if (condition) {
-      editCondition(condition);
-      setIsPreviewModalVisible(false);
-      setIsModalVisible(true);
-    }
-  };
-
-  const deleteConditionFromPreview = async (conditionId) => {
-    await deleteCondition(conditionId);
-    setEdges((prevEdges) => {
-      const edge = prevEdges.find((e) => e.id === previewConditionId);
-      const updatedConditions = edge?.data?.conditions.filter((c) => c.Id !== conditionId);
-      if (!updatedConditions) {
-        setIsPreviewModalVisible(false);
-        return prevEdges.filter((e) => e.id !== previewConditionId);
-      }
-      return prevEdges.map((e) =>
-        e.id === previewConditionId
-          ? { ...e, data: { conditions: updatedConditions }, label: updatedConditions?.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', ') }
-          : e
+  const edgeTypes = {
+    customBezier: ({ id, source, target, sourceX, sourceY, targetX, targetY, data, ...rest }) => {
+      const offset = edges
+        .filter((e) => e.source === source && e.target === target)
+        .findIndex((e) => e.id === id) * 20 -
+        ((edges.filter((e) => e.source === source && e.target === target).length - 1) * 20) / 2;
+      const midX = (sourceX || nodes.find((n) => n.id === source).position.x) + offset;
+      const midY = (sourceY || nodes.find((n) => n.id === source).position.y + 50) +
+        ((targetY || nodes.find((n) => n.id === target).position.y - 50) -
+          (sourceY || nodes.find((n) => n.id === source).position.y + 50)) / 2;
+      const path = `M ${sourceX || nodes.find((n) => n.id === source).position.x} ${sourceY || nodes.find((n) => n.id === source).position.y + 50} 
+                    C ${midX} ${(sourceY || nodes.find((n) => n.id === source).position.y + 100) + offset},
+                      ${midX} ${(targetY || nodes.find((n) => n.id === target).position.y - 100) + offset},
+                      ${targetX || nodes.find((n) => n.id === target).position.x} ${targetY || nodes.find((n) => n.id === target).position.y - 50}`;
+      return (
+        <g>
+          <path
+            id={id}
+            className="react-flow__edge-path"
+            d={path}
+            style={{
+              ...rest.style,
+              strokeWidth: 3,
+              transition: 'stroke 0.3s, stroke-width 0.3s',
+            }}
+            markerEnd={rest.markerEnd}
+          />
+        </g>
       );
-    });
+    },
   };
-
   return (
     <div className="flex h-screen bg-gray-100">
       {showSidebar && (
@@ -1624,52 +1646,12 @@ const Conditions = () => {
                         nodes={nodes}
                         edges={edges.map((edge) => ({
                           ...edge,
-                          type: 'customBezier', // Use custom edge type with eye button
+                          type: 'customBezier',
+                          sourceHandle: 'bottom',
+                          targetHandle: 'top',
                         }))}
-                        edgeTypes={{
-                          customBezier: ({ id, source, target, sourceX, sourceY, targetX, targetY, data, ...rest }) => {
-                            const isConditionEdge = !id.startsWith('default_');
-                            const offset = edges.filter((e) => e.source === source && e.target === target).findIndex((e) => e.id === id) * 20 - 
-                                          ((edges.filter((e) => e.source === source && e.target === target).length - 1) * 20) / 2;
-                            const midX = (sourceX || nodes.find((n) => n.id === source).position.x) + ((targetX || nodes.find((n) => n.id === target).position.x) - (sourceX || nodes.find((n) => n.id === source).position.x)) / 2 + offset;
-                            const midY = (sourceY || nodes.find((n) => n.id === source).position.y + 50) + ((targetY || nodes.find((n) => n.id === target).position.y - 50) - (sourceY || nodes.find((n) => n.id === source).position.y + 50)) / 2 + offset;
-                            const path = `M ${sourceX || nodes.find((n) => n.id === source).position.x} ${sourceY || nodes.find((n) => n.id === source).position.y + 50} 
-                                          C ${(sourceX || nodes.find((n) => n.id === source).position.x) + 100 + offset} ${(sourceY || nodes.find((n) => n.id === source).position.y + 50) + offset},
-                                            ${(targetX || nodes.find((n) => n.id === target).position.x) - 100 + offset} ${(targetY || nodes.find((n) => n.id === target).position.y - 50) + offset},
-                                            ${targetX || nodes.find((n) => n.id === target).position.x} ${targetY || nodes.find((n) => n.id === target).position.y - 50}`;
-                            return (
-                              <>
-                                <path
-                                  id={id}
-                                  className="react-flow__edge-path"
-                                  d={path}
-                                  style={rest.style}
-                                  markerEnd={rest.markerEnd}
-                                />
-                                {/* Eye button in the middle of the edge */}
-                                {isConditionEdge && (
-                                  <foreignObject
-                                    x={midX - 15}
-                                    y={midY - 15}
-                                    width="30"
-                                    height="30"
-                                    style={{ overflow: 'visible' }}
-                                  >
-                                    <Button
-                                      icon={<FaEye />}
-                                      size="small"
-                                      style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
-                                      onClick={() => {
-                                        setPreviewConditionId(id);
-                                        setIsPreviewModalVisible(true);
-                                      }}
-                                    />
-                                  </foreignObject>
-                                )}
-                              </>
-                            );
-                          },
-                        }}
+                        // nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onNodeClick={onNodeClick}
@@ -1682,223 +1664,351 @@ const Conditions = () => {
                     </ReactFlowProvider>
                   </div>
                   <Modal
-                    title={`${editingConditionId ? 'Edit' : 'Add'} Condition for ${pages.find((p) => p.Id === selectedNode)?.Name || 'Page'}`}
+                    title={`Conditions for ${pages.find((p) => p.Id === selectedNode)?.Name || 'Page'}`}
                     visible={isModalVisible}
                     onCancel={() => {
                       setIsModalVisible(false);
-                      setNewCondition((prev) => ({
-                        ...prev,
-                        conditions: [{ ifField: '', operator: '', value: '' }],
-                        logic: 'AND',
-                        thenAction: 'skip to',
-                        targetPage: '',
-                        sourcePage: selectedNode,
-                      }));
-                      setEditingConditionId(null);
                       setSelectedNode(null);
                     }}
-                    footer={null}
-                    width={600}
+                    footer={[
+                      <Button key="create" type="primary" onClick={() => {
+                        setNewCondition({
+                          type: 'skip_hide_page',
+                          conditions: [{ ifField: '', operator: '', value: '' }],
+                          logic: 'AND',
+                          logicExpression: '',
+                          thenAction: 'skip to',
+                          thenFields: [],
+                          dependentField: '',
+                          dependentValues: [],
+                          maskPattern: '',
+                          sourcePage: selectedNode,
+                          targetPage: '',
+                          ifField: '',
+                          value: '',
+                        });
+                        setEditingConditionId(null);
+                        setIsCreateModalVisible(true);
+                      }}>
+                        Create Condition
+                      </Button>,
+                      <Button key="close" onClick={() => {
+                        setIsModalVisible(false);
+                        setSelectedNode(null);
+                      }}>
+                        Close
+                      </Button>,
+                    ]}
+                    width={800}
                   >
-                    {editingConditionId && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="mb-4 p-3 bg-gray-100 rounded"
-                      >
-                        <h4 className="text-md font-semibold">Current Condition:</h4>
-                        {newCondition.conditions?.map((cond, index) => (
-                          <p key={index}>
-                            <strong>Condition {index + 1} {index === 0 ? 'If' : newCondition.logic === 'Custom' ? '' : newCondition.logic}:</strong>{' '}
-                            {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                            {cond.value || 'N/A'}
-                          </p>
-                        ))}
-                        {newCondition.logic === 'Custom' && (
-                          <p><strong>Logic:</strong> {newCondition.logicExpression}</p>
-                        )}
-                        <p>
-                          <strong>Then:</strong> {newCondition.thenAction}{' '}
-                          {pages.find((p) => p.Id === newCondition.targetPage)?.Name || 'Unknown'}
-                        </p>
-                      </motion.div>
-                    )}
-                    {newCondition.conditions?.map((condition, index) => (
-                      <motion.div key={index} variants={itemVariants} className="mb-4 p-3 border rounded">
+                    <motion.div variants={containerVariants} className="mb-4">
+                      <h2 className="text-xl font-semibold mb-3">Existing Conditions</h2>
+                      <AnimatePresence>
+                        {edges
+                          .filter((e) => e.source === selectedNode && !e.id.startsWith('default_'))
+                          .flatMap((e) => e.data.conditions).length === 0 ? (
+                            <p>No conditions added.</p>
+                          ) : (
+                            edges
+                              .filter((e) => e.source === selectedNode && !e.id.startsWith('default_'))
+                              .flatMap((e) => e.data.conditions)
+                              .map((condition) => (
+                                <motion.div
+                                  key={condition.Id}
+                                  initial={{ opacity: 0, y: 20 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -20 }}
+                                  className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
+                                >
+                                  <div>
+                                    {condition.logic === 'Custom' ? (
+                                      <>
+                                        <p><strong>If:</strong></p>
+                                        {condition.conditions?.map((cond, index) => (
+                                          <p key={index}>
+                                            <strong>Condition {index + 1}:</strong>{' '}
+                                            {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                            {cond.value || 'N/A'}
+                                          </p>
+                                        ))}
+                                        <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                                      </>
+                                    ) : (
+                                      <p>
+                                        <strong>If:</strong>{' '}
+                                        {condition.conditions?.map((cond, index) => (
+                                          <span key={index}>
+                                            {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                            {cond.value || 'N/A'}
+                                            {index < condition.conditions.length - 1 && ` ${condition.logic} `}
+                                          </span>
+                                        ))}
+                                      </p>
+                                    )}
+                                    <p>
+                                      <strong>Then:</strong> {condition.thenAction} {pages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}
+                                    </p>
+                                  </div>
+                                  <div className="flex space-x-2">
+                                    <Button size="small" onClick={() => {
+                                      editCondition(condition);
+                                      setIsCreateModalVisible(true);
+                                    }}>
+                                      <FaEdit />
+                                    </Button>
+                                    <Button size="small" onClick={() => deleteCondition(condition.Id)}>
+                                      <FaTrash />
+                                    </Button>
+                                  </div>
+                                </motion.div>
+                              ))
+                          )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </Modal>
+                  <Modal
+                    title="Create New Condition"
+                    visible={isCreateModalVisible}
+                    onCancel={() => {
+                      setIsCreateModalVisible(false);
+                      setNewCondition({
+                        type: 'skip_hide_page',
+                        conditions: [{ ifField: '', operator: '', value: '' }],
+                        logic: 'AND',
+                        logicExpression: '',
+                        thenAction: 'skip to',
+                        thenFields: [],
+                        dependentField: '',
+                        dependentValues: [],
+                        maskPattern: '',
+                        sourcePage: selectedNode,
+                        targetPage: '',
+                        ifField: '',
+                        value: '',
+                      });
+                      setEditingConditionId(null);
+                    }}
+                    footer={null}
+                    width={800}
+                  >
+                    <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
+                      <h2 className="text-xl font-semibold mb-3">{editingConditionId ? 'Edit Condition' : 'Add New Condition'}</h2>
+                      {newCondition.conditions?.map((condition, index) => (
+                        <motion.div key={index} variants={itemVariants} className="mb-4 p-3 border rounded">
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700">If Field</label>
+                            <Select
+                              value={condition.ifField}
+                              onChange={(value) => handleFieldChange('ifField', value, index)}
+                              placeholder="Select field"
+                              style={{ width: '100%' }}
+                            >
+                              {validIfFields
+                                .filter((f) => {
+                                  const page = pages.find((p) => p.Id === selectedNode);
+                                  const pageNum = page ? parseInt(page.Id.replace('page_', '')) : null;
+                                  return pageNum && fields.find((field) => field.Unique_Key__c === f.Unique_Key__c)?.Page_Number__c <= pageNum;
+                                })
+                                .map((field) => (
+                                  <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                                    {field.Name} (Page {fields.find((f) => f.Unique_Key__c === field.Unique_Key__c)?.Page_Number__c})
+                                  </Option>
+                                ))}
+                            </Select>
+                          </div>
+                          {condition.ifField && (
+                            <>
+                              <div className="mb-3">
+                                <label className="block text-sm font-medium text-gray-700">Operator</label>
+                                <Select
+                                  value={condition.operator}
+                                  onChange={(value) => handleFieldChange('operator', value, index)}
+                                  placeholder="Select operator"
+                                  style={{ width: '100%' }}
+                                >
+                                  {getOperators(fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map((op) => (
+                                    <Option key={op} value={op}>
+                                      {op}
+                                    </Option>
+                                  ))}
+                                </Select>
+                              </div>
+                              {condition.operator && !['is null', 'is not null'].includes(condition.operator) && (
+                                <div className="mb-3">
+                                  <label className="block text-sm font-medium text-gray-700">Value</label>
+                                  {['checkbox', 'radio', 'dropdown'].includes(
+                                    fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
+                                  ) ? (
+                                    <Select
+                                      value={condition.value}
+                                      onChange={(value) => handleFieldChange('value', value, index)}
+                                      placeholder="Select value"
+                                      style={{ width: '100%' }}
+                                    >
+                                      {getFieldOptions(condition.ifField).map((option) => (
+                                        <Option key={option} value={option}>
+                                          {option}
+                                        </Option>
+                                      ))}
+                                    </Select>
+                                  ) : ['date', 'datetime', 'date-time', 'time'].includes(
+                                      fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
+                                    ) ? (
+                                      <Input
+                                        type={
+                                          fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                            ? 'date'
+                                            : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                            ? 'time'
+                                            : 'datetime-local'
+                                        }
+                                        value={condition.value}
+                                        onChange={(e) => handleFieldChange('value', e.target.value, index)}
+                                        placeholder={
+                                          fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                            ? 'YYYY-MM-DD'
+                                            : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                            ? 'HH:MM'
+                                            : 'YYYY-MM-DD HH:MM'
+                                        }
+                                        style={{ width: '100%' }}
+                                      />
+                                    ) : (
+                                      <Input
+                                        value={condition.value}
+                                        onChange={(e) => handleFieldChange('value', e.target.value, index)}
+                                        placeholder="Enter value"
+                                      />
+                                    )}
+                                </div>
+                              )}
+                              {index > 0 && (
+                                <Button
+                                  type="danger"
+                                  size="small"
+                                  onClick={() => removeCondition(index)}
+                                  style={{ marginTop: '8px' }}
+                                >
+                                  <FaTrash />
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </motion.div>
+                      ))}
+                      {newCondition.conditions?.length > 1 && (
                         <div className="mb-3">
-                          <label className="block text-sm font-medium text-gray-700">If Field</label>
+                          <label className="block text-sm font-medium text-gray-700">Logic</label>
                           <Select
-                            value={condition.ifField}
-                            onChange={(value) => handleFieldChange('ifField', value, index)}
-                            placeholder="Select field"
+                            value={newCondition.logic}
+                            onChange={(value) => handleFieldChange('logic', value)}
                             style={{ width: '100%' }}
                           >
-                            {validIfFields
-                              .filter((f) => {
-                                const page = pages.find((p) => p.Id === selectedNode);
-                                const pageNum = page ? parseInt(page.Id.replace('page_', '')) : null;
-                                return pageNum && fields.find((field) => field.Unique_Key__c === f.Unique_Key__c)?.Page_Number__c === pageNum;
-                              })
-                              .map((field) => (
-                                <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
-                                  {field.Name}
+                            <Option value="AND">AND</Option>
+                            <Option value="OR">OR</Option>
+                            <Option value="Custom">Custom</Option>
+                          </Select>
+                          {newCondition.logic === 'Custom' && (
+                            <div className="mt-2">
+                              <label className="block text-sm font-medium text-gray-700">
+                                Custom Logic Expression{' '}
+                                <span className="text-gray-500 text-xs">
+                                  (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
+                                </span>
+                              </label>
+                              <Input
+                                value={newCondition.logicExpression}
+                                onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
+                                placeholder={`e.g., 1 OR (2 AND 3)`}
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div className="mb-3 flex items-center">
+                        <div style={{ width: '120px', marginRight: '8px' }}>
+                          <label className="block text-sm font-medium text-gray-700">Then</label>
+                          <Select
+                            value={newCondition.thenAction}
+                            onChange={(value) => handleFieldChange('thenAction', value)}
+                            style={{ width: '100%' }}
+                          >
+                            <Option value="skip to">Skip To</Option>
+                            <Option value="hide">Hide</Option>
+                          </Select>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <label className="block text-sm font-medium text-gray-700">Page</label>
+                          <Select
+                            value={newCondition.targetPage}
+                            onChange={(value) => handleFieldChange('targetPage', value)}
+                            placeholder="Select target page"
+                            style={{ width: '100%' }}
+                          >
+                            {pages
+                              .filter((p) => p.Id !== selectedNode)
+                              .filter((p) => !(newCondition.thenAction === 'hide' && (p.Id === pages[0]?.Id || p.Id === pages[pages.length - 1]?.Id)))
+                              .map((page) => (
+                                <Option key={page.Id} value={page.Id}>
+                                  {page.Name}
                                 </Option>
                               ))}
                           </Select>
                         </div>
-                        {condition.ifField && (
-                          <>
-                            <div className="mb-3">
-                              <label className="block text-sm font-medium text-gray-700">Operator</label>
-                              <Select
-                                value={condition.operator}
-                                onChange={(value) => handleFieldChange('operator', value, index)}
-                                placeholder="Select operator"
-                                style={{ width: '100%' }}
-                              >
-                                {getOperators(fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map((op) => (
-                                  <Option key={op} value={op}>
-                                    {op}
-                                  </Option>
-                                ))}
-                              </Select>
-                            </div>
-                            {condition.operator && !['is null', 'is not null'].includes(condition.operator) && (
-                              <div className="mb-3">
-                                <label className="block text-sm font-medium text-gray-700">Value</label>
-                                {['checkbox', 'radio', 'dropdown'].includes(
-                                  fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
-                                ) ? (
-                                  <Select
-                                    value={condition.value}
-                                    onChange={(value) => handleFieldChange('value', value, index)}
-                                    placeholder="Select value"
-                                    style={{ width: '100%' }}
-                                  >
-                                    {getFieldOptions(condition.ifField).map((option) => (
-                                      <Option key={option} value={option}>
-                                        {option}
-                                      </Option>
-                                    ))}
-                                  </Select>
-                                ) : ['date', 'datetime', 'date-time', 'time'].includes(
-                                    fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
-                                  ) ? (
-                                    <Input
-                                      type={
-                                        fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
-                                          ? 'date'
-                                          : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
-                                          ? 'time'
-                                          : 'datetime-local'
-                                      }
-                                      value={condition.value}
-                                      onChange={(e) => handleFieldChange('value', e.target.value, index)}
-                                      placeholder={
-                                        fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
-                                          ? 'YYYY-MM-DD'
-                                          : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
-                                          ? 'HH:MM'
-                                          : 'YYYY-MM-DD HH:MM'
-                                      }
-                                      style={{ width: '100%' }}
-                                    />
-                                  ) : (
-                                    <Input
-                                      value={condition.value}
-                                      onChange={(e) => handleFieldChange('value', e.target.value, index)}
-                                      placeholder="Enter value"
-                                    />
-                                  )}
-                              </div>
-                            )}
-                            {index > 0 && (
-                              <Button
-                                type="danger"
-                                size="small"
-                                onClick={() => removeCondition(index)}
-                                style={{ marginTop: '8px' }}
-                              >
-                                <FaTrash />
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </motion.div>
-                    ))}
-                    {newCondition.conditions?.length > 1 && (
-                      <div className="mb-3">
-                        <label className="block text-sm font-medium text-gray-700">Logic</label>
-                        <Select
-                          value={newCondition.logic}
-                          onChange={(value) => handleFieldChange('logic', value)}
-                          style={{ width: '100%' }}
-                        >
-                          <Option value="AND">AND</Option>
-                          <Option value="OR">OR</Option>
-                          <Option value="Custom">Custom</Option>
-                        </Select>
-                        {newCondition.logic === 'Custom' && (
-                          <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              Custom Logic Expression{' '}
-                              <span className="text-gray-500 text-xs">
-                                (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
-                              </span>
-                            </label>
-                            <Input
-                              value={newCondition.logicExpression}
-                              onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
-                              placeholder={`e.g., 1 OR (2 AND 3)`}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                        )}
                       </div>
-                    )}
-                    <div className="mb-3 flex items-center">
-                      <div style={{ width: '120px', marginRight: '8px' }}>
-                        <label className="block text-sm font-medium text-gray-700">Then</label>
-                        <Select
-                          value={newCondition.thenAction}
-                          onChange={(value) => handleFieldChange('thenAction', value)}
-                          style={{ width: '100%' }}
-                        >
-                          <Option value="skip to">Skip To</Option>
-                          <Option value="hide">Hide</Option>
-                        </Select>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <label className="block text-sm font-medium text-gray-700">Page</label>
-                        <Select
-                          value={newCondition.targetPage}
-                          onChange={(value) => handleFieldChange('targetPage', value)}
-                          placeholder="Select target page"
-                          style={{ width: '100%' }}
-                        >
-                          {pages
-                            .filter((p) => p.Id !== selectedNode)
-                            .filter((p) => !(newCondition.thenAction === 'hide' && (p.Id === pages[0]?.Id || p.Id === pages[pages.length - 1]?.Id)))
-                            .map((page) => (
-                              <Option key={page.Id} value={page.Id}>
-                                {page.Name}
-                              </Option>
-                            ))}
-                        </Select>
-                      </div>
-                    </div>
-                    <Button
-                      type="primary"
-                      onClick={addCondition}
-                      style={{ marginTop: '8px' }}
-                    >
-                      <FaPlus style={{ marginRight: '4px' }} /> Add Condition
-                    </Button>
-                    <div className="flex space-x-2 mt-4">
                       <Button
                         type="primary"
-                        onClick={() => {
-                          saveCondition(editingConditionId).then(() => {
+                        onClick={addCondition}
+                        style={{ marginTop: '8px' }}
+                      >
+                        <FaPlus style={{ marginRight: '4px' }} /> Add Condition
+                      </Button>
+                      <div className="flex space-x-2 mt-4">
+                        <Button
+                          type="primary"
+                          onClick={() => {
+                            saveCondition(editingConditionId).then(() => {
+                              setNewCondition({
+                                type: 'skip_hide_page',
+                                conditions: [{ ifField: '', operator: '', value: '' }],
+                                logic: 'AND',
+                                logicExpression: '',
+                                thenAction: 'skip to',
+                                thenFields: [],
+                                dependentField: '',
+                                dependentValues: [],
+                                maskPattern: '',
+                                sourcePage: selectedNode,
+                                targetPage: '',
+                                ifField: '',
+                                value: '',
+                              });
+                              setEditingConditionId(null);
+                              setIsCreateModalVisible(false);
+                            });
+                          }}
+                          disabled={
+                            !newCondition.conditions?.every((c) => c.ifField && c.operator) ||
+                            !newCondition.targetPage ||
+                            !newCondition.sourcePage
+                          }
+                        >
+                          <FaSave style={{ marginRight: '4px' }} /> {editingConditionId ? 'Update Condition' : 'Add Condition'}
+                        </Button>
+                        {editingConditionId && (
+                          <Button
+                            type="danger"
+                            onClick={() => {
+                              deleteCondition(editingConditionId);
+                            }}
+                          >
+                            <FaTrash style={{ marginRight: '4px' }} /> Delete
+                          </Button>
+                        )}
+                        <Button
+                          type="default"
+                          onClick={() => {
                             setNewCondition({
                               type: 'skip_hide_page',
                               conditions: [{ ifField: '', operator: '', value: '' }],
@@ -1915,110 +2025,13 @@ const Conditions = () => {
                               value: '',
                             });
                             setEditingConditionId(null);
-                            setSelectedNode(null);
-                            setIsModalVisible(false);
-                          });
-                        }}
-                        disabled={
-                          !newCondition.conditions?.every((c) => c.ifField && c.operator) ||
-                          !newCondition.targetPage ||
-                          !newCondition.sourcePage
-                        }
-                      >
-                        <FaSave style={{ marginRight: '4px' }} /> {editingConditionId ? 'Update Edge' : 'Add Edge'}
-                      </Button>
-                      {editingConditionId && (
-                        <Button
-                          type="danger"
-                          onClick={() => {
-                            deleteCondition(editingConditionId);
-                            setIsModalVisible(false);
+                            setIsCreateModalVisible(false);
                           }}
                         >
-                          <FaTrash style={{ marginRight: '4px' }} /> Delete
+                          Cancel
                         </Button>
-                      )}
-                      <Button
-                        type="default"
-                        onClick={() => {
-                          setNewCondition((prev) => ({
-                            ...prev,
-                            conditions: [{ ifField: '', operator: '', value: '' }],
-                            logic: 'AND',
-                            thenAction: 'skip to',
-                            targetPage: '',
-                            sourcePage: selectedNode,
-                            ifField: '',
-                            value: '',
-                          }));
-                          setEditingConditionId(null);
-                          setSelectedNode(null);
-                          setIsModalVisible(false);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </Modal>
-                  <Modal
-                    title={`Conditions for Edge ${pages.find((p) => p.Id === edges.find((e) => e.id === previewConditionId)?.source)?.Name} to ${pages.find((p) => p.Id === edges.find((e) => e.id === previewConditionId)?.target)?.Name}`}
-                    visible={isPreviewModalVisible}
-                    onCancel={() => {
-                      setPreviewConditionId(null);
-                      setIsPreviewModalVisible(false);
-                    }}
-                    footer={null}
-                    width={600}
-                  >
-                    <AnimatePresence>
-                      {edges.find((e) => e.id === previewConditionId)?.data.conditions.map((condition) => (
-                        <motion.div
-                          key={condition.Id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
-                          className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
-                        >
-                          <div>
-                            {condition.logic === 'Custom' ? (
-                              <>
-                                <p><strong>If:</strong></p>
-                                {condition.conditions?.map((cond, index) => (
-                                  <p key={index}>
-                                    <strong>Condition {index + 1}:</strong>{' '}
-                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                    {cond.value || 'N/A'}
-                                  </p>
-                                ))}
-                                <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
-                              </>
-                            ) : (
-                              <p>
-                                <strong>If:</strong>{' '}
-                                {condition.conditions?.map((cond, index) => (
-                                  <span key={index}>
-                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                    {cond.value || 'N/A'}
-                                    {index < condition.conditions.length - 1 && ` ${condition.logic} `}
-                                  </span>
-                                ))}
-                              </p>
-                            )}
-                            <p>
-                              <strong>Then:</strong> {condition.thenAction} {pages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button size="small" onClick={() => editConditionFromPreview(condition.Id)}>
-                              <FaEdit />
-                            </Button>
-                            <Button size="small" onClick={() => deleteConditionFromPreview(condition.Id)}>
-                              <FaTrash />
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
+                      </div>
+                    </motion.div>
                   </Modal>
                 </motion.div>
               </TabPane>
