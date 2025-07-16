@@ -24,7 +24,19 @@ import {
   ChevronUp,
   Edit,
   TimerIcon,
-  EyeIcon
+  EyeIcon,
+  MessageSquareText,
+  Phone,
+  User,
+  Settings,
+  Send,
+  Signal,
+  Wifi,
+  Battery,
+  Info,
+  CheckCheck,
+  BatteryFull,
+  BatteryMedium
 } from 'lucide-react';
 import { formFields, smsTemplates } from '../utils';
 import { ConditionInput } from './ConditionInput';
@@ -85,6 +97,7 @@ const NotificationTab = ({
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [showConditionInput, setShowConditionInput] = useState(false);
+  const [previewRule, setPreviewRule] = useState(null);
 
   const [open, setOpen] = useState(false); // For Rows per page dropdown
   const rowsPerPageOptions = [10, 25, 50, 100];
@@ -285,8 +298,178 @@ const NotificationTab = ({
     setRules(rules);
   }, [rules, setRules]);
 
+  const handlePreview = (id) => {
+    const rule = rules.find(r => r.id === id);
+    console.log('Preview rule : ', rule);
+    setPreviewRule(rule);
+  };
+
   return (
     <div className="rounded-2xl bg-gray-50">
+      {previewRule && (
+  <AnimatePresence>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      {/* Overlay click to close */}
+      <div 
+        className="absolute inset-0 cursor-pointer" 
+        onClick={() => setPreviewRule(null)} 
+      />
+      
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full mx-4 overflow-hidden border border-gray-200 dark:border-gray-700"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+          <div className="flex items-center space-x-3">
+            {(previewRule.type === 'Email' || previewRule.type === "Digest Email") ? (
+              <Mail className="w-5 h-5 text-blue-500" />
+            ) : (
+              <MessageSquareText className="w-5 h-5 text-green-500" />
+            )}
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+              {previewRule.type} Preview
+            </h3>
+          </div>
+          <button
+            className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            onClick={() => setPreviewRule(null)}
+            aria-label="Close preview"
+          >
+            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[80vh]">
+          {previewRule.type === 'Email' || previewRule.type === "Digest Email" ? (
+            <div className="p-6">
+              {/* Email Header */}
+              <div className="mb-6">
+                <div className="mb-4">
+                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span className="w-12">From:</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      QuickForm <span className="text-gray-400">(no-reply@quickform.com)</span>
+                    </span>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span className="w-12">To:</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {(() => {
+                        try {
+                          if (previewRule.receipents) {
+                            const parsed = JSON.parse(previewRule.receipents);
+                            if (Array.isArray(parsed.to)) return parsed.to.join(', ');
+                            if (typeof parsed.to === 'string') return parsed.to;
+                          }
+                          return previewRule.receipents || '';
+                        } catch {
+                          return previewRule.receipents || '';
+                        }
+                      })()}
+                    </span>
+                  </div>
+                </div>
+                <div className="mb-6">
+                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    <span className="w-12">Subject:</span>
+                    <span className="text-lg font-bold text-gray-900 dark:text-white">
+                      {JSON.parse(previewRule.body).subject}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Body */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div 
+                  className="prose dark:prose-invert max-w-none text-gray-800 dark:text-gray-200 whitespace-pre-line" 
+                  dangerouslySetInnerHTML={{ __html: JSON.parse(previewRule.body).body }}
+                />
+              </div>
+            </div>
+          ) : (
+            /* SMS Preview */
+            <div className="p-6 flex flex-col items-center">
+              <div className="w-64 h-[500px] bg-gray-100 dark:bg-gray-700 rounded-3xl shadow-2xl flex flex-col items-center justify-between p-4 relative border-8 border-gray-900 dark:border-gray-600">
+                {/* Phone notch */}
+                <div className="w-32 h-5 bg-gray-900 dark:bg-gray-600 rounded-b-lg absolute top-0" />
+                
+                {/* Status bar */}
+                <div className="w-full flex justify-between items-center px-4 pt-1 text-xs text-gray-600 dark:text-gray-300">
+                  <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+                  <div className="flex space-x-1">
+                    <Signal className="w-3 h-3" />
+                    <Wifi className="w-3 h-3" />
+                    <BatteryMedium className="w-3 h-3" />
+                  </div>
+                </div>
+                
+                {/* SMS Content */}
+                <div className="w-full px-3 mt-4 space-y-4 overflow-y-auto flex-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">QuickForm</div>
+                  <div className="bg-blue-500 text-white rounded-2xl rounded-tl-none p-3 max-w-[80%]">
+                    {previewRule.body || previewRule.Body__c}
+                  </div>
+                </div>
+                
+                {/* Input area */}
+                <div className="w-full px-3 mb-4">
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="Reply..." 
+                      className="w-full bg-white dark:bg-gray-600 rounded-full py-2 px-4 pr-10 text-sm border-0 focus:ring-2 focus:ring-blue-500"
+                      disabled
+                    />
+                    <button className="absolute right-2 top-1/2 transform -translate-y-1/2 text-blue-500">
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                
+                {/* Navigation bar */}
+                <div className="w-full flex justify-around items-center py-2 bg-white dark:bg-gray-600 rounded-full mx-2 mb-1">
+                  <MessageSquareText className="w-5 h-5 text-blue-500" />
+                  <Phone className="w-5 h-5 text-gray-400" />
+                  <User className="w-5 h-5 text-gray-400" />
+                  <Settings className="w-5 h-5 text-gray-400" />
+                </div>
+              </div>
+              
+              <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 flex items-center">
+                <Info className="w-4 h-4 mr-1" />
+                SMS preview - character count: {(previewRule.body || previewRule.Body__c)?.length || 0}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 flex justify-end">
+          <button
+            onClick={() => setPreviewRule(null)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center"
+          >
+            <CheckCheck className="w-4 h-4 mr-2" />
+            Got it
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  </AnimatePresence>
+)}
       {!showNotificationForm ? (
         <motion.div
           initial={{ opacity: 0 }}

@@ -412,7 +412,16 @@ export const EmailTab = ({ rules, setRules, setActiveTab, editingRuleId, setEdit
               )}
             </AnimatePresence>
           </div>
-
+          <div className="">
+              <label className="block text-lg font-semibold text-gray-800 mb-2" htmlFor="emailSubject">Subject</label>
+              <input
+                id="emailSubject"
+                type="text"
+                placeholder="Enter Subject"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-400 focus:border-blue-400 bg-white text-gray-800 mb-4"
+                {...register('emailSubject', { required: true })}
+              />
+            </div>
           {/* Email Template Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Email Template</h3>
