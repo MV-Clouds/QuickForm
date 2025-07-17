@@ -68,7 +68,12 @@ export const handler = async (event) => {
               ? {
                   thenAction: conditionData.thenAction,
                   sourcePage: conditionData.sourcePage,
-                  targetPage: conditionData.targetPage,
+                  targetPage: Array.isArray(conditionData.targetPage) ? conditionData.targetPage : [conditionData.targetPage].filter(Boolean),
+                  ...(conditionData.thenAction === 'loop' ? {
+                    loopField: conditionData.loopField || '',
+                    loopValue: conditionData.loopValue || '',
+                    loopType: conditionData.loopType || 'static',
+                  } : {}),
                 }
               : {
                   thenAction: conditionData.thenAction,

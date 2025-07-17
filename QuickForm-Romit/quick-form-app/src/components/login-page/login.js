@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Select, Button } from 'antd';
+import './login.css'; // Import your CSS styles
+
+const { Option } = Select;
 
 const Login = () => {
-  const [org, setOrg] = useState(''); // Store selected Salesforce org
+  const [org, setOrg] = useState('Pick an option'); // Store selected Salesforce org
   const [isButtonDisabled, setIsButtonDisabled] = useState(true); // Track login button state
   const navigate = useNavigate(); // React Router navigation
   let popup = null; // Reference to popup window
@@ -47,10 +52,9 @@ const Login = () => {
     };
   }, [navigate]);
 
-  const handleOrgChange = (e) => {
-    const selectedOrg = e.target.value; // Get selected org
-    setOrg(selectedOrg); // Update state
-    setIsButtonDisabled(!selectedOrg); // Enable button if org selected
+  const handleOrgChange = (value) => {
+    setOrg(value); // Update state
+    setIsButtonDisabled(!value); // Enable button if org selected
   };
 
   const openPopup = () => {
@@ -91,45 +95,130 @@ const Login = () => {
     }
   };
 
+  // Animation variants for page load
+  const pageVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
+  };
+
+  // Animation variants for dropdown
+  const dropdownVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.3, ease: 'easeOut' } },
+    focus: { 
+      boxShadow: '0 0 0 2px #3b82f6',
+      transition: { duration: 0.2 }
+    }
+  };
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-sm">
-        <div className="flex justify-center mb-6">
-          <img
-            src="https://login.salesforce.com/img/logo214.svg"
-            alt="Salesforce"
-            style={{ height: '60px' }} // Logo size
-          />
+    <div className="min-h-screen bg-white font-sans">
+      <motion.div
+        className="login-page flex"
+        variants={pageVariants}
+        initial="initial"
+        animate="animate"
+      >
+        <div className="content-container flex w-full">
+          <div className="left-container">
+            <div className="features-section">
+              <p className="main-title">Streamline Your Workflow<br />with <span className="quickform-text">QuickForm</span></p>
+              <div className="subtitle-div">
+                <p className="subtitle">
+                  Seamlessly integrate with Salesforce and manage your data with unparalleled efficiency. Focus on what matters most.
+                </p>
+              </div>
+              <div className="features-container">
+                <div className="feature">
+                  <div className="icon-wrapper">
+                    <img src="/images/flash_icon.svg" alt="Lightning Icon" className="feature-icon" />
+                  </div>
+                  <p className="feature-title">Lightning Fast</p>
+                  <p className="feature-description">
+                    Create and deploy forms in minutes, not hours.
+                  </p>
+                </div>
+                <div className="feature">
+                  <div className="icon-wrapper">
+                    <img src="/images/deep_integration_icon.svg" alt="Camera Icon" className="feature-icon" />
+                  </div>
+                  <p className="feature-title">Deep Integration</p>
+                  <p className="feature-description">
+                    Native Salesforce connectivity for real-time data sync.
+                  </p>
+                </div>
+                <div className="feature">
+                  <div className="icon-wrapper">
+                    <img src="/images/customizable_icon.svg" alt="Gear Icon" className="feature-icon" />
+                  </div>
+                  <p className="feature-title">Customizable</p>
+                  <p className="feature-description">
+                    Tailor forms to your exact needs with powerful design tools.
+                  </p>
+                </div>
+                <div className="feature">
+                  <div className="icon-wrapper">
+                    <img src="/images/secure_icon.svg" alt="Shield Icon" className="feature-icon" />
+                  </div>
+                  <p className="feature-title">Secure & Reliable</p>
+                  <p className="feature-description">
+                    Enterprise-grade security to protect your valuable data.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="footer">
+              <p className="footer-text">© 2025, made with ♥ by MVCouds a better web.</p>
+            </div>
+          </div>
+          <div className="right-container">
+            <div className="quickform-logo"><img src="/images/quickform-logo.svg" alt="QuickForm Logo" className="logo" /></div>
+            <div className="login-container">
+              <img
+                src="https://login.salesforce.com/img/logo214.svg"
+                alt="Salesforce"
+                className="login-image"
+              />
+              <h2 className="login-text">Login with Salesforce</h2>
+              <div className="login-form">
+                <div className="dropdown-container">
+                  <label htmlFor="org-select" className="label">
+                    Choose Salesforce Org
+                  </label>
+                  <AnimatePresence>
+                    <motion.div
+                      variants={dropdownVariants}
+                      initial="hidden"
+                      animate="visible"
+                      whileFocus="focus"
+                    >
+                      <Select
+                        id="org-select"
+                        value={org}
+                        onChange={handleOrgChange}
+                        placeholder = "Pick an option"
+                        style={{ width: '100%' }}
+                        className="dropdown"
+                      >
+                        <Option value="production">Production (login.salesforce.com)</Option>
+                        <Option value="sandbox">Sandbox (test.salesforce.com)</Option>
+                      </Select>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+                <button
+                  id="login-button"
+                  onClick={openPopup}
+                  disabled={isButtonDisabled}
+                  className={`login-button ${isButtonDisabled ? 'disabled' : ''}`}
+                >
+                  <img src="/images/login_gate.svg" alt="Login logo" className="gate-logo"/> Login with Salesforce
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        <h2 className="text-2xl font-bold text-center mb-6">Login with Salesforce</h2>
-        <div className="mb-4">
-          <label htmlFor="org-select" className="block text-sm font-medium text-gray-700 mb-2">
-            Choose Salesforce Org
-          </label>
-          <select
-            id="org-select"
-            value={org}
-            onChange={handleOrgChange}
-            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">-- Select --</option> {/* Placeholder option */}
-            <option value="production">Production (login.salesforce.com)</option>
-            <option value="sandbox">Sandbox (test.salesforce.com)</option>
-          </select>
-        </div>
-        <button
-          id="login-button"
-          onClick={openPopup}
-          disabled={isButtonDisabled} // Disable if no org selected
-          className={`w-full py-3 rounded-lg font-medium transition-colors ${
-            isButtonDisabled
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' // Disabled styling
-              : 'bg-blue-600 text-white hover:bg-blue-700' // Enabled styling
-          }`}
-        >
-          Login with Salesforce
-        </button>
-      </div>
+      </motion.div>
     </div>
   );
 };

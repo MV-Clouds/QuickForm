@@ -1,7 +1,20 @@
 import { motion } from 'framer-motion';
 import { Bot, MessageSquare } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
 
 const BotButton = ({ isOpen, setIsOpen , handleActivity }) => {
+  const [showButton, setShowButton] = useState(false);
+
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl) {
+      setShowButton(true);
+    }
+  }, []);
+
+  if (!showButton) return null;
   return (
     <motion.button
       whileHover={{

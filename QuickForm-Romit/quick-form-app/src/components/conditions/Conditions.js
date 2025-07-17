@@ -38,10 +38,13 @@ const Conditions = () => {
     dependentValues: [],
     maskPattern: '',
     sourcePage: '',
-    targetPage: '',
+    targetPage: [], // Changed to array to support multiple hide pages
     // For dependent tab, use single condition fields
     ifField: '',
     value: '',
+    loopField: '', // New: Field for loop condition
+    loopValue: '', // New: Static value for loop
+    loopType: 'static', // New: 'static' or 'field' for loop value source
   });
   const [editingConditionId, setEditingConditionId] = useState(null);
   const [pages, setPages] = useState([]);
@@ -147,16 +150,31 @@ const Conditions = () => {
           .filter((c) => c.type === 'skip_hide_page')
           .reduce((acc, condition) => {
             const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c) : condition;
-            const key = `${conditionData.sourcePage}-${conditionData.thenAction}-${conditionData.targetPage}`;
-            if (!acc[key]) {
-              acc[key] = { 
-                source: conditionData.sourcePage, 
-                target: conditionData.targetPage, 
-                thenAction: conditionData.thenAction, 
-                conditions: [] 
-              };
+            if (conditionData.thenAction === 'loop') {
+              const key = `${conditionData.sourcePage}-loop`;
+              if (!acc[key]) {
+                acc[key] = {
+                  source: conditionData.sourcePage,
+                  target: conditionData.sourcePage, // Loop targets same page
+                  thenAction: 'loop',
+                  conditions: [],
+                };
+              }
+              acc[key].conditions.push(conditionData);
+            } else {
+              conditionData.targetPage.forEach((target) => {
+                const key = `${conditionData.sourcePage}-${conditionData.thenAction}-${target}`;
+                if (!acc[key]) {
+                  acc[key] = {
+                    source: conditionData.sourcePage,
+                    target,
+                    thenAction: conditionData.thenAction,
+                    conditions: [],
+                  };
+                }
+                acc[key].conditions.push(conditionData);
+              });
             }
-            acc[key].conditions.push(conditionData);
             return acc;
           }, {});
         // Initialize edges with variable positioning
@@ -170,11 +188,13 @@ const Conditions = () => {
             id: `${group.source}-${group.thenAction}-${group.target}`,
             source: group.source,
             target: group.target,
-            label: group.conditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', '),
+            label: group.thenAction === 'loop'
+              ? `Loop (${group.conditions.length} condition${group.conditions.length > 1 ? 's' : ''})`
+              : group.conditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage[0])?.Name || 'Unknown'}`)?.join(', '),
             type: 'smoothstep',
-            animated: group.thenAction === 'skip to',
+            animated: group.thenAction === 'skip to' || group.thenAction === 'loop',
             style: {
-              stroke: group.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f',
+              stroke: group.thenAction === 'skip to' ? '#1a73e8' : group.thenAction === 'hide' ? '#ff4d4f' : '#00cc00', // Green for loop
               strokeWidth: 2,
               zIndex: 10 + idx,
             },
@@ -273,6 +293,14 @@ const Conditions = () => {
       ) {
         return `Contradictory condition found: Cannot set different dependent values for the same controlling field and value.`;
       } else if (newCondition.type === 'skip_hide_page' && isSameIf) {
+        if (newCondition.thenAction === 'loop') {
+          if (conditionData.thenAction === 'loop' && conditionData.sourcePage === newCondition.sourcePage) {
+            return 'Contradictory condition found: Only one loop condition is allowed per page.';
+          }
+          if (newCondition.sourcePage !== newCondition.targetPage[0]) {
+            return 'Loop condition must target the same page as the source page.';
+          }
+        }
         if (
           conditionData.thenAction === newCondition.thenAction &&
           conditionData.targetPage === newCondition.targetPage
@@ -385,9 +413,12 @@ const Conditions = () => {
       dependentValues: conditionData.dependentValues || [],
       maskPattern: conditionData.maskPattern || '',
       sourcePage: conditionData.sourcePage || '',
-      targetPage: conditionData.targetPage || '',
+      targetPage: Array.isArray(conditionData.targetPage) ? conditionData.targetPage : [conditionData.targetPage].filter(Boolean),
       ifField: conditionData.type === 'dependent' ? conditionData.ifField || '' : '',
       value: conditionData.type === 'dependent' ? conditionData.value || '' : '',
+      loopField: conditionData.loopField || '',
+      loopValue: conditionData.loopValue || '',
+      loopType: conditionData.loopType || 'static',
     });
     setEditingConditionId(conditionData.Id);
     if (conditionData.type === 'skip_hide_page') {
@@ -462,7 +493,7 @@ const Conditions = () => {
             Id: `page_${pageNum}`,
             Name: `Page ${pageNum}`,
           }));
-        if (newCondition.thenAction === 'hide' && (newCondition.targetPage === derivedPages[0]?.Id || newCondition.targetPage === derivedPages[derivedPages.length - 1]?.Id)) {
+        if (newCondition.thenAction === 'hide' && newCondition.targetPage.some((page) => page === derivedPages[0]?.Id || page === derivedPages[derivedPages.length - 1]?.Id)) {
           throw new Error('Cannot hide the first or last page');
         }
         conditionData = {
@@ -480,6 +511,11 @@ const Conditions = () => {
             thenAction: newCondition.thenAction,
             sourcePage: newCondition.sourcePage,
             targetPage: newCondition.targetPage,
+             ...(newCondition.thenAction === 'loop' ? {
+              loopField: newCondition.loopField,
+              loopValue: newCondition.loopValue,
+              loopType: newCondition.loopType,
+            } : {}),
           }),
         };
       } else {
@@ -536,54 +572,123 @@ const Conditions = () => {
       );
       
       if (newCondition.type === 'skip_hide_page') {
-        const edgeId = `${newCondition.sourcePage}-${newCondition.thenAction}-${newCondition.targetPage}`;
+        // Normalize targetPage to an array
+        const targetPages = Array.isArray(newCondition.targetPage) ? newCondition.targetPage : [newCondition.targetPage].filter(Boolean);
+        console.log('Normalized targetPages:', targetPages);
+
+        // Create or update edges for each target page
         setEdges((prevEdges) => {
           console.log('Previous Edges:', prevEdges);
-          
-          const existingEdge = prevEdges.find((e) => e.id === edgeId);
-          if (existingEdge) {
-            const updatedConditions = conditionId
-            ? existingEdge.data.conditions.map((c) => (c.Id === conditionId ? data.condition : c)) // Edit existing condition
-            : [...existingEdge.data.conditions, data.condition];
-            const newEdges = prevEdges.map((e) =>
-              e.id === edgeId
-                ? {
-                    ...e,
-                    data: { conditions: updatedConditions },
-                    label: updatedConditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', '),
-                    animated: updatedConditions.some((c) => c.thenAction === 'skip to'),
-                    style: {
-                      stroke: updatedConditions.some((c) => c.thenAction === 'skip to') ? '#1a73e8' : '#ff4d4f',
-                      strokeWidth: 2,
-                      zIndex: prevEdges.findIndex((e) => e.id === edgeId) + 10,
-                    },
-                  }
-                : e
-            );
-            console.log('Updated Edges:', newEdges);
-            return newEdges;
+          let newEdges = [...prevEdges];
+
+          if (newCondition.thenAction === 'loop') {
+            const edgeId = `${newCondition.sourcePage}-loop`;
+            const existingEdge = newEdges.find((e) => e.id === edgeId);
+            if (existingEdge) {
+              const updatedConditions = conditionId
+                ? existingEdge.data.conditions.map((c) => (c.Id === conditionId ? data.condition : c))
+                : [...existingEdge.data.conditions, data.condition];
+              newEdges = newEdges.map((e) =>
+                e.id === edgeId
+                  ? {
+                      ...e,
+                      data: { conditions: updatedConditions },
+                      label: `Loop (${updatedConditions.length} condition${updatedConditions.length > 1 ? 's' : ''})`,
+                      animated: true,
+                      style: {
+                        stroke: '#00cc00',
+                        strokeWidth: 2,
+                        zIndex: newEdges.findIndex((e) => e.id === edgeId) + 10,
+                      },
+                    }
+                  : e
+              );
+            } else {
+              const newEdge = {
+                id: edgeId,
+                source: newCondition.sourcePage,
+                target: newCondition.sourcePage,
+                label: `Loop (1 condition)`,
+                type: 'smoothstep',
+                animated: true,
+                style: {
+                  stroke: '#00cc00',
+                  strokeWidth: 2,
+                  zIndex: 10,
+                },
+                markerEnd: { type: 'arrowclosed' },
+                data: { conditions: [data.condition] },
+                sourceX: nodes.find((n) => n.id === newCondition.sourcePage)?.position.x,
+                sourceY: nodes.find((n) => n.id === newCondition.sourcePage)?.position.y + 50,
+                targetX: nodes.find((n) => n.id === newCondition.sourcePage)?.position.x,
+                targetY: nodes.find((n) => n.id === newCondition.sourcePage)?.position.y - 50,
+              };
+              newEdges = [
+                ...newEdges.filter((e) => !(e.source === newCondition.sourcePage && e.id.startsWith(`${newCondition.sourcePage}-loop`))),
+                newEdge,
+              ];
+            }
           } else {
-            const newEdge = {
-              id: edgeId,
-              source: newCondition.sourcePage,
-              target: newCondition.targetPage,
-              label: `${data.condition.thenAction} ${pages.find((p) => p.Id === data.condition.targetPage)?.Name || 'Unknown'}`,
-              type: 'smoothstep',
-              animated: data.condition.thenAction === 'skip to',
-              style: { stroke: data.condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f', strokeWidth: 2, zIndex: 10 },
-              markerEnd: { type: 'arrowclosed' },
-              data: { conditions: [data.condition] },
-              sourceX: nodes.find((n) => n.id === newCondition.sourcePage).position.x,
-              sourceY: nodes.find((n) => n.id === newCondition.sourcePage).position.y + 50,
-              targetX: nodes.find((n) => n.id === newCondition.targetPage).position.x,
-              targetY: nodes.find((n) => n.id === newCondition.targetPage).position.y - 50,
-            };
-            // Filter out existing edges with the same source and thenAction to enforce max one skip-to and one hide edge
-            return [
-              ...prevEdges.filter(e => !(e.source === newCondition.sourcePage && e.id.startsWith(`${newCondition.sourcePage}-${newCondition.thenAction}-`) && e.id !== `default_${newCondition.sourcePage}_to_`)),
-              newEdge
-            ];
+            // Create or update an edge for each target page
+            targetPages.forEach((targetPage) => {
+              const edgeId = `${newCondition.sourcePage}-${newCondition.thenAction}-${targetPage}`;
+              console.log('Generated edgeId:', edgeId);
+              const existingEdge = newEdges.find((e) => e.id === edgeId);
+              if (existingEdge) {
+                const updatedConditions = conditionId
+                  ? existingEdge.data.conditions.map((c) => (c.Id === conditionId ? data.condition : c))
+                  : [...existingEdge.data.conditions, data.condition];
+                newEdges = newEdges.map((e) =>
+                  e.id === edgeId
+                    ? {
+                        ...e,
+                        data: { conditions: updatedConditions },
+                        label: updatedConditions
+                          .map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage[0])?.Name || 'Unknown'}`)
+                          .join(', '),
+                        animated: updatedConditions.some((c) => c.thenAction === 'skip to'),
+                        style: {
+                          stroke: updatedConditions.some((c) => c.thenAction === 'skip to') ? '#1a73e8' : '#ff4d4f',
+                          strokeWidth: 2,
+                          zIndex: newEdges.findIndex((e) => e.id === edgeId) + 10,
+                        },
+                      }
+                    : e
+                );
+              } else {
+                const newEdge = {
+                  id: edgeId,
+                  source: newCondition.sourcePage,
+                  target: targetPage,
+                  label: `${data.condition.thenAction} ${pages.find((p) => p.Id === targetPage)?.Name || 'Unknown'}`,
+                  type: 'smoothstep',
+                  animated: data.condition.thenAction === 'skip to',
+                  style: {
+                    stroke: data.condition.thenAction === 'skip to' ? '#1a73e8' : '#ff4d4f',
+                    strokeWidth: 2,
+                    zIndex: 10,
+                  },
+                  markerEnd: { type: 'arrowclosed' },
+                  data: { conditions: [data.condition] },
+                  sourceX: nodes.find((n) => n.id === newCondition.sourcePage)?.position.x,
+                  sourceY: nodes.find((n) => n.id === newCondition.sourcePage)?.position.y + 50,
+                  targetX: nodes.find((n) => n.id === targetPage)?.position.x,
+                  targetY: nodes.find((n) => n.id === targetPage)?.position.y - 50,
+                };
+                newEdges = [
+                  ...newEdges.filter((e) =>
+                    !(e.source === newCondition.sourcePage &&
+                      e.id.startsWith(`${newCondition.sourcePage}-${newCondition.thenAction}-`) &&
+                      e.id !== `default_${newCondition.sourcePage}_to_` &&
+                      e.target !== targetPage)
+                  ),
+                  newEdge,
+                ];
+              }
+            });
           }
+          console.log('Updated Edges:', newEdges);
+          return newEdges;
         });
       }
       setNewCondition({
@@ -597,7 +702,7 @@ const Conditions = () => {
         dependentValues: [],
         maskPattern: '',
         sourcePage: newCondition.type === 'skip_hide_page' ? selectedNode : '',
-        targetPage: '',
+        targetPage: [],
         ifField: newCondition.type === 'dependent' ? '' : '',
         value: newCondition.type === 'dependent' ? '' : '',
       });
@@ -644,10 +749,13 @@ const Conditions = () => {
             return {
               ...edge,
               data: { conditions: updatedConditions },
-              label: updatedConditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage)?.Name || 'Unknown'}`).join(', '),
-              animated: updatedConditions.some((c) => c.thenAction === 'skip to'),
+              label: edge.data.conditions[0]?.thenAction === 'loop'
+                ? `Loop (${updatedConditions.length} condition${updatedConditions.length > 1 ? 's' : ''})`
+                : updatedConditions.map((c) => `${c.thenAction} ${pages.find((p) => p.Id === c.targetPage[0])?.Name || 'Unknown'}`)?.join(', '),
+              animated: updatedConditions.some((c) => c.thenAction === 'skip to' || c.thenAction === 'loop'),
               style: {
-                stroke: updatedConditions.some((c) => c.thenAction === 'skip to') ? '#1a73e8' : '#ff4d4f',
+                stroke: updatedConditions.some((c) => c.thenAction === 'skip to') ? '#1a73e8' : updatedConditions.some((c) =>
+                  c.thenAction === 'hide') ? '#ff4d4f' : '#00cc00',
                 strokeWidth: 2,
                 zIndex: prevEdges.findIndex((e) => e.id === edge.id) + 10,
               },
@@ -825,6 +933,37 @@ const Conditions = () => {
 
   const edgeTypes = {
     customBezier: ({ id, source, target, sourceX, sourceY, targetX, targetY, data, ...rest }) => {
+      // Handle self-loop case
+      if (source === target) {
+        // Define a circular or elliptical path for the self-loop
+        const node = nodes.find((n) => n.id === source);
+        const x = sourceX || node.position.x;
+        const y = sourceY || node.position.y + 50; // Start at bottom handle
+        const radiusX = 50; // Horizontal radius for the loop
+        const radiusY = 30; // Vertical radius for the loop
+        // Create an elliptical path for the self-loop
+        const path = `
+          M ${x} ${y}
+          C ${x + radiusX} ${y}, ${x + radiusX} ${y - radiusY * 2}, ${x} ${y - radiusY * 2}
+          C ${x - radiusX} ${y - radiusY * 2}, ${x - radiusX} ${y}, ${x} ${y}
+        `;
+        return (
+          <g>
+            <path
+              id={id}
+              className="react-flow__edge-path"
+              d={path}
+              style={{
+                ...rest.style,
+                strokeWidth: 3,
+                transition: 'stroke 0.3s, stroke-width 0.3s',
+              }}
+              markerEnd={rest.markerEnd}
+            />
+          </g>
+        );
+      }
+      // Existing logic for non-self-loops
       const offset = edges
         .filter((e) => e.source === source && e.target === target)
         .findIndex((e) => e.id === id) * 20 -
@@ -1065,7 +1204,7 @@ const Conditions = () => {
                           onChange={(value) => handleFieldChange('thenFields', value)}
                           placeholder="Select field(s) to show/hide"
                           style={{ width: '100%' }}
-                          disabled={! (newCondition.conditions ? newCondition.conditions[0].ifField : false)}
+                          disabled={! (newCondition.conditions ? newCondition.conditions[0]?.ifField : false)}
                         >
                           {validIfFields
                             .filter((f) => !newCondition.conditions?.some((c) => c.ifField === f.Unique_Key__c))
@@ -1165,7 +1304,7 @@ const Conditions = () => {
                             <p>
                               <strong>Then:</strong> {condition.thenAction}{' '}
                               {(Array.isArray(condition.thenFields)
-                                ? condition.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean).join(', ')
+                                ? condition.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean)?.join(', ')
                                 : fields.find((f) => f.Unique_Key__c === condition.thenFields)?.Name) || 'None'}
                             </p>
                           </div>
@@ -1500,7 +1639,7 @@ const Conditions = () => {
                           onChange={(value) => handleFieldChange('thenFields', value)}
                           placeholder="Select field(s)"
                           style={{ width: '100%' }}
-                          disabled={! (newCondition.conditions ? newCondition.conditions[0].ifField : false)}
+                          disabled={! (newCondition.conditions ? newCondition.conditions[0]?.ifField : false)}
                         >
                           {validIfFields
                             .filter((f) => !newCondition.conditions?.some((c) => c.ifField === f.Unique_Key__c))
@@ -1615,7 +1754,7 @@ const Conditions = () => {
                               <strong>Then:</strong> {condition.thenAction}
                               {condition.thenAction === 'set mask' ? ` with pattern "${condition.maskPattern || 'N/A'}"` : ''}{' '}
                               {(Array.isArray(condition.thenFields)
-                                ? condition.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean).join(', ')
+                                ? condition.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean)?.join(', ')
                                 : fields.find((f) => f.Unique_Key__c === condition.thenFields)?.Name) || 'None'}
                             </p>
                           </div>
@@ -1683,7 +1822,7 @@ const Conditions = () => {
                           dependentValues: [],
                           maskPattern: '',
                           sourcePage: selectedNode,
-                          targetPage: '',
+                          targetPage: [],
                           ifField: '',
                           value: '',
                         });
@@ -1721,42 +1860,68 @@ const Conditions = () => {
                                   className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
                                 >
                                   <div>
-                                    {condition.logic === 'Custom' ? (
+                                    {condition.thenAction === 'loop' ? (
                                       <>
-                                        <p><strong>If:</strong></p>
-                                        {condition.conditions?.map((cond, index) => (
-                                          <p key={index}>
-                                            <strong>Condition {index + 1}:</strong>{' '}
-                                            {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                            {cond.value || 'N/A'}
-                                          </p>
-                                        ))}
-                                        <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                                        <p><strong>Loop Type:</strong> {condition.loopType === 'static' ? 'Static Value' : 'Field from Previous Page'}</p>
+                                        <p>
+                                          <strong>Loop Times:</strong>{' '}
+                                          {condition.loopType === 'static'
+                                            ? condition.loopValue || 'N/A'
+                                            : fields.find((f) => f.Unique_Key__c === condition.loopField)?.Name || 'Unknown'}
+                                        </p>
+                                        <p>
+                                          <strong>Target Page:</strong> {pages.find((p) => p.Id === condition.targetPage[0])?.Name || 'Unknown'}
+                                        </p>
                                       </>
                                     ) : (
-                                      <p>
-                                        <strong>If:</strong>{' '}
-                                        {condition.conditions?.map((cond, index) => (
-                                          <span key={index}>
-                                            {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                            {cond.value || 'N/A'}
-                                            {index < condition.conditions.length - 1 && ` ${condition.logic} `}
-                                          </span>
-                                        ))}
-                                      </p>
+                                      <>
+                                        {condition.logic === 'Custom' ? (
+                                          <>
+                                            <p><strong>If:</strong></p>
+                                            {condition.conditions?.map((cond, index) => (
+                                              <p key={index}>
+                                                <strong>Condition {index + 1}:</strong>{' '}
+                                                {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                                {cond.value || 'N/A'}
+                                              </p>
+                                            ))}
+                                            <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                                          </>
+                                        ) : (
+                                          <p>
+                                            <strong>If:</strong>{' '}
+                                            {condition.conditions?.map((cond, index) => (
+                                              <span key={index}>
+                                                {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
+                                                {cond.value || 'N/A'}
+                                                {index < condition.conditions.length - 1 && ` ${condition.logic} `}
+                                              </span>
+                                            ))}
+                                          </p>
+                                        )}
+                                        <p>
+                                          <strong>Then:</strong> {condition.thenAction}{' '}
+                                          {Array.isArray(condition.targetPage)
+                                            ? condition.targetPage.map((pageId) => pages.find((p) => p.Id === pageId)?.Name || 'Unknown')?.join(', ')
+                                            : pages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}
+                                        </p>
+                                      </>
                                     )}
-                                    <p>
-                                      <strong>Then:</strong> {condition.thenAction} {pages.find((p) => p.Id === condition.targetPage)?.Name || 'Unknown'}
-                                    </p>
                                   </div>
                                   <div className="flex space-x-2">
-                                    <Button size="small" onClick={() => {
-                                      editCondition(condition);
-                                      setIsCreateModalVisible(true);
-                                    }}>
+                                    <Button
+                                      size="small"
+                                      onClick={() => {
+                                        editCondition(condition);
+                                        setIsCreateModalVisible(true);
+                                      }}
+                                    >
                                       <FaEdit />
                                     </Button>
-                                    <Button size="small" onClick={() => deleteCondition(condition.Id)}>
+                                    <Button
+                                      size="small"
+                                      onClick={() => deleteCondition(condition.Id)}
+                                    >
                                       <FaTrash />
                                     </Button>
                                   </div>
@@ -1770,7 +1935,6 @@ const Conditions = () => {
                     title="Create New Condition"
                     visible={isCreateModalVisible}
                     onCancel={() => {
-                      setIsCreateModalVisible(false);
                       setNewCondition({
                         type: 'skip_hide_page',
                         conditions: [{ ifField: '', operator: '', value: '' }],
@@ -1782,255 +1946,412 @@ const Conditions = () => {
                         dependentValues: [],
                         maskPattern: '',
                         sourcePage: selectedNode,
-                        targetPage: '',
+                        targetPage: [],
                         ifField: '',
                         value: '',
+                        loopField: '',
+                        loopValue: '',
+                        loopType: 'static',
                       });
                       setEditingConditionId(null);
+                      setIsCreateModalVisible(false);
                     }}
                     footer={null}
                     width={800}
                   >
                     <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
                       <h2 className="text-xl font-semibold mb-3">{editingConditionId ? 'Edit Condition' : 'Add New Condition'}</h2>
-                      {newCondition.conditions?.map((condition, index) => (
-                        <motion.div key={index} variants={itemVariants} className="mb-4 p-3 border rounded">
-                          <div className="mb-3">
-                            <label className="block text-sm font-medium text-gray-700">If Field</label>
-                            <Select
-                              value={condition.ifField}
-                              onChange={(value) => handleFieldChange('ifField', value, index)}
-                              placeholder="Select field"
-                              style={{ width: '100%' }}
-                            >
-                              {validIfFields
-                                .filter((f) => {
-                                  const page = pages.find((p) => p.Id === selectedNode);
-                                  const pageNum = page ? parseInt(page.Id.replace('page_', '')) : null;
-                                  return pageNum && fields.find((field) => field.Unique_Key__c === f.Unique_Key__c)?.Page_Number__c <= pageNum;
-                                })
-                                .map((field) => (
-                                  <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
-                                    {field.Name} (Page {fields.find((f) => f.Unique_Key__c === field.Unique_Key__c)?.Page_Number__c})
-                                  </Option>
-                                ))}
-                            </Select>
-                          </div>
-                          {condition.ifField && (
-                            <>
+                      <Tabs
+                        defaultActiveKey={newCondition.thenAction === 'loop' ? 'loop' : 'skip_hide'}
+                        onChange={(key) => {
+                          handleFieldChange('thenAction', key === 'loop' ? 'loop' : 'skip to');
+                          handleFieldChange('targetPage', key === 'loop' ? [selectedNode] : []);
+                          handleFieldChange('conditions', key === 'loop' ? [] : [{ ifField: '', operator: '', value: '' }]);
+                          handleFieldChange('logic', 'AND');
+                          handleFieldChange('logicExpression', '');
+                        }}
+                      >
+                        <TabPane tab="Skip To / Hide Page" key="skip_hide">
+                          {newCondition.conditions?.map((condition, index) => (
+                            <motion.div key={index} variants={itemVariants} className="mb-4 p-3 border rounded">
                               <div className="mb-3">
-                                <label className="block text-sm font-medium text-gray-700">Operator</label>
+                                <label className="block text-sm font-medium text-gray-700">If Field</label>
                                 <Select
-                                  value={condition.operator}
-                                  onChange={(value) => handleFieldChange('operator', value, index)}
-                                  placeholder="Select operator"
+                                  value={condition.ifField}
+                                  onChange={(value) => handleFieldChange('ifField', value, index)}
+                                  placeholder="Select field"
                                   style={{ width: '100%' }}
                                 >
-                                  {getOperators(fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map((op) => (
-                                    <Option key={op} value={op}>
-                                      {op}
-                                    </Option>
-                                  ))}
+                                  {validIfFields
+                                    .filter((f) => {
+                                      const page = pages.find((p) => p.Id === selectedNode);
+                                      const pageNum = page ? parseInt(page.Id.replace('page_', '')) : null;
+                                      return pageNum && fields.find((field) => field.Unique_Key__c === f.Unique_Key__c)?.Page_Number__c <= pageNum;
+                                    })
+                                    .map((field) => (
+                                      <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                                        {field.Name} (Page {fields.find((f) => f.Unique_Key__c === field.Unique_Key__c)?.Page_Number__c})
+                                      </Option>
+                                    ))}
                                 </Select>
                               </div>
-                              {condition.operator && !['is null', 'is not null'].includes(condition.operator) && (
-                                <div className="mb-3">
-                                  <label className="block text-sm font-medium text-gray-700">Value</label>
-                                  {['checkbox', 'radio', 'dropdown'].includes(
-                                    fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
-                                  ) ? (
+                              {condition.ifField && (
+                                <>
+                                  <div className="mb-3">
+                                    <label className="block text-sm font-medium text-gray-700">Operator</label>
                                     <Select
-                                      value={condition.value}
-                                      onChange={(value) => handleFieldChange('value', value, index)}
-                                      placeholder="Select value"
+                                      value={condition.operator}
+                                      onChange={(value) => handleFieldChange('operator', value, index)}
+                                      placeholder="Select operator"
                                       style={{ width: '100%' }}
                                     >
-                                      {getFieldOptions(condition.ifField).map((option) => (
-                                        <Option key={option} value={option}>
-                                          {option}
+                                      {getOperators(fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map((op) => (
+                                        <Option key={op} value={op}>
+                                          {op}
                                         </Option>
                                       ))}
                                     </Select>
-                                  ) : ['date', 'datetime', 'date-time', 'time'].includes(
-                                      fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
-                                    ) ? (
-                                      <Input
-                                        type={
-                                          fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
-                                            ? 'date'
-                                            : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
-                                            ? 'time'
-                                            : 'datetime-local'
-                                        }
-                                        value={condition.value}
-                                        onChange={(e) => handleFieldChange('value', e.target.value, index)}
-                                        placeholder={
-                                          fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
-                                            ? 'YYYY-MM-DD'
-                                            : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
-                                            ? 'HH:MM'
-                                            : 'YYYY-MM-DD HH:MM'
-                                        }
-                                        style={{ width: '100%' }}
-                                      />
-                                    ) : (
-                                      <Input
-                                        value={condition.value}
-                                        onChange={(e) => handleFieldChange('value', e.target.value, index)}
-                                        placeholder="Enter value"
-                                      />
-                                    )}
+                                  </div>
+                                  {condition.operator && !['is null', 'is not null'].includes(condition.operator) && (
+                                    <div className="mb-3">
+                                      <label className="block text-sm font-medium text-gray-700">Value</label>
+                                      {['checkbox', 'radio', 'dropdown'].includes(
+                                        fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
+                                      ) ? (
+                                        <Select
+                                          value={condition.value}
+                                          onChange={(value) => handleFieldChange('value', value, index)}
+                                          placeholder="Select value"
+                                          style={{ width: '100%' }}
+                                        >
+                                          {getFieldOptions(condition.ifField).map((option) => (
+                                            <Option key={option} value={option}>
+                                              {option}
+                                            </Option>
+                                          ))}
+                                        </Select>
+                                      ) : ['date', 'datetime', 'date-time', 'time'].includes(
+                                          fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c
+                                        ) ? (
+                                          <Input
+                                            type={
+                                              fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                                ? 'date'
+                                                : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                                ? 'time'
+                                                : 'datetime-local'
+                                            }
+                                            value={condition.value}
+                                            onChange={(e) => handleFieldChange('value', e.target.value, index)}
+                                            placeholder={
+                                              fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                                ? 'YYYY-MM-DD'
+                                                : fields.find((f) => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                                ? 'HH:MM'
+                                                : 'YYYY-MM-DD HH:MM'
+                                            }
+                                            style={{ width: '100%' }}
+                                          />
+                                        ) : (
+                                          <Input
+                                            value={condition.value}
+                                            onChange={(e) => handleFieldChange('value', e.target.value, index)}
+                                            placeholder="Enter value"
+                                          />
+                                        )}
+                                    </div>
+                                  )}
+                                  {index > 0 && (
+                                    <Button
+                                      type="danger"
+                                      size="small"
+                                      onClick={() => removeCondition(index)}
+                                      style={{ marginTop: '8px' }}
+                                    >
+                                      <FaTrash />
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </motion.div>
+                          ))}
+                          {newCondition.conditions?.length > 1 && (
+                            <div className="mb-3">
+                              <label className="block text-sm font-medium text-gray-700">Logic</label>
+                              <Select
+                                value={newCondition.logic}
+                                onChange={(value) => handleFieldChange('logic', value)}
+                                style={{ width: '100%' }}
+                              >
+                                <Option value="AND">AND</Option>
+                                <Option value="OR">OR</Option>
+                                <Option value="Custom">Custom</Option>
+                              </Select>
+                              {newCondition.logic === 'Custom' && (
+                                <div className="mt-2">
+                                  <label className="block text-sm font-medium text-gray-700">
+                                    Custom Logic Expression{' '}
+                                    <span className="text-gray-500 text-xs">
+                                      (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
+                                    </span>
+                                  </label>
+                                  <Input
+                                    value={newCondition.logicExpression}
+                                    onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
+                                    placeholder={`e.g., 1 OR (2 AND 3)`}
+                                    style={{ width: '100%' }}
+                                  />
                                 </div>
                               )}
-                              {index > 0 && (
-                                <Button
-                                  type="danger"
-                                  size="small"
-                                  onClick={() => removeCondition(index)}
-                                  style={{ marginTop: '8px' }}
-                                >
-                                  <FaTrash />
-                                </Button>
-                              )}
-                            </>
+                            </div>
                           )}
-                        </motion.div>
-                      ))}
-                      {newCondition.conditions?.length > 1 && (
-                        <div className="mb-3">
-                          <label className="block text-sm font-medium text-gray-700">Logic</label>
-                          <Select
-                            value={newCondition.logic}
-                            onChange={(value) => handleFieldChange('logic', value)}
-                            style={{ width: '100%' }}
+                          <div className="mb-3 flex items-center">
+                            <div style={{ width: '120px', marginRight: '8px' }}>
+                              <label className="block text-sm font-medium text-gray-700">Then</label>
+                              <Select
+                                value={newCondition.thenAction}
+                                onChange={(value) => handleFieldChange('thenAction', value)}
+                                style={{ width: '100%' }}
+                              >
+                                <Option value="skip to">Skip To</Option>
+                                <Option value="hide">Hide</Option>
+                              </Select>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <label className="block text-sm font-medium text-gray-700">Page(s)</label>
+                              <Select
+                                mode={newCondition.thenAction === 'hide' ? 'multiple' : 'default'}
+                                value={newCondition.targetPage}
+                                onChange={(value) => handleFieldChange('targetPage', value)}
+                                placeholder="Select target page(s)"
+                                style={{ width: '100%' }}
+                              >
+                                {pages
+                                  .filter((p) => p.Id !== selectedNode)
+                                  .filter((p) => !(newCondition.thenAction === 'hide' && (p.Id === pages[0]?.Id || p.Id === pages[pages.length - 1]?.Id)))
+                                  .map((page) => (
+                                    <Option key={page.Id} value={page.Id}>
+                                      {page.Name}
+                                    </Option>
+                                  ))}
+                              </Select>
+                            </div>
+                          </div>
+                          <Button
+                            type="primary"
+                            onClick={addCondition}
+                            style={{ marginTop: '8px' }}
                           >
-                            <Option value="AND">AND</Option>
-                            <Option value="OR">OR</Option>
-                            <Option value="Custom">Custom</Option>
-                          </Select>
-                          {newCondition.logic === 'Custom' && (
-                            <div className="mt-2">
-                              <label className="block text-sm font-medium text-gray-700">
-                                Custom Logic Expression{' '}
-                                <span className="text-gray-500 text-xs">
-                                  (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
-                                </span>
-                              </label>
+                            <FaPlus style={{ marginRight: '4px' }} /> Add Condition
+                          </Button>
+                          <div className="flex space-x-2 mt-4">
+                            <Button
+                              type="primary"
+                              onClick={() => {
+                                saveCondition(editingConditionId).then(() => {
+                                  setNewCondition({
+                                    type: 'skip_hide_page',
+                                    conditions: [{ ifField: '', operator: '', value: '' }],
+                                    logic: 'AND',
+                                    logicExpression: '',
+                                    thenAction: 'skip to',
+                                    thenFields: [],
+                                    dependentField: '',
+                                    dependentValues: [],
+                                    maskPattern: '',
+                                    sourcePage: selectedNode,
+                                    targetPage: [],
+                                    ifField: '',
+                                    value: '',
+                                    loopField: '',
+                                    loopValue: '',
+                                    loopType: 'static',
+                                  });
+                                  setEditingConditionId(null);
+                                  setIsCreateModalVisible(false);
+                                });
+                              }}
+                              disabled={
+                                !newCondition.conditions?.every((c) => c.ifField && c.operator) ||
+                                !newCondition.targetPage.length ||
+                                !newCondition.sourcePage
+                              }
+                            >
+                              <FaSave style={{ marginRight: '4px' }} /> {editingConditionId ? 'Update Condition' : 'Add Condition'}
+                            </Button>
+                            {editingConditionId && (
+                              <Button
+                                type="danger"
+                                onClick={() => {
+                                  deleteCondition(editingConditionId);
+                                }}
+                              >
+                                <FaTrash style={{ marginRight: '4px' }} /> Delete
+                              </Button>
+                            )}
+                            <Button
+                              type="default"
+                              onClick={() => {
+                                setNewCondition({
+                                  type: 'skip_hide_page',
+                                  conditions: [{ ifField: '', operator: '', value: '' }],
+                                  logic: 'AND',
+                                  logicExpression: '',
+                                  thenAction: 'skip to',
+                                  thenFields: [],
+                                  dependentField: '',
+                                  dependentValues: [],
+                                  maskPattern: '',
+                                  sourcePage: selectedNode,
+                                  targetPage: [],
+                                  ifField: '',
+                                  value: '',
+                                  loopField: '',
+                                  loopValue: '',
+                                  loopType: 'static',
+                                });
+                                setEditingConditionId(null);
+                                setIsCreateModalVisible(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </TabPane>
+                        <TabPane tab="Loop" key="loop">
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700">Loop Type</label>
+                            <Select
+                              value={newCondition.loopType}
+                              onChange={(value) => handleFieldChange('loopType', value)}
+                              style={{ width: '100%' }}
+                            >
+                              <Option value="static">Static Value</Option>
+                              <Option value="field">Field from Previous Page</Option>
+                            </Select>
+                          </div>
+                          {newCondition.loopType === 'static' ? (
+                            <div className="mb-3">
+                              <label className="block text-sm font-medium text-gray-700">Loop Count (Static)</label>
                               <Input
-                                value={newCondition.logicExpression}
-                                onChange={(e) => handleFieldChange('logicExpression', e.target.value)}
-                                placeholder={`e.g., 1 OR (2 AND 3)`}
+                                type="number"
+                                value={newCondition.loopValue}
+                                onChange={(e) => handleFieldChange('loopValue', e.target.value)}
+                                placeholder="Enter loop count"
                                 style={{ width: '100%' }}
                               />
                             </div>
+                          ) : (
+                            <div className="mb-3">
+                              <label className="block text-sm font-medium text-gray-700">Loop Field (Number)</label>
+                              <Select
+                                value={newCondition.loopField}
+                                onChange={(value) => handleFieldChange('loopField', value)}
+                                placeholder="Select number field"
+                                style={{ width: '100%' }}
+                              >
+                                {validIfFields
+                                  .filter((f) => {
+                                    const page = pages.find((p) => p.Id === selectedNode);
+                                    const pageNum = page ? parseInt(page.Id.replace('page_', '')) : null;
+                                    return (
+                                      pageNum &&
+                                      f.Field_Type__c === 'number' &&
+                                      fields.find((field) => field.Unique_Key__c === f.Unique_Key__c)?.Page_Number__c < pageNum
+                                    );
+                                  })
+                                  .map((field) => (
+                                    <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                                      {field.Name} (Page {fields.find((f) => f.Unique_Key__c === field.Unique_Key__c)?.Page_Number__c})
+                                    </Option>
+                                  ))}
+                              </Select>
+                            </div>
                           )}
-                        </div>
-                      )}
-                      <div className="mb-3 flex items-center">
-                        <div style={{ width: '120px', marginRight: '8px' }}>
-                          <label className="block text-sm font-medium text-gray-700">Then</label>
-                          <Select
-                            value={newCondition.thenAction}
-                            onChange={(value) => handleFieldChange('thenAction', value)}
-                            style={{ width: '100%' }}
-                          >
-                            <Option value="skip to">Skip To</Option>
-                            <Option value="hide">Hide</Option>
-                          </Select>
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <label className="block text-sm font-medium text-gray-700">Page</label>
-                          <Select
-                            value={newCondition.targetPage}
-                            onChange={(value) => handleFieldChange('targetPage', value)}
-                            placeholder="Select target page"
-                            style={{ width: '100%' }}
-                          >
-                            {pages
-                              .filter((p) => p.Id !== selectedNode)
-                              .filter((p) => !(newCondition.thenAction === 'hide' && (p.Id === pages[0]?.Id || p.Id === pages[pages.length - 1]?.Id)))
-                              .map((page) => (
-                                <Option key={page.Id} value={page.Id}>
-                                  {page.Name}
-                                </Option>
-                              ))}
-                          </Select>
-                        </div>
-                      </div>
-                      <Button
-                        type="primary"
-                        onClick={addCondition}
-                        style={{ marginTop: '8px' }}
-                      >
-                        <FaPlus style={{ marginRight: '4px' }} /> Add Condition
-                      </Button>
-                      <div className="flex space-x-2 mt-4">
-                        <Button
-                          type="primary"
-                          onClick={() => {
-                            saveCondition(editingConditionId).then(() => {
-                              setNewCondition({
-                                type: 'skip_hide_page',
-                                conditions: [{ ifField: '', operator: '', value: '' }],
-                                logic: 'AND',
-                                logicExpression: '',
-                                thenAction: 'skip to',
-                                thenFields: [],
-                                dependentField: '',
-                                dependentValues: [],
-                                maskPattern: '',
-                                sourcePage: selectedNode,
-                                targetPage: '',
-                                ifField: '',
-                                value: '',
-                              });
-                              setEditingConditionId(null);
-                              setIsCreateModalVisible(false);
-                            });
-                          }}
-                          disabled={
-                            !newCondition.conditions?.every((c) => c.ifField && c.operator) ||
-                            !newCondition.targetPage ||
-                            !newCondition.sourcePage
-                          }
-                        >
-                          <FaSave style={{ marginRight: '4px' }} /> {editingConditionId ? 'Update Condition' : 'Add Condition'}
-                        </Button>
-                        {editingConditionId && (
-                          <Button
-                            type="danger"
-                            onClick={() => {
-                              deleteCondition(editingConditionId);
-                            }}
-                          >
-                            <FaTrash style={{ marginRight: '4px' }} /> Delete
-                          </Button>
-                        )}
-                        <Button
-                          type="default"
-                          onClick={() => {
-                            setNewCondition({
-                              type: 'skip_hide_page',
-                              conditions: [{ ifField: '', operator: '', value: '' }],
-                              logic: 'AND',
-                              logicExpression: '',
-                              thenAction: 'skip to',
-                              thenFields: [],
-                              dependentField: '',
-                              dependentValues: [],
-                              maskPattern: '',
-                              sourcePage: selectedNode,
-                              targetPage: '',
-                              ifField: '',
-                              value: '',
-                            });
-                            setEditingConditionId(null);
-                            setIsCreateModalVisible(false);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                          <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700">Target Page</label>
+                            <Select
+                              value={newCondition.targetPage}
+                              disabled
+                              style={{ width: '100%' }}
+                            >
+                              <Option value={selectedNode}>{pages.find((p) => p.Id === selectedNode)?.Name || 'Current Page'}</Option>
+                            </Select>
+                          </div>
+                          <div className="flex space-x-2 mt-4">
+                            <Button
+                              type="primary"
+                              onClick={() => {
+                                saveCondition(editingConditionId).then(() => {
+                                  setNewCondition({
+                                    type: 'skip_hide_page',
+                                    conditions: [],
+                                    logic: 'AND',
+                                    logicExpression: '',
+                                    thenAction: 'skip to',
+                                    thenFields: [],
+                                    dependentField: '',
+                                    dependentValues: [],
+                                    maskPattern: '',
+                                    sourcePage: selectedNode,
+                                    targetPage: [],
+                                    ifField: '',
+                                    value: '',
+                                    loopField: '',
+                                    loopValue: '',
+                                    loopType: 'static',
+                                  });
+                                  setEditingConditionId(null);
+                                  setIsCreateModalVisible(false);
+                                });
+                              }}
+                              disabled={
+                                !newCondition.sourcePage ||
+                                (newCondition.thenAction === 'loop' && (!newCondition.loopField && !newCondition.loopValue))
+                              }
+                            >
+                              <FaSave style={{ marginRight: '4px' }} /> {editingConditionId ? 'Update Condition' : 'Add Condition'}
+                            </Button>
+                            {editingConditionId && (
+                              <Button
+                                type="danger"
+                                onClick={() => {
+                                  deleteCondition(editingConditionId);
+                                }}
+                              >
+                                <FaTrash style={{ marginRight: '4px' }} /> Delete
+                              </Button>
+                            )}
+                            <Button
+                              type="default"
+                              onClick={() => {
+                                setNewCondition({
+                                  type: 'skip_hide_page',
+                                  conditions: [],
+                                  logic: 'AND',
+                                  logicExpression: '',
+                                  thenAction: 'skip to',
+                                  thenFields: [],
+                                  dependentField: '',
+                                  dependentValues: [],
+                                  maskPattern: '',
+                                  sourcePage: selectedNode,
+                                  targetPage: [],
+                                  ifField: '',
+                                  value: '',
+                                  loopField: '',
+                                  loopValue: '',
+                                  loopType: 'static',
+                                });
+                                setEditingConditionId(null);
+                                setIsCreateModalVisible(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </TabPane>
+                      </Tabs>
                     </motion.div>
                   </Modal>
                 </motion.div>

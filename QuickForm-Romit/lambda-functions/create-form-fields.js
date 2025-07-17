@@ -124,7 +124,8 @@ export const handler = async (event) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          Active_Version__c: `V1`,
+          Active_Version__c: `None`,
+          Status__c: 'Inactive',
         }),
       });
 
@@ -208,6 +209,7 @@ export const handler = async (event) => {
           body: JSON.stringify({
             Active_Version__c: `V${formVersion.Version__c}`,
             Publish_Link__c: formUpdate?.Publish_Link__c || '',
+            Status__c: 'Active',
           }),
         });
       
@@ -292,21 +294,22 @@ export const handler = async (event) => {
     }
 
     // Step 3: Update Form__c Active_Version__c
-    const updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        Active_Version__c: formVersion.Stage__c === 'Publish' ? `V${formVersion.Version__c}` : 'None',
-      }),
-    });
+    // const updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
+    //   method: 'PATCH',
+    //   headers: {
+    //     Authorization: `Bearer ${token}`,
+    //     'Content-Type': 'application/json',
+    //   },
+    //   body: JSON.stringify({
+    //     Active_Version__c: formVersion.Stage__c === 'Publish' ? `V${formVersion.Version__c}` : 'None',
+    //     Status__c: formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
+    //   }),
+    // });
 
-    if (!updateFormResponse.ok) {
-      const errorData = await updateFormResponse.json();
-      throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
-    }
+    // if (!updateFormResponse.ok) {
+    //   const errorData = await updateFormResponse.json();
+    //   throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
+    // }
     
     // Step 4: Create Form_Field__c records
     const createdFormFields = [];
@@ -413,6 +416,7 @@ export const handler = async (event) => {
         ...updatedFormRecords[formIndex],
         Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
         Publish_Link__c: formUpdate?.Publish_Link__c || '',
+        Status__c: formData.formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
         FormVersions: [newFormVersionRecord, ...otherVersions],
       };
     } else {
@@ -421,6 +425,7 @@ export const handler = async (event) => {
         Name: `FORM-${formId.slice(-4)}`,
         Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
         FormVersions: [newFormVersionRecord],
+        Status__c: formData.formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
         Source: 'Form__c',
       });
     }

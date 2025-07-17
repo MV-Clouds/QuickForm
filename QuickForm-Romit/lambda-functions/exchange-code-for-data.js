@@ -169,7 +169,7 @@ export const handler = async (event) => {
       fetchSalesforceData(
         access_token,
         instance_url,
-        'SELECT Id, Name, Active_Version__c, Publish_Link__c FROM Form__c'
+        'SELECT Id, Name, Active_Version__c, Publish_Link__c , Status__c FROM Form__c'
       ),
       fetchSalesforceData(
         access_token,
