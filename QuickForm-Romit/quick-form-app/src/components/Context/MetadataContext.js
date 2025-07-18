@@ -17,6 +17,7 @@ export const SalesforceDataProvider = ({ children }) => {
     try {
       setIsLoading(true);
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+      const fetchStart = Date.now();
       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -28,6 +29,7 @@ export const SalesforceDataProvider = ({ children }) => {
       }
 
       const data = await response.json();
+      console.log(`Fetch completed in ${Date.now() - fetchStart}ms`);
       const parsedMetadata = JSON.parse(data.metadata || '[]');
       const parseFormRecords = (formRecordsString) => {
         if (!formRecordsString || formRecordsString === 'null') return [];

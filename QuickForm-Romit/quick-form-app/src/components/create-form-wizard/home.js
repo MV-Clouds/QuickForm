@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
 import FormName from './FormName';
 import InactivityTracker from '../time-out/InactivityTracker';
+import './home.css';
 
 const LoadingSpinner = () => (
   <div className="flex justify-center items-center">
@@ -430,138 +431,48 @@ const Home = () => {
 
         {/* Modal for selecting form creation option */}
         {isModalOpen && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm transition-all duration-300">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 mx-4 border border-gray-100 transform transition-all duration-300">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-semibold text-gray-800">Create New Form</h2>
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl transition-colors duration-200"
-                  aria-label="Close"
-                >
-                  ×
+          <div className="modal-overlay">
+            <div className="modal-container">
+              <div className="modal-header">
+                <h2 className="form-title">Create New Form</h2>
+                <button className="close-button-container" onClick={() => setIsModalOpen(false)}> 
+                      <img src="/images/close_icon.svg" alt="Close" />
                 </button>
               </div>
-
-              <p className="text-gray-500 mb-6">Select how you'd like to create your form:</p>
-
-              <div className="space-y-4">
-                {/* Build from Scratch */}
-                <button
-                  onClick={() => handleOptionSelect('scratch')}
-                  onMouseEnter={() => setHoveredOption('scratch')}
-                  onMouseLeave={() => setHoveredOption(null)}
-                  className={`flex items-start p-4 border rounded-xl w-full transition-all duration-200 ${
-                    hoveredOption === 'scratch'
-                      ? 'border-blue-300 bg-blue-50 shadow-sm'
-                      : 'border-gray-200 hover:border-blue-200'
-                  }`}
-                >
-                  <div
-                    className={`p-3 rounded-lg mr-4 ${
-                      hoveredOption === 'scratch'
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
+              <div className="divider"></div>
+              <div className="form-content">
+                <div className="form-content-inner">
+                  <div className="instruction-text">Select how you’d like to create your form:</div>
+                  <div className="options-container">
+                    <div className="option-card scratch-option" onClick={() => handleOptionSelect('scratch')}>
+                      <div className="preview-image">
+                        <img src="/images/form_scratch.svg" alt="Scratch Option" />
+                      </div>
+                      <div className="option-text">
+                        <div className="option-title">Build from Scratch</div>
+                        <div className="option-description">Start with a blank canvas and full cutomization</div>
+                      </div>
+                    </div>
+                    <div className="option-card salesforce-option" onClick={() => handleOptionSelect('salesforce')}>
+                      <div className="preview-image">
+                        <img src="/images/form_build.svg" alt="Salesforce Option" />
+                      </div>
+                      <div className="option-text">
+                        <div className="option-title">Build using Salesforce</div>
+                        <div className="option-description">Connect to your Salesforce data and object</div>
+                      </div>
+                    </div>
+                    <div className="option-card templates-option" onClick={() => handleOptionSelect('templates')}>
+                      <div className="preview-image">
+                        <img src="/images/form_template.svg" alt="Templates Option" />
+                      </div>
+                      <div className="option-text">
+                        <div className="option-title">Use a Template</div>
+                        <div className="option-description">Start with professionally design template</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-left">
-                    <h3 className="font-medium text-gray-800">Build from Scratch</h3>
-                    <p className="text-sm text-gray-500">Start with a blank canvas and full customization</p>
-                  </div>
-                </button>
-
-                {/* Build using Salesforce */}
-                <button
-                  onClick={() => handleOptionSelect('salesforce')}
-                  onMouseEnter={() => setHoveredOption('salesforce')}
-                  onMouseLeave={() => setHoveredOption(null)}
-                  className={`flex items-start p-4 border rounded-xl w-full transition-all duration-200 ${
-                    hoveredOption === 'salesforce'
-                      ? 'border-blue-300 bg-blue-50 shadow-sm'
-                      : 'border-gray-200 hover:border-blue-200'
-                  }`}
-                >
-                  <div
-                    className={`p-3 rounded-lg mr-4 ${
-                      hoveredOption === 'salesforce'
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
-                      />
-                    </svg>
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-medium text-gray-800">Build using Salesforce</h3>
-                    <p className="text-sm text-gray-500">Connect to your Salesforce data and objects</p>
-                  </div>
-                </button>
-
-                {/* Build from Predefined Templates */}
-                <button
-                  onClick={() => handleOptionSelect('templates')}
-                  onMouseEnter={() => setHoveredOption('templates')}
-                  onMouseLeave={() => setHoveredOption(null)}
-                  className={`flex items-start p-4 border rounded-xl w-full transition-all duration-200 ${
-                    hoveredOption === 'templates'
-                      ? 'border-blue-300 bg-blue-50 shadow-sm'
-                      : 'border-gray-200 hover:border-blue-200'
-                  }`}
-                >
-                  <div
-                    className={`p-3 rounded-lg mr-4 ${
-                      hoveredOption === 'templates'
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="text-left">
-                    <h3 className="font-medium text-gray-800">Use a Template</h3>
-                    <p className="text-sm text-gray-500">Start with professionally designed templates</p>
-                  </div>
-                </button>
+                </div>
               </div>
             </div>
           </div>
