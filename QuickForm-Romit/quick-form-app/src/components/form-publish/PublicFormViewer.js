@@ -11,7 +11,8 @@ import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import { AiOutlineStar, AiFillStar, AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { FaRegLightbulb, FaLightbulb, FaBolt } from 'react-icons/fa';
-      
+import { parsePhoneNumberFromString, getExampleNumber } from 'libphonenumber-js';
+
 function PublicFormViewer() {
   const { linkId } = useParams();
   const [formData, setFormData] = useState(null);
@@ -24,138 +25,144 @@ function PublicFormViewer() {
   const [linkData, setLinkData] = useState(null);
   const [signatures, setSignatures] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
-  const [selectedRatings, setSelectedRatings] = useState({});       
+  const [selectedRatings, setSelectedRatings] = useState({});
   const [selectedOptions, setSelectedOptions] = useState({});
-  const [isDropdownOpen, setIsDropdownOpen] = useState({});      
+  const [isDropdownOpen, setIsDropdownOpen] = useState({});
   const [toggles, setToggles] = useState({});
   const signatureRefs = useRef({});
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState([]);
 
   useEffect(() => {
-    const fetchFormData = async () => {
+  const fetchFormData = async () => {
+    try {
+      let decrypted;
       try {
-        let decrypted;
-        try {
-          decrypted = decrypt(linkId);
-        } catch (e) {
-          throw new Error(e.message || 'Invalid link format');
-        }
- 
-        const [userId, formId] = decrypted.split('$');
-        if (!userId || !formId) {
-          throw new Error('Invalid link data');
-        }
-        setLinkData({ userId, formId });
-
-        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId }),
-        });
-
-        const tokenData = await tokenResponse.json();
-        if (!tokenResponse.ok || tokenData.error) {
-          throw new Error(tokenData.error || 'Failed to fetch access token');
-        }
-        const token = tokenData.access_token;
-        const instanceUrl = tokenData.instanceUrl;
-        setAccessToken(token);
-        setInstanceUrl(instanceUrl);
-
-        const response = await fetch(process.env.REACT_APP_FETCH_FORM_BY_LINK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, formId, accessToken: token }),
-        });
-        
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch form');
-        }
-        const formVersion = data.formVersion;
-        setFormData(formVersion);
-
-        const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json', 
-            Authorization: `Bearer ${token}` 
-          },
-          body: JSON.stringify({ 
-            userId, 
-            formVersionId: formVersion.Id, 
-            instanceUrl,
-            accessToken: token 
-          }),
-        });
-            
-        const mappingsData = await mappingsResponse.json();
-        if (!mappingsResponse.ok) {
-          throw new Error(mappingsData.error || 'Failed to fetch mappings');
-        }
-        setFormData(prev => ({ ...prev, mappings: mappingsData.mappings }));
-
-        const initialValues = {};
-        const initialSignatures = {};
-        const initialFilePreviews = {};
-        const initialRatings = {};
-        const initialSelectedOptions = {};
-        const initialToggles = {};
-
-        formVersion.Fields.forEach((field) => {
-          const properties = JSON.parse(field.Properties__c || '{}');
-          const fieldType = field.Field_Type__c;
-
-          if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-            initialValues[field.Id] = properties.defaultValue || [];
-          } else if (fieldType === 'datetime' || fieldType === 'date') {
-            initialValues[field.Id] = properties.defaultValue || null;
-          } else if (fieldType === 'time') {
-            initialValues[field.Id] = properties.defaultValue || '';
-          } else if (fieldType === 'scalerating') {
-            initialValues[field.Id] = {};
-          } else {
-            initialValues[field.Id] = properties.defaultValue || '';
-          }
-
-          initialSignatures[field.Id] = null;
-          initialFilePreviews[field.Id] = null;
-          initialRatings[field.Id] = null;
-          initialSelectedOptions[field.Id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
-          initialToggles[field.Id] = false;
-        });
-
-        setFormValues(initialValues);
-        setSignatures(initialSignatures);
-        setFilePreviews(initialFilePreviews);
-        setSelectedRatings(initialRatings);
-        setSelectedOptions(initialSelectedOptions);
-        setToggles(initialToggles);
-
-        const pageMap = {};
-        formVersion.Fields.forEach((field) => {
-          const pageNum = field.Page_Number__c || 1;
-          if (!pageMap[pageNum]) {
-            pageMap[pageNum] = [];
-          }
-          pageMap[pageNum].push(field);
-        });
-
-        const sortedPages = Object.keys(pageMap)
-          .sort((a, b) => Number(a) - Number(b))
-          .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
-        setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
-      } catch (error) {
-        console.error('Error fetching form:', error);
-        setFetchError(error.message || 'Failed to load form');
+        decrypted = decrypt(linkId);
+      } catch (e) {
+        throw new Error(e.message || 'Invalid link format');
       }
-    };
 
-    if (linkId) {
-      fetchFormData();
+      const [userId, formId] = decrypted.split('$');
+      if (!userId || !formId) {
+        throw new Error('Invalid link data');
+      }
+      setLinkData({ userId, formId });
+
+      const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const tokenData = await tokenResponse.json();
+      if (!tokenResponse.ok || tokenData.error) {
+        throw new Error(tokenData.error || 'Failed to fetch access token');
+      }
+      const token = tokenData.access_token;
+      const instanceUrl = tokenData.instanceUrl;
+      setAccessToken(token);
+      setInstanceUrl(instanceUrl);
+
+      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, formId, accessToken: token }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch form');
+      }
+      const formVersion = data.formVersion;
+      setFormData(formVersion);
+
+      const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          formVersionId: formVersion.Id,
+          instanceUrl,
+          accessToken: token,
+        }),
+      });
+
+      const mappingsData = await mappingsResponse.json();
+      if (!mappingsResponse.ok) {
+        throw new Error(mappingsData.error || 'Failed to fetch mappings');
+      }
+      setFormData((prev) => ({ ...prev, mappings: mappingsData.mappings }));
+
+      const initialValues = {};
+      const initialSignatures = {};
+      const initialFilePreviews = {};
+      const initialRatings = {};
+      const initialSelectedOptions = {};
+      const initialToggles = {};
+
+      formVersion.Fields.forEach((field) => {
+        const properties = JSON.parse(field.Properties__c || '{}');
+        const fieldType = field.Field_Type__c;
+
+        if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+          // Safely access subFields properties with defaults
+          initialValues[`${field.Id}_countryCode`] =
+            properties.subFields?.countryCode?.value ?? 'US';
+          initialValues[field.Id] =
+            properties.subFields?.phoneNumber?.value ?? '';
+        } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+          initialValues[field.Id] = properties.defaultValue || [];
+        } else if (fieldType === 'datetime' || fieldType === 'date') {
+          initialValues[field.Id] = properties.defaultValue || null;
+        } else if (fieldType === 'time') {
+          initialValues[field.Id] = properties.defaultValue || '';
+        } else if (fieldType === 'scalerating') {
+          initialValues[field.Id] = {};
+        } else {
+          initialValues[field.Id] = properties.defaultValue || '';
+        }
+
+        initialSignatures[field.Id] = null;
+        initialFilePreviews[field.Id] = null;
+        initialRatings[field.Id] = null;
+        initialSelectedOptions[field.Id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
+        initialToggles[field.Id] = false;
+      });
+
+      setFormValues(initialValues);
+      setSignatures(initialSignatures);
+      setFilePreviews(initialFilePreviews);
+      setSelectedRatings(initialRatings);
+      setSelectedOptions(initialSelectedOptions);
+      setToggles(initialToggles);
+
+      const pageMap = {};
+      formVersion.Fields.forEach((field) => {
+        const pageNum = field.Page_Number__c || 1;
+        if (!pageMap[pageNum]) {
+          pageMap[pageNum] = [];
+        }
+        pageMap[pageNum].push(field);
+      });
+
+      const sortedPages = Object.keys(pageMap)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
+      setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
+    } catch (error) {
+      console.error('Error fetching form:', error);
+      setFetchError(error.message || 'Failed to load form');
     }
-  }, [linkId]);
+  };
+
+  if (linkId) {
+    fetchFormData();
+  }
+}, [linkId]);
 
   const handleChange = (fieldId, value, isFile = false) => {
     setFormValues((prev) => ({ ...prev, [fieldId]: isFile ? value : value }));
@@ -222,115 +229,153 @@ function PublicFormViewer() {
     const newErrors = {};
 
     formData.Fields.forEach((field) => {
-  const properties = JSON.parse(field.Properties__c || '{}');
-  const value = formValues[field.Id];
-  const fieldType = field.Field_Type__c;
-  const fieldLabel = properties.label || field.Name;
+      const properties = JSON.parse(field.Properties__c || '{}');
+      const value = formValues[field.Id];
+      const fieldType = field.Field_Type__c;
+      const fieldLabel = properties.label || field.Name;
 
-  const isRequired = properties.isRequired;
-  if (isRequired) {
-    if (value === '' || value == null ||
-        (Array.isArray(value) && value.length === 0) ||
-        (fieldType === 'fileupload' && !value) ||
-        (fieldType === 'imageuploader' && !value) ||
-        (fieldType === 'signature' && !signatures[field.Id]) ||
-        (fieldType === 'terms' && !value) ||
-        (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))) {
-      newErrors[field.Id] = `${fieldLabel} is required`;
-    }
-  }
-
-  switch (fieldType) {
-    case 'number':
-      if (value !== '' && isNaN(parseFloat(value))) {
-        newErrors[field.Id] = `${fieldLabel} must be a valid number`;
-      } else if (properties.numberValueLimits?.enabled) {
-        const numValue = parseFloat(value);
-        const { min, max } = properties.numberValueLimits;
-        if (min != null && numValue < parseFloat(min)) {
-          newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
-        }
-        if (max != null && numValue > parseFloat(max)) {
-          newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
+      const isRequired = properties.isRequired;
+      if (isRequired) {
+        if (
+          value === '' ||
+          value == null ||
+          (Array.isArray(value) && value.length === 0) ||
+          (fieldType === 'fileupload' && !value) ||
+          (fieldType === 'imageuploader' && !value) ||
+          (fieldType === 'signature' && !signatures[field.Id]) ||
+          (fieldType === 'terms' && !value) ||
+          (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))
+        ) {
+          newErrors[field.Id] = `${fieldLabel} is required`;
         }
       }
-      break;
 
-    case 'price':
-      if (value !== '' && isNaN(parseFloat(value))) {
-        newErrors[field.Id] = `${fieldLabel} must be a valid number`;
-      } else if (properties.priceLimits?.enabled) {
-        const numValue = parseFloat(value);
-        const { min, max } = properties.priceLimits;
-        if (min != null && numValue < parseFloat(min)) {
-          newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
-        }
-        if (max != null && numValue > parseFloat(max)) {
-          newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
-        }
-      }
-      break;
+      switch (fieldType) {
+        case 'number':
+          if (value !== '' && isNaN(parseFloat(value))) {
+            newErrors[field.Id] = `${fieldLabel} must be a valid number`;
+          } else if (properties.numberValueLimits?.enabled) {
+            const numValue = parseFloat(value);
+            const { min, max } = properties.numberValueLimits;
+            if (min != null && numValue < parseFloat(min)) {
+              newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
+            }
+            if (max != null && numValue > parseFloat(max)) {
+              newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
+            }
+          }
+          break;
+        case 'phone':
+          if (value) {
+            const isCountryCodeEnabled = properties.subFields?.countryCode?.enabled;
 
-    case 'shorttext':
-      if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
-        newErrors[field.Id] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
-      }
-      break;
+            if (isCountryCodeEnabled) {
+              const countryCode = formValues[`${field.Id}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
+              try {
+                const adjustedValue = value.replace(/\D/g, '');
+                const phoneNumber = parsePhoneNumberFromString(adjustedValue, countryCode);
 
-    case 'longtext':
-      if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
-        newErrors[field.Id] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
-      }
-      break;
+                if (!phoneNumber || !phoneNumber.isValid()) {
+                  newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
+                } else {
+                  const maxDigits = phoneNumber.countryCallingCode === '+1' ? 10 : phoneNumber.nationalNumber.length <= 15 ? phoneNumber.nationalNumber.length : 15;
 
-    case 'email':
-      if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        newErrors[field.Id] = `${fieldLabel} must be a valid email address`;
-      }
-      if (properties.allowedDomains && value) {
-        const domains = properties.allowedDomains.split(',').map(d => d.trim());
-        const domain = value.split('@')[1];
-        if (!domains.includes(domain)) {
-          newErrors[field.Id] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
-        }
-      }
-      if (properties.enableConfirmation && value !== formValues[`${field.Id}_confirmation`]) {
-        newErrors[`${field.Id}_confirmation`] = 'Email confirmation does not match';
-      }
-      break;
+                  if (adjustedValue.length > maxDigits) {
+                    newErrors[field.Id] = `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
+                  }
 
-    case 'fileupload':
-    case 'imageuploader':
-      if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
-        newErrors[field.Id] = `File size exceeds ${properties.maxFileSize}MB limit`;
-      }
-      if (value && properties.allowedFileTypes) {
-        const extension = value.name.split('.').pop().toLowerCase();
-        const allowed = properties.allowedFileTypes.split(',').map(type => type.trim().toLowerCase());
-        if (!allowed.includes(extension)) {
-          newErrors[field.Id] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
-        }
-      }
-      break;
+                  if (countryCode === 'US' && !/^[2-9]\d{2}$/.test(phoneNumber.nationalNumber.slice(0, 3))) {
+                    newErrors[field.Id] = `${fieldLabel} must include a valid US area code`;
+                  }
+                }
+              } catch (error) {
+                newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
+              }
+            } else {
+              // If country code is not enabled, you can optionally clear any existing error:
+              delete newErrors[field.Id];
+            }
+          }
+          break;
 
-    case 'date':
-      if (properties.enableAgeVerification && value) {
-        const today = new Date();
-        const birthDate = new Date(value);
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-          age--;
-        }
-        if (age < properties.minAge) {
-          newErrors[field.Id] = `You must be at least ${properties.minAge} years old`;
-        }
+        case 'price':
+          if (value !== '' && isNaN(parseFloat(value))) {
+            newErrors[field.Id] = `${fieldLabel} must be a valid number`;
+          } else if (properties.priceLimits?.enabled) {
+            const numValue = parseFloat(value);
+            const { min, max } = properties.priceLimits;
+            if (min != null && numValue < parseFloat(min)) {
+              newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
+            }
+            if (max != null && numValue > parseFloat(max)) {
+              newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
+            }
+          }
+          break;
+        case 'shorttext':
+          if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
+            newErrors[field.Id] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
+          }
+          break;
+        case 'longtext':
+          if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
+            newErrors[field.Id] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
+          }
+          break;
+        case 'email':
+          if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+            newErrors[field.Id] = `${fieldLabel} must be a valid email address`;
+          }
+          if (properties.allowedDomains && value) {
+            const domains = properties.allowedDomains.split(',').map((d) => d.trim());
+            const domain = value.split('@')[1];
+            if (!domains.includes(domain)) {
+              newErrors[field.Id] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
+            }
+          }
+          if (properties.enableConfirmation && value !== formValues[`${field.Id}_confirmation`]) {
+            newErrors[`${field.Id}_confirmation`] = 'Email confirmation does not match';
+          }
+          break;
+        case 'fileupload':
+        case 'imageuploader':
+          if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
+            newErrors[field.Id] = `File size exceeds ${properties.maxFileSize}MB limit`;
+          }
+          if (value && properties.allowedFileTypes) {
+            const extension = value.name.split('.').pop().toLowerCase();
+            const allowed = properties.allowedFileTypes.split(',').map((type) => type.trim().toLowerCase());
+            if (!allowed.includes(extension)) {
+              newErrors[field.Id] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
+            }
+          }
+          break;
+        case 'date':
+          if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD format`;
+          }
+          if (properties.enableAgeVerification && value) {
+            const today = new Date();
+            const birthDate = new Date(value);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+              age--;
+            }
+            if (age < properties.minAge) {
+              newErrors[field.Id] = `You must be at least ${properties.minAge} years old`;
+            }
+          }
+          break;
+        case 'datetime':
+          if (value && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value)) {
+            newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD HH:MM format`;
+          }
+          break;
+        default:
+          break;
       }
-      break;
-    default:
-      break;
-  }
-});
+    });
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -355,140 +400,356 @@ function PublicFormViewer() {
     return data.documentId;
   };
 
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
+  //     return;
+  //   }
+
+  //   setIsSubmitting(true);
+  //   try {
+  //     const submissionData = {};
+  //     const filesToUpload = {};
+
+  //     for (const key of Object.keys(formValues)) {
+  //       const field = formData.Fields.find((f) => f.Id === key);
+  //       const fieldType = field?.Field_Type__c;
+
+  //       if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
+  //         filesToUpload[key] = formValues[key];
+  //         submissionData[key] = formValues[key].name;
+  //       } else if (fieldType === 'signature' && signatures[key]) {
+  //         const signatureBlob = await (await fetch(signatures[key])).blob();
+  //         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
+  //         filesToUpload[key] = signatureFile;
+  //         submissionData[key] = `${key}.png`;
+  //       } else {
+  //         // For phone fields, clean the input to digits only for submission
+  //         if (fieldType === 'phone') {
+  //           submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+  //         } else {
+  //           submissionData[key] = formValues[key];
+  //         }
+  //       }
+  //     }
+
+  //     const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         Authorization: `Bearer ${accessToken}`,
+  //       },
+  //       body: JSON.stringify({
+  //         userId: linkData.userId,
+  //         submissionData: {
+  //           formId: formData.Form__c,
+  //           formVersionId: formData.Id,
+  //           data: submissionData,
+  //           signatures: signatures,
+  //         },
+  //       }),
+  //     });
+
+  //     const data = await response.json();
+  //     if (!response.ok) {
+  //       throw new Error(data.error || 'Failed to submit form');
+  //     }
+
+  //     const submissionId = data.submissionId;
+
+  //     const updatedSubmissionData = { ...submissionData };
+  //     for (const [key, file] of Object.entries(filesToUpload)) {
+  //       const documentId = await uploadFileToSalesforce(file, submissionId);
+  //       updatedSubmissionData[key] = documentId;
+  //     }
+
+  //     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //         Authorization: `Bearer ${accessToken}`,
+  //       },
+  //       body: JSON.stringify({
+  //         userId: linkData.userId,
+  //         instanceUrl,
+  //         formVersionId: formData.Id,
+  //         formData: updatedSubmissionData,
+  //         nodes: formData.mappings,
+  //       }),
+  //     });
+
+  //     const flowData = await flowResponse.json();
+  //     if (!flowResponse.ok) {
+  //       const newErrors = {};
+  //       if (flowData.results) {
+  //         Object.entries(flowData.results).forEach(([nodeId, result]) => {
+  //           if (result.error) {
+  //             const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+  //             if (mapping?.Formatter_Config__c) {
+  //               const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
+  //               let fieldId = formatterConfig.inputField;
+  //               if (fieldId.includes('_phoneNumber')) {
+  //                 fieldId = fieldId.replace('_phoneNumber', '');
+  //               }
+  //               newErrors[fieldId] = result.error;
+  //             }
+  //           }
+  //         });
+  //         if (Object.keys(newErrors).length > 0) {
+  //           setErrors(newErrors);
+  //           throw new Error('Form submission completed but flow execution had errors');
+  //         }
+  //       }
+  //       throw new Error(flowData.error || 'Failed to execute flow');
+  //     }
+
+  //     alert('Form submitted and flow executed successfully!');
+
+  //     const initialValues = {};
+  //     formData.Fields.forEach((field) => {
+  //       const properties = JSON.parse(field.Properties__c || '{}');
+  //       const fieldType = field.Field_Type__c;
+  //       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+  //         initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+  //         initialValues[field.Id] = '';
+  //       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+  //         initialValues[field.Id] = [];
+  //       } else if (fieldType === 'datetime' || fieldType === 'date') {
+  //         initialValues[field.Id] = null;
+  //       } else if (fieldType === 'scalerating') {
+  //         initialValues[field.Id] = {};
+  //       } else {
+  //         initialValues[field.Id] = '';
+  //       }
+  //     });
+  //     setFormValues(initialValues);
+  //     setErrors({});
+  //     setSignatures({});
+  //     setFilePreviews({});
+  //     setSelectedRatings({});
+  //     setSelectedOptions({});
+  //     setToggles({});
+  //     setCurrentPage(0);
+  //   } catch (error) {
+  //     if (error.message.includes('INVALID_JWT_FORMAT')) {
+  //       let decrypted;
+  //       try {
+  //         decrypted = decrypt(linkId);
+  //       } catch (e) {
+  //         throw new Error(e.message || 'Invalid link format');
+  //       }
+
+  //       const [userId, formId] = decrypted.split('$');
+  //       const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+  //         method: 'POST',
+  //         headers: { 'Content-Type': 'application/json' },
+  //         body: JSON.stringify({ userId }),
+  //       });
+
+  //       const tokenData = await tokenResponse.json();
+  //       if (!tokenResponse.ok || tokenData.error) {
+  //         throw new Error(tokenData.error || 'Failed to fetch access token');
+  //       }
+  //       const token = tokenData.access_token;
+  //       setAccessToken(token);
+  //       handleSubmit(e);
+  //     } else {
+  //       console.error('Error submitting form:', error);
+  //       setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
+  //     }
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
+
+  // In handleSubmit function
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
-      return;
-    }
+  e.preventDefault();
+  if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
+    return;
+  }
 
-    setIsSubmitting(true);
-    try {
-      const submissionData = {};
-      const filesToUpload = {};
+  setIsSubmitting(true);
+  try {
+    const submissionData = {};
+    const filesToUpload = {};
 
-      for (const key of Object.keys(formValues)) {
-        const field = formData.Fields.find((f) => f.Id === key);
-        const fieldType = field?.Field_Type__c;
+    for (const key of Object.keys(formValues)) {
+      const field = formData.Fields.find((f) => f.Id === key);
+      const fieldType = field?.Field_Type__c;
+      const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
-        if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-          filesToUpload[key] = formValues[key];
-          submissionData[key] = formValues[key].name;
-        } else if (fieldType === 'signature' && signatures[key]) {
-          const signatureBlob = await (await fetch(signatures[key])).blob();
-          const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-          filesToUpload[key] = signatureFile;
-          submissionData[key] = `${key}.png`;
+      if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
+        filesToUpload[key] = formValues[key];
+        submissionData[key] = formValues[key].name;
+      } else if (fieldType === 'signature' && signatures[key]) {
+        const signatureBlob = await (await fetch(signatures[key])).blob();
+        const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
+        filesToUpload[key] = signatureFile;
+        submissionData[key] = `${key}.png`;
+      } else if (fieldType === 'phone' && !key.endsWith('_countryCode')) {
+        // Handle phone fields
+        if (properties.subFields?.countryCode?.enabled) {
+          const countryCode = formValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
+          const phoneNumber = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+          try {
+            const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
+            if (phoneObj && phoneObj.isValid()) {
+              // Combine country code and phone number in E.164 format
+              submissionData[key] = phoneObj.format('E.164');
+            } else {
+              // If invalid, store the raw phone number
+              submissionData[key] = phoneNumber;
+              console.warn(`Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`);
+            }
+            // Include country code separately for formatter reference
+            submissionData[`${key}_countryCode`] = countryCode;
+          } catch (error) {
+            submissionData[key] = phoneNumber;
+            submissionData[`${key}_countryCode`] = countryCode;
+            console.warn(`Error parsing phone number for ${key}: ${error.message}`);
+          }
         } else {
-          submissionData[key] = formValues[key];
+          // For phone fields without country code subfield, clean to digits
+          submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
         }
-      }
-
-      const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: linkData.userId,
-          submissionData: {
-            formId: formData.Form__c,
-            formVersionId: formData.Id,
-            data: submissionData,
-            signatures: signatures,
-          },
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit form');
-      }
-
-      const submissionId = data.submissionId;
-
-      const updatedSubmissionData = { ...submissionData };
-      for (const [key, file] of Object.entries(filesToUpload)) {
-        const documentId = await uploadFileToSalesforce(file, submissionId);
-        updatedSubmissionData[key] = documentId;
-      }
-
-      const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: linkData.userId,
-          instanceUrl,
-          formVersionId: formData.Id,
-          formData: updatedSubmissionData,
-          nodes: formData.mappings,
-        }),
-      });
-
-      const flowData = await flowResponse.json();
-      if (!flowResponse.ok) {
-        throw new Error(flowData.error || 'Failed to execute flow');
-      }
-
-      alert('Form submitted and flow executed successfully!');
-
-      const initialValues = {};
-      formData.Fields.forEach((field) => {
-        const properties = JSON.parse(field.Properties__c || '{}');
-        const fieldType = field.Field_Type__c;
-        if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-          initialValues[field.Unique_Key__c] = [];
-        } else if (fieldType === 'datetime' || fieldType === 'date') {
-          initialValues[field.Unique_Key__c] = null;
-        } else if (fieldType === 'scalerating') {
-          initialValues[field.Unique_Key__c] = {};
-        } else {
-          initialValues[field.Unique_Key__c] = '';
-        }
-      });
-      setFormValues(initialValues);
-      setErrors({});
-      setSignatures({});
-      setFilePreviews({});
-      setSelectedRatings({});
-      setSelectedOptions({});
-      setToggles({});
-      setCurrentPage(0);
-    } catch (error) {
-      if (error.message.includes('INVALID_JWT_FORMAT')) {
-        let decrypted;
-        try {
-          decrypted = decrypt(linkId);
-        } catch (e) {
-          throw new Error(e.message || 'Invalid link format');
-        }
-
-        const [userId, formId] = decrypted.split('$');
-        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId }),
-        });
-
-        const tokenData = await tokenResponse.json();
-        if (!tokenResponse.ok || tokenData.error) {
-          throw new Error(tokenData.error || 'Failed to fetch access token');
-        }
-        const token = tokenData.access_token;
-        setAccessToken(token);
-        handleSubmit(e);
+      } else if (key.endsWith('_countryCode')) {
+        // Country code is already handled above
+        continue;
       } else {
-        console.error('Error submitting form:', error);
-        setErrors({ submit: error.message || 'Failed to submit form' });
-      
+        submissionData[key] = formValues[key];
       }
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+
+    const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        userId: linkData.userId,
+        submissionData: {
+          formId: formData.Form__c,
+          formVersionId: formData.Id,
+          data: submissionData,
+          signatures: signatures,
+        },
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to submit form');
+    }
+
+    const submissionId = data.submissionId;
+
+    const updatedSubmissionData = { ...submissionData };
+    for (const [key, file] of Object.entries(filesToUpload)) {
+      const documentId = await uploadFileToSalesforce(file, submissionId);
+      updatedSubmissionData[key] = documentId;
+    }
+
+    const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        userId: linkData.userId,
+        instanceUrl,
+        formVersionId: formData.Id,
+        formData: updatedSubmissionData,
+        nodes: formData.mappings,
+      }),
+    });
+
+    const flowData = await flowResponse.json();
+    if (!flowResponse.ok) {
+      const newErrors = {};
+      if (flowData.results) {
+        Object.entries(flowData.results).forEach(([nodeId, result]) => {
+          if (result.error) {
+            const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+            if (mapping?.Formatter_Config__c) {
+              const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
+              let fieldId = formatterConfig.inputField;
+              if (fieldId.includes('_phoneNumber')) {
+                fieldId = fieldId.replace('_phoneNumber', '');
+              }
+              newErrors[fieldId] = result.error;
+            }
+          }
+        });
+        if (Object.keys(newErrors).length > 0) {
+          setErrors(newErrors);
+          throw new Error('Form submission completed but flow execution had errors');
+        }
+      }
+      throw new Error(flowData.error || 'Failed to execute flow');
+    }
+
+    alert('Form submitted and flow executed successfully!');
+
+    const initialValues = {};
+    formData.Fields.forEach((field) => {
+      const properties = JSON.parse(field.Properties__c || '{}');
+      const fieldType = field.Field_Type__c;
+      if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+        initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+        initialValues[field.Id] = '';
+      } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+        initialValues[field.Id] = [];
+      } else if (fieldType === 'datetime' || fieldType === 'date') {
+        initialValues[field.Id] = null;
+      } else if (fieldType === 'scalerating') {
+        initialValues[field.Id] = {};
+      } else {
+        initialValues[field.Id] = '';
+      }
+    });
+    setFormValues(initialValues);
+    setErrors({});
+    setSignatures({});
+    setFilePreviews({});
+    setSelectedRatings({});
+    setSelectedOptions({});
+    setToggles({});
+    setCurrentPage(0);
+  } catch (error) {
+    if (error.message.includes('INVALID_JWT_FORMAT')) {
+      let decrypted;
+      try {
+        decrypted = decrypt(linkId);
+      } catch (e) {
+        throw new Error(e.message || 'Invalid link format');
+      }
+
+      const [userId, formId] = decrypted.split('$');
+      const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const tokenData = await tokenResponse.json();
+      if (!tokenResponse.ok || tokenData.error) {
+        throw new Error(tokenData.error || 'Failed to fetch access token');
+      }
+      const token = tokenData.access_token;
+      setAccessToken(token);
+      handleSubmit(e);
+    } else {
+      console.error('Error submitting form:', error);
+      setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
+    }
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   const handleNextPage = () => {
     if (currentPage < pages.length - 1) {
@@ -693,18 +954,30 @@ function PublicFormViewer() {
         );
 
       case 'phone':
+        const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
+        let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
+        try {
+          const exampleNumber = getExampleNumber(countryCode);
+          if (exampleNumber) {
+            phoneMask = exampleNumber.format('NATIONAL').replace(/[0-9]/g, '9');
+          }
+        } catch (error) {
+          console.warn(`No example number for country ${countryCode}, using default mask`);
+        }
+
         return (
           <div className="mb-4">
             {renderLabel()}
-            {properties.enableCountryCode ? (
+            {properties.subFields?.countryCode?.enabled ? (
               <div className="flex items-center gap-3">
                 <div className="w-1/3">
                   <PhoneInput
-                    country={properties.selectedCountryCode?.toLowerCase() || 'us'}
-                    value={formValues[`${fieldId}_countryCode`] || ''}
+                    country={countryCode.toLowerCase()}
+                    value={formValues[`${fieldId}_countryCode`] || 'US'}
                     onChange={(phone, countryData) => {
                       const newCountryCode = countryData.countryCode.toUpperCase();
                       handleChange(`${fieldId}_countryCode`, newCountryCode);
+                      handleChange(fieldId, ''); // Reset phone number
                     }}
                     inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                     buttonClass="border rounded p-1 bg-white"
@@ -720,23 +993,24 @@ function PublicFormViewer() {
                   />
                 </div>
                 <div className="w-2/3">
-                  <InputMask
-                    mask={properties.phoneInputMask || '(999) 999-9999'}
+                  <input
+                    type="text"
+                    {...commonProps}
                     value={formValues[fieldId] || ''}
                     onChange={(e) => handleChange(fieldId, e.target.value)}
-                    className={`w-full p-2 border rounded text-sm ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                    placeholder={properties.placeholder?.main || 'Enter phone number'}
+                    placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                     disabled={isDisabled}
+                    aria-label="Phone number"
                   />
                 </div>
               </div>
             ) : (
               <InputMask
-                mask={properties.phoneInputMask || '(999) 999-9999'}
+                mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
                 value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                placeholder={properties.placeholder?.main || 'Enter phone number'}
+                placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
               />
             )}
@@ -750,11 +1024,18 @@ function PublicFormViewer() {
           <div className="mb-4">
             {renderLabel()}
             <DatePicker
-              format={properties.dateFormat?.replace(/\//g, properties.dateSeparator || '-') || 'YYYY-MM-DD'}
-              value={formValues[fieldId] ? new Date(formValues[fieldId]) : null}
+              format={properties.dateFormat?.replace(/\//g, properties.dateSeparator || '-') || 'yyyy-MM-dd'}
+              value={formValues[fieldId] ? new Date(formValues[fieldId] + 'T00:00:00') : null}
               onChange={(date) => {
-                const formattedDate = date ? date.toISOString().split('T')[0] : null;
-                handleChange(fieldId, formattedDate);
+                if (date) {
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  const formattedDate = `${year}-${month}-${day}`;
+                  handleChange(fieldId, formattedDate);
+                } else {
+                  handleChange(fieldId, null);
+                }
               }}
               placeholder={properties.placeholder?.main || 'Select date'}
               className="w-full"
@@ -794,18 +1075,26 @@ function PublicFormViewer() {
           <div className="mb-4">
             {renderLabel()}
             <DatePicker
-              format={properties.dateFormat
-                ? `${properties.dateFormat.replace(/\//g, properties.dateSeparator || '-')} ${properties.timeFormat || 'HH:mm'}`
-                : 'YYYY-MM-DD HH:mm'}
+              format={
+                properties.dateFormat && properties.timeFormat
+                  ? `${properties.dateFormat.replace(/\//g, properties.dateSeparator || '-') } ${properties.timeFormat === 'hh:mm a' ? 'hh:mm a' : 'HH:mm'}`
+                  : 'yyyy-MM-dd HH:mm'
+              }
               value={formValues[fieldId] ? new Date(formValues[fieldId]) : null}
               onChange={(date) => {
                 if (date) {
                   const year = date.getFullYear();
                   const month = String(date.getMonth() + 1).padStart(2, '0');
                   const day = String(date.getDate()).padStart(2, '0');
-                  const hours = String(date.getHours()).padStart(2, '0');
+                  let hours = date.getHours();
                   const minutes = String(date.getMinutes()).padStart(2, '0');
-                  const formattedDateTime = `${year}-${month}-${day} ${hours}:${minutes}`;
+                  if (properties.timeFormat === 'hh:mm a') {
+                    const hours12 = date.getHours() % 12 || 12;
+                    const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+                    hours = ampm === 'PM' ? (hours12 === 12 ? 12 : hours12 + 12) : (hours12 === 12 ? 0 : hours12);
+                  }
+                  const formattedHours = String(hours).padStart(2, '0');
+                  const formattedDateTime = `${year}-${month}-${day} ${formattedHours}:${minutes}`;
                   handleChange(fieldId, formattedDateTime);
                 } else {
                   handleChange(fieldId, null);
@@ -930,7 +1219,7 @@ function PublicFormViewer() {
                 value={formValues[fieldId] || (properties.allowMultipleSelections ? [] : '')}
                 onChange={(e) => {
                   const value = properties.allowMultipleSelections
-                    ? Array.from(e.target.selectedOptions, option => option.value)
+                    ? Array.from(e.target.selectedOptions, (option) => option.value)
                     : e.target.value;
                   handleChange(fieldId, value);
                 }}
@@ -964,7 +1253,7 @@ function PublicFormViewer() {
             />
             {filePreviews[fieldId] && (
               <div className="mt-2">
-                <img src={filePreviews[fieldId]} alt="Preview" className="max-h-32" onError={(e) => e.target.style.display = 'none'} />
+                <img src={filePreviews[fieldId]} alt="Preview" className="max-h-32" onError={(e) => (e.target.style.display = 'none')} />
               </div>
             )}
             {properties.maxFileSize && (
@@ -1168,7 +1457,7 @@ function PublicFormViewer() {
             <div className="flex flex-col gap-2">
               <SignatureCanvas
                 ref={(ref) => (signatureRefs.current[fieldId] = ref)}
-                canvasProps={{ 
+                canvasProps={{
                   className: `border rounded w-full h-32 ${hasError ? 'border-red-500' : 'border-gray-300'}`,
                   style: { backgroundColor: '#fff' }
                 }}
@@ -1409,7 +1698,7 @@ function PublicFormViewer() {
                       type="text"
                       className="w-full p-2 border rounded"
                       value={formValues[properties.leftField.id] || ''}
-                      onChange={e => handleChange(properties.leftField.id, e.target.value)}
+                      onChange={(e) => handleChange(properties.leftField.id, e.target.value)}
                       placeholder={properties.leftField.label || 'Left Field'}
                       disabled={properties.leftField.isDisabled}
                     />
@@ -1426,7 +1715,7 @@ function PublicFormViewer() {
                       type={properties.rightField.type}
                       className="w-full p-2 border rounded"
                       value={formValues[properties.rightField.id] || ''}
-                      onChange={e => handleChange(properties.rightField.id, e.target.value)}
+                      onChange={(e) => handleChange(properties.rightField.id, e.target.value)}
                       placeholder={properties.rightField.label || 'Right Field'}
                       disabled={properties.rightField.isDisabled}
                     />

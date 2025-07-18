@@ -30,7 +30,7 @@ export const SalesforceDataProvider = ({ children }) => {
       const data = await response.json();
       const parsedMetadata = JSON.parse(data.metadata || '[]');
       const parsedFormRecords = JSON.parse(data.FormRecords || '[]');
-
+      
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
     } catch (err) {

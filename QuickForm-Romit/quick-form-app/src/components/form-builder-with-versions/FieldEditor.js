@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import FormCalculationWidget from './FormCalculationWidget';
-import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb, FaTrash, FaArrowsAltV } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb, FaTrash, FaArrowsAltV, FaInfoCircle } from 'react-icons/fa';
 import { AiOutlineStar, AiOutlineHeart } from 'react-icons/ai';
 import { BiBoltCircle } from 'react-icons/bi';
 import EmojiPicker from 'emoji-picker-react';
@@ -910,8 +910,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       <div className="flex border-b mb-4">
         <button
           className={`px-4 py-2 font-medium text-sm ${activeTab === 'settings'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-blue-600'
+            ? 'border-b-2 border-blue-500 text-blue-600'
+            : 'text-gray-500 hover:text-blue-600'
             }`}
           onClick={() => setActiveTab('settings')}
         >
@@ -920,8 +920,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
         {isFormCalculation && (
           <button
             className={`px-4 py-2 font-medium text-sm ${activeTab === 'widget'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-blue-600'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-500 hover:text-blue-600'
               }`}
             onClick={() => setActiveTab('widget')}
           >
@@ -968,9 +968,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </select>
                     </div>
                   </>
-                ) : isHeading ?  
-                <>
-                 <div className="mb-4">
+                ) : isHeading ?
+                  <>
+                    <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
                       <input
                         type="text"
@@ -992,168 +992,168 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         <option value="right">Right</option>
                       </select>
                     </div>
-                </> : (
-                  <>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
-                      <input
-                        type="text"
-                        value={label}
-                        onChange={handleLabelChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter field label"
-                      />
-                    </div>
-                    {isPlaceholderSupported && (
+                  </> : (
+                    <>
                       <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
-                        {isAddress ? (
-                          <div className="flex flex-col gap-2">
-                            {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                              <div key={key}>
-                                <label className="text-xs text-gray-500 capitalize">{key}</label>
-                                <input
-                                  type="text"
-                                  value={subFields[key]?.placeholder || ''}
-                                  onChange={(e) => handleAddressPlaceholderChange(key, e.target.value)}
-                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                  placeholder={`Enter ${key} placeholder`}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        ) : isFullname ? (
-                          <div className="flex flex-col gap-2">
-                            {['firstName', 'lastName'].map((key) => (
-                              <div key={key}>
-                                <label className="text-xs text-gray-500 capitalize">{key}</label>
-                                <input
-                                  type="text"
-                                  value={fullnameSubFields[key]?.placeholder || ''}
-                                  onChange={(e) => handleFullnamePlaceholderChange(key, e.target.value)}
-                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                  placeholder={`Enter ${key} placeholder`}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        ) : isPhone ? (
-                          <div className="flex flex-col gap-2">
-                            <div>
-                              <label className="text-xs text-gray-500">Phone Number</label>
-                              <input
-                                type="text"
-                                value={phoneSubFields.phoneNumber?.placeholder || ''}
-                                onChange={(e) => {
-                                  const newSubFields = {
-                                    ...phoneSubFields,
-                                    phoneNumber: {
-                                      ...phoneSubFields.phoneNumber,
-                                      placeholder: e.target.value
-                                    }
-                                  };
-                                  setPhoneSubFields(newSubFields);
-                                  onUpdateField(selectedField.id, { subFields: newSubFields });
-                                }}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder="Enter phone number"
-                              />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                        <input
+                          type="text"
+                          value={label}
+                          onChange={handleLabelChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter field label"
+                        />
+                      </div>
+                      {isPlaceholderSupported && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
+                          {isAddress ? (
+                            <div className="flex flex-col gap-2">
+                              {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                                <div key={key}>
+                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                  <input
+                                    type="text"
+                                    value={subFields[key]?.placeholder || ''}
+                                    onChange={(e) => handleAddressPlaceholderChange(key, e.target.value)}
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                    placeholder={`Enter ${key} placeholder`}
+                                  />
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                        ) : (
-                          <input
-                            type="text"
-                            value={placeholder.main || ''}
-                            onChange={(e) => handlePlaceholderChange('main', e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter placeholder text"
-                          />
-                        )}
-                      </div>
-                    )}
-                    {isAlignmentSupported && (
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Label Alignment</label>
-                        <select
-                          value={labelAlignment}
-                          onChange={handleAlignmentChange}
-                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="top">Top</option>
-                          <option value="left">Left</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    )}
-                    {/* Default Value Feature */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
-                      <input
-                        type="text"
-                        value={defaultValue}
-                        onChange={handleDefaultValueChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter default value"
-                      />
-                    </div>
-                    <div className="mb-4">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={isRequired}
-                          onChange={handleRequiredChange}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Required</span>
-                      </label>
-                    </div>
-                    <div className="mb-4">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={isDisabled}
-                          onChange={handleDisabledChange}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
-                      </label>
-                    </div>
-                    <div className="mb-4">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={isHidden}
-                          onChange={handleHiddenChange}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Hidden Field</span>
-                      </label>
-                    </div>
-                    <div className="mb-4">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={showHelpText}
-                          onChange={handleShowHelpTextChange}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Show Help Text</span>
-                      </label>
-                      {showHelpText && (
-                        <div className="mt-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
-                          <textarea
-                            value={helpText}
-                            onChange={handleHelpTextChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter help text"
-                            rows="4"
-                          />
+                          ) : isFullname ? (
+                            <div className="flex flex-col gap-2">
+                              {['firstName', 'lastName'].map((key) => (
+                                <div key={key}>
+                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                  <input
+                                    type="text"
+                                    value={fullnameSubFields[key]?.placeholder || ''}
+                                    onChange={(e) => handleFullnamePlaceholderChange(key, e.target.value)}
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                    placeholder={`Enter ${key} placeholder`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : isPhone ? (
+                            <div className="flex flex-col gap-2">
+                              <div>
+                                <label className="text-xs text-gray-500">Phone Number</label>
+                                <input
+                                  type="text"
+                                  value={phoneSubFields.phoneNumber?.placeholder || ''}
+                                  onChange={(e) => {
+                                    const newSubFields = {
+                                      ...phoneSubFields,
+                                      phoneNumber: {
+                                        ...phoneSubFields.phoneNumber,
+                                        placeholder: e.target.value
+                                      }
+                                    };
+                                    setPhoneSubFields(newSubFields);
+                                    onUpdateField(selectedField.id, { subFields: newSubFields });
+                                  }}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder="Enter phone number"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              value={placeholder.main || ''}
+                              onChange={(e) => handlePlaceholderChange('main', e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter placeholder text"
+                            />
+                          )}
                         </div>
                       )}
-                    </div>
-                  </>
-                )}
+                      {isAlignmentSupported && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Label Alignment</label>
+                          <select
+                            value={labelAlignment}
+                            onChange={handleAlignmentChange}
+                            className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="top">Top</option>
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </div>
+                      )}
+                      {/* Default Value Feature */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
+                        <input
+                          type="text"
+                          value={defaultValue}
+                          onChange={handleDefaultValueChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter default value"
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isRequired}
+                            onChange={handleRequiredChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Required</span>
+                        </label>
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isDisabled}
+                            onChange={handleDisabledChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
+                        </label>
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isHidden}
+                            onChange={handleHiddenChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Hidden Field</span>
+                        </label>
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={showHelpText}
+                            onChange={handleShowHelpTextChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Show Help Text</span>
+                        </label>
+                        {showHelpText && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
+                            <textarea
+                              value={helpText}
+                              onChange={handleHelpTextChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter help text"
+                              rows="4"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
               </div>
             )}
           </div>
@@ -1608,42 +1608,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       )}
                     </div>
                   )}
-                  {/* {isAddress && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Sub-labels</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <div key={key} className="mb-2">
-                              <label className="text-xs text-gray-500 capitalize">{key}</label>
-                              <input
-                                type="text"
-                                value={subFields[key]?.label || ''}
-                                onChange={(e) => handleSubLabelsChange(key, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Enter ${key} sub-label`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Visible Sub-fields</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <label key={key} className="inline-flex items-center mb-2">
-                              <input
-                                type="checkbox"
-                                checked={subFields[key]?.visible}
-                                onChange={() => handleVisibleSubFieldsChange(key)}
-                                className="mr-2"
-                              />
-                              <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )} */}
                   {isAddress && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
@@ -2078,10 +2042,12 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                     </div>
                   )}
                   {/* NEW: Phone-specific properties */}
+                  {/* NEW: Phone-specific properties */}
                   {isPhone && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Phone Settings</label>
                       <div className="flex flex-col gap-2">
+                        {/* Enable Country Code Checkbox */}
                         <label className="inline-flex items-center">
                           <input
                             type="checkbox"
@@ -2092,14 +2058,18 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                                 countryCode: {
                                   ...phoneSubFields.countryCode,
                                   enabled: e.target.checked,
-                                  value: e.target.checked ? 'US' : ''
-                                }
+                                  value: e.target.checked ? phoneSubFields.countryCode?.value || 'US' : '',
+                                },
+                                phoneNumber: {
+                                  value: phoneSubFields.phoneNumber?.value || '',
+                                  placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                  ...(e.target.checked ? {} : { phoneMask: phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999' }),
+                                },
                               };
                               setPhoneSubFields(newSubFields);
                               onUpdateField(selectedField.id, {
                                 subFields: newSubFields,
-                                // Remove main placeholder when country code is enabled
-                                placeholder: undefined
+                                placeholder: undefined,
                               });
                             }}
                             className="mr-2"
@@ -2107,60 +2077,73 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           <span className="text-sm font-medium text-gray-700">Enable Country Code</span>
                         </label>
 
-                        {phoneSubFields.countryCode?.enabled ? (
-                          <>
-                            <div>
-                              <label className="text-xs text-gray-500">Default Country Code</label>
-                              <select
-                                value={phoneSubFields.countryCode?.value || 'US'}
-                                onChange={(e) => {
-                                  const newSubFields = {
-                                    ...phoneSubFields,
-                                    countryCode: {
-                                      ...phoneSubFields.countryCode,
-                                      value: e.target.value
-                                    }
-                                  };
-                                  setPhoneSubFields(newSubFields);
-                                  onUpdateField(selectedField.id, { subFields: newSubFields });
-                                }}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              >
-                                <option value="">Select a country</option>
-                                {countries.map(({ code, name, dialCode }) => (
-                                  <option key={code} value={code}>
-                                    {`${name} (${dialCode})`}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
+                        {/* Country Selector Dropdown */}
+                        {phoneSubFields.countryCode?.enabled && (
+                          <div>
+                            <label className="text-xs text-gray-500">Default Country Code</label>
+                            <select
+                              value={phoneSubFields.countryCode?.value || 'US'}
+                              onChange={(e) => {
+                                const newSubFields = {
+                                  ...phoneSubFields,
+                                  countryCode: {
+                                    ...phoneSubFields.countryCode,
+                                    value: e.target.value,
+                                  },
+                                  phoneNumber: {
+                                    value: phoneSubFields.phoneNumber?.value || '',
+                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                  },
+                                };
+                                setPhoneSubFields(newSubFields);
+                                onUpdateField(selectedField.id, { subFields: newSubFields });
+                              }}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="">Select a country</option>
+                              {countries.map(({ code, name, dialCode }) => (
+                                <option key={code} value={code}>
+                                  {`${name} (${dialCode})`}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
-                          </>
-                        ) : null}
-
-                        <div>
-                          <label className="text-xs text-gray-500">Phone Number Mask</label>
-                          <input
-                            type="text"
-                            value={phoneSubFields.phoneNumber?.phoneMask || ''}
-                            onChange={(e) => {
-                              const newSubFields = {
-                                ...phoneSubFields,
-                                phoneNumber: {
-                                  ...phoneSubFields.phoneNumber,
-                                  phoneMask: e.target.value
-                                }
-                              };
-                              setPhoneSubFields(newSubFields);
-                              onUpdateField(selectedField.id, { subFields: newSubFields });
-                            }}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="(999) 999-9999"
-                          />
-                        </div>
+                        {/* Phone Mask Field — Only Show if Country Code Is Disabled */}
+                        {!phoneSubFields.countryCode?.enabled && (
+                          <div>
+                            <label className="text-xs text-gray-500 flex items-center gap-1">
+                              Phone Number Mask
+                              <FaInfoCircle
+                                className="text-blue-500 cursor-pointer"
+                                title="Use ( ) and - symbols to define a phone input mask. Example: (999) 999-9999"
+                              />
+                            </label>
+                            <input
+                              type="text"
+                              value={phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                              onChange={(e) => {
+                                const newSubFields = {
+                                  ...phoneSubFields,
+                                  phoneNumber: {
+                                    value: phoneSubFields.phoneNumber?.value || '',
+                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                    phoneMask: e.target.value,
+                                  },
+                                };
+                                setPhoneSubFields(newSubFields);
+                                onUpdateField(selectedField.id, { subFields: newSubFields });
+                              }}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="(999) 999-9999"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
+
                   {/* NEW: Price-specific properties */}
                   {isPrice && (
                     <div className="mb-4">

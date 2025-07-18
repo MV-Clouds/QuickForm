@@ -149,8 +149,8 @@ const ActionPanel = ({
       fetchSalesforceFields(selectedObject)
         .then((data) => {
           const newFields = data.fields || [];
-          console.log('salesforce fields--> ',newFields);
-          
+          console.log('salesforce fields--> ', newFields);
+
           setSalesforceObjects(prev => [
             ...prev.filter(obj => obj.name !== selectedObject),
             { name: selectedObject, fields: newFields }
@@ -249,32 +249,62 @@ const ActionPanel = ({
 
   const formatterOperations = {
     date: [
-      { value: "format_date", label: "Format Date" },
-      { value: "format_time", label: "Format Time" },
-      { value: "format_datetime", label: "Format Date and Time" },
-      { value: "timezone_conversion", label: "Timezone Conversion" },
-      { value: "add_date", label: "Add Date Units" },
-      { value: "subtract_date", label: "Subtract Date Units" },
-      { value: "date_difference", label: "Date Difference" },
+      { value: "format_date", label: "Format Date" }, // date
+      { value: "format_time", label: "Format Time" }, // time
+      { value: "format_datetime", label: "Format Date and Time" }, // datetime
+      { value: "timezone_conversion", label: "Timezone Conversion" }, // time, datetime
+      { value: "add_date", label: "Add Date Units" },           // date, datetime
+      { value: "subtract_date", label: "Subtract Date Units" }, // date, datetime
+      { value: "date_difference", label: "Date Difference" },  // date
     ],
     number: [
-      { value: "locale_format", label: "Locale Number Format" },
-      { value: "currency_format", label: "Currency Format" },
-      { value: "round_number", label: "Round Number" },
-      { value: "phone_format", label: "Format Phone Number" },
-      { value: "math_operation", label: "Math Operation" },
+      { value: "locale_format", label: "Locale Number Format" }, // number
+      { value: "currency_format", label: "Currency Format" },   // price
+      { value: "round_number", label: "Round Number" },           // number
+      { value: "phone_format", label: "Format Phone Number" },    // phone
+      { value: "math_operation", label: "Math Operation" },     // number
     ],
     text: [
-      { value: "uppercase", label: "Uppercase" },
-      { value: "lowercase", label: "Lowercase" },
-      { value: "title_case", label: "Title Case" },
-      { value: "trim_whitespace", label: "Trim Whitespace" },
-      { value: "replace", label: "Replace Text" },
-      { value: "extract_email", label: "Extract Email" },
-      { value: "split", label: "Split Text" },
-      { value: "word_count", label: "Word Count" },
-      { value: "url_encode", label: "URL Encode" },
+      { value: "uppercase", label: "Uppercase" }, // shorttext, longtext, address, fullname, email
+      { value: "lowercase", label: "Lowercase" }, // shorttext, longtext, address, fullname, email
+      { value: "title_case", label: "Title Case" }, // shorttext, longtext, address, fullname, email
+      { value: "trim_whitespace", label: "Trim Whitespace" }, // shorttext, longtext, address, fullname, email
+      { value: "replace", label: "Replace Text" }, // shorttext, longtext, address, fullname, email
+      { value: "extract_email", label: "Extract Email" }, // shorttext, longtext, address, fullname, email
+      { value: "split", label: "Split Text" }, // shorttext, longtext, address, fullname, email
+      { value: "word_count", label: "Word Count" }, // shorttext, longtext, address, fullname, email
+      { value: "url_encode", label: "URL Encode" }, // shorttext, longtext, address, fullname, email
     ],
+  };
+
+  const operationFieldTypeCompatibility = {
+    date: {
+      format_date: ["date", "datetime"],
+      format_time: ["time", "datetime"],
+      format_datetime: ["datetime"],
+      timezone_conversion: ["time", "datetime"],
+      add_date: ["date", "datetime"],
+      subtract_date: ["date", "datetime"],
+      date_difference: ["date", "datetime"],
+    },
+    number: {
+      locale_format: ["number", "price"],
+      currency_format: ["price", "number"],
+      round_number: ["number", "price"],
+      phone_format: ["phone"],
+      math_operation: ["number", "price"],
+    },
+    text: {
+      uppercase: ["shorttext", "longtext", "address", "fullname", "email"],
+      lowercase: ["shorttext", "longtext", "address", "fullname", "email"],
+      title_case: ["shorttext", "longtext", "address", "fullname", "email"],
+      trim_whitespace: ["shorttext", "longtext", "address", "fullname", "email"],
+      replace: ["shorttext", "longtext", "address", "fullname", "email"],
+      extract_email: ["shorttext", "longtext", "address", "fullname", "email"],
+      split: ["shorttext", "longtext", "address", "fullname", "email"],
+      word_count: ["shorttext", "longtext", "address", "fullname", "email"],
+      url_encode: ["shorttext", "longtext", "address", "fullname", "email"],
+    },
   };
 
   const dateFormats = [
@@ -492,47 +522,47 @@ const ActionPanel = ({
   // };
 
   const handleObjectSelect = (selectedOption) => {
-  if (!selectedOption) {
-    setSelectedObject("");
-    setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
-    return;
-  }
+    if (!selectedOption) {
+      setSelectedObject("");
+      setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+      return;
+    }
 
-  const selectedObjectName = selectedOption.value;
-  setSelectedObject(selectedObjectName);
+    const selectedObjectName = selectedOption.value;
+    setSelectedObject(selectedObjectName);
 
-  const shouldFetchFields =
-    selectedObjectName &&
-    (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
+    const shouldFetchFields =
+      selectedObjectName &&
+      (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
 
-  if (!shouldFetchFields) return;
+    if (!shouldFetchFields) return;
 
-  fetchSalesforceFields(selectedObjectName)
-    .then((data) => {
-      const newFields = data.fields || [];
-      console.log('salesforce fields--> ', newFields);
+    fetchSalesforceFields(selectedObjectName)
+      .then((data) => {
+        const newFields = data.fields || [];
+        console.log('salesforce fields--> ', newFields);
 
-      setSalesforceObjects(prev => [
-        ...prev.filter(obj => obj.name !== selectedObjectName),
-        { name: selectedObjectName, fields: newFields }
-      ]);
+        setSalesforceObjects(prev => [
+          ...prev.filter(obj => obj.name !== selectedObjectName),
+          { name: selectedObjectName, fields: newFields }
+        ]);
 
-      // Automatically add required fields to mappings
-      const requiredFields = newFields.filter(field => field.required);
-      if (requiredFields.length > 0 && isCreateUpdateNode) {
-        const newMappings = requiredFields.map(field => ({
-          salesforceField: field.name,
-          formFieldId: "",
-          fieldType: "",
-          picklistValue: ""
-        }));
-        setLocalMappings(newMappings);
-      }
-    })
-    .catch((error) => {
-      setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
-    });
-};
+        // Automatically add required fields to mappings
+        const requiredFields = newFields.filter(field => field.required);
+        if (requiredFields.length > 0 && isCreateUpdateNode) {
+          const newMappings = requiredFields.map(field => ({
+            salesforceField: field.name,
+            formFieldId: "",
+            fieldType: "",
+            picklistValue: ""
+          }));
+          setLocalMappings(newMappings);
+        }
+      })
+      .catch((error) => {
+        setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
+      });
+  };
 
   const getAncestorNodes = (currentNodeId, edges, nodes) => {
     const ancestors = new Set();
@@ -567,15 +597,15 @@ const ActionPanel = ({
       return;
     }
 
-     // Check if required fields are mapped
+    // Check if required fields are mapped
     if (isCreateUpdateNode && selectedObject) {
       const requiredFields = safeSalesforceObjects
         .find(obj => obj.name === selectedObject)
         ?.fields?.filter(f => f.required) || [];
-      
+
       const missingRequiredFields = requiredFields.filter(reqField => {
-        return !localMappings.some(mapping => 
-          mapping.salesforceField === reqField.name && 
+        return !localMappings.some(mapping =>
+          mapping.salesforceField === reqField.name &&
           (mapping.formFieldId || mapping.picklistValue)
         );
       });
@@ -585,7 +615,7 @@ const ActionPanel = ({
         return;
       }
     }
-    
+
     if (isLoopNode && (!loopCollection || !currentItemVariableName)) {
       setSaveError("Please provide a loop collection and a current item variable name.");
       return;
@@ -617,8 +647,23 @@ const ActionPanel = ({
         console.log("Validation failed: Missing inputField or operation");
         return;
       }
+
+      // Validate input field type compatibility
+      const selectedField = safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField);
+      if (selectedField) {
+        const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
+        if (compatibleTypes.length > 0 && !compatibleTypes.includes(selectedField.type)) {
+          setSaveError(`Selected input field type (${selectedField.type}) is not compatible with operation ${formatterConfig.operation}.`);
+          return;
+        }
+      }
+
       if (formatterConfig.formatType === "date") {
-        if ((formatterConfig.operation === "format_date" || formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (!formatterConfig.options.format || !formatterConfig.options.timezone)) {
+        if (formatterConfig.operation === "format_date" && !formatterConfig.options.format) {
+          setSaveError("Please provide date format.");
+          return;
+        }
+        if ((formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (!formatterConfig.options.format || !formatterConfig.options.timezone)) {
           setSaveError("Please provide format and timezone.");
           return;
         }
@@ -638,6 +683,16 @@ const ActionPanel = ({
           if (formatterConfig.useCustomInput && !formatterConfig.customValue) {
             setSaveError("Please provide a custom compare date.");
             return;
+          }
+          if (formatterConfig.inputField2) {
+            const secondField = safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2);
+            if (secondField) {
+              const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
+              if (compatibleTypes.length > 0 && !compatibleTypes.includes(secondField.type)) {
+                setSaveError(`Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.`);
+                return;
+              }
+            }
           }
         }
       }
@@ -671,6 +726,16 @@ const ActionPanel = ({
             setSaveError("Please provide math operation.");
             return;
           }
+          if (formatterConfig.inputField2) {
+            const secondField = safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2);
+            if (secondField) {
+              const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
+              if (compatibleTypes.length > 0 && !compatibleTypes.includes(secondField.type)) {
+                setSaveError(`Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.`);
+                return;
+              }
+            }
+          }
         }
       }
       if (formatterConfig.formatType === "text") {
@@ -678,8 +743,8 @@ const ActionPanel = ({
           setSaveError("Please provide search and replace values.");
           return;
         }
-        if (formatterConfig.operation === "split" && !formatterConfig.options.index) {
-          setSaveError("Please provide index.");
+        if (formatterConfig.operation === "split" && (!formatterConfig.options.delimiter || !formatterConfig.options.index)) {
+          setSaveError("Please provide delimiter and index.");
           return;
         }
       }
@@ -780,7 +845,8 @@ const ActionPanel = ({
   const safeFormFields = Array.isArray(formFields) ? formFields : [];
   const safeSalesforceObjects = Array.isArray(salesforceObjects) ? salesforceObjects : [];
 
-  const formFieldOptions = (mappingIndex) => {
+
+  const formFieldOptions = (mappingIndex, isSecondInput = false) => {
     const currentSalesforceField = mappingIndex !== undefined ? localMappings[mappingIndex]?.salesforceField : null;
     const sfField = currentSalesforceField && selectedObject
       ? safeSalesforceObjects
@@ -788,24 +854,46 @@ const ActionPanel = ({
         ?.fields?.find(f => f.name === currentSalesforceField)
       : null;
 
-    const allowedTypes = sfField ? (typeMapping[sfField?.type] || typeMapping.string) : typeMapping.string;
+    let allowedTypes = sfField ? (typeMapping[sfField?.type] || typeMapping.string) : typeMapping.string;
+
+    // Filter form fields based on formatter type and operation
+    if (isFormatterNode && formatterConfig.formatType) {
+      const selectedFieldId = isSecondInput ? formatterConfig.inputField2 : formatterConfig.inputField;
+      const selectedField = safeFormFields.find(f => f.id === selectedFieldId || f.Unique_Key__c === selectedFieldId);
+      const selectedFieldType = selectedField ? selectedField.type : null;
+
+      if (formatterConfig.operation && operationFieldTypeCompatibility[formatterConfig.formatType]) {
+        allowedTypes = operationFieldTypeCompatibility[formatterConfig.formatType][formatterConfig.operation] || allowedTypes;
+      } else {
+        // Fallback to general type mapping based on formatType
+        const formatTypeToFieldTypes = {
+          date: ["date", "datetime", "time"],
+          number: ["number", "price", "phone"],
+          text: ["shorttext", "longtext", "address", "fullname", "email"],
+        };
+        allowedTypes = formatTypeToFieldTypes[formatterConfig.formatType] || allowedTypes;
+      }
+    }
 
     const groups = safeFormFields
       .filter(f => !f.parentFieldId)
       .map(parent => {
         const properties = parent.Properties__c ? JSON.parse(parent.Properties__c) : {};
         const subFieldsData = properties.subFields || {};
-        const subFields = Object.entries(subFieldsData).map(([key, subField]) => {
-          const subFieldLabel = subField.label || subField.type || key.replace(/([A-Z])/g, ' $1').trim() || 'Unknown';
-          const subFieldId = subField.id || `${parent.id}_${key}`;
-          return {
-            value: subFieldId,
-            label: subField.enabled !== false ? subFieldLabel : `${subFieldLabel} (Disabled)`,
-            isFormField: true,
-            isSubField: true,
-            type: subField.type || parent.type
-          };
-        }).filter(sub => allowedTypes.includes(sub.type));
+        const subFields = Object.entries(subFieldsData)
+          .filter(([_, subField]) => subField.enabled !== false)
+          .map(([key, subField]) => {
+            const subFieldLabel = subField.label || subField.type || key.replace(/([A-Z])/g, ' $1').trim() || 'Unknown';
+            const subFieldId = subField.id || `${parent.id}_${key}`;
+            return {
+              value: subFieldId,
+              label: subFieldLabel,
+              isFormField: true,
+              isSubField: true,
+              type: subField.type || parent.type,
+            };
+          })
+          .filter(sub => allowedTypes.includes(sub.type));
 
         return {
           label: parent.name || 'Unknown',
@@ -815,15 +903,20 @@ const ActionPanel = ({
               label: parent.name || 'Unknown',
               isFormField: true,
               isSubField: false,
-              type: parent.type
+              type: parent.type,
             },
-            ...subFields
-          ].filter(opt => allowedTypes.includes(opt.type))
+            ...subFields,
+          ].filter(opt => allowedTypes.includes(opt.type)),
         };
-      }).filter(group => group.options.length > 0);
+      })
+      .filter(group => group.options.length > 0);
 
     const orphanSubFields = safeFormFields
       .filter(f => f.parentFieldId && !safeFormFields.some(p => p.id === f.parentFieldId))
+      .filter(f => {
+        const properties = f.Properties__c ? JSON.parse(f.Properties__c) : {};
+        return properties.enabled !== false;
+      })
       .map(f => {
         const properties = f.Properties__c ? JSON.parse(f.Properties__c) : {};
         const subFieldLabel = properties.label || f.type || f.name || 'Unknown';
@@ -832,7 +925,7 @@ const ActionPanel = ({
           label: subFieldLabel,
           isFormField: true,
           isSubField: true,
-          type: f.type
+          type: f.type,
         };
       })
       .filter(sub => allowedTypes.includes(sub.type));
@@ -840,20 +933,20 @@ const ActionPanel = ({
     if (orphanSubFields.length > 0) {
       groups.push({
         label: 'Other Fields',
-        options: orphanSubFields
+        options: orphanSubFields,
       });
     }
 
-    if (sfField && (sfField.type === 'picklist' || sfField.type === 'multipicklist')) {
+    if (sfField && (sfField.type === 'picklist' || sfField.type === 'multipicklist') && !isFormatterNode) {
       const picklistGroup = {
         label: 'Picklist Values',
         options: sfField.values && Array.isArray(sfField.values) && sfField.values.length > 0
           ? sfField.values.map(val => ({
             value: val,
             label: val,
-            isPicklistValue: true
+            isPicklistValue: true,
           }))
-          : [{ value: '', label: 'No picklist values available', isDisabled: true }]
+          : [{ value: '', label: 'No picklist values available', isDisabled: true }],
       };
       groups.unshift(picklistGroup);
     }
@@ -1837,7 +1930,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {isFormatterNode && (
+          {/* {isFormatterNode && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1897,39 +1990,6 @@ const ActionPanel = ({
                   classNamePrefix="select"
                 />
               </div>
-
-              {/* <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
-                <Select
-                  value={safeFormFields.find((f) => f.id === formatterConfig.inputField) ? 
-                    { value: formatterConfig.inputField, label: safeFormFields.find((f) => f.id === formatterConfig.inputField).name } 
-                    : null}
-                  onChange={(selected) => handleFormatterChange("inputField", selected ? selected.value : "")}
-                  options={safeFormFields.map(f => ({
-                    value: f.id,
-                    label: f.name || 'Unknown'
-                  }))}
-                  placeholder="Select Input Field"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                  isClearable
-                  classNamePrefix="select"
-                />
-              </div> */}
 
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
@@ -2007,42 +2067,7 @@ const ActionPanel = ({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   className="space-y-4"
-                >
-                  {/* <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
-                    <Select
-                      value={formFieldOptions.find((opt) => opt.value === formatterConfig.inputField2) || null}
-                      onChange={(selected) => handleFormatterChange("inputField2", selected ? selected.value : "")}
-                      options={formFieldOptions}
-                      placeholder={formFieldOptions.length ? "Select Second Form Field" : "No Form Fields Available"}
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                          fontSize: "0.875rem",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          minHeight: "34px",
-                        }),
-                        placeholder: (base) => ({
-                          ...base,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      isClearable
-                      isDisabled={!formFieldOptions.length || formatterConfig.useCustomInput}
-                      classNamePrefix="select"
-                    />
-                  </div> */}
-
+                > 
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
                     <Select
@@ -2154,7 +2179,7 @@ const ActionPanel = ({
                   animate={{ opacity: 1 }}
                   className="space-y-4"
                 >
-                  {(formatterConfig.operation === "format_date" || formatterConfig.operation === "format_datetime") && (
+                  {(formatterConfig.operation === "format_date") && (
                     <>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
@@ -2182,13 +2207,18 @@ const ActionPanel = ({
                           classNamePrefix="select"
                         />
                       </div>
+                    </>
+                  )}
+
+                   {(formatterConfig.operation === "format_datetime") && (
+                    <>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
                         <Select
-                          value={timezoneOptions.find((opt) => opt.value === formatterConfig.options.timezone) || null}
-                          onChange={(selected) => handleFormatterOptionChange("timezone", selected ? selected.value : "")}
-                          options={timezoneOptions}
-                          placeholder="Select Timezone"
+                          value={dateFormats.find((opt) => opt.value === formatterConfig.options.format) || null}
+                          onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
+                          options={formatterConfig.operation === "format_date" ? dateFormats : dateTimeFormats}
+                          placeholder="Select Date Format"
                           styles={{
                             container: (base) => ({
                               ...base,
@@ -2239,36 +2269,10 @@ const ActionPanel = ({
                           classNamePrefix="select"
                         />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-                        <Select
-                          value={timezoneOptions.find((opt) => opt.value === formatterConfig.options.timezone) || null}
-                          onChange={(selected) => handleFormatterOptionChange("timezone", selected ? selected.value : "")}
-                          options={timezoneOptions}
-                          placeholder="Select Timezone"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
-                      </div>
                     </>
                   )}
 
-                  {formatterConfig.operation === "timezone_conversion" && (
+                  {(formatterConfig.operation === "timezone_conversion" || formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (
                     <>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Source Timezone</label>
@@ -2557,6 +2561,690 @@ const ActionPanel = ({
                   )}
                 </motion.div>
               )}
+              {formatterConfig.formatType === "text" && formatterConfig.operation && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-4"
+                >
+                  {formatterConfig.operation === "replace" && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Search Value</label>
+                        <input
+                          type="text"
+                          value={formatterConfig.options.searchValue || ""}
+                          onChange={(e) => handleFormatterOptionChange("searchValue", e.target.value)}
+                          placeholder="Text to replace"
+                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Replace Value</label>
+                        <input
+                          type="text"
+                          value={formatterConfig.options.replaceValue || ""}
+                          onChange={(e) => handleFormatterOptionChange("replaceValue", e.target.value)}
+                          placeholder="Replacement text"
+                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {formatterConfig.operation === "split" && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Delimiter</label>
+                        <input
+                          type="text"
+                          value={formatterConfig.options.delimiter || ""}
+                          onChange={(e) => handleFormatterOptionChange("delimiter", e.target.value)}
+                          placeholder="e.g., ,"
+                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Index</label>
+                        <Select
+                          value={splitIndexOptions.find((opt) => opt.value === formatterConfig.options.index) || null}
+                          onChange={(selected) => handleFormatterOptionChange("index", selected ? selected.value : "")}
+                          options={splitIndexOptions}
+                          placeholder="Select Index"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </motion.div>
+          )} */}
+
+          {isFormatterNode && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-4"
+            >
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Formatter Type</label>
+                <Select
+                  value={formatterTypes.find((opt) => opt.value === formatterConfig.formatType) || null}
+                  onChange={(selected) => handleFormatterChange("formatType", selected ? selected.value : "date")}
+                  options={formatterTypes}
+                  placeholder="Select Formatter Type"
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                  }}
+                  classNamePrefix="select"
+                />
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
+                <Select
+                  value={
+                    formatterOperations[formatterConfig.formatType]
+                      .filter(opt => {
+                        const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[opt.value] || [];
+                        const selectedField = safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField);
+                        return !selectedField || compatibleTypes.includes(selectedField.type);
+                      })
+                      .find((opt) => opt.value === formatterConfig.operation) || null
+                  }
+                  onChange={(selected) => handleFormatterChange("operation", selected ? selected.value : "")}
+                  options={formatterOperations[formatterConfig.formatType].filter(opt => {
+                    const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[opt.value] || [];
+                    const selectedField = safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField);
+                    return !selectedField || compatibleTypes.includes(selectedField.type);
+                  })}
+                  placeholder="Select Operation"
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                  }}
+                  isDisabled={!formatterConfig.formatType}
+                  classNamePrefix="select"
+                />
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
+                <Select
+                  value={
+                    safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField)
+                      ? {
+                        value: formatterConfig.inputField,
+                        label: safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField).name || 'Unknown',
+                        isFormField: true,
+                        isSubField: !!safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField)?.parentFieldId,
+                      }
+                      : null
+                  }
+                  onChange={(selected) => handleFormatterChange("inputField", selected ? selected.value : "")}
+                  options={formFieldOptions()}
+                  placeholder={formFieldOptions().length ? "Select Form Field" : "No Form Fields Available"}
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    placeholder: (base) => ({
+                      ...base,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                    groupHeading: (base) => ({
+                      ...base,
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      color: '#1f2937',
+                      backgroundColor: '#f9fafb',
+                      padding: '8px 12px',
+                      borderBottom: '1px solid #e5e7eb',
+                    }),
+                    option: (base, { data, isDisabled }) => ({
+                      ...base,
+                      backgroundColor: data.isSubField ? '#f3f4f6' : base.backgroundColor,
+                      color: isDisabled ? '#ccc' : (data.isSubField ? '#374151' : base.color),
+                      paddingLeft: data.isSubField ? '24px' : '12px',
+                      cursor: isDisabled ? 'not-allowed' : 'default',
+                      ':active': {
+                        backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor),
+                      },
+                      ':hover': {
+                        backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : '#f3f4f6'),
+                      },
+                    }),
+                  }}
+                  isClearable
+                  classNamePrefix="select"
+                  formatGroupLabel={(group) => (
+                    <div className="flex items-center">
+                      <span>{group.label}</span>
+                    </div>
+                  )}
+                />
+              </div>
+
+              {(formatterConfig.operation === "date_difference" || formatterConfig.operation === "math_operation") && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="space-y-4"
+                >
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
+                    <Select
+                      value={
+                        safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2)
+                          ? {
+                            value: formatterConfig.inputField2,
+                            label: safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2).name || 'Unknown',
+                            isFormField: true,
+                            isSubField: !!safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2)?.parentFieldId,
+                          }
+                          : null
+                      }
+                      onChange={(selected) => handleFormatterChange("inputField2", selected ? selected.value : "")}
+                      options={formFieldOptions(undefined, true)}
+                      placeholder={formFieldOptions(undefined, true).length ? "Select Second Form Field" : "No Form Fields Available"}
+                      styles={{
+                        container: (base) => ({
+                          ...base,
+                          borderRadius: "0.375rem",
+                          borderColor: "#e5e7eb",
+                          fontSize: "0.875rem",
+                        }),
+                        control: (base) => ({
+                          ...base,
+                          minHeight: "34px",
+                        }),
+                        placeholder: (base) => ({
+                          ...base,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }),
+                        menu: (base) => ({
+                          ...base,
+                          zIndex: 9999,
+                        }),
+                        groupHeading: (base) => ({
+                          ...base,
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                          textTransform: 'uppercase',
+                          color: '#1f2937',
+                          backgroundColor: '#f9fafb',
+                          padding: '8px 12px',
+                          borderBottom: '1px solid #e5e7eb',
+                        }),
+                        option: (base, { data, isDisabled }) => ({
+                          ...base,
+                          backgroundColor: data.isSubField ? '#f3f4f6' : base.backgroundColor,
+                          color: isDisabled ? '#ccc' : (data.isSubField ? '#374151' : base.color),
+                          paddingLeft: data.isSubField ? '24px' : '12px',
+                          cursor: isDisabled ? 'not-allowed' : 'default',
+                          ':active': {
+                            backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor),
+                          },
+                          ':hover': {
+                            backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : '#f3f4f6'),
+                          },
+                        }),
+                      }}
+                      isClearable
+                      isDisabled={!formFieldOptions(undefined, true).length || formatterConfig.useCustomInput}
+                      classNamePrefix="select"
+                      formatGroupLabel={(group) => (
+                        <div className="flex items-center">
+                          <span>{group.label}</span>
+                        </div>
+                      )}
+                    />
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formatterConfig.useCustomInput}
+                        onChange={(e) => handleFormatterChange("useCustomInput", e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Use Custom Input</span>
+                    </label>
+                  </div>
+
+                  {formatterConfig.useCustomInput && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                    >
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {formatterConfig.operation === "date_difference" ? "Custom Compare Date" : "Custom Value"}
+                      </label>
+                      <input
+                        type="text"
+                        value={formatterConfig.customValue}
+                        onChange={(e) => handleFormatterChange("customValue", e.target.value)}
+                        placeholder={formatterConfig.operation === "date_difference" ? "e.g., 2025-06-20" : "e.g., 200"}
+                        className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+
+              {formatterConfig.formatType === "date" && formatterConfig.operation && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-4"
+                >
+                  {(formatterConfig.operation === "format_date" || formatterConfig.operation === "format_datetime") && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
+                      <Select
+                        value={dateFormats.find((opt) => opt.value === formatterConfig.options.format) || null}
+                        onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
+                        options={formatterConfig.operation === "format_date" ? dateFormats : dateTimeFormats}
+                        placeholder="Select Date Format"
+                        styles={{
+                          container: (base) => ({
+                            ...base,
+                            borderRadius: "0.375rem",
+                            borderColor: "#e5e7eb",
+                            fontSize: "0.875rem",
+                          }),
+                          control: (base) => ({
+                            ...base,
+                            minHeight: "34px",
+                          }),
+                          menu: (base) => ({
+                            ...base,
+                            zIndex: 9999,
+                          }),
+                        }}
+                        classNamePrefix="select"
+                      />
+                    </div>
+                  )}
+
+                  {formatterConfig.operation === "format_time" && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Time Format</label>
+                      <Select
+                        value={timeFormats.find((opt) => opt.value === formatterConfig.options.format) || null}
+                        onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
+                        options={timeFormats}
+                        placeholder="Select Time Format"
+                        styles={{
+                          container: (base) => ({
+                            ...base,
+                            borderRadius: "0.375rem",
+                            borderColor: "#e5e7eb",
+                            fontSize: "0.875rem",
+                          }),
+                          control: (base) => ({
+                            ...base,
+                            minHeight: "34px",
+                          }),
+                          menu: (base) => ({
+                            ...base,
+                            zIndex: 9999,
+                          }),
+                        }}
+                        classNamePrefix="select"
+                      />
+                    </div>
+                  )}
+
+                  {(formatterConfig.operation === "timezone_conversion" || formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Source Timezone</label>
+                        <Select
+                          value={timezoneOptions.find((opt) => opt.value === formatterConfig.options.timezone) || null}
+                          onChange={(selected) => handleFormatterOptionChange("timezone", selected ? selected.value : "")}
+                          options={timezoneOptions}
+                          placeholder="Select Source Timezone"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Timezone</label>
+                        <Select
+                          value={timezoneOptions.find((opt) => opt.value === formatterConfig.options.targetTimezone) || null}
+                          onChange={(selected) => handleFormatterOptionChange("targetTimezone", selected ? selected.value : "")}
+                          options={timezoneOptions}
+                          placeholder="Select Target Timezone"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {(formatterConfig.operation === "add_date" || formatterConfig.operation === "subtract_date") && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                        <Select
+                          value={[{ value: "days", label: "Days" }, { value: "months", label: "Months" }, { value: "years", label: "Years" }].find((opt) => opt.value === formatterConfig.options.unit) || null}
+                          onChange={(selected) => handleFormatterOptionChange("unit", selected ? selected.value : "")}
+                          options={[{ value: "days", label: "Days" }, { value: "months", label: "Months" }, { value: "years", label: "Years" }]}
+                          placeholder="Select Unit"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Value</label>
+                        <input
+                          type="number"
+                          value={formatterConfig.options.value || ""}
+                          onChange={(e) => handleFormatterOptionChange("value", e.target.value)}
+                          placeholder="e.g., 3"
+                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              )}
+
+              {formatterConfig.formatType === "number" && formatterConfig.operation && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="space-y-4"
+                >
+                  {formatterConfig.operation === "locale_format" && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Locale</label>
+                      <Select
+                        value={localeOptions.find((opt) => opt.value === formatterConfig.options.locale) || null}
+                        onChange={(selected) => handleFormatterOptionChange("locale", selected ? selected.value : "")}
+                        options={localeOptions}
+                        placeholder="Select Locale"
+                        styles={{
+                          container: (base) => ({
+                            ...base,
+                            borderRadius: "0.375rem",
+                            borderColor: "#e5e7eb",
+                            fontSize: "0.875rem",
+                          }),
+                          control: (base) => ({
+                            ...base,
+                            minHeight: "34px",
+                          }),
+                          menu: (base) => ({
+                            ...base,
+                            zIndex: 9999,
+                          }),
+                        }}
+                        classNamePrefix="select"
+                      />
+                    </div>
+                  )}
+                  {formatterConfig.operation === "currency_format" && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                        <Select
+                          value={currencyOptions.find((opt) => opt.value === formatterConfig.options.currency) || null}
+                          onChange={(selected) => handleFormatterOptionChange("currency", selected ? selected.value : "")}
+                          options={currencyOptions}
+                          placeholder="Select Currency"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Locale</label>
+                        <Select
+                          value={localeOptions.find((opt) => opt.value === formatterConfig.options.locale) || null}
+                          onChange={(selected) => handleFormatterOptionChange("locale", selected ? selected.value : "")}
+                          options={localeOptions}
+                          placeholder="Select Locale"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {formatterConfig.operation === "round_number" && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Decimals</label>
+                      <input
+                        type="number"
+                        value={formatterConfig.options.decimals || ""}
+                        onChange={(e) => handleFormatterOptionChange("decimals", e.target.value)}
+                        placeholder="e.g., 2"
+                        className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="0"
+                      />
+                    </div>
+                  )}
+                  {formatterConfig.operation === "phone_format" && (
+                    <>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Country Code</label>
+                        <Select
+                          value={countryOptions.find((opt) => opt.value === formatterConfig.options.countryCode) || null}
+                          onChange={(selected) => handleFormatterOptionChange("countryCode", selected ? selected.value : "")}
+                          options={countryOptions}
+                          placeholder="Select Country Code"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
+                        <Select
+                          value={phoneFormatOptions.find((opt) => opt.value === formatterConfig.options.format) || null}
+                          onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
+                          options={phoneFormatOptions}
+                          placeholder="Select Format"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {formatterConfig.operation === "math_operation" && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
+                      <Select
+                        value={[{ value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "multiply", label: "Multiply" }, { value: "divide", label: "Divide" }].find((opt) => opt.value === formatterConfig.options.operation) || null}
+                        onChange={(selected) => handleFormatterOptionChange("operation", selected ? selected.value : "")}
+                        options={[{ value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "multiply", label: "Multiply" }, { value: "divide", label: "Divide" }]}
+                        placeholder="Select Operation"
+                        styles={{
+                          container: (base) => ({
+                            ...base,
+                            borderRadius: "0.375rem",
+                            borderColor: "#e5e7eb",
+                            fontSize: "0.875rem",
+                          }),
+                          control: (base) => ({
+                            ...base,
+                            minHeight: "34px",
+                          }),
+                          menu: (base) => ({
+                            ...base,
+                            zIndex: 9999,
+                          }),
+                        }}
+                        classNamePrefix="select"
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
               {formatterConfig.formatType === "text" && formatterConfig.operation && (
                 <motion.div
                   initial={{ opacity: 0 }}

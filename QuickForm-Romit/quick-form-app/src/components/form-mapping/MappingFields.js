@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from 'react-router-dom';
 import { ReactFlowProvider } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
@@ -58,8 +58,7 @@ const MappingFields = () => {
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
-  const { metadata, formRecords } = useSalesforceData();
-
+  const { metadata, formRecords, refreshData } = useSalesforceData();
   const [selectedNode, setSelectedNode] = useState(null);
   const [mappings, setMappings] = useState({});
   const [formFields, setFormFields] = useState([]);
@@ -70,6 +69,7 @@ const MappingFields = () => {
   const [saveError, setSaveError] = useState(null);
   const [nodes, setNodes] = useState([]); // Initialize empty to avoid premature rendering
   const [edges, setEdges] = useState([]);
+  const tokenRef = useRef(null);
 
   const initialNodes = [
     {
@@ -89,6 +89,8 @@ const MappingFields = () => {
   ];
 
   const initialEdges = [];
+  console.log('formRecords ', formRecords);
+
 
   const showToast = (message, type = 'error') => {
     setSaveError({ message, type });
@@ -100,8 +102,8 @@ const MappingFields = () => {
   // Initialize Salesforce objects from metadata
   useEffect(() => {
     if (metadata && metadata.length > 0) {
-      console.log('metadata  ',metadata);
-      
+      console.log('metadata  ', metadata);
+
       const objects = metadata.map(obj => ({
         name: obj.name,
         label: obj.label,
@@ -358,9 +360,12 @@ const MappingFields = () => {
         return false;
       }
       if (nodeMapping.formatterConfig.formatType === "date") {
+        if (nodeMapping.formatterConfig.operation === "format_date" && !nodeMapping.formatterConfig.options?.format) {
+          showToast(`Formatter node ${node.data.displayLabel} must have a date format defined.`);
+          return false;
+        }
         if (
-          (nodeMapping.formatterConfig.operation === "format_date" ||
-            nodeMapping.formatterConfig.operation === "format_datetime" ||
+          (nodeMapping.formatterConfig.operation === "format_datetime" ||
             nodeMapping.formatterConfig.operation === "format_time") &&
           (!nodeMapping.formatterConfig.options?.format || !nodeMapping.formatterConfig.options?.timezone)
         ) {
@@ -602,252 +607,180 @@ const MappingFields = () => {
         });
         setMappings(updatedMappings);
         showToast("All configurations saved successfully!", 'success');
+        await refreshData();
       } else {
         throw new Error(`Save failed: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
-      showToast(error.message || "Failed to save configurations. Please check your network or contact support.", 'error');
+      if (error.message.includes('INVALID_JWT_FORMAT')) {
+        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        });
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || tokenData.error) {
+          throw new Error(tokenData.error || 'Failed to fetch access token');
+        }
+        tokenRef.current = tokenData.access_token;
+        saveAllConfiguration();
+      }
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const fetchExistingMappings = async (userId, formVersionId, instanceUrl, access_token, retries = 2) => {
-    try {
-      const url = process.env.REACT_APP_FETCH_MAPPINGS_URL;
-
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${access_token}`,
-        },
-        body: JSON.stringify({ userId, formVersionId, instanceUrl: cleanedInstanceUrl }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 401 && retries > 0) {
-          throw new Error("Unauthorized: Retry fetching access token");
-        }
-        throw new Error(data.error || `Failed to fetch existing mappings: ${response.status}`);
-      }
-
-      console.log('Raw mappings data:', data.mappings);
-
-      const parsedMappings = Array.isArray(data.mappings)
-        ? data.mappings.reduce((acc, mapping) => {
-          const nodeId = mapping.nodeId;
-          if (!nodeId) {
-            console.warn('Skipping mapping with missing nodeId:', mapping);
-            return acc;
-          }
-
-          let conditionsData = {};
-          if (mapping.conditions && typeof mapping.conditions === 'object') {
-            conditionsData = mapping.conditions;
-          } else if (mapping.Conditions__c) {
-            conditionsData = JSON.parse(mapping.Conditions__c);
-          }
-
-          let fieldMappings = [];
-          if (mapping.Field_Mappings__c) {
-            try {
-              fieldMappings = typeof mapping.Field_Mappings__c === 'string'
-                ? JSON.parse(mapping.Field_Mappings__c)
-                : mapping.Field_Mappings__c;
-            } catch (e) {
-              console.error('Error parsing field mappings:', e);
-              fieldMappings = [];
-            }
-          } else if (mapping.fieldMappings) {
-            fieldMappings = Array.isArray(mapping.fieldMappings)
-              ? mapping.fieldMappings
-              : [];
-          }
-
-          fieldMappings = fieldMappings.map(fm => ({
-            formFieldId: fm.formFieldId || fm.Form_Field_Id__c || '',
-            fieldType: fm.fieldType || fm.Field_Type__c || '',
-            salesforceField: fm.salesforceField || fm.Salesforce_Field__c || '',
-            picklistValue: fm.picklistValue || fm.Picklist_Value__c || ''
-          }));
-
-          let loopConfig = {};
-          if (mapping.loopConfig && typeof mapping.loopConfig === 'object') {
-            loopConfig = mapping.loopConfig;
-          } else if (mapping.Loop_Config__c) {
-            loopConfig = JSON.parse(mapping.Loop_Config__c);
-          }
-
-          let formatterConfig = {};
-          if (mapping.formatterConfig && typeof mapping.formatterConfig === 'object') {
-            formatterConfig = mapping.formatterConfig;
-          } else if (mapping.Formatter_Config__c) {
-            formatterConfig = JSON.parse(mapping.Formatter_Config__c);
-          }
-
-          const actionType =
-            mapping.actionType === "CreateUpdate" || mapping.Type__c === "CreateUpdate"
-              ? "Create/Update"
-              : mapping.actionType === "Start" || mapping.Type__c === "Start"
-                ? "Start"
-                : mapping.actionType === "End" || mapping.Type__c === "End"
-                  ? "End"
-                  : mapping.actionType || mapping.Type__c;
-
-          const nodeType =
-            actionType === "Start" || actionType === "End"
-              ? actionType.toLowerCase()
-              : actionType === "Condition" ||
-                actionType === "Path" ||
-                actionType === "Loop" ||
-                actionType === "Formatter"
-                ? "utility"
-                : "action";
-
-          return {
-            ...acc,
-            [nodeId]: {
-              nodeId,
-              actionType,
-              label: mapping.label || mapping.Name || actionType,
-              order: parseInt(mapping.order || mapping.Order__c, 10) || 0,
-              formVersionId: mapping.formVersionId || mapping.Form_Version__c || "",
-              previousNodeId: mapping.previousNodeId || mapping.Previous_Node_Id__c || null,
-              nextNodeIds: (mapping.nextNodeIds || mapping.Next_Node_Id__c)
-                ? Array.isArray(mapping.nextNodeIds)
-                  ? mapping.nextNodeIds
-                  : mapping.nextNodeIds.split(",")
-                : [],
-              salesforceObject: mapping.salesforceObject || mapping.Salesforce_Object__c || "",
-              fieldMappings: fieldMappings || [],
-              conditions: Array.isArray(conditionsData.conditions) ? conditionsData.conditions : [],
-              logicType: conditionsData.logicType || "AND",
-              customLogic: conditionsData.customLogic || "",
-              pathOption: conditionsData.pathOption || "Rules",
-              returnLimit: conditionsData.returnLimit || "",
-              sortField: conditionsData.sortField || "",
-              sortOrder: conditionsData.sortOrder || "ASC",
-              enableConditions:
-                actionType === "Create/Update" ? !!conditionsData.conditions?.length : false,
-              loopConfig: {
-                loopCollection: loopConfig.loopCollection || "",
-                currentItemVariableName: loopConfig.currentItemVariableName || "",
-                maxIterations: loopConfig.maxIterations || "",
-                loopVariables: loopConfig.loopVariables || {
-                  currentIndex: false,
-                  counter: false,
-                  indexBase: "0",
-                },
-                exitConditions: Array.isArray(loopConfig.exitConditions)
-                  ? loopConfig.exitConditions
-                  : [],
-                logicType: loopConfig.logicType || "AND",
-                customLogic: loopConfig.customLogic || "",
-              },
-              formatterConfig: {
-                formatType: formatterConfig.formatType || "date",
-                operation: formatterConfig.operation || "",
-                inputField: formatterConfig.inputField || "",
-                outputVariable: formatterConfig.outputVariable || "",
-                options: formatterConfig.options || {},
-                inputField2: formatterConfig.inputField2 || "",
-                useCustomInput: formatterConfig.useCustomInput || false,
-                customValue: formatterConfig.customValue || "",
-              },
-              id: mapping.id || mapping.Id || "",
-              type: nodeType,
-              displayLabel: mapping.label || mapping.Name || actionType,
-            },
-          };
-        }, {})
-        : {};
-
-      const updatedNodes = Array.isArray(data.nodes)
-        ? data.nodes.map((node) => {
-          const mapping = parsedMappings[node.id];
-          if (!mapping) {
-            return node;
-          }
-          return {
-            ...node,
-            type: "custom",
-            data: {
-              ...node.data,
-              label: mapping.label,
-              displayLabel: mapping.displayLabel || mapping.label,
-              action: mapping.actionType,
-              type: mapping.type,
-              order: mapping.order,
-              salesforceObject: mapping.salesforceObject,
-              fieldMappings: mapping.fieldMappings,
-              conditions: mapping.conditions,
-              logicType: mapping.logicType,
-              customLogic: mapping.customLogic,
-              pathOption: mapping.pathOption,
-              returnLimit: mapping.returnLimit,
-              sortField: mapping.sortField,
-              sortOrder: mapping.sortOrder,
-              enableConditions: mapping.enableConditions,
-              loopConfig: mapping.loopConfig,
-              formatterConfig: mapping.formatterConfig,
-            },
-          };
-        })
-        : [];
-
-      return {
-        mappings: parsedMappings,
-        nodes: updatedNodes,
-        edges: Array.isArray(data.edges) ? data.edges : [],
-      };
-    } catch (error) {
-      showToast(`Failed to fetch existing mappings: ${error.message}`, 'error');
-      return { mappings: {}, nodes: [], edges: [] };
     }
   };
 
   const initializeData = async () => {
     setIsLoading(true);
 
-    const userId = sessionStorage.getItem('userId');
-    const instanceUrl = sessionStorage.getItem('instanceUrl');
-
-    if (!userId || !instanceUrl || !formVersionId) {
-      showToast("Missing userId, instanceUrl, or formVersionId.", 'error');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      let tokenToUse = token;
-      if (!tokenToUse) {
-        tokenToUse = await fetchAccessToken(userId, instanceUrl);
-        if (!tokenToUse) {
-          setIsLoading(false);
-          return;
-        }
-        setToken(tokenToUse);
+      if (!formVersionId || !formRecords || formRecords.length === 0) {
+        showToast("Form version data not loaded yet", 'error');
+        setIsLoading(false);
+        return;
       }
 
-      const existingMappingsData = await fetchExistingMappings(userId, formVersionId, instanceUrl, tokenToUse);
-      if (Object.keys(existingMappingsData.mappings).length > 0) {
-        setMappings(existingMappingsData.mappings);
-        setNodes(existingMappingsData.nodes);
-        setEdges(existingMappingsData.edges);
-      } else {
+      // Find the form version in formRecords
+      const formVersion = formRecords
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version.Id === formVersionId);
+
+      if (!formVersion) {
+        showToast(`Form version ${formVersionId} not found`, 'error');
+        setIsLoading(false);
+        return;
+      }
+
+      // Extract mappings data from formVersion
+      const mappingsData = formVersion.Mappings || {};
+
+      // Process the mappings data to match your component's expected format
+      const processedMappings = {};
+      const processedNodes = [];
+      const processedEdges = [];
+
+      if (mappingsData.Mappings) {
+        // Process mappings
+        Object.entries(mappingsData.Mappings).forEach(([nodeId, mapping]) => {
+          processedMappings[nodeId] = {
+            nodeId,
+            actionType: mapping.actionType,
+            label: mapping.label,
+            order: mapping.order,
+            formVersionId: mapping.formVersionId,
+            previousNodeId: mapping.previousNodeId,
+            nextNodeIds: mapping.nextNodeIds || [],
+            salesforceObject: mapping.salesforceObject,
+            fieldMappings: mapping.fieldMappings || [],
+            conditions: mapping.conditions || [],
+            logicType: mapping.logicType || 'AND',
+            customLogic: mapping.customLogic || '',
+            pathOption: mapping.pathOption || 'Rules',
+            returnLimit: mapping.returnLimit,
+            sortField: mapping.sortField,
+            sortOrder: mapping.sortOrder || 'ASC',
+            enableConditions: mapping.enableConditions || false,
+            loopConfig: mapping.loopConfig || {
+              loopCollection: '',
+              currentItemVariableName: '',
+              maxIterations: '',
+              loopVariables: {
+                currentIndex: false,
+                counter: false,
+                indexBase: "0"
+              },
+              exitConditions: [],
+              logicType: 'AND',
+              customLogic: ''
+            },
+            formatterConfig: mapping.formatterConfig || {
+              formatType: 'date',
+              operation: '',
+              inputField: '',
+              outputVariable: '',
+              options: {},
+              inputField2: '',
+              useCustomInput: false,
+              customValue: ''
+            },
+            id: mapping.id || '',
+            type: mapping.actionType === 'Start' || mapping.actionType === 'End'
+              ? mapping.actionType.toLowerCase()
+              : mapping.actionType === 'Condition' || mapping.actionType === 'Path' ||
+                mapping.actionType === 'Loop' || mapping.actionType === 'Formatter'
+                ? 'utility'
+                : 'action',
+            displayLabel: mapping.label || mapping.actionType
+          };
+        });
+
+        // Process nodes
+        if (mappingsData.Nodes && Array.isArray(mappingsData.Nodes)) {
+          mappingsData.Nodes.forEach(node => {
+            const mapping = processedMappings[node.id];
+            if (mapping) {
+              processedNodes.push({
+                ...node,
+                type: "custom",
+                data: {
+                  ...node.data,
+                  label: mapping.label,
+                  displayLabel: mapping.displayLabel || mapping.label,
+                  action: mapping.actionType,
+                  type: mapping.type,
+                  order: mapping.order,
+                  salesforceObject: mapping.salesforceObject,
+                  fieldMappings: mapping.fieldMappings,
+                  conditions: mapping.conditions,
+                  logicType: mapping.logicType,
+                  customLogic: mapping.customLogic,
+                  pathOption: mapping.pathOption,
+                  returnLimit: mapping.returnLimit,
+                  sortField: mapping.sortField,
+                  sortOrder: mapping.sortOrder,
+                  enableConditions: mapping.enableConditions,
+                  loopConfig: mapping.loopConfig,
+                  formatterConfig: mapping.formatterConfig
+                }
+              });
+            } else {
+              // Fallback for nodes without mappings
+              processedNodes.push({
+                ...node,
+                type: "custom",
+                data: {
+                  ...node.data,
+                  action: node.data.action || 'Unknown',
+                  type: node.data.type || 'action',
+                  order: node.data.order || 0
+                }
+              });
+            }
+          });
+        }
+
+        // Process edges
+        if (mappingsData.Edges && Array.isArray(mappingsData.Edges)) {
+          processedEdges.push(...mappingsData.Edges);
+        }
+      }
+      // If no mappings data found, initialize with default nodes
+      if (Object.keys(processedMappings).length === 0) {
         setNodes(initialNodes);
         setEdges(initialEdges);
-        setMappings({});
+      } else {
+        setMappings(processedMappings);
+        setNodes(processedNodes);
+        setEdges(processedEdges);
       }
-      console.log('existingMappingsData :: ', existingMappingsData);
-      console.log('existingMappingsData.mappings:: ', existingMappingsData.mappings);
-
 
     } catch (error) {
-      showToast(`Initialization failed: ${error.message}. Please check your connection or contact support.`, 'error');
+      showToast(`Initialization failed: ${error.message}`, 'error');
+      console.error('Error initializing mappings:', error);
+      // Fallback to initial nodes if there's an error
+      setNodes(initialNodes);
+      setEdges(initialEdges);
     } finally {
       setIsLoading(false);
     }

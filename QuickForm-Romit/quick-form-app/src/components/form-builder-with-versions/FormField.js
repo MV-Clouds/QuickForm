@@ -1047,7 +1047,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
           <FieldWrapper
             {...wrapperProps}
             labelContent={
-              <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
+              <label className={`text-gray-700 ${selectedTheme?.textColor || ''} flex items-center gap-1`}>
                 {label || 'Phone'}
                 {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
                 {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -1066,11 +1066,11 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                         const newCountryCode = countryData.countryCode.toUpperCase();
                         handleSubFieldChange('countryCode', { value: newCountryCode });
                       }}
-                      inputClass="p-2 border rounded text-sm w-full" // Visible, full-width input
+                      inputClass="p-2 border rounded text-sm w-full"
                       buttonClass="border rounded p-1 bg-white"
                       dropdownClass="border rounded max-h-64 overflow-y-auto"
                       containerClass="flex items-center w-full"
-                      inputProps={{ 'aria-label': 'Country code selector', readOnly: true }} // Read-only to prevent typing
+                      inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
                       disabled={isDisabled}
                       placeholder={subFields.countryCode?.placeholder || 'Select country code'}
                       enableSearch
@@ -1079,32 +1079,35 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                       preferredCountries={['us', 'ca', 'gb']}
                     />
                   </div>
-                  {/* Phone Number Input */}
+
+                  {/* Plain Input without Mask, Max 12 Digits */}
                   <div className="w-2/3">
-                    <InputMask
-                      mask={subFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                    <input
+                      type="tel"
+                      maxLength={12}
                       value={subFields.phoneNumber?.value || ''}
-                      onChange={(e) => handleSubFieldChange('phoneNumber', { 
-                        value: e.target.value,
-                        // Keep the existing mask when updating value
-                        phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999'
-                      })}
+                      onChange={(e) =>
+                        handleSubFieldChange('phoneNumber', {
+                          value: e.target.value.replace(/\D/g, '').slice(0, 12), // Only numbers, max 12 digits
+                        })
+                      }
                       className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                       placeholder={subFields.phoneNumber?.placeholder || 'Enter phone number'}
                       disabled={isDisabled}
-                      inputProps={{ 'aria-label': 'Phone number input' }}
+                      aria-label="Phone number input"
                     />
                   </div>
                 </div>
               ) : (
-              <InputMask
+                <InputMask
                   mask={subFields.phoneNumber?.phoneMask || '(999) 999-9999'}
                   value={subFields.phoneNumber?.value || ''}
-                  onChange={(e) => handleSubFieldChange('phoneNumber', { 
-                    value: e.target.value,
-                    // Keep the existing mask when updating value
-                    phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999'
-                  })}
+                  onChange={(e) =>
+                    handleSubFieldChange('phoneNumber', {
+                      value: e.target.value,
+                      phoneMask: subFields.phoneNumber?.phoneMask || '(999) 999-9999',
+                    })
+                  }
                   className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={subFields.phoneNumber?.placeholder || 'Enter phone number'}
                   disabled={isDisabled}
