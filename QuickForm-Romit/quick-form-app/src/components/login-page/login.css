@@ -1,0 +1,521 @@
+/* General reset for consistent rendering */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Root variables for consistent theming */
+  :root {
+    --primary-dark: #001F3F;
+    --primary-light: #F9FAFB;
+    --accent-gradient: linear-gradient(90deg, rgba(0, 138, 176, 0.2) 30%, rgba(143, 220, 241, 0.2) 100%);
+    --accent-gradient-hover: linear-gradient(90deg, rgba(0, 138, 176, 0.1) 30%, rgba(143, 220, 241, 0.1) 100%);
+    --text-dark: #0B0A0A;
+    --text-light: #ffffff;
+    --border-color: #E4E7EC;
+    --shadow: 0px 4px 30px rgba(33, 33, 52, 0.1);
+  }
+  
+  /* Base layout */
+  .login-page {
+    width: 100%;
+    min-width: 320px; /* Minimum width for small devices */
+    max-width: 100vw;
+    min-height: 100vh; /* Ensure it takes at least full viewport height */
+    display: flex;
+    flex-direction: column;
+    overflow: auto; /* Handle overflow for smaller screens */
+  }
+  
+  .content-container {
+    display: flex;
+    flex: 1; /* Allow container to grow and fill available space */
+    min-height: 100vh;
+    max-width: 100%;
+  }
+  
+  /* Left container */
+  .left-container {
+    flex: 1; /* Equal width distribution */
+    min-width: 300px; /* Prevent it from getting too narrow */
+    max-width: 50vw; /* Cap width on larger screens */
+    background-color: var(--primary-dark);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly; /* Center content vertically */
+    position: relative;
+  }
+  
+  .features-section {
+    width: min(85%, 1000px); /* Responsive width, max 600px */
+    margin: 0 auto; /* Center horizontally */
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.5rem, 4vh, 2.5rem); /* Responsive gap */
+    padding: 2rem;
+  }
+  
+  .main-title {
+    color: var(--text-light);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.5%;
+  }
+  
+  .quickform-text {
+    background: linear-gradient(0deg, rgba(0, 138, 176, 1) 0%, rgba(143, 220, 241, 1) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.5%;
+  }
+  
+  .subtitle-div {
+    width: min(100%, 500px); /* Responsive width */
+  }
+  
+  .subtitle {
+    color: var(--text-light);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(1rem, 2.5vw, 1.125rem);
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: 0.5%;
+  }
+  
+  .features-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(16px, 3vw, 24px);
+    width: 100%;
+  }
+  
+  .feature {
+    flex: 1 1 clamp(200px, 45%, 300px); /* Flexible width with minimum */
+    padding: clamp(12px, 2vw, 16px);
+    border: 1px solid #8fdcf1;
+    border-radius: 0.5rem;
+    background: var(--accent-gradient);
+    backdrop-filter: blur(30px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .icon-wrapper {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+  
+  .feature-title {
+    color: var(--text-light);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(0.875rem, 2.5vw, 1.125rem);
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.5%;
+  }
+  
+  .feature-description {
+    color: var(--text-light);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(0.625rem, 2vw, 0.75rem);
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: 0.5%;
+  }
+  
+  .footer {
+    width: min(85%, 1000px);
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  
+  .footer-text {
+    color: var(--text-light);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(0.75rem, 2vw, 0.875rem);
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  
+  /* Right container */
+  .right-container {
+    flex: 1;
+    min-width: 300px;
+    max-width: 50vw;
+    background-color: var(--primary-light);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+  }
+  
+  .quickform-logo {
+    position: relative;
+    margin-bottom: 2%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .logo {
+    width: clamp(200px, 20vw, 275px); /* Responsive logo size */
+  }
+  
+  .login-container {
+    width: min(75%, 500px); /* Responsive width */
+    margin: 0 auto;
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    padding: clamp(30px, 5vw, 50px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(24px, 4vh, 40px);
+  }
+  
+  .login-image {
+    width: clamp(80px, 10vw, 120px);
+    height: clamp(60px, 10vh, 100px);
+  }
+  
+  .login-text {
+    color: var(--text-dark);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+  
+  .login-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(20px, 3vh, 28px);
+  }
+  
+  .dropdown-container {
+    width: 100%;
+  }
+  
+  .label {
+    display: block;
+    color: var(--text-dark);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(10px, 2vw, 12px);
+    font-weight: 600;
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  
+  .ant-select {
+    width: 100%;
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-weight: 500;
+    color: var(--text-dark);
+  }
+  
+  .ant-select-selector {
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    background-color: #ffffff !important;
+    height: clamp(36px, 5vh, 40px) !important;
+    display: flex;
+    align-items: center;
+  }
+  
+  .ant-select-selection-item,
+  .ant-select-selection-placeholder {
+    color: var(--text-dark) !important;
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-weight: 500;
+  }
+  
+  .ant-select-arrow {
+    color: var(--text-dark) !important;
+    padding-top: 10px;
+    padding-right: 5px;
+  }
+  
+  .ant-select-focused .ant-select-selector,
+  .ant-select-selector:hover {
+    border-color: #8fdcf1 !important;
+    box-shadow: 0 0 0 2px rgba(143, 220, 241, 0.3) !important;
+  }
+  
+  .ant-select-dropdown {
+    background: #ffffff !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    box-shadow: var(--shadow) !important;
+  }
+  
+  .ant-select-item-option {
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif !important;
+    font-size: clamp(12px, 2vw, 14px) !important;
+    font-weight: 500 !important;
+    color: var(--text-dark) !important;
+    padding: 8px 12px !important;
+  }
+  
+  .ant-select-item-option-selected {
+    background: var(--accent-gradient) !important;
+    color: var(--text-dark) !important;
+    font-weight: 600 !important;
+  }
+  
+  .ant-select-item-option:hover {
+    background: var(--accent-gradient-hover) !important;
+  }
+  
+  @keyframes waveEffect {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: 0 0;
+    }
+  }
+  
+  .login-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: clamp(8px, 2vh, 10px);
+    border-radius: 8px;
+    background: linear-gradient(
+      270deg,
+      rgba(29, 109, 158, 0.9),
+      rgba(20, 65, 126, 0.9),
+      rgba(11, 41, 94, 0.9),
+      rgba(20, 65, 126, 0.9),
+      rgba(29, 109, 158, 0.9)
+    );
+    background-size: 200% auto;
+    color: var(--text-light);
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: clamp(0.75rem, 2vw, 0.875rem);
+    font-weight: 600;
+    line-height: 1.5;
+    text-align: center;
+    transition: background-position 0.8s ease;
+  }
+  
+  .login-button:hover:not(.disabled) {
+    animation: waveEffect 3s ease infinite;
+    background-size: 200% 100%;
+  }
+  
+  .login-button.disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    cursor: not-allowed;
+  }
+  
+  .gate-logo {
+    padding-right: 7px;
+    width: clamp(16px, 2vw, 20px);
+  }
+  
+  /* Media query for medium screens (up to 1440px) */
+  @media (max-width: 1440px) {
+    .content-container {
+      min-height: 100vh;
+    }
+  
+    .left-container,
+    .right-container {
+      max-width: none; /* Remove width cap for flexibility */
+    }
+  
+    .features-section {
+      width: min(90%, 850px);
+      gap: clamp(1rem, 3vh, 2rem);
+    }
+  
+    .main-title,
+    .quickform-text {
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+    }
+  
+    .subtitle {
+      font-size: clamp(0.875rem, 2vw, 1rem);
+    }
+  
+    .feature {
+      flex: 1 1 clamp(180px, 45%, 280px);
+      padding: clamp(10px, 2vw, 14px);
+    }
+  
+    .feature-title {
+      font-size: clamp(0.875rem, 2vw, 1rem);
+    }
+  
+    .feature-description {
+      font-size: clamp(0.6rem, 1.5vw, 0.7rem);
+    }
+  
+    .footer {
+      width: min(85%, 550px);
+      top: 0%;
+    }
+  
+  
+    .logo {
+      width: clamp(180px, 18vw, 225px);
+    }
+  
+    .login-container {
+      width: min(80%, 450px);
+      padding: clamp(24px, 4vw, 40px);
+      /* gap: clamp(20px, 3vh, 32px); */
+    }
+  
+    .login-image {
+      width: clamp(70px, 12vw, 100px);
+      height: clamp(50px, 8vh, 80px);
+    }
+  
+    .login-text {
+      font-size: clamp(1rem, 2.5vw, 1.3rem);
+    }
+  
+    .login-form {
+      gap: clamp(16px, 2.5vh, 24px);
+    }
+  
+    .login-button {
+      padding: clamp(7px, 1.5vh, 9px);
+      font-size: clamp(0.7rem, 1.5vw, 0.8rem);
+    }
+  }
+  
+  /* Media query for small screens (up to 768px) */
+  @media (max-width: 768px) {
+    .content-container {
+      flex-direction: column;
+      min-height: 100vh;
+    }
+  
+    .left-container,
+    .right-container {
+      flex: none; /* Reset flex for stacking */
+      width: 100%;
+      min-height: 50vh; /* Ensure each takes at least half the viewport */
+      max-width: none;
+    }
+  
+    .features-section {
+      width: min(90%, 500px);
+      gap: clamp(1rem, 2vh, 1.5rem);
+      padding: 1.5rem;
+    }
+  
+    .main-title,
+    .quickform-text {
+      font-size: clamp(1.5rem, 4vw, 1.8rem);
+    }
+  
+    .subtitle {
+      font-size: clamp(0.75rem, 2vw, 0.875rem);
+    }
+  
+    .features-container {
+      gap: clamp(12px, 2vw, 16px);
+    }
+  
+    .feature {
+      flex: 1 1 100%; /* Full width on small screens */
+      padding: clamp(10px, 2vw, 12px);
+    }
+  
+    .feature-title {
+      font-size: clamp(0.75rem, 2vw, 0.875rem);
+    }
+  
+    .feature-description {
+      font-size: clamp(0.5rem, 1.5vw, 0.625rem);
+    }
+  
+    .footer {
+      width: min(90%, 500px);
+      bottom: 1rem;
+    }
+  
+    .footer-text {
+      font-size: clamp(0.625rem, 1.5vw, 0.75rem);
+    }
+  
+  
+    .logo {
+      width: clamp(150px, 30vw, 200px);
+    }
+  
+    .login-container {
+      width: min(90%, 400px);
+      padding: clamp(20px, 4vw, 30px);
+      gap: clamp(16px, 2.5vh, 24px);
+    }
+  
+    .login-image {
+      width: clamp(60px, 20vw, 80px);
+      height: clamp(40px, 8vh, 60px);
+    }
+  
+    .login-text {
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+    }
+  
+    .login-form {
+      gap: clamp(12px, 2vh, 20px);
+    }
+  
+    .label {
+      font-size: clamp(9px, 1.5vw, 10px);
+    }
+  
+    .login-button {
+      padding: clamp(6px, 1.5vh, 8px);
+      font-size: clamp(0.625rem, 1.5vw, 0.75rem);
+    }
+  }
+  
+  /* Media query for very small screens (up to 480px) */
+  @media (max-width: 480px) {
+    .features-section {
+      width: 95%;
+      padding: 1rem;
+    }
+  
+    .main-title,
+    .quickform-text {
+      font-size: clamp(1.2rem, 4vw, 1.5rem);
+    }
+  
+    .subtitle {
+      font-size: clamp(0.625rem, 2vw, 0.75rem);
+    }
+  
+    .login-container {
+      width: 95%;
+      padding: clamp(16px, 3vw, 24px);
+    }
+  
+    .login-image {
+      width: clamp(50px, 15vw, 70px);
+      height: clamp(30px, 6vh, 50px);
+    }
+  }
