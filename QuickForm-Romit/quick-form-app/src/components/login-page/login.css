@@ -280,6 +280,35 @@
   background: var(--accent-gradient-hover) !important;
 }
 
+.ant-input {
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  background-color: #ffffff !important;
+  height: clamp(36px, 5vh, 40px) !important;
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-weight: 500;
+  color: var(--text-dark);
+  padding: 4px 11px;
+  transition: all 0.3s;
+}
+
+.ant-input:hover {
+  border-color: #8fdcf1 !important;
+  box-shadow: 0 0 0 2px rgba(143, 220, 241, 0.3) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused {
+  border-color: #8fdcf1 !important;
+  box-shadow: 0 0 0 2px rgba(143, 220, 241, 0.3) !important;
+}
+
+.ant-input::placeholder {
+  color: #a0a0a0 !important;
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-weight: 500;
+}
+
 @keyframes waveEffect {
   0% {
     background-position: 200% 0;
@@ -326,8 +355,7 @@
 }
 
 .gate-logo {
-  padding-right: 7px;
-  width: clamp(16px, 2vw, 20px);
+  margin-right: 8px;
 }
 
 /* Media query for medium screens (up to 1440px) */
