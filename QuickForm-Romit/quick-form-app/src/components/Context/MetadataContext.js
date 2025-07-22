@@ -18,7 +18,7 @@ export const SalesforceDataProvider = ({ children }) => {
       setIsLoading(true);
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
       const fetchStart = Date.now();
-      console.log('Metadata Context initialize')
+      console.log('Metadata Context initialize',userId, cleanedInstanceUrl);
       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

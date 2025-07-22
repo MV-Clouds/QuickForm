@@ -89,6 +89,8 @@ const MappingFields = () => {
   ];
 
   const initialEdges = [];
+  console.log(metadata, 'metadata');
+  
   console.log('formRecords ', formRecords);
 
 
@@ -160,6 +162,22 @@ const MappingFields = () => {
     }
   }, [formVersionId, formRecords]);
 
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl && !token) {
+      fetchAccessToken(userId, instanceUrl);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl && (!formRecords || formRecords.length === 0)) {
+      refreshData();
+    }
+  }, []);
+
   const fetchAccessToken = async (userId, instanceUrl, retries = 2) => {
     try {
       const url = process.env.REACT_APP_GET_ACCESS_TOKEN_URL || "https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/prod/getAccessToken";
@@ -187,7 +205,7 @@ const MappingFields = () => {
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
-
+console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       if (!token || !instanceUrl || !userId) {
         throw new Error('User not authenticated or instance URL missing');
       }
@@ -729,7 +747,7 @@ const MappingFields = () => {
                   ...node.data,
                   label: mapping.label,
                   displayLabel: mapping.displayLabel || mapping.label,
-                  action: mapping.actionType,
+                  action: mapping.actionType === "CreateUpdate" ? "Create/Update" : mapping.actionType, 
                   type: mapping.type,
                   order: mapping.order,
                   salesforceObject: mapping.salesforceObject,
@@ -790,7 +808,7 @@ const MappingFields = () => {
 
   useEffect(() => {
     initializeData();
-  }, [formVersionId]);
+  }, [formVersionId,formRecords]);
 
   const onDragStart = (event, nodeType, action) => {
     event.dataTransfer.setData("application/reactflow-type", nodeType);
@@ -859,7 +877,7 @@ const MappingFields = () => {
                   </ReactFlowProvider>
                 </div>
 
-                {selectedNode && ["Create/Update", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
+                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
                   <ActionPanel
                     nodeId={selectedNode.id}
                     nodeType={selectedNode.data.action}

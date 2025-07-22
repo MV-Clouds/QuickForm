@@ -33,7 +33,138 @@ function PublicFormViewer() {
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState([]);
 
-  useEffect(() => {
+//   useEffect(() => {
+//   const fetchFormData = async () => {
+//     try {
+//       let decrypted;
+//       try {
+//         decrypted = decrypt(linkId);
+//       } catch (e) {
+//         throw new Error(e.message || 'Invalid link format');
+//       }
+
+//       const [userId, formId] = decrypted.split('$');
+//       if (!userId || !formId) {
+//         throw new Error('Invalid link data');
+//       }
+//       setLinkData({ userId, formId });
+
+//       const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ userId }),
+//       });
+
+//       const tokenData = await tokenResponse.json();
+//       if (!tokenResponse.ok || tokenData.error) {
+//         throw new Error(tokenData.error || 'Failed to fetch access token');
+//       }
+//       const token = tokenData.access_token;
+//       const instanceUrl = tokenData.instanceUrl;
+//       setAccessToken(token);
+//       setInstanceUrl(instanceUrl);
+
+//       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ userId, formId, accessToken: token }),
+//       });
+
+//       const data = await response.json();
+//       if (!response.ok) {
+//         throw new Error(data.error || 'Failed to fetch form');
+//       }
+//       const formVersion = data.formVersion;
+//       setFormData(formVersion);
+
+//       const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json',
+//           Authorization: `Bearer ${token}`,
+//         },
+//         body: JSON.stringify({
+//           userId,
+//           formVersionId: formVersion.Id,
+//           instanceUrl,
+//           accessToken: token,
+//         }),
+//       });
+
+//       const mappingsData = await mappingsResponse.json();
+//       if (!mappingsResponse.ok) {
+//         throw new Error(mappingsData.error || 'Failed to fetch mappings');
+//       }
+//       setFormData((prev) => ({ ...prev, mappings: mappingsData.mappings }));
+
+//       const initialValues = {};
+//       const initialSignatures = {};
+//       const initialFilePreviews = {};
+//       const initialRatings = {};
+//       const initialSelectedOptions = {};
+//       const initialToggles = {};
+
+//       formVersion.Fields.forEach((field) => {
+//         const properties = JSON.parse(field.Properties__c || '{}');
+//         const fieldType = field.Field_Type__c;
+
+//         if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+//           // Safely access subFields properties with defaults
+//           initialValues[`${field.Id}_countryCode`] =
+//             properties.subFields?.countryCode?.value ?? 'US';
+//           initialValues[`${field.Id}_phoneNumber`] =
+//             properties.subFields?.phoneNumber?.value ?? '';
+//         } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+//           initialValues[field.Id] = properties.defaultValue || [];
+//         } else if (fieldType === 'datetime' || fieldType === 'date') {
+//           initialValues[field.Id] = properties.defaultValue || null;
+//         } else if (fieldType === 'time') {
+//           initialValues[field.Id] = properties.defaultValue || '';
+//         } else if (fieldType === 'scalerating') {
+//           initialValues[field.Id] = {};
+//         } else {
+//           initialValues[field.Id] = properties.defaultValue || '';
+//         }
+
+//         initialSignatures[field.Id] = null;
+//         initialFilePreviews[field.Id] = null;
+//         initialRatings[field.Id] = null;
+//         initialSelectedOptions[field.Id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
+//         initialToggles[field.Id] = false;
+//       });
+
+//       setFormValues(initialValues);
+//       setSignatures(initialSignatures);
+//       setFilePreviews(initialFilePreviews);
+//       setSelectedRatings(initialRatings);
+//       setSelectedOptions(initialSelectedOptions);
+//       setToggles(initialToggles);
+
+//       const pageMap = {};
+//       formVersion.Fields.forEach((field) => {
+//         const pageNum = field.Page_Number__c || 1;
+//         if (!pageMap[pageNum]) {
+//           pageMap[pageNum] = [];
+//         }
+//         pageMap[pageNum].push(field);
+//       });
+
+//       const sortedPages = Object.keys(pageMap)
+//         .sort((a, b) => Number(a) - Number(b))
+//         .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
+//       setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
+//     } catch (error) {
+//       console.error('Error fetching form:', error);
+//       setFetchError(error.message || 'Failed to load form');
+//     }
+//   };
+
+//   if (linkId) {
+//     fetchFormData();
+//   }
+// }, [linkId]);
+
+useEffect(() => {
   const fetchFormData = async () => {
     try {
       let decrypted;
@@ -108,12 +239,12 @@ function PublicFormViewer() {
         const properties = JSON.parse(field.Properties__c || '{}');
         const fieldType = field.Field_Type__c;
 
-        if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-          // Safely access subFields properties with defaults
-          initialValues[`${field.Id}_countryCode`] =
-            properties.subFields?.countryCode?.value ?? 'US';
-          initialValues[field.Id] =
-            properties.subFields?.phoneNumber?.value ?? '';
+        if (fieldType === 'phone') {
+          if (properties.subFields?.countryCode?.enabled) {
+            initialValues[`${field.Id}_countryCode`] = properties.subFields?.countryCode?.value ?? 'US';
+          }
+          initialValues[`${field.Id}_phoneNumber`] = properties.subFields?.phoneNumber?.value ?? '';
+          initialValues[field.Id] = properties.subFields?.phoneNumber?.value ?? '';
         } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
           initialValues[field.Id] = properties.defaultValue || [];
         } else if (fieldType === 'datetime' || fieldType === 'date') {
@@ -225,161 +356,160 @@ function PublicFormViewer() {
   };
 
   const validateForm = () => {
-    if (!formData) return false;
-    const newErrors = {};
+  if (!formData) return false;
+  const newErrors = {};
 
-    formData.Fields.forEach((field) => {
-      const properties = JSON.parse(field.Properties__c || '{}');
-      const value = formValues[field.Id];
-      const fieldType = field.Field_Type__c;
-      const fieldLabel = properties.label || field.Name;
+  formData.Fields.forEach((field) => {
+    const properties = JSON.parse(field.Properties__c || '{}');
+    const value = formValues[field.Id];
+    const fieldType = field.Field_Type__c;
+    const fieldLabel = properties.label || field.Name;
 
-      const isRequired = properties.isRequired;
-      if (isRequired) {
-        if (
-          value === '' ||
-          value == null ||
-          (Array.isArray(value) && value.length === 0) ||
-          (fieldType === 'fileupload' && !value) ||
-          (fieldType === 'imageuploader' && !value) ||
-          (fieldType === 'signature' && !signatures[field.Id]) ||
-          (fieldType === 'terms' && !value) ||
-          (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))
-        ) {
+    const isRequired = properties.isRequired;
+    if (isRequired) {
+      if (
+        value === '' ||
+        value == null ||
+        (Array.isArray(value) && value.length === 0) ||
+        (fieldType === 'fileupload' && !value) ||
+        (fieldType === 'imageuploader' && !value) ||
+        (fieldType === 'signature' && !signatures[field.Id]) ||
+        (fieldType === 'terms' && !value) ||
+        (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))
+      ) {
+        newErrors[field.Id] = `${fieldLabel} is required`;
+      }
+    }
+
+    switch (fieldType) {
+      case 'number':
+        if (value !== '' && isNaN(parseFloat(value))) {
+          newErrors[field.Id] = `${fieldLabel} must be a valid number`;
+        } else if (properties.numberValueLimits?.enabled) {
+          const numValue = parseFloat(value);
+          const { min, max } = properties.numberValueLimits;
+          if (min != null && numValue < parseFloat(min)) {
+            newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
+          }
+          if (max != null && numValue > parseFloat(max)) {
+            newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
+          }
+        }
+        break;
+      case 'phone':
+        const isCountryCodeEnabled = properties.subFields?.countryCode?.enabled;
+        const phoneNumber = isCountryCodeEnabled
+          ? formValues[`${field.Id}_phoneNumber`] || ''
+          : formValues[field.Id] || '';
+        const countryCode = isCountryCodeEnabled
+          ? formValues[`${field.Id}_countryCode`] || properties.subFields?.countryCode?.value || 'US'
+          : 'US'; // Default for validation only
+
+        if (phoneNumber && phoneNumber !== '') {
+          try {
+            const adjustedValue = phoneNumber.replace(/\D/g, '');
+            const phoneNumberObj = parsePhoneNumberFromString(adjustedValue, countryCode);
+
+            if (!phoneNumberObj || !phoneNumberObj.isValid()) {
+              newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
+            } else {
+              const maxDigits = phoneNumberObj.countryCallingCode === '+1' ? 10 : 15;
+              if (adjustedValue.length > maxDigits) {
+                newErrors[field.Id] = `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
+              }
+              if (countryCode === 'US' && !/^[2-9]\d{2}$/.test(phoneNumberObj.nationalNumber.slice(0, 3))) {
+                newErrors[field.Id] = `${fieldLabel} must include a valid US area code`;
+              }
+            }
+          } catch (error) {
+            newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
+          }
+        } else if (isRequired) {
           newErrors[field.Id] = `${fieldLabel} is required`;
         }
-      }
+        break;
+      case 'price':
+        if (value !== '' && isNaN(parseFloat(value))) {
+          newErrors[field.Id] = `${fieldLabel} must be a valid number`;
+        } else if (properties.priceLimits?.enabled) {
+          const numValue = parseFloat(value);
+          const { min, max } = properties.priceLimits;
+          if (min != null && numValue < parseFloat(min)) {
+            newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
+          }
+          if (max != null && numValue > parseFloat(max)) {
+            newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
+          }
+        }
+        break;
+      case 'shorttext':
+        if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
+          newErrors[field.Id] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
+        }
+        break;
+      case 'longtext':
+        if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
+          newErrors[field.Id] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
+        }
+        break;
+      case 'email':
+        if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          newErrors[field.Id] = `${fieldLabel} must be a valid email address`;
+        }
+        if (properties.allowedDomains && value) {
+          const domains = properties.allowedDomains.split(',').map((d) => d.trim());
+          const domain = value.split('@')[1];
+          if (!domains.includes(domain)) {
+            newErrors[field.Id] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
+          }
+        }
+        if (properties.enableConfirmation && value !== formValues[`${field.Id}_confirmation`]) {
+          newErrors[`${field.Id}_confirmation`] = 'Email confirmation does not match';
+        }
+        break;
+      case 'fileupload':
+      case 'imageuploader':
+        if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
+          newErrors[field.Id] = `File size exceeds ${properties.maxFileSize}MB limit`;
+        }
+        if (value && properties.allowedFileTypes) {
+          const extension = value.name.split('.').pop().toLowerCase();
+          const allowed = properties.allowedFileTypes.split(',').map((type) => type.trim().toLowerCase());
+          if (!allowed.includes(extension)) {
+            newErrors[field.Id] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
+          }
+        }
+        break;
+      case 'date':
+        if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD format`;
+        }
+        if (properties.enableAgeVerification && value) {
+          const today = new Date();
+          const birthDate = new Date(value);
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+          if (age < properties.minAge) {
+            newErrors[field.Id] = `You must be at least ${properties.minAge} years old`;
+          }
+        }
+        break;
+      case 'datetime':
+        if (value && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value)) {
+          newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD HH:MM format`;
+        }
+        break;
+      default:
+        break;
+    }
+  });
 
-      switch (fieldType) {
-        case 'number':
-          if (value !== '' && isNaN(parseFloat(value))) {
-            newErrors[field.Id] = `${fieldLabel} must be a valid number`;
-          } else if (properties.numberValueLimits?.enabled) {
-            const numValue = parseFloat(value);
-            const { min, max } = properties.numberValueLimits;
-            if (min != null && numValue < parseFloat(min)) {
-              newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
-            }
-            if (max != null && numValue > parseFloat(max)) {
-              newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
-            }
-          }
-          break;
-        case 'phone':
-          if (value) {
-            const isCountryCodeEnabled = properties.subFields?.countryCode?.enabled;
-
-            if (isCountryCodeEnabled) {
-              const countryCode = formValues[`${field.Id}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
-              try {
-                const adjustedValue = value.replace(/\D/g, '');
-                const phoneNumber = parsePhoneNumberFromString(adjustedValue, countryCode);
-
-                if (!phoneNumber || !phoneNumber.isValid()) {
-                  newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
-                } else {
-                  const maxDigits = phoneNumber.countryCallingCode === '+1' ? 10 : phoneNumber.nationalNumber.length <= 15 ? phoneNumber.nationalNumber.length : 15;
-
-                  if (adjustedValue.length > maxDigits) {
-                    newErrors[field.Id] = `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
-                  }
-
-                  if (countryCode === 'US' && !/^[2-9]\d{2}$/.test(phoneNumber.nationalNumber.slice(0, 3))) {
-                    newErrors[field.Id] = `${fieldLabel} must include a valid US area code`;
-                  }
-                }
-              } catch (error) {
-                newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
-              }
-            } else {
-              // If country code is not enabled, you can optionally clear any existing error:
-              delete newErrors[field.Id];
-            }
-          }
-          break;
-
-        case 'price':
-          if (value !== '' && isNaN(parseFloat(value))) {
-            newErrors[field.Id] = `${fieldLabel} must be a valid number`;
-          } else if (properties.priceLimits?.enabled) {
-            const numValue = parseFloat(value);
-            const { min, max } = properties.priceLimits;
-            if (min != null && numValue < parseFloat(min)) {
-              newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
-            }
-            if (max != null && numValue > parseFloat(max)) {
-              newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
-            }
-          }
-          break;
-        case 'shorttext':
-          if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
-            newErrors[field.Id] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
-          }
-          break;
-        case 'longtext':
-          if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
-            newErrors[field.Id] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
-          }
-          break;
-        case 'email':
-          if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-            newErrors[field.Id] = `${fieldLabel} must be a valid email address`;
-          }
-          if (properties.allowedDomains && value) {
-            const domains = properties.allowedDomains.split(',').map((d) => d.trim());
-            const domain = value.split('@')[1];
-            if (!domains.includes(domain)) {
-              newErrors[field.Id] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
-            }
-          }
-          if (properties.enableConfirmation && value !== formValues[`${field.Id}_confirmation`]) {
-            newErrors[`${field.Id}_confirmation`] = 'Email confirmation does not match';
-          }
-          break;
-        case 'fileupload':
-        case 'imageuploader':
-          if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
-            newErrors[field.Id] = `File size exceeds ${properties.maxFileSize}MB limit`;
-          }
-          if (value && properties.allowedFileTypes) {
-            const extension = value.name.split('.').pop().toLowerCase();
-            const allowed = properties.allowedFileTypes.split(',').map((type) => type.trim().toLowerCase());
-            if (!allowed.includes(extension)) {
-              newErrors[field.Id] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
-            }
-          }
-          break;
-        case 'date':
-          if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD format`;
-          }
-          if (properties.enableAgeVerification && value) {
-            const today = new Date();
-            const birthDate = new Date(value);
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-              age--;
-            }
-            if (age < properties.minAge) {
-              newErrors[field.Id] = `You must be at least ${properties.minAge} years old`;
-            }
-          }
-          break;
-        case 'datetime':
-          if (value && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value)) {
-            newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD HH:MM format`;
-          }
-          break;
-        default:
-          break;
-      }
-    });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
 
   const uploadFileToSalesforce = async (file, submissionId) => {
     const formData = new FormData();
@@ -400,171 +530,200 @@ function PublicFormViewer() {
     return data.documentId;
   };
 
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
-  //     return;
-  //   }
 
-  //   setIsSubmitting(true);
-  //   try {
-  //     const submissionData = {};
-  //     const filesToUpload = {};
+// const handleSubmit = async (e) => {
+//   e.preventDefault();
+//   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
+//     return;
+//   }
 
-  //     for (const key of Object.keys(formValues)) {
-  //       const field = formData.Fields.find((f) => f.Id === key);
-  //       const fieldType = field?.Field_Type__c;
+//   setIsSubmitting(true);
+//   try {
+//     const submissionData = {};
+//     const filesToUpload = {};
 
-  //       if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-  //         filesToUpload[key] = formValues[key];
-  //         submissionData[key] = formValues[key].name;
-  //       } else if (fieldType === 'signature' && signatures[key]) {
-  //         const signatureBlob = await (await fetch(signatures[key])).blob();
-  //         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-  //         filesToUpload[key] = signatureFile;
-  //         submissionData[key] = `${key}.png`;
-  //       } else {
-  //         // For phone fields, clean the input to digits only for submission
-  //         if (fieldType === 'phone') {
-  //           submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
-  //         } else {
-  //           submissionData[key] = formValues[key];
-  //         }
-  //       }
-  //     }
+//     for (const key of Object.keys(formValues)) {
+//       const field = formData.Fields.find((f) => f.Id === key);
+//       const fieldType = field?.Field_Type__c;
+//       const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
-  //     const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${accessToken}`,
-  //       },
-  //       body: JSON.stringify({
-  //         userId: linkData.userId,
-  //         submissionData: {
-  //           formId: formData.Form__c,
-  //           formVersionId: formData.Id,
-  //           data: submissionData,
-  //           signatures: signatures,
-  //         },
-  //       }),
-  //     });
+//       if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
+//         filesToUpload[key] = formValues[key];
+//         submissionData[key] = formValues[key].name;
+//       } else if (fieldType === 'signature' && signatures[key]) {
+//         const signatureBlob = await (await fetch(signatures[key])).blob();
+//         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
+//         filesToUpload[key] = signatureFile;
+//         submissionData[key] = `${key}.png`;
+//       } else if (fieldType === 'phone') {
+//         // Skip subfields here - they'll be handled in the main phone field processing
+//         if (key.endsWith('_countryCode') || key.endsWith('_phoneNumber')) {
+//           continue;
+//         }
+       
+//         // Handle phone fields
+//         if (properties.subFields?.countryCode?.enabled) {
+//           const countryCode = formValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
+//           const phoneNumber = formValues[`${key}_phoneNumber`] ? formValues[`${key}_phoneNumber`].replace(/\D/g, '') : '';
+//           try {
+//             const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
+//             if (phoneObj && phoneObj.isValid()) {
+//               // Combine country code and phone number in E.164 format
+//               submissionData[key] = phoneObj.format('E.164');
+//             } else {
+//               // If invalid, store the raw phone number
+//               submissionData[key] = phoneNumber;
+//               console.warn(`Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`);
+//             }
+//             // Include country code and phone number separately for formatter reference
+//             submissionData[`${key}_countryCode`] = countryCode;
+//             submissionData[`${key}_phoneNumber`] = phoneNumber;
+//           } catch (error) {
+//             submissionData[key] = phoneNumber;
+//             submissionData[`${key}_countryCode`] = countryCode;
+//             submissionData[`${key}_phoneNumber`] = phoneNumber;
+//             console.warn(`Error parsing phone number for ${key}: ${error.message}`);
+//           }
+//         } else {
+//           // For phone fields without country code subfield, clean to digits
+//           submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+//         }
+//       } else {
+//         submissionData[key] = formValues[key];
+//       }
+//     }
 
-  //     const data = await response.json();
-  //     if (!response.ok) {
-  //       throw new Error(data.error || 'Failed to submit form');
-  //     }
+//     const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         Authorization: `Bearer ${accessToken}`,
+//       },
+//       body: JSON.stringify({
+//         userId: linkData.userId,
+//         submissionData: {
+//           formId: formData.Form__c,
+//           formVersionId: formData.Id,
+//           data: submissionData,
+//           signatures: signatures,
+//         },
+//       }),
+//     });
 
-  //     const submissionId = data.submissionId;
+//     const data = await response.json();
+//     if (!response.ok) {
+//       throw new Error(data.error || 'Failed to submit form');
+//     }
 
-  //     const updatedSubmissionData = { ...submissionData };
-  //     for (const [key, file] of Object.entries(filesToUpload)) {
-  //       const documentId = await uploadFileToSalesforce(file, submissionId);
-  //       updatedSubmissionData[key] = documentId;
-  //     }
+//     const submissionId = data.submissionId;
 
-  //     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${accessToken}`,
-  //       },
-  //       body: JSON.stringify({
-  //         userId: linkData.userId,
-  //         instanceUrl,
-  //         formVersionId: formData.Id,
-  //         formData: updatedSubmissionData,
-  //         nodes: formData.mappings,
-  //       }),
-  //     });
+//     const updatedSubmissionData = { ...submissionData };
+//     for (const [key, file] of Object.entries(filesToUpload)) {
+//       const documentId = await uploadFileToSalesforce(file, submissionId);
+//       updatedSubmissionData[key] = documentId;
+//     }
 
-  //     const flowData = await flowResponse.json();
-  //     if (!flowResponse.ok) {
-  //       const newErrors = {};
-  //       if (flowData.results) {
-  //         Object.entries(flowData.results).forEach(([nodeId, result]) => {
-  //           if (result.error) {
-  //             const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-  //             if (mapping?.Formatter_Config__c) {
-  //               const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-  //               let fieldId = formatterConfig.inputField;
-  //               if (fieldId.includes('_phoneNumber')) {
-  //                 fieldId = fieldId.replace('_phoneNumber', '');
-  //               }
-  //               newErrors[fieldId] = result.error;
-  //             }
-  //           }
-  //         });
-  //         if (Object.keys(newErrors).length > 0) {
-  //           setErrors(newErrors);
-  //           throw new Error('Form submission completed but flow execution had errors');
-  //         }
-  //       }
-  //       throw new Error(flowData.error || 'Failed to execute flow');
-  //     }
+//     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//         Authorization: `Bearer ${accessToken}`,
+//       },
+//       body: JSON.stringify({
+//         userId: linkData.userId,
+//         instanceUrl,
+//         formVersionId: formData.Id,
+//         formData: updatedSubmissionData,
+//         nodes: formData.mappings,
+//       }),
+//     });
 
-  //     alert('Form submitted and flow executed successfully!');
+//     const flowData = await flowResponse.json();
+//     if (!flowResponse.ok) {
+//       const newErrors = {};
+//       if (flowData.results) {
+//         Object.entries(flowData.results).forEach(([nodeId, result]) => {
+//           if (result.error) {
+//             const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+//             if (mapping?.Formatter_Config__c) {
+//               const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
+//               let fieldId = formatterConfig.inputField;
+//               if (fieldId.includes('_phoneNumber') || fieldId.includes('_countryCode')) {
+//                 fieldId = fieldId.replace(/_phoneNumber|_countryCode/g, '');
+//               }
+//               newErrors[fieldId] = result.error;
+//             }
+//           }
+//         });
+//         if (Object.keys(newErrors).length > 0) {
+//           setErrors(newErrors);
+//           throw new Error('Form submission completed but flow execution had errors');
+//         }
+//       }
+//       throw new Error(flowData.error || 'Failed to execute flow');
+//     }
 
-  //     const initialValues = {};
-  //     formData.Fields.forEach((field) => {
-  //       const properties = JSON.parse(field.Properties__c || '{}');
-  //       const fieldType = field.Field_Type__c;
-  //       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-  //         initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
-  //         initialValues[field.Id] = '';
-  //       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-  //         initialValues[field.Id] = [];
-  //       } else if (fieldType === 'datetime' || fieldType === 'date') {
-  //         initialValues[field.Id] = null;
-  //       } else if (fieldType === 'scalerating') {
-  //         initialValues[field.Id] = {};
-  //       } else {
-  //         initialValues[field.Id] = '';
-  //       }
-  //     });
-  //     setFormValues(initialValues);
-  //     setErrors({});
-  //     setSignatures({});
-  //     setFilePreviews({});
-  //     setSelectedRatings({});
-  //     setSelectedOptions({});
-  //     setToggles({});
-  //     setCurrentPage(0);
-  //   } catch (error) {
-  //     if (error.message.includes('INVALID_JWT_FORMAT')) {
-  //       let decrypted;
-  //       try {
-  //         decrypted = decrypt(linkId);
-  //       } catch (e) {
-  //         throw new Error(e.message || 'Invalid link format');
-  //       }
+//     alert('Form submitted and flow executed successfully!');
 
-  //       const [userId, formId] = decrypted.split('$');
-  //       const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({ userId }),
-  //       });
+//     const initialValues = {};
+//     formData.Fields.forEach((field) => {
+//       const properties = JSON.parse(field.Properties__c || '{}');
+//       const fieldType = field.Field_Type__c;
+//       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+//         initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+//         initialValues[`${field.Id}_phoneNumber`] = '';
+//         initialValues[field.Id] = '';
+//       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+//         initialValues[field.Id] = [];
+//       } else if (fieldType === 'datetime' || fieldType === 'date') {
+//         initialValues[field.Id] = null;
+//       } else if (fieldType === 'scalerating') {
+//         initialValues[field.Id] = {};
+//       } else {
+//         initialValues[field.Id] = '';
+//       }
+//     });
+//     setFormValues(initialValues);
+//     setErrors({});
+//     setSignatures({});
+//     setFilePreviews({});
+//     setSelectedRatings({});
+//     setSelectedOptions({});
+//     setToggles({});
+//     setCurrentPage(0);
+//   } catch (error) {
+//     if (error.message.includes('INVALID_JWT_FORMAT')) {
+//       let decrypted;
+//       try {
+//         decrypted = decrypt(linkId);
+//       } catch (e) {
+//         throw new Error(e.message || 'Invalid link format');
+//       }
 
-  //       const tokenData = await tokenResponse.json();
-  //       if (!tokenResponse.ok || tokenData.error) {
-  //         throw new Error(tokenData.error || 'Failed to fetch access token');
-  //       }
-  //       const token = tokenData.access_token;
-  //       setAccessToken(token);
-  //       handleSubmit(e);
-  //     } else {
-  //       console.error('Error submitting form:', error);
-  //       setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
-  //     }
-  //   } finally {
-  //     setIsSubmitting(false);
-  //   }
-  // };
+//       const [userId, formId] = decrypted.split('$');
+//       const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({ userId }),
+//       });
 
-  // In handleSubmit function
+//       const tokenData = await tokenResponse.json();
+//       if (!tokenResponse.ok || tokenData.error) {
+//         throw new Error(tokenData.error || 'Failed to fetch access token');
+//       }
+//       const token = tokenData.access_token;
+//       setAccessToken(token);
+//       handleSubmit(e);
+//     } else {
+//       console.error('Error submitting form:', error);
+//       setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
+//     }
+//   } finally {
+//     setIsSubmitting(false);
+//   }
+// };
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
     return;
@@ -588,35 +747,29 @@ function PublicFormViewer() {
         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
         filesToUpload[key] = signatureFile;
         submissionData[key] = `${key}.png`;
-      } else if (fieldType === 'phone' && !key.endsWith('_countryCode')) {
-        // Handle phone fields
+      } else if (fieldType === 'phone') {
+        // Handle phone fields - this is the key change
+        const phoneNumber = formValues[`${key}_phoneNumber`] || '';
+        const cleanedPhoneNumber = phoneNumber.replace(/\D/g, '');
+
+        // Always include the raw phone number in the _phoneNumber subfield
+        submissionData[`${key}_phoneNumber`] = cleanedPhoneNumber;
+
         if (properties.subFields?.countryCode?.enabled) {
-          const countryCode = formValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
-          const phoneNumber = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+          const countryCode = formValues[`${key}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
+          submissionData[`${key}_countryCode`] = countryCode;
+
+          // Format the main field in E.164 format if possible
           try {
-            const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
-            if (phoneObj && phoneObj.isValid()) {
-              // Combine country code and phone number in E.164 format
-              submissionData[key] = phoneObj.format('E.164');
-            } else {
-              // If invalid, store the raw phone number
-              submissionData[key] = phoneNumber;
-              console.warn(`Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`);
-            }
-            // Include country code separately for formatter reference
-            submissionData[`${key}_countryCode`] = countryCode;
+            const phoneObj = parsePhoneNumberFromString(cleanedPhoneNumber, countryCode);
+            submissionData[key] = phoneObj?.isValid() ? phoneObj.format('E.164') : cleanedPhoneNumber;
           } catch (error) {
-            submissionData[key] = phoneNumber;
-            submissionData[`${key}_countryCode`] = countryCode;
-            console.warn(`Error parsing phone number for ${key}: ${error.message}`);
+            submissionData[key] = cleanedPhoneNumber;
           }
         } else {
-          // For phone fields without country code subfield, clean to digits
-          submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+          // For phone fields without country code subfield
+          submissionData[key] = cleanedPhoneNumber;
         }
-      } else if (key.endsWith('_countryCode')) {
-        // Country code is already handled above
-        continue;
       } else {
         submissionData[key] = formValues[key];
       }
@@ -677,8 +830,8 @@ function PublicFormViewer() {
             if (mapping?.Formatter_Config__c) {
               const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
               let fieldId = formatterConfig.inputField;
-              if (fieldId.includes('_phoneNumber')) {
-                fieldId = fieldId.replace('_phoneNumber', '');
+              if (fieldId.includes('_phoneNumber') || fieldId.includes('_countryCode')) {
+                fieldId = fieldId.replace(/_phoneNumber|_countryCode/g, '');
               }
               newErrors[fieldId] = result.error;
             }
@@ -698,8 +851,11 @@ function PublicFormViewer() {
     formData.Fields.forEach((field) => {
       const properties = JSON.parse(field.Properties__c || '{}');
       const fieldType = field.Field_Type__c;
-      if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-        initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+      if (fieldType === 'phone') {
+        if (properties.subFields?.countryCode?.enabled) {
+          initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+        }
+        initialValues[`${field.Id}_phoneNumber`] = '';
         initialValues[field.Id] = '';
       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
         initialValues[field.Id] = [];
@@ -953,71 +1109,143 @@ function PublicFormViewer() {
           </div>
         );
 
-      case 'phone':
-        const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
-        let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
-        try {
-          const exampleNumber = getExampleNumber(countryCode);
-          if (exampleNumber) {
-            phoneMask = exampleNumber.format('NATIONAL').replace(/[0-9]/g, '9');
-          }
-        } catch (error) {
-          console.warn(`No example number for country ${countryCode}, using default mask`);
-        }
+      // case 'phone':
+      //   const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
+      //   let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
+      //   try {
+      //     const exampleNumber = getExampleNumber(countryCode);
+      //     if (exampleNumber) {
+      //       phoneMask = exampleNumber.format('NATIONAL').replace(/[0-9]/g, '9');
+      //     }
+      //   } catch (error) {
+      //     console.warn(`No example number for country ${countryCode}, using default mask`);
+      //   }
 
-        return (
-          <div className="mb-4">
-            {renderLabel()}
-            {properties.subFields?.countryCode?.enabled ? (
-              <div className="flex items-center gap-3">
-                <div className="w-1/3">
-                  <PhoneInput
-                    country={countryCode.toLowerCase()}
-                    value={formValues[`${fieldId}_countryCode`] || 'US'}
-                    onChange={(phone, countryData) => {
-                      const newCountryCode = countryData.countryCode.toUpperCase();
-                      handleChange(`${fieldId}_countryCode`, newCountryCode);
-                      handleChange(fieldId, ''); // Reset phone number
-                    }}
-                    inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                    buttonClass="border rounded p-1 bg-white"
-                    dropdownClass="border rounded max-h-64 overflow-y-auto"
-                    containerClass="flex items-center w-full"
-                    inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
-                    disabled={isDisabled}
-                    placeholder=""
-                    enableSearch
-                    searchPlaceholder="Search country"
-                    searchNotFound="No country found"
-                    preferredCountries={['us', 'ca', 'gb']}
-                  />
-                </div>
-                <div className="w-2/3">
-                  <input
-                    type="text"
-                    {...commonProps}
-                    value={formValues[fieldId] || ''}
-                    onChange={(e) => handleChange(fieldId, e.target.value)}
-                    placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
-                    disabled={isDisabled}
-                    aria-label="Phone number"
-                  />
-                </div>
-              </div>
-            ) : (
-              <InputMask
-                mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
-                value={formValues[fieldId] || ''}
-                onChange={(e) => handleChange(fieldId, e.target.value)}
-                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
-                disabled={isDisabled}
-              />
-            )}
-            {renderHelpText()}
-            {renderError()}
+      //   return (
+      //     <div className="mb-4">
+      //       {renderLabel()}
+      //       {properties.subFields?.countryCode?.enabled ? (
+      //         <div className="flex items-center gap-3">
+      //           <div className="w-1/3">
+      //             <PhoneInput
+      //               country={countryCode.toLowerCase()}
+      //               value={formValues[`${fieldId}_countryCode`] || 'US'}
+      //               onChange={(phone, countryData) => {
+      //                 const newCountryCode = countryData.countryCode.toUpperCase();
+      //                 handleChange(`${fieldId}_countryCode`, newCountryCode);
+      //                 // Clear phone number when country changes
+      //                 handleChange(`${fieldId}_phoneNumber`, '');
+      //               }}
+      //               inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+      //               buttonClass="border rounded p-1 bg-white"
+      //               dropdownClass="border rounded max-h-64 overflow-y-auto"
+      //               containerClass="flex items-center w-full"
+      //               inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
+      //               disabled={isDisabled}
+      //               placeholder=""
+      //               enableSearch
+      //               searchPlaceholder="Search country"
+      //               searchNotFound="No country found"
+      //               preferredCountries={['us', 'ca', 'gb']}
+      //             />
+      //           </div>
+      //           <div className="w-2/3">
+      //             <input
+      //               type="text"
+      //               {...commonProps}
+      //               value={formValues[`${fieldId}_phoneNumber`] || ''}
+      //               onChange={(e) => handleChange(`${fieldId}_phoneNumber`, e.target.value)}
+      //               placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+      //               disabled={isDisabled}
+      //               aria-label="Phone number"
+      //             />
+      //           </div>
+      //         </div>
+      //       ) : (
+      //         <InputMask
+      //           mask={properties.subFields?.phoneNumber?.phoneMask || '(999) 999-9999'}
+      //           value={formValues[fieldId] || ''}
+      //           onChange={(e) => handleChange(fieldId, e.target.value)}
+      //           className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+      //           placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+      //           disabled={isDisabled}
+      //         />
+      //       )}
+      //       {renderHelpText()}
+      //       {renderError()}
+      //     </div>
+      //   );
+
+      case 'phone':
+  const countryCode = properties.subFields?.countryCode?.enabled
+    ? formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US'
+    : 'US'; // Default to US for masking/validation, not stored
+  let phoneMask = '(999) 999-9999'; // Default mask
+  try {
+    const exampleNumber = getExampleNumber(countryCode);
+    if (exampleNumber) {
+      phoneMask = exampleNumber.format('NATIONAL').replace(/[0-9]/g, '9');
+    }
+  } catch (error) {
+    console.warn(`No example number for country ${countryCode}, using default mask`);
+  }
+
+  return (
+    <div className="mb-4">
+      {renderLabel()}
+      {properties.subFields?.countryCode?.enabled ? (
+        <div className="flex items-center gap-3">
+          <div className="w-1/3">
+            <PhoneInput
+              country={countryCode.toLowerCase()}
+              value={formValues[`${fieldId}_countryCode`] || 'US'}
+              onChange={(phone, countryData) => {
+                const newCountryCode = countryData.countryCode.toUpperCase();
+                handleChange(`${fieldId}_countryCode`, newCountryCode);
+                handleChange(`${fieldId}_phoneNumber`, ''); // Clear phone number when country changes
+              }}
+              inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+              buttonClass="border rounded p-1 bg-white"
+              dropdownClass="border rounded max-h-64 overflow-y-auto"
+              containerClass="flex items-center w-full"
+              inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
+              disabled={isDisabled}
+              placeholder=""
+              enableSearch
+              searchPlaceholder="Search country"
+              searchNotFound="No country found"
+              preferredCountries={['us', 'ca', 'gb']}
+            />
           </div>
-        );
+          <div className="w-2/3">
+            <input
+              type="text"
+              {...commonProps}
+              value={formValues[`${fieldId}_phoneNumber`] || ''}
+              onChange={(e) => handleChange(`${fieldId}_phoneNumber`, e.target.value)}
+              placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+              disabled={isDisabled}
+              aria-label="Phone number"
+            />
+          </div>
+        </div>
+      ) : (
+        <InputMask
+          mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
+          value={formValues[fieldId] || ''}
+          onChange={(e) => {
+            handleChange(fieldId, e.target.value);
+            handleChange(`${fieldId}_phoneNumber`, e.target.value); // Sync with _phoneNumber
+          }}
+          className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+          placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+          disabled={isDisabled}
+        />
+      )}
+      {renderHelpText()}
+      {renderError()}
+    </div>
+  );
 
       case 'date':
         return (
@@ -1536,8 +1764,8 @@ function PublicFormViewer() {
         return (
           <div className="mb-6">
             <h2 className={`text-2xl font-bold text-gray-800 ${
-              properties.alignment === 'left' ? 'text-left' : 
-              properties.alignment === 'right' ? 'text-right' : 
+              properties.alignment === 'left' ? 'text-left' :
+              properties.alignment === 'right' ? 'text-right' :
               'text-center'
             }`}>
               {properties.heading || 'Form Header'}

@@ -162,6 +162,28 @@ const ActionPanel = ({
     }
   }, [selectedObject, salesforceObjects, fetchSalesforceFields]);
 
+//   useEffect(() => {
+//   if (!selectedObject) return;
+
+//   const objectExists = salesforceObjects.find(obj => obj.name === selectedObject);
+//   // Only fetch if object doesn't exist or fields are undefined
+//   if (!objectExists || typeof objectExists.fields === 'undefined') {
+//     fetchSalesforceFields(selectedObject)
+//       .then((data) => {
+//         const newFields = data.fields || [];
+//         console.log('salesforce fields--> ', newFields);
+
+//         setSalesforceObjects(prev => [
+//           ...prev.filter(obj => obj.name !== selectedObject),
+//           { name: selectedObject, fields: newFields }
+//         ]);
+//       })
+//       .catch((error) => {
+//         setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
+//       });
+//   }
+// }, [selectedObject, fetchSalesforceFields]);
+
   const operatorGroups = {
     text: [
       { value: "=", label: "Equals" },
