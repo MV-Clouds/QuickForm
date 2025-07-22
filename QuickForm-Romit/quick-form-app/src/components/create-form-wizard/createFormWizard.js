@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import FormName from './FormName';
+import { Select } from 'antd';
+import './createFormWizard.css';
+const { Option } = Select;
 
 const itemVariants = {
   hidden: { opacity: 0, scale: 0.95, y: 10 }, // Animation variant for hidden state
@@ -10,13 +13,13 @@ const itemVariants = {
 };
 
 
-const CreateFormWizard = () => {
+const CreateFormWizard = ({ onClose }) => {
   const [step, setStep] = useState(1); // State for tracking current step (1 or 2)
   const [selectedObjects, setSelectedObjects] = useState([]); // State for storing selected object names
   const [metadata, setMetadata] = useState([]); // State for storing metadata (list of objects)
   const [fieldsData, setFieldsData] = useState({}); // State for storing fields data for each object
   const [selectedFields, setSelectedFields] = useState({}); // State for storing selected fields for each object
-  const [currentObject, setCurrentObject] = useState(''); // State for tracking the currently selected object in Step 2
+  const [currentObject, setCurrentObject] = useState(); // State for tracking the currently selected object in Step 2
   const [error, setError] = useState(''); // State for storing error messages
   const [isLoading, setIsLoading] = useState(false); // State for tracking loading status
   const [objectSearch, setObjectSearch] = useState(''); // State for object search input
@@ -74,53 +77,91 @@ const CreateFormWizard = () => {
     }
   };
 
+  const fetchMetadata = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      if (!userId || !instanceUrl) throw new Error('User not authenticated');
+
+      const token = accessToken || (await fetchAccessToken(userId, instanceUrl));
+      if (!token) throw new Error('Failed to get access token');
+
+
+      const metadataResponse = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId, instanceUrl, accessToken }),
+      });
+
+      if (!metadataResponse.ok) throw new Error('Failed to fetch metadata');
+
+      const metadataData = await metadataResponse.json();
+      if (metadataData.metadata) {
+        setMetadata(JSON.parse(metadataData.metadata));
+      } else {
+        setError('No metadata found for this user.');
+      }
+    } catch (err) {
+      console.error('Error fetching metadata:', err);
+      setError('Error fetching metadata: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshFieldsForCurrentObject = async () => {
+    if (!currentObject) return;
+    setIsLoading(true);
+    setError('');
+    try {
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      if (!userId || !instanceUrl) throw new Error("User not authenticated");
+
+      const token = accessToken || (await fetchAccessToken(userId, instanceUrl));
+      if (!token) throw new Error("Failed to get access token");
+
+      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+
+      const response = await fetch(process.env.REACT_APP_FETCH_FIELDS_URL, {
+        method: 'POST',
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          instanceUrl: cleanedInstanceUrl,
+          objectName: currentObject,
+          access_token: token,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to fetch fields");
+      }
+
+      const data = await response.json();
+      
+      // Assuming your state structure expects something like:
+      setFieldsData((prev) => ({
+        ...prev,
+        [currentObject]: data.fields || [],
+      }));
+
+    } catch (err) {
+      console.error("Error refreshing fields:", err);
+      setError("Error refreshing fields: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   // Fetch metadata when component mounts
   useEffect(() => {
-    const fetchMetadata = async () => {
-      setIsLoading(true); // Set loading state to true
-      try {
-        const userId = sessionStorage.getItem('userId'); // Get user ID from session storage
-        const instanceUrl = sessionStorage.getItem('instanceUrl'); // Get instance URL from session storage
-
-        if (!userId || !instanceUrl) { // Check if user is authenticated
-          throw new Error('User not authenticated'); // Throw error if user is not authenticated
-        }
-
-        const token = await fetchAccessToken(userId, instanceUrl); // Fetch access token
-        const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, ''); // Clean instance URL by removing protocol
-
-        const metadataResponse = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, { // Fetch metadata from Lambda
-          method: 'POST', // HTTP method
-          headers: {
-            'Content-Type': 'application/json', // Request content type
-            Authorization: `Bearer ${token}`, // Authorization header with token
-          },
-          body: JSON.stringify({
-            userId, // User ID for metadata request
-            instanceUrl: cleanedInstanceUrl, // Cleaned instance URL for metadata request
-          }),
-        });
-
-        if (!metadataResponse.ok) { // Check if response is not OK
-          throw new Error('Failed to fetch metadata'); // Throw error if metadata fetch fails
-        }
-        
-        const metadataData = await metadataResponse.json(); // Parse response JSON
-        
-        if (metadataData.metadata) { // Check if metadata exists in response
-          setMetadata(JSON.parse(metadataData.metadata)); // Parse and set metadata in state
-        } else {
-          setError('No metadata found for this user.'); // Set error if no metadata is found
-        }
-      } catch (err) {
-        console.error('Error fetching metadata:', err); // Log error to console
-        setError('Error fetching metadata: ' + err.message); // Set error message in state
-      } finally {
-        setIsLoading(false); // Set loading state to false
-      }
-    };
-
-    fetchMetadata(); // Call the fetchMetadata function
+    fetchMetadata();
   }, []); // Empty dependency array ensures this runs only on mount
 
   // Fetch fields for a specific object
@@ -339,8 +380,8 @@ const CreateFormWizard = () => {
 
   // Handle closing the wizard
   const closeWizard = useCallback(() => {
-    navigate('/home'); // Navigate to home page when wizard is closed
-  }, [navigate]); // Dependencies for useCallback
+    if (onClose) onClose();
+  }, [onClose]); // Dependencies for useCallback
 
   // Main JSX return statement with comments for major sections
   if (isFormNameOpen) {
@@ -371,27 +412,28 @@ const CreateFormWizard = () => {
     );
   }
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50"> {/* Overlay for modal */}
+    <div className="wizard-overlay"> {/* Overlay for modal */}
       {isLoading && ( // Loading overlay section
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"> {/* Wizard container */}
-        <div className="flex justify-between items-center p-6 border-b"> {/* Header section */}
-          <h2 className="text-2xl font-bold text-gray-800">Create Form Wizard</h2>
+      <div className="wizard-container"> {/* Wizard container */}
+        <div className="wizard-header"> {/* Header section */}
+          <h2 className="wizard-title">Create Form Wizard</h2>
           <button
             onClick={closeWizard}
-            className="text-gray-500 hover:text-gray-700 text-xl"
+            className="wizard-close"
             aria-label="Close"
           >
-            ×
+                <img src="/images/close_icon.svg" alt="Close" />
+
           </button>
         </div>
 
         {error && ( // Error message section
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
+          <div className="wizard-error-alert">
             <div className="flex items-center">
               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -405,52 +447,54 @@ const CreateFormWizard = () => {
           </div>
         )}
 
-        <div className="flex-grow overflow-auto p-6"> {/* Main content area */}
+        <div className="wizard-content"> {/* Main content area */}
           {step === 1 && ( // Step 1: Select Objects
-            <div>
-              <h3 className="text-lg font-semibold mb-4 text-gray-700">Step 1: Select Objects</h3>
+          <div>
+            <div className="object-container">
+              <div className="title-group">
+              <h3 className="wizard-step-title">Step 1: Select Objects</h3>
+                <div className="wizard-refresh" onClick={fetchMetadata}>
+                  <svg width="18" height="14" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.44599 5.51184C3.15162 6.61034 3.18961 7.77145 3.55515 8.84835C3.92069 9.92525 4.59735 10.8696 5.49958 11.5619C6.40181 12.2542 7.48908 12.6635 8.6239 12.7379C9.75871 12.8123 10.8901 12.5485 11.875 11.9798M14.554 8.48784C14.8484 7.38935 14.8104 6.22824 14.4448 5.15134C14.0793 4.07444 13.4026 3.13011 12.5004 2.43779C11.5982 1.74546 10.5109 1.33622 9.37608 1.26183C8.24127 1.18744 7.10988 1.45123 6.12499 2.01984" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M0.75 7.5L3.25 5L5.75 7.5M12.25 6.5L14.75 9L17.25 6.5" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
 
-              <div className="mb-4"> {/* Object search section */}
-                <div className="relative">
+                </div>
+              </div>
+
+              <div className="wizard-form-group"> {/* Object search section */}
+                <div className="wizard-search-container">
                   <input
                     type="text"
                     placeholder="Search objects..."
                     value={objectSearch}
                     onChange={(e) => setObjectSearch(e.target.value)}
-                    className="w-full p-2 pl-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="wizard-search-input"
                   />
-                  <svg
-                    className="absolute left-3 top-3 h-4 w-4 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="wizard-search-icon">
+                    <path d="M11 16.5C14.0376 16.5 16.5 14.0376 16.5 11C16.5 7.96243 14.0376 5.5 11 5.5C7.96243 5.5 5.5 7.96243 5.5 11C5.5 14.0376 7.96243 16.5 11 16.5Z" stroke="#5F6165" stroke-width="1.5"/>
+                    <path d="M15 15L19 19" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </div>
               </div>
 
-              <div className="flex items-stretch gap-4"> {/* Object selection layout */}
-                <div className="flex-1 flex flex-col"> {/* Available objects section */}
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-700">Available Objects</h4>
+              <div className="wizard-dual-list-row"> {/* Object selection layout */}
+                <div className="wizard-list-col"> {/* Available objects section */}
+                  <div className="wizard-list-title-row">
+                    <h4 className="wizard-list-title">Available Objects</h4>
                     <button
                       onClick={() => moveAllObjects('right')}
-                      className="text-gray-500 hover:text-blue-600 p-1"
+                      className="wizard-list-add"
                       title="Add all"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                      <svg width="15" height="16" viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.61084 1L13.2231 7.62308C13.2747 7.67142 13.3157 7.72981 13.3438 7.79464C13.3718 7.85947 13.3863 7.92936 13.3863 8C13.3863 8.07064 13.3718 8.14054 13.3438 8.20536C13.3157 8.27019 13.2747 8.32858 13.2231 8.37692L6.61084 15" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M1 1L7.62308 7.62308C7.72174 7.72373 7.777 7.85906 7.777 8C7.777 8.14094 7.72174 8.27627 7.62308 8.37692L1 15" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
                     </button>
                   </div>
-                  <div className="border rounded-lg overflow-hidden flex-1">
-                    <div className="overflow-y-auto" style={{ height: '33vh' }}>
+                  <div className="wizard-listbox">
+                    <div className={`${filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       <AnimatePresence>
                         {filteredMetadata
                           .filter((obj) => !selectedObjects.includes(obj.name))
@@ -463,17 +507,17 @@ const CreateFormWizard = () => {
                               animate="visible"
                               exit="exit"
                               transition={{ duration: 0.05 }}
-                              className="flex items-center p-3 cursor-default hover:bg-gray-50 border-b bg-white"
+                              className="wizard-listbox-entry"
                             >
                               <div className="flex-grow flex items-center">
                                 <div>
-                                  <div className="font-medium">{obj.label}</div>
-                                  <div className="text-sm text-gray-500">{obj.name}</div>
+                                  <div className="wizard-listbox-entry-label">{obj.label}</div>
+                                  <div className="wizard-listbox-entry-api">{obj.name}</div>
                                 </div>
                               </div>
                               <button
                                 onClick={() => toggleObjectSelection(obj.name)}
-                                className="text-gray-400 hover:text-blue-600 p-1"
+                                className="wizard-list-add"
                               >
                                 <span className="text-2xl">→</span>
                               </button>
@@ -481,7 +525,7 @@ const CreateFormWizard = () => {
                           ))}
                       </AnimatePresence>
                       {filteredMetadata.length === 0 && (
-                        <div className="text-center py-4 text-gray-500 h-full flex items-center justify-center">
+                        <div className="wizard-listbox-empty">
                           No objects available
                         </div>
                       )}
@@ -489,55 +533,62 @@ const CreateFormWizard = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 flex flex-col"> {/* Selected objects section */}
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-700">Selected Objects</h4>
+                <div className="wizard-list-col"> {/* Selected objects section */}
+                  <div className="wizard-list-title-row">
+                    <h4 className="wizard-list-title">Selected Objects</h4>
                     <button
                       onClick={() => moveAllObjects('left')}
-                      className="text-gray-500 hover:text-blue-600 p-1"
+                      className="wizard-list-clear"
                       title="Remove all"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                     <svg width="15" height="16" viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8.38916 15L1.77685 8.37692C1.72534 8.32858 1.68429 8.27019 1.65622 8.20536C1.62816 8.14053 1.61368 8.07064 1.61368 8C1.61368 7.92936 1.62816 7.85946 1.65622 7.79464C1.68429 7.72981 1.72534 7.67142 1.77685 7.62308L8.38916 0.999999" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M14 15L7.37692 8.37692C7.27826 8.27627 7.223 8.14094 7.223 8C7.223 7.85906 7.27826 7.72373 7.37692 7.62308L14 0.999999" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
                     </button>
                   </div>
-                  <div className="border rounded-lg overflow-hidden flex-1 bg-blue-50">
-                    <div className="overflow-y-auto" style={{ height: '33vh' }}>
-                      <AnimatePresence>
+                  <div className="wizard-listbox selected">
+                    <div className={`${selectedObjects.length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                      <AnimatePresence >
                         {selectedObjects.length > 0 ? (
-                          selectedObjects.map((objName) => {
-                            const obj = metadata.find((o) => o.name === objName);
-                            if (!obj) return null;
-                            return (
-                              <motion.div
-                                key={obj.name}
-                                layout
-                                variants={itemVariants}
-                                initial="hidden"
-                                animate="visible"
-                                exit="exit"
-                                transition={{ duration: 0.05 }}
-                                className="flex items-center p-3 cursor-default border-b border-blue-200 bg-blue-100 hover:bg-blue-200"
-                              >
-                                <button
-                                  onClick={() => toggleObjectSelection(obj.name)}
-                                  className="text-blue-400 hover:text-blue-600 p-1"
+                          <motion.div layout> {/* This enables layout animation for child positioning */}
+                            {selectedObjects.map((objName) => {
+                              const obj = metadata.find((o) => o.name === objName);
+                              if (!obj) return null;
+                              return (
+                                <motion.div
+                                  key={obj.name}
+                                  layout // 👈 Keep layout on the child too
+                                  initial={{ opacity: 0, y: 10 }} // 👈 Add custom entrance animation
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  transition={{
+                                    type: "spring",
+                                    stiffness: 380,
+                                    damping: 30,
+                                    mass: 0.9,
+                                  }}
+                                  className="wizard-listbox-entry"
                                 >
-                                  <span className="text-2xl">←</span>
-                                </button>
-                                <div className="flex-grow flex justify-end">
-                                  <div>
-                                    <div className="font-medium">{obj.label}</div>
-                                    <div className="text-sm text-gray-500">{obj.name}</div>
+                                  <button
+                                    onClick={() => toggleObjectSelection(obj.name)}
+                                    className="wizard-list-clear"
+                                  >
+                                    <span className="text-2xl">←</span>
+                                  </button>
+                                  <div className="flex-grow flex justify-end">
+                                    <div>
+                                      <div className="wizard-listbox-entry-label">{obj.label}</div>
+                                      <div className="wizard-listbox-entry-api">{obj.name}</div>
+                                    </div>
                                   </div>
-                                </div>
-                              </motion.div>
-                            );
-                          })
+                                </motion.div>
+                              );
+                            })}
+                          </motion.div>
                         ) : (
                           <motion.div
-                            className="text-center py-4 text-gray-500 h-full flex items-center justify-center"
+                            className="wizard-listbox-empty"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -547,101 +598,105 @@ const CreateFormWizard = () => {
                         )}
                       </AnimatePresence>
                     </div>
+
                   </div>
                 </div>
               </div>
+                </div>
 
-              <div className="mt-6 flex justify-end"> {/* Navigation buttons section */}
+              <div className="wizard-steps-nav"> {/* Navigation buttons section */}
+                <div className="cancel-button">
+                  <div className="cancel-button-border">
+                  <button
+                    onClick={closeWizard}
+                    className="wizard-btn wizard-btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  </div>
+                </div>
+                <div className={` ${selectedObjects.length === 0 ? 'next-button' : 'next-button-enabled'}`}>
+                  <div className="next-button-border">
                 <button
                   onClick={handleNextStep}
                   disabled={selectedObjects.length === 0}
-                  className={`px-6 py-2 rounded-lg font-medium ${
-                    selectedObjects.length === 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  } transition-colors`}
+                  className="wizard-btn wizard-btn-primary"
                 >
                   Next
-                  <svg
-                    className="w-4 h-4 ml-2 inline"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  
                 </button>
+                </div>
+                </div>
               </div>
             </div>
           )}
 
           {step === 2 && ( // Step 2: Select Fields
             <div>
-              <h3 className="text-lg font-semibold mb-4 text-gray-700">Step 2: Select Fields</h3>
+              <div className="object-container">
+              <div className="title-group">
+                <h3 className="wizard-step-title">Step 2: Select Fields</h3>
+                <div className="wizard-refresh" onClick={refreshFieldsForCurrentObject}>
+                  <svg width="18" height="14" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3.44599 5.51184C3.15162 6.61034 3.18961 7.77145 3.55515 8.84835C3.92069 9.92525 4.59735 10.8696 5.49958 11.5619C6.40181 12.2542 7.48908 12.6635 8.6239 12.7379C9.75871 12.8123 10.8901 12.5485 11.875 11.9798M14.554 8.48784C14.8484 7.38935 14.8104 6.22824 14.4448 5.15134C14.0793 4.07444 13.4026 3.13011 12.5004 2.43779C11.5982 1.74546 10.5109 1.33622 9.37608 1.26183C8.24127 1.18744 7.10988 1.45123 6.12499 2.01984" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M0.75 7.5L3.25 5L5.75 7.5M12.25 6.5L14.75 9L17.25 6.5" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
 
-              <div className="mb-4"> {/* Object dropdown section */}
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                </div>               
+              </div>
+              <div className="wizard-form-group"> {/* Object dropdown section */}
+                <label className="object-small">
                   Select Object:
                 </label>
-                <select
+                <Select
+                  id="object-select"
                   value={currentObject}
-                  onChange={handleObjectChange}
-                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(value) => setCurrentObject(value)}
+                  className="dropdown"      // For consistency with your login CSS
+                  style={{ width: '100%' }}
+                  placeholder="Select an object"
                 >
                   {selectedObjects.map((obj) => (
-                    <option key={obj} value={obj}>
+                    <Option key={obj} value={obj}>
                       {obj}
-                    </option>
+                    </Option>
                   ))}
-                </select>
+                </Select>
               </div>
 
-              <div className="mb-4"> {/* Field search section */}
-                <div className="relative">
+              <div className="wizard-form-group"> {/* Field search section */}
+                <div className="wizard-search-container">
                   <input
                     type="text"
                     placeholder="Search fields..."
                     value={fieldSearch}
                     onChange={(e) => setFieldSearch(e.target.value)}
-                    className="w-full p-2 pl-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="wizard-search-input"
                   />
-                  <svg
-                    className="absolute left-3 top-3 h-4 w-4 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="wizard-search-icon">
+                    <path d="M11 16.5C14.0376 16.5 16.5 14.0376 16.5 11C16.5 7.96243 14.0376 5.5 11 5.5C7.96243 5.5 5.5 7.96243 5.5 11C5.5 14.0376 7.96243 16.5 11 16.5Z" stroke="#5F6165" stroke-width="1.5"/>
+                    <path d="M15 15L19 19" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </div>
               </div>
 
-              <div className="flex items-stretch gap-4"> {/* Field selection layout */}
-                <div className="flex-1 flex flex-col"> {/* Available fields section */}
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-700">Available Fields</h4>
+              <div className="wizard-dual-list-row"> {/* Field selection layout */}
+                <div className="wizard-list-col"> {/* Available fields section */}
+                  <div className="wizard-list-title-row">
+                    <h4 className="wizard-list-title">Available Fields</h4>
                     <button
                       onClick={() => moveAllFields('right')}
-                      className="text-gray-500 hover:text-blue-600 p-1"
+                      className="wizard-list-add"
                       title="Add all"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                      <svg width="15" height="16" viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6.61084 1L13.2231 7.62308C13.2747 7.67142 13.3157 7.72981 13.3438 7.79464C13.3718 7.85947 13.3863 7.92936 13.3863 8C13.3863 8.07064 13.3718 8.14054 13.3438 8.20536C13.3157 8.27019 13.2747 8.32858 13.2231 8.37692L6.61084 15" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M1 1L7.62308 7.62308C7.72174 7.72373 7.777 7.85906 7.777 8C7.777 8.14094 7.72174 8.27627 7.62308 8.37692L1 15" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
                     </button>
                   </div>
-                  <div className="border rounded-lg overflow-hidden flex-1">
-                    <div className="overflow-y-auto" style={{ height: '33vh' }}>
+                  <div className="wizard-listbox">
+                    <div className={`${filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       {filteredFields.length > 0 ? (
                         <AnimatePresence>
                           {filteredFields
@@ -657,19 +712,19 @@ const CreateFormWizard = () => {
                                 animate="visible"
                                 exit="exit"
                                 transition={{ duration: 0.05 }}
-                                className="flex items-center p-3 cursor-default hover:bg-gray-50 border-b"
+                                className="wizard-listbox-entry"
                               >
                                 <div className="flex-grow flex items-center">
                                   <div>
-                                    <div className="font-medium">
+                                    <div className="wizard-listbox-entry-label">
                                       {field.label}
                                       {field.required && (
-                                        <span className="text-red-500 ml-1">*</span>
+                                        <span className="wizard-listbox-entry-required">*</span>
                                       )}
                                     </div>
-                                    <div className="text-sm text-gray-500">{field.name}</div>
+                                    <div className="wizard-listbox-entry-api">{field.name}</div>
                                     {field.type && (
-                                      <div className="text-xs text-gray-400 mt-1">
+                                      <div className="wizard-listbox-entry-meta">
                                         Type: {field.type}
                                       </div>
                                     )}
@@ -677,7 +732,7 @@ const CreateFormWizard = () => {
                                 </div>
                                 <button
                                   onClick={() => toggleFieldSelection(field.name)}
-                                  className="text-gray-400 hover:text-blue-600 p-1"
+                                  className="wizard-list-add"
                                 >
                                   <span className="text-2xl">→</span>
                                 </button>
@@ -685,7 +740,7 @@ const CreateFormWizard = () => {
                             ))}
                         </AnimatePresence>
                       ) : (
-                        <div className="text-center py-4 text-gray-500 h-full flex items-center justify-center">
+                        <div className="wizard-listbox-empty">
                           {fieldSearch ? 'No matching fields found' : 'No fields available'}
                         </div>
                       )}
@@ -693,21 +748,22 @@ const CreateFormWizard = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 flex flex-col"> {/* Selected fields section */}
-                  <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-medium text-gray-700">Selected Fields</h4>
+                <div className="wizard-list-col"> {/* Selected fields section */}
+                  <div className="wizard-list-title-row">
+                    <h4 className="wizard-list-title">Selected Fields</h4>
                     <button
                       onClick={() => moveAllFields('left')}
-                      className="text-gray-500 hover:text-blue-600 p-1"
+                      className="wizard-list-clear"
                       title="Remove all"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                     <svg width="15" height="16" viewBox="0 0 15 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8.38916 15L1.77685 8.37692C1.72534 8.32858 1.68429 8.27019 1.65622 8.20536C1.62816 8.14053 1.61368 8.07064 1.61368 8C1.61368 7.92936 1.62816 7.85946 1.65622 7.79464C1.68429 7.72981 1.72534 7.67142 1.77685 7.62308L8.38916 0.999999" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M14 15L7.37692 8.37692C7.27826 8.27627 7.223 8.14094 7.223 8C7.223 7.85906 7.27826 7.72373 7.37692 7.62308L14 0.999999" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                       </svg>
                     </button>
                   </div>
-                  <div className="border rounded-lg overflow-hidden flex-1 bg-blue-50">
-                    <div className="overflow-y-auto" style={{ height: '33vh' }}>
+                  <div className="wizard-listbox selected">
+                    <div className={`${selectedObjects.length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       {(selectedFields[currentObject] || []).length > 0 ? (
                         <AnimatePresence>
                           {(selectedFields[currentObject] || []).map((fieldName) => {
@@ -724,28 +780,30 @@ const CreateFormWizard = () => {
                                 animate="visible"
                                 exit="exit"
                                 transition={{ duration: 0.05 }}
-                                className="flex items-center p-3 cursor-default hover:bg-blue-100 border-b border-blue-200"
+                                className="wizard-listbox-entry"
                               >
                                 <button
                                   onClick={() => toggleFieldSelection(field.name)}
-                                  className="text-blue-400 hover:text-blue-600 p-1"
+                                  className="wizard-list-clear"
                                 >
                                   <span className="text-2xl">←</span>
                                 </button>
                                 <div className="flex-grow flex justify-end">
                                   <div>
-                                    <div className="font-medium">
+                                    <div className="selected-fields-align">
+                                    <div className="wizard-listbox-entry-label-fields">
                                       {field.label}
                                       {field.required && (
-                                        <span className="text-red-500 ml-1">*</span>
+                                        <span className="wizard-listbox-entry-required">*</span>
                                       )}
                                     </div>
-                                    <div className="text-sm text-gray-500">{field.name}</div>
+                                    <div className="wizard-listbox-entry-api">{field.name}</div>
                                     {field.type && (
-                                      <div className="text-xs text-gray-400 mt-1">
+                                      <div className="wizard-listbox-entry-meta">
                                         Type: {field.type}
                                       </div>
                                     )}
+                                    </div>
                                   </div>
                                 </div>
                               </motion.div>
@@ -753,7 +811,7 @@ const CreateFormWizard = () => {
                           })}
                         </AnimatePresence>
                       ) : (
-                        <div className="text-center py-4 text-gray-500 h-full flex items-center justify-center">
+                        <div className="wizard-listbox-empty">
                           Select fields using arrows
                         </div>
                       )}
@@ -761,64 +819,42 @@ const CreateFormWizard = () => {
                   </div>
                 </div>
               </div>
+              </div>
 
-              <div className="mt-6 flex justify-between"> {/* Navigation buttons section */}
+              <div className="wizard-steps-nav"> {/* Navigation buttons section */}
+                <div className="cancel-button">
+<div className="cancel-button-border">
                 <button
                   onClick={() => {
                     setError('');
                     setStep(1);
                   }}
-                  className="px-6 py-2 rounded-lg font-medium bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors"
+                  className="wizard-btn wizard-btn-secondary"
                 >
-                  <svg
-                    className="w-4 h-4 mr-2 inline"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
                   Back
                 </button>
+                </div>
+                </div>
+                <div className="next-button-enabled">
+                <div className="next-button-border">
                 <button
                   onClick={handleSubmit}
-                  className="px-6 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                  className="wizard-btn wizard-btn-primary"
                 >
                   Finish
-                  <svg
-                    className="w-4 h-4 ml-2 inline"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
+                 <svg width="12" height="10" viewBox="0 0 12 10" fill="none" xmlns="http://www.w3.org/2000/svg" className="right-icon">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M9.95147 1.25186C10.4201 0.783233 11.1799 0.783233 11.6485 1.25186C12.0811 1.68444 12.1144 2.36512 11.7484 2.83587L11.6485 2.94892L5.64853 8.94892C5.21595 9.3815 4.53527 9.41477 4.06452 9.04875L3.95147 8.94892L0.351472 5.34892C-0.117157 4.88029 -0.117157 4.12049 0.351472 3.65186C0.784053 3.21928 1.46473 3.18601 1.93548 3.55204L2.04853 3.65186L4.8 6.40239L9.95147 1.25186Z" fill="white"/>
+                </svg>
+
                 </button>
+                </div>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="p-4 border-t flex justify-center"> {/* Step indicator section */}
-          <div className="flex space-x-2">
-            <div
-              className={`w-3 h-3 rounded-full ${step === 1 ? 'bg-blue-600' : 'bg-gray-300'}`}
-            ></div>
-            <div
-              className={`w-3 h-3 rounded-full ${step === 2 ? 'bg-blue-600' : 'bg-gray-300'}`}
-            ></div>
-          </div>
-        </div>
+        
       </div>
     </div>
   );

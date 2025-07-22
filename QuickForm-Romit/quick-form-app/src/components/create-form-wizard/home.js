@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Integrations from '../integrations/Integrations';
 import InactivityTracker from '../time-out/InactivityTracker';
 import './home.css';
+import CreateFormWizard from './createFormWizard';
 const dummyUsername = 'Jane Cooper';
 
 const Home = () => {
@@ -20,6 +21,7 @@ const Home = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedNav, setSelectedNav] = useState('home');
   const [token, settoken] = useState();
+  const [showCreateFormWizard, setShowCreateFormWizard] = useState(false);
   const navigate = useNavigate();
 
   // Analytics data (dynamic)
@@ -217,7 +219,8 @@ const Home = () => {
     }
 
     if (option === 'salesforce') {
-      navigate('/wizard');
+      setShowCreateFormWizard(true);  // Open the wizard modal right here
+      setIsLoading(false);
     } else if (option === 'scratch') {
       setIsLoading(false);
       setIsFormNameOpen(true);
@@ -315,7 +318,7 @@ const Home = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <InactivityTracker />
+      {/* <InactivityTracker /> */}
       <Sidebar
         username={dummyUsername}
         selected={selectedNav}
@@ -460,6 +463,14 @@ const Home = () => {
               alignment: 'center',
             },
           ]}
+        />
+      )}
+      {showCreateFormWizard && (
+        <CreateFormWizard
+          onClose={() => {
+            setIsModalOpen(true);            // Reopen the build option modal
+            setShowCreateFormWizard(false); // Close the wizard
+          }}
         />
       )}
     </div>
