@@ -1,9 +1,3 @@
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-
-const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
-
 export const handler = async (event) => {
   // Parse the request body
   let body;
@@ -42,6 +36,7 @@ export const handler = async (event) => {
       headers: {
         Authorization: `Bearer ${access_token}`,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
     });
 
@@ -87,6 +82,11 @@ export const handler = async (event) => {
         type: field.type, // Include the field type (e.g., string, boolean, reference)
         referenceTo: field.referenceTo || [], // For relationship fields
         required: !field.nillable && !field.defaultedOnCreate,
+        values: ['picklist', 'multipicklist'].includes(field.type)
+        ? field.picklistValues
+            .filter(v => !v.active || v.defaultValue !== undefined) // optional: filter inactive if needed
+            .map(v => v.value)
+        : undefined,
       }));
     
     return {
@@ -105,7 +105,7 @@ export const handler = async (event) => {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify({ error: `Failed to fetch fields: ${error.message}` }),
+      body: JSON.stringify({ error: `Failed to fetch fields: ${error}` }),
     };
   }
 };

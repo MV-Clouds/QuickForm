@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import FormCalculationWidget from './FormCalculationWidget';
-import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb,FaTrash,FaArrowsAltV } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb, FaTrash, FaArrowsAltV, FaInfoCircle } from 'react-icons/fa';
 import { AiOutlineStar, AiOutlineHeart } from 'react-icons/ai';
-import { BiBoltCircle } from 'react-icons/bi'; 
+import { BiBoltCircle } from 'react-icons/bi';
 import EmojiPicker from 'emoji-picker-react';
 import { getCountryList } from './getCountries';
 
@@ -18,9 +18,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [options, setOptions] = useState(selectedField?.options || []);
   const [rows, setRows] = useState(selectedField?.rows || []);
   const [columns, setColumns] = useState(selectedField?.columns || []);
-  const [salutations, setSalutations] = useState(selectedField?.salutations || ['Mr.', 'Mrs.', 'Ms.', 'Dr.']);
-  const [enableSalutation, setEnableSalutation] = useState(selectedField?.enableSalutation || false);
- const [ratingType, setRatingType] = useState(selectedField?.ratingType || 'emoji');
+  const [ratingType, setRatingType] = useState(selectedField?.ratingType || 'emoji');
   const [ratingRange, setRatingRange] = useState(selectedField?.ratingRange || 5);
   const [ratingValues, setRatingValues] = useState(
     selectedField?.ratingValues || Array(selectedField?.ratingRange || 5).fill('').map((_, i) => `Rating ${i + 1}`)
@@ -36,21 +34,41 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [enableConfirmation, setEnableConfirmation] = useState(selectedField?.enableConfirmation || false);
   const [enableVerification, setEnableVerification] = useState(selectedField?.enableVerification || false);
 
-  // State for address-specific properties
-  const [subLabels, setSubLabels] = useState(selectedField?.subLabels || {
-    street: 'Street Address',
-    city: 'City',
-    state: 'State',
-    country: 'Country',
-    postal: 'Postal Code',
-  });
-  const [visibleSubFields, setVisibleSubFields] = useState(selectedField?.visibleSubFields || {
-    street: true,
-    city: true,
-    state: true,
-    country: true,
-    postal: true,
-  });
+  // State for address-specific properties (integrated into subFields)
+  const [subFields, setSubFields] = useState(
+    selectedField?.subFields || {
+      street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street' },
+      city: { visible: true, label: 'City', value: '', placeholder: 'Enter city' },
+      state: { visible: true, label: 'State', value: '', placeholder: 'Enter state' },
+      country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country' },
+      postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code' },
+    }
+  );
+
+  // State for fullname-specific properties (integrated into subFields)
+  const [fullnameSubFields, setFullnameSubFields] = useState(
+    selectedField?.subFields || {
+      salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
+      firstName: { value: '', placeholder: 'First Name' },
+      lastName: { value: '', placeholder: 'Last Name' },
+    }
+  );
+
+  const [phoneSubFields, setPhoneSubFields] = useState(
+    selectedField?.subFields || {
+      countryCode: {
+        enabled: true,
+        value: 'US',
+        placeholder: 'Select country code',
+        options: [],
+      },
+      phoneNumber: {
+        value: '',
+        placeholder: 'Enter phone number',
+        phoneMask: '(999) 999-9999',
+      },
+    }
+  );
 
   // State for fileupload-specific properties
   const [maxFileSize, setMaxFileSize] = useState(selectedField?.maxFileSize || '');
@@ -63,7 +81,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [helpText, setHelpText] = useState(selectedField?.helpText || '');
 
   // State for header and footer properties
-  const [headerText, setHeaderText] = useState(selectedField?.heading || 'Form');
+  const [headerText, setHeaderText] = useState('Form');
   const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
   const [footerText, setFooterText] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.text || selectedFooter.buttonType.charAt(0).toUpperCase() + selectedFooter.buttonType.slice(1)) : '');
   const [footerBgColor, setFooterBgColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.bgColor || (selectedFooter.buttonType === 'previous' ? 'bg-gray-600' : 'bg-blue-600')) : '');
@@ -120,10 +138,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [relatedValues, setRelatedValues] = useState(selectedField?.[`${selectedField?.type}RelatedValues`] || {});
   const [predefinedOptionSet, setPredefinedOptionSet] = useState('');
 
-  // NEW: State for phone-specific properties
-  const [phoneInputMask, setPhoneInputMask] = useState(selectedField?.phoneInputMask || '(999) 999-9999');
-  const [enableCountryCode, setEnableCountryCode] = useState(selectedField?.enableCountryCode || false);
-  // NEW: State for price-specific properties
+  // State for price-specific properties
   const [priceLimits, setPriceLimits] = useState(selectedField?.priceLimits || { enabled: false, min: '', max: '' });
   const [currencyType, setCurrencyType] = useState(selectedField?.currencyType || 'USD');
 
@@ -132,7 +147,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [shuffleOptions, setShuffleOptions] = useState(selectedField?.shuffleOptions || false);
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(selectedField?.dropdownRelatedValues || {});
-  
+
+  // NEW : Default value / Hidden Feature / Unique Name
+  const [defaultValue, setDefaultValue] = useState(selectedField?.defaultValue || '');
+  const [isHidden, setIsHidden] = useState(selectedField?.isHidden || false);
+  const [uniqueName, setUniqueName] = useState(selectedField?.uniqueName || '');
+  const [uniqueNameError, setUniqueNameError] = useState('');
+  const [headingText, setHeadingText] = useState(selectedField?.heading || 'Form Head');
+  const [headingAlignment, setHeadingAlignment] = useState(selectedField?.alignment || 'center');
+
   useEffect(() => {
     if (selectedField) {
       setLabel(selectedField.label || '');
@@ -144,7 +167,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setLabelAlignment(selectedField.labelAlignment || 'top');
       setRows(selectedField.rows || ['Criteria 1', 'Criteria 2', 'Criteria 3']);
       setColumns(selectedField.columns || ['1', '2', '3', '4', '5']);
-      setOptions(selectedField.options || ['Option 1', 'Option 2','Option 3'])
+      setOptions(selectedField.options || ['Option 1', 'Option 2', 'Option 3']);
       setRatingType(selectedField.ratingType || 'emoji');
       setRatingRange(selectedField.ratingRange || 5);
       setRatingValues(
@@ -157,9 +180,25 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setAllowedDomains(selectedField.allowedDomains || '');
       setEnableConfirmation(selectedField.enableConfirmation || false);
       setEnableVerification(selectedField.enableVerification || false);
-      setSubLabels(selectedField.subLabels || { street: 'Street Address', city: 'City', state: 'State', country: 'Country', postal: 'Postal Code' });
-      setEnableSalutation(selectedField.enableSalutation || false);
-      setSalutations(selectedField.salutations || ['Mr.', 'Mrs.', 'Ms.', 'Dr.']);
+      // Initialize address subFields
+      setSubFields(
+        selectedField.subFields || {
+          street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street' },
+          city: { visible: true, label: 'City', value: '', placeholder: 'Enter city' },
+          state: { visible: true, label: 'State', value: '', placeholder: 'Enter state' },
+          country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country' },
+          postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code' },
+        }
+      );
+      // Initialize fullname subFields
+      setFullnameSubFields(
+        selectedField.subFields || {
+          salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
+          firstName: { value: '', placeholder: 'First Name' },
+          lastName: { value: '', placeholder: 'Last Name' },
+        }
+      );
+
       setInputType(selectedField.inputType || 'radio');
       setDropdownOptionsInput((selectedField.dropdownOptions || []).join('\n'));
       setShortTextMaxChars(selectedField.shortTextMaxChars || '');
@@ -167,16 +206,18 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setLongTextMaxChars(selectedField.longTextMaxChars || '');
       setNumberValueLimits(selectedField.numberValueLimits || { enabled: false, min: '', max: '' });
       setRelatedValues(selectedField[`${selectedField.type}RelatedValues`] || {});
-      // NEW: Initialize phone-specific states
-      setPhoneInputMask(selectedField.phoneInputMask || '(999) 999-9999');
-      setEnableCountryCode(selectedField.enableCountryCode || false);
-      // NEW: Initialize price-specific states
       setPriceLimits(selectedField.priceLimits || { enabled: false, min: '', max: '' });
       setCurrencyType(selectedField.currencyType || 'USD');
 
       setAllowMultipleSelections(selectedField.allowMultipleSelections || false);
       setShuffleOptions(selectedField.shuffleOptions || false);
       setDropdownRelatedValues(selectedField.dropdownRelatedValues || {});
+      // NEW: Set default value / Hidden Feature / Unique Name
+      setDefaultValue(selectedField.defaultValue || '');
+      setIsHidden(selectedField.isHidden || false);
+      setUniqueName(selectedField.uniqueName || '');
+      setUniqueNameError('');
+
       // Set default predefined option set based on options
       if (selectedField.options?.join(',') === 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday') {
         setPredefinedOptionSet('days');
@@ -231,7 +272,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setRatingValues(newRatingValues);
       setRatingEmojis(newRatingEmojis);
       onUpdateField(selectedField.id, { ratingRange: value, ratingValues: newRatingValues, ratingEmojis: newRatingEmojis });
-    } 
+    }
   };
 
   const handleRatingValueChange = (index, value) => {
@@ -290,71 +331,93 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { columns: newColumns });
   };
 
+  // Handler for hidden feature
+  const handleHiddenChange = (e) => {
+    setIsHidden(e.target.checked);
+    onUpdateField(selectedField.id, { isHidden: e.target.checked });
+  };
   const handleAddColumn = () => {
     const newColumns = [...columns, `${columns.length + 1}`];
     setColumns(newColumns);
     onUpdateField(selectedField.id, { columns: newColumns });
   };
 
-  // Handlers for salutation (fullname-specific)
-  const handleEnableSalutationChange = (e) => {
-    setEnableSalutation(e.target.checked);
-    onUpdateField(selectedField.id, { enableSalutation: e.target.checked });
+  // Handlers for fullname-specific properties
+  const handleSalutationEnabledChange = (e) => {
+    const newSubFields = {
+      ...fullnameSubFields,
+      salutation: { ...fullnameSubFields.salutation, enabled: e.target.checked }
+    };
+    setFullnameSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
-  const handleSalutationChange = (index, value) => {
-    const newSalutations = [...salutations];
-    newSalutations[index] = value;
-    setSalutations(newSalutations);
-    onUpdateField(selectedField.id, { salutations: newSalutations });
+  const handleSalutationOptionChange = (index, value) => {
+    const newOptions = [...fullnameSubFields.salutation.options];
+    newOptions[index] = value;
+    const newSubFields = {
+      ...fullnameSubFields,
+      salutation: { ...fullnameSubFields.salutation, options: newOptions }
+    };
+    setFullnameSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
-  const handleAddSalutation = () => {
-    const newSalutations = [...salutations, `Salutation ${salutations.length + 1}`];
-    setSalutations(newSalutations);
-    onUpdateField(selectedField.id, { salutations: newSalutations });
+  const handleAddSalutationOption = () => {
+    const newOptions = [...fullnameSubFields.salutation.options, `Salutation ${fullnameSubFields.salutation.options.length + 1}`];
+    const newSubFields = {
+      ...fullnameSubFields,
+      salutation: { ...fullnameSubFields.salutation, options: newOptions }
+    };
+    setFullnameSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
-  const handleRemoveSalutation = (index) => {
-    const newSalutations = salutations.filter((_, i) => i !== index);
-    setSalutations(newSalutations);
-    onUpdateField(selectedField.id, { salutations: newSalutations });
+  const handleRemoveSalutationOption = (index) => {
+    const newOptions = fullnameSubFields.salutation.options.filter((_, i) => i !== index);
+    const newSubFields = {
+      ...fullnameSubFields,
+      salutation: { ...fullnameSubFields.salutation, options: newOptions }
+    };
+    setFullnameSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
-  // Handlers for email-specific properties
-  const handleMaxCharsChange = (e) => {
-    const value = e.target.value;
-    setMaxChars(value);
-    onUpdateField(selectedField.id, { maxChars: value });
-  };
-
-  const handleAllowedDomainsChange = (e) => {
-    const value = e.target.value;
-    setAllowedDomains(value);
-    onUpdateField(selectedField.id, { allowedDomains: value });
-  };
-
-  const handleConfirmationChange = (e) => {
-    setEnableConfirmation(e.target.checked);
-    onUpdateField(selectedField.id, { enableConfirmation: e.target.checked });
-  };
-
-  const handleVerificationChange = (e) => {
-    setEnableVerification(e.target.checked);
-    onUpdateField(selectedField.id, { enableVerification: e.target.checked });
+  const handleFullnamePlaceholderChange = (key, value) => {
+    const newSubFields = {
+      ...fullnameSubFields,
+      [key]: { ...fullnameSubFields[key], placeholder: value },
+    };
+    setFullnameSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
   // Handlers for address-specific properties
-  const handleSubLabelsChange = (key, value) => {
-    const newSubLabels = { ...subLabels, [key]: value };
-    setSubLabels(newSubLabels);
-    onUpdateField(selectedField.id, { subLabels: newSubLabels });
+  const handleAddressSubLabelChange = (key, value) => {
+    const newSubFields = {
+      ...subFields,
+      [key]: { ...subFields[key], label: value }
+    };
+    setSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
-  const handleVisibleSubFieldsChange = (key) => {
-    const newVisibleSubFields = { ...visibleSubFields, [key]: !visibleSubFields[key] };
-    setVisibleSubFields(newVisibleSubFields);
-    onUpdateField(selectedField.id, { visibleSubFields: newVisibleSubFields });
+  const handleAddressVisibilityChange = (key) => {
+    const newSubFields = {
+      ...subFields,
+      [key]: { ...subFields[key], visible: !subFields[key].visible }
+    };
+    setSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
+  };
+
+  const handleAddressPlaceholderChange = (key, value) => {
+    const newSubFields = {
+      ...subFields,
+      [key]: { ...subFields[key], placeholder: value },
+    };
+    setSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
   // Handlers for fileupload-specific properties
@@ -494,11 +557,35 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { restrictAmPm: value });
   };
 
+  // Handlers for email-specific properties
+  const handleMaxCharsChange = (e) => {
+    const value = e.target.value;
+    setMaxChars(value);
+    onUpdateField(selectedField.id, { maxChars: value });
+  };
+
+  const handleAllowedDomainsChange = (e) => {
+    const value = e.target.value;
+    setAllowedDomains(value);
+    onUpdateField(selectedField.id, { allowedDomains: value });
+  };
+
+  const handleConfirmationChange = (e) => {
+    setEnableConfirmation(e.target.checked);
+    onUpdateField(selectedField.id, { enableConfirmation: e.target.checked });
+  };
+
+  const handleVerificationChange = (e) => {
+    setEnableVerification(e.target.checked);
+    onUpdateField(selectedField.id, { enableVerification: e.target.checked });
+  };
+
   // Handlers for advanced properties
   const handleDisabledChange = (e) => {
     setIsDisabled(e.target.checked);
     onUpdateField(selectedField.id, { isDisabled: e.target.checked });
   };
+
 
   const handleShowHelpTextChange = (e) => {
     setShowHelpText(e.target.checked);
@@ -515,7 +602,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setHeaderText(e.target.value);
     onUpdateField(selectedField.id, { heading: e.target.value });
   };
-
+  //handle for form heading
+  const handleHeadingTextChange = (e) => {
+    setHeadingText(e.target.value);
+    onUpdateField(selectedField.id, { heading: e.target.value });
+  };
+  const handleHeadingAlignmentChange = (e) => {
+    setHeadingAlignment(e.target.value);
+    onUpdateField(selectedField.id, { alignment: e.target.value });
+  };
   const handleHeaderAlignmentChange = (e) => {
     setHeaderAlignment(e.target.value);
     onUpdateField(selectedField.id, { alignment: e.target.value });
@@ -710,20 +805,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
   };
 
-  // NEW: Handlers for phone-specific properties
-  const handlePhoneInputMaskChange = (e) => {
-    const value = e.target.value;
-    setPhoneInputMask(value);
-    onUpdateField(selectedField.id, { phoneInputMask: value });
-  };
-
-  const handleEnableCountryCodeChange = (e) => {
-    const value = e.target.checked;
-    setEnableCountryCode(value);
-    onUpdateField(selectedField.id, { enableCountryCode: value });
-  };
-
-  // NEW: Handlers for price-specific properties
+  // Handlers for price-specific properties
   const handlePriceLimitsChange = (key, value) => {
     const newLimits = { ...priceLimits, [key]: value };
     setPriceLimits(newLimits);
@@ -736,7 +818,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { currencyType: value });
   };
 
-   const handleDragStart = (index) => {
+  const handleDragStart = (index) => {
     setDragIndex(index);
   };
 
@@ -759,10 +841,29 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setDragIndex(null);
   };
 
+  const handleDefaultValueChange = (e) => {
+    setDefaultValue(e.target.value);
+    onUpdateField(selectedField.id, { defaultValue: e.target.value });
+  };
+
+  const handleUniqueNameChange = (e) => {
+    let value = e.target.value.trim();
+    const innerRaw = value.replace(/^{|}$/g, '');
+    const innerCleaned = innerRaw.replace(/\s/g, '');
+    const finalValue = `{${innerCleaned}}`;
+    if (/\s/.test(innerRaw)) {
+      setUniqueNameError('Unique name cannot contain spaces.');
+    } else {
+      setUniqueNameError('');
+      setUniqueName(finalValue);
+      onUpdateField(selectedField.id, { uniqueName: finalValue });
+    }
+  };
+
   // Supported field types for placeholders
   const placeholderSupportedTypes = [
     'shorttext', 'longtext', 'number', 'phone', 'email', 'price', 'fullname',
-    'address', 'link', 'date', 'datetime', 'time', 'fileupload', 
+    'address', 'link', 'date', 'datetime', 'time', 'fileupload',
     'dropdown', 'signature', 'terms', 'displaytext', 'formcalculation'
   ];
 
@@ -775,7 +876,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isRating = selectedField?.type === 'rating';
   const isAddress = selectedField?.type === 'address';
   const isFullname = selectedField?.type === 'fullname';
-  const isHeader = selectedField?.type === 'header';
+  const isHeader = selectedField?.type === 'header'; // for Main Form Header
   const isEmail = selectedField?.type === 'email';
   const isFileUpload = selectedField?.type === 'fileupload';
   const isTerms = selectedField?.type === 'terms';
@@ -787,7 +888,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isNumber = selectedField?.type === 'number';
   const isPhone = selectedField?.type === 'phone';
   const isPrice = selectedField?.type === 'price';
-  const selectedCountryCode = selectedField.selectedCountryCode || 'US';
+  const isHeading = selectedField?.type === 'heading'; // For Headings in form
   // Get dynamic country list
   const countries = getCountryList();
 
@@ -808,22 +909,20 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       {/* Tabs for Settings and Widget */}
       <div className="flex border-b mb-4">
         <button
-          className={`px-4 py-2 font-medium text-sm ${
-            activeTab === 'settings'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-blue-600'
-          }`}
+          className={`px-4 py-2 font-medium text-sm ${activeTab === 'settings'
+            ? 'border-b-2 border-blue-500 text-blue-600'
+            : 'text-gray-500 hover:text-blue-600'
+            }`}
           onClick={() => setActiveTab('settings')}
         >
           Settings
         </button>
         {isFormCalculation && (
           <button
-            className={`px-4 py-2 font-medium text-sm ${
-              activeTab === 'widget'
-                ? 'border-b-2 border-blue-500 text-blue-600'
-                : 'text-gray-500 hover:text-blue-600'
-            }`}
+            className={`px-4 py-2 font-medium text-sm ${activeTab === 'widget'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-500 hover:text-blue-600'
+              }`}
             onClick={() => setActiveTab('widget')}
           >
             Widget
@@ -869,128 +968,196 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </select>
                     </div>
                   </>
-                ) : (
+                ) : isHeading ?
                   <>
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
                       <input
                         type="text"
-                        value={label}
-                        onChange={handleLabelChange}
+                        value={headingText}
+                        onChange={handleHeadingTextChange}
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter field label"
+                        placeholder="Enter header text"
                       />
                     </div>
-                    {isPlaceholderSupported && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Alignment</label>
+                      <select
+                        value={headingAlignment}
+                        onChange={handleHeadingAlignmentChange}
+                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+                  </> : (
+                    <>
                       <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
-                        {isAddress ? (
-                          <div className="flex flex-col gap-2">
-                            {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                              <div key={key}>
-                                <label className="text-xs text-gray-500 capitalize">{key}</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+                        <input
+                          type="text"
+                          value={label}
+                          onChange={handleLabelChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter field label"
+                        />
+                      </div>
+                      {isPlaceholderSupported && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
+                          {isAddress ? (
+                            <div className="flex flex-col gap-2">
+                              {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                                <div key={key}>
+                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                  <input
+                                    type="text"
+                                    value={subFields[key]?.placeholder || ''}
+                                    onChange={(e) => handleAddressPlaceholderChange(key, e.target.value)}
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                    placeholder={`Enter ${key} placeholder`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : isFullname ? (
+                            <div className="flex flex-col gap-2">
+                              {['firstName', 'lastName'].map((key) => (
+                                <div key={key}>
+                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                  <input
+                                    type="text"
+                                    value={fullnameSubFields[key]?.placeholder || ''}
+                                    onChange={(e) => handleFullnamePlaceholderChange(key, e.target.value)}
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                    placeholder={`Enter ${key} placeholder`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : isPhone ? (
+                            <div className="flex flex-col gap-2">
+                              <div>
+                                <label className="text-xs text-gray-500">Phone Number</label>
                                 <input
                                   type="text"
-                                  value={placeholder[key] || ''}
-                                  onChange={(e) => handlePlaceholderChange(key, e.target.value)}
+                                  value={phoneSubFields.phoneNumber?.placeholder || ''}
+                                  onChange={(e) => {
+                                    const newSubFields = {
+                                      ...phoneSubFields,
+                                      phoneNumber: {
+                                        ...phoneSubFields.phoneNumber,
+                                        placeholder: e.target.value
+                                      }
+                                    };
+                                    setPhoneSubFields(newSubFields);
+                                    onUpdateField(selectedField.id, { subFields: newSubFields });
+                                  }}
                                   className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                  placeholder={`Enter ${key} placeholder`}
+                                  placeholder="Enter phone number"
                                 />
                               </div>
-                            ))}
-                          </div>
-                        ) : isFullname ? (
-                          <div className="flex flex-col gap-2">
-                            {['first', 'last'].map((key) => (
-                              <div key={key}>
-                                <label className="text-xs text-gray-500 capitalize">{key} Name</label>
-                                <input
-                                  type="text"
-                                  value={placeholder[key] || ''}
-                                  onChange={(e) => handlePlaceholderChange(key, e.target.value)}
-                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                  placeholder={`Enter ${key} name placeholder`}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              value={placeholder.main || ''}
+                              onChange={(e) => handlePlaceholderChange('main', e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter placeholder text"
+                            />
+                          )}
+                        </div>
+                      )}
+                      {isAlignmentSupported && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Label Alignment</label>
+                          <select
+                            value={labelAlignment}
+                            onChange={handleAlignmentChange}
+                            className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="top">Top</option>
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </div>
+                      )}
+                      {/* Default Value Feature */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
+                        <input
+                          type="text"
+                          value={defaultValue}
+                          onChange={handleDefaultValueChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter default value"
+                        />
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
                           <input
-                            type="text"
-                            value={placeholder.main || ''}
-                            onChange={(e) => handlePlaceholderChange('main', e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter placeholder text"
+                            type="checkbox"
+                            checked={isRequired}
+                            onChange={handleRequiredChange}
+                            className="mr-2"
                           />
+                          <span className="text-sm font-medium text-gray-700">Required</span>
+                        </label>
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isDisabled}
+                            onChange={handleDisabledChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
+                        </label>
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isHidden}
+                            onChange={handleHiddenChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Hidden Field</span>
+                        </label>
+                      </div>
+                      <div className="mb-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={showHelpText}
+                            onChange={handleShowHelpTextChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Show Help Text</span>
+                        </label>
+                        {showHelpText && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
+                            <textarea
+                              value={helpText}
+                              onChange={handleHelpTextChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter help text"
+                              rows="4"
+                            />
+                          </div>
                         )}
                       </div>
-                    )}
-                    {isAlignmentSupported && (
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Label Alignment</label>
-                        <select
-                          value={labelAlignment}
-                          onChange={handleAlignmentChange}
-                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="top">Top</option>
-                          <option value="left">Left</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    )}
-                    <div className="mb-4">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={isRequired}
-                          onChange={handleRequiredChange}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Required</span>
-                      </label>
-                    </div>
-                    <div className="mb-4">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={isDisabled}
-                      onChange={handleDisabledChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
-                  </label>
-                </div>
-                <div className="mb-4">
-                  <label className="inline-flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={showHelpText}
-                      onChange={handleShowHelpTextChange}
-                      className="mr-2"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Show Help Text</span>
-                  </label>
-                  {showHelpText && (
-                    <div className="mt-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
-                      <textarea
-                        value={helpText}
-                        onChange={handleHelpTextChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter help text"
-                        rows="4"
-                      />
-                    </div>
+                    </>
                   )}
-                </div>
-                  </>
-                )}
               </div>
             )}
           </div>
 
-          {/* Additional Properties Section */}
           {selectedField && (
             <div className="mb-2">
               <button
@@ -1048,84 +1215,116 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </button>
                     </div>
                   )}
-                 {isOptionsSupported && selectedField.type === 'dropdown' && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
-                  <select
-                    value={predefinedOptionSet}
-                    onChange={handlePredefinedOptionSetChange}
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                  >
-                    <option value="">Custom</option>
-                    <option value="days">Days of the Week</option>
-                    <option value="week">Weeks</option>
-                    <option value="gender">Gender</option>
-                  </select>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
-                  {options.map((opt, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center mb-2 gap-2"
-                      draggable={shuffleOptions}
-                      onDragStart={() => handleDragStart(idx)}
-                      onDragOver={(e) => handleDragOver(e, idx)}
-                      onDrop={() => handleDrop(idx)}
-                    >
-                      {shuffleOptions && (
-                        <FaArrowsAltV className="cursor-move text-gray-500" />
-                      )}
+                  {selectedField?.type === 'imageuploader' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
                       <input
-                        type="text"
-                        value={opt}
-                        onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
+                        type="number"
+                        min="1"
+                        value={selectedField.imageWidth || ''}
+                        onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder={`Option ${idx + 1}`}
+                        placeholder="e.g. 200"
                       />
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
                       <input
-                        type="text"
-                        value={dropdownRelatedValues[opt] || ''}
-                        onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
-                        className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Related value"
+                        type="number"
+                        min="1"
+                        value={selectedField.imageHeight || ''}
+                        onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="e.g. 100"
                       />
-                      <button
-                        onClick={() => handleDropdownRemoveOption(idx)}
-                        className="text-red-500 hover:text-red-700"
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
+                      <select
+                        value={selectedField.imageAlign || 'center'}
+                        onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
+                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <FaTrash />
-                      </button>
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
                     </div>
-                  ))}
-                  <button
-                    onClick={handleDropdownAddOption}
-                    className="text-blue-600 hover:underline"
-                  >
-                    + Add Item
-                  </button>
-                  <div className="mt-4">
-                    <label className="inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={allowMultipleSelections}
-                        onChange={handleAllowMultipleSelectionsChange}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
-                    </label>
-                  </div>
-                  <div className="mt-2">
-                    <label className="inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={shuffleOptions}
-                        onChange={handleShuffleOptionsChange}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
-                    </label>
-                  </div>
-                </div>
-              )}
+                  )}
+                  {isOptionsSupported && selectedField.type === 'dropdown' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
+                      <select
+                        value={predefinedOptionSet}
+                        onChange={handlePredefinedOptionSetChange}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                      >
+                        <option value="">Custom</option>
+                        <option value="days">Days of the Week</option>
+                        <option value="week">Weeks</option>
+                        <option value="gender">Gender</option>
+                      </select>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
+                      {options.map((opt, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center mb-2 gap-2"
+                          draggable={shuffleOptions}
+                          onDragStart={() => handleDragStart(idx)}
+                          onDragOver={(e) => handleDragOver(e, idx)}
+                          onDrop={() => handleDrop(idx)}
+                        >
+                          {shuffleOptions && (
+                            <FaArrowsAltV className="cursor-move text-gray-500" />
+                          )}
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder={`Option ${idx + 1}`}
+                          />
+                          <input
+                            type="text"
+                            value={dropdownRelatedValues[opt] || ''}
+                            onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
+                            className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Related value"
+                          />
+                          <button
+                            onClick={() => handleDropdownRemoveOption(idx)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={handleDropdownAddOption}
+                        className="text-blue-600 hover:underline"
+                      >
+                        + Add Item
+                      </button>
+                      <div className="mt-4">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={allowMultipleSelections}
+                            onChange={handleAllowMultipleSelectionsChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
+                        </label>
+                      </div>
+                      <div className="mt-2">
+                        <label className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={shuffleOptions}
+                            onChange={handleShuffleOptionsChange}
+                            className="mr-2"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                   {isScaleRating && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
@@ -1186,30 +1385,30 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         </button>
                       </div>
                       {showMultiRowModal && (
-                          <div className="bg-white p-4 rounded-lg w-96">
-                            <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
-                            <textarea
-                              value={multiRowInput}
-                              onChange={(e) => setMultiRowInput(e.target.value)}
-                              className="w-full p-2 border rounded-lg"
-                              rows="5"
-                              placeholder="Enter one row per line"
-                            />
-                            <div className="flex justify-end gap-2 mt-4">
-                              <button
-                                onClick={() => setShowMultiRowModal(false)}
-                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={handleMultiRowSave}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                              >
-                                Save
-                              </button>
-                            </div>
+                        <div className="bg-white p-4 rounded-lg w-96">
+                          <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
+                          <textarea
+                            value={multiRowInput}
+                            onChange={(e) => setMultiRowInput(e.target.value)}
+                            className="w-full p-2 border rounded-lg"
+                            rows="5"
+                            placeholder="Enter one row per line"
+                          />
+                          <div className="flex justify-end gap-2 mt-4">
+                            <button
+                              onClick={() => setShowMultiRowModal(false)}
+                              className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleMultiRowSave}
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              Save
+                            </button>
                           </div>
+                        </div>
                       )}
                       <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Columns</label>
                       {columns.map((colLabel, colIdx) => (
@@ -1240,32 +1439,32 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                     </div>
                   )}
                   {showMultiColumnModal && (
-                      <div className="bg-white p-4 rounded-lg w-96">
-                        <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
-                        <textarea
-                          value={multiColumnInput}
-                          onChange={(e) => setMultiColumnInput(e.target.value)}
-                          className="w-full p-2 border rounded-lg"
-                          rows="5"
-                          placeholder="Enter one column per line"
-                        />
-                        <div className="flex justify-end gap-2 mt-4">
-                          <button
-                            onClick={() => setShowMultiColumnModal(false)}
-                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={handleMultiColumnSave}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            Save
-                          </button>
-                        </div>
+                    <div className="bg-white p-4 rounded-lg w-96">
+                      <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
+                      <textarea
+                        value={multiColumnInput}
+                        onChange={(e) => setMultiColumnInput(e.target.value)}
+                        className="w-full p-2 border rounded-lg"
+                        rows="5"
+                        placeholder="Enter one column per line"
+                      />
+                      <div className="flex justify-end gap-2 mt-4">
+                        <button
+                          onClick={() => setShowMultiColumnModal(false)}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleMultiColumnSave}
+                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
                       </div>
-                  )} 
-                 {isRating && (
+                    </div>
+                  )}
+                  {isRating && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Rating Type</label>
                       <div className="flex gap-4">
@@ -1333,10 +1532,10 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             className="text-2xl w-12 text-center text-gray-700 hover:text-blue-500"
                           >
                             {ratingType === 'emoji' ? ratingEmojis[idx] :
-                            ratingType === 'star' ? <AiOutlineStar /> :
-                            ratingType === 'heart' ? <AiOutlineHeart /> :
-                            ratingType === 'bulb' ? <FaRegLightbulb /> :
-                            ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
+                              ratingType === 'star' ? <AiOutlineStar /> :
+                                ratingType === 'heart' ? <AiOutlineHeart /> :
+                                  ratingType === 'bulb' ? <FaRegLightbulb /> :
+                                    ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
                           </button>
                           {ratingType === 'emoji' && showEmojiPicker === idx && (
                             <div className="absolute top-10 left-0 z-10">
@@ -1363,36 +1562,36 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       <label className="inline-flex items-center mb-2">
                         <input
                           type="checkbox"
-                          checked={enableSalutation}
-                          onChange={handleEnableSalutationChange}
+                          checked={fullnameSubFields.salutation.enabled}
+                          onChange={handleSalutationEnabledChange}
                           className="mr-2"
                         />
                         <span className="text-sm font-medium text-gray-700">Enable Salutation</span>
                       </label>
-                      {enableSalutation && (
+                      {fullnameSubFields.salutation.enabled && (
                         <>
-                          <div className='mb-3'>
+                          <div className="mb-3">
                             <label className="text-xs text-gray-500">Salutation Placeholder</label>
                             <input
                               type="text"
-                              value={placeholder.salutation || ''}
-                              onChange={(e) => handlePlaceholderChange('salutation', e.target.value)}
+                              value={fullnameSubFields.salutation.placeholder || ''}
+                              onChange={(e) => handleFullnamePlaceholderChange('salutation', e.target.value)}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Enter salutation dropdown placeholder"
                             />
                           </div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Edit Salutations</label>
-                          {salutations.map((sal, idx) => (
+                          {fullnameSubFields.salutation.options.map((sal, idx) => (
                             <div key={idx} className="flex items-center mb-2 gap-2">
                               <input
                                 type="text"
                                 value={sal}
-                                onChange={(e) => handleSalutationChange(idx, e.target.value)}
+                                onChange={(e) => handleSalutationOptionChange(idx, e.target.value)}
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder={`Salutation ${idx + 1}`}
                               />
                               <button
-                                onClick={() => handleRemoveSalutation(idx)}
+                                onClick={() => handleRemoveSalutationOption(idx)}
                                 className="text-red-500 hover:text-red-700"
                               >
                                 <FaTimes />
@@ -1400,13 +1599,49 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             </div>
                           ))}
                           <button
-                            onClick={handleAddSalutation}
+                            onClick={handleAddSalutationOption}
                             className="text-blue-600 hover:underline"
                           >
                             + Add Salutation
                           </button>
                         </>
                       )}
+                    </div>
+                  )}
+                  {isAddress && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
+                      <div className="flex flex-col gap-2">
+                        <div>
+                          <label className="text-xs text-gray-500">Sub-labels</label>
+                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                            <div key={key} className="mb-2">
+                              <label className="text-xs text-gray-500 capitalize">{key}</label>
+                              <input
+                                type="text"
+                                value={subFields[key]?.label || ''}
+                                onChange={(e) => handleAddressSubLabelChange(key, e.target.value)}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder={`Enter ${key} sub-label`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500">Visible Sub-fields</label>
+                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                            <label key={key} className="inline-flex items-center mb-2">
+                              <input
+                                type="checkbox"
+                                checked={subFields[key]?.visible}
+                                onChange={() => handleAddressVisibilityChange(key)}
+                                className="mr-2"
+                              />
+                              <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                   {isEmail && (
@@ -1452,42 +1687,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           />
                           <span className="text-sm font-medium text-gray-700">Enable Verification Code</span>
                         </label>
-                      </div>
-                    </div>
-                  )}
-                  {isAddress && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Sub-labels</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <div key={key} className="mb-2">
-                              <label className="text-xs text-gray-500 capitalize">{key}</label>
-                              <input
-                                type="text"
-                                value={subLabels[key] || ''}
-                                onChange={(e) => handleSubLabelsChange(key, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Enter ${key} sub-label`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Visible Sub-fields</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <label key={key} className="inline-flex items-center mb-2">
-                              <input
-                                type="checkbox"
-                                checked={visibleSubFields[key]}
-                                onChange={() => handleVisibleSubFieldsChange(key)}
-                                className="mr-2"
-                              />
-                              <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
-                            </label>
-                          ))}
-                        </div>
                       </div>
                     </div>
                   )}
@@ -1766,116 +1965,138 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                     </div>
                   )}
                   {isShortText && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
-                    <input
-                      type="number"
-                      value={shortTextMaxChars}
-                      onChange={handleShortTextMaxCharsChange}
-                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      placeholder="Enter max characters (max 255)"
-                      min="1"
-                      max="255"
-                    />
-                  </div>
-                )}
-                {isLongText && (
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
-                    <label className="inline-flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={isRichText}
-                        onChange={handleIsRichTextChange}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
-                    </label>
-                    <div className="mt-2">
+                    <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
                       <input
                         type="number"
-                        value={longTextMaxChars}
-                        onChange={handleLongTextMaxCharsChange}
+                        value={shortTextMaxChars}
+                        onChange={handleShortTextMaxCharsChange}
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter max characters (max 131072)"
+                        placeholder="Enter max characters (max 255)"
                         min="1"
-                        max="131072"
+                        max="255"
                       />
                     </div>
-                  </div>
-                )}
-                {isNumber && (
-                  <div className="mb-4">
-                    <label className="inline-flex items-center mb-2">
-                      <input
-                        type="checkbox"
-                        checked={numberValueLimits.enabled}
-                        onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
-                    </label>
-                    {numberValueLimits.enabled && (
-                      <div className="flex gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Minimum Value</label>
-                          <input
-                            type="number"
-                            value={numberValueLimits.min}
-                            onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter min value"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Maximum Value</label>
-                          <input
-                            type="number"
-                            value={numberValueLimits.max}
-                            onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter max value"
-                          />
-                        </div>
+                  )}
+                  {isLongText && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isRichText}
+                          onChange={handleIsRichTextChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
+                      </label>
+                      <div className="mt-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
+                        <input
+                          type="number"
+                          value={longTextMaxChars}
+                          onChange={handleLongTextMaxCharsChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter max characters (max 131072)"
+                          min="1"
+                          max="131072"
+                        />
                       </div>
-                    )}
-                  </div>
-                )}
-                {/* NEW: Phone-specific properties */}
-                {isPhone && (
+                    </div>
+                  )}
+                  {isNumber && (
+                    <div className="mb-4">
+                      <label className="inline-flex items-center mb-2">
+                        <input
+                          type="checkbox"
+                          checked={numberValueLimits.enabled}
+                          onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
+                      </label>
+                      {numberValueLimits.enabled && (
+                        <div className="flex gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Minimum Value</label>
+                            <input
+                              type="number"
+                              value={numberValueLimits.min}
+                              onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter min value"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Maximum Value</label>
+                            <input
+                              type="number"
+                              value={numberValueLimits.max}
+                              onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter max value"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* NEW: Phone-specific properties */}
+                  {/* NEW: Phone-specific properties */}
+                  {isPhone && (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Phone Settings</label>
                       <div className="flex flex-col gap-2">
+                        {/* Enable Country Code Checkbox */}
                         <label className="inline-flex items-center">
                           <input
                             type="checkbox"
-                            checked={enableCountryCode}
-                            onChange={handleEnableCountryCodeChange}
+                            checked={phoneSubFields.countryCode?.enabled || false}
+                            onChange={(e) => {
+                              const newSubFields = {
+                                ...phoneSubFields,
+                                countryCode: {
+                                  ...phoneSubFields.countryCode,
+                                  enabled: e.target.checked,
+                                  value: e.target.checked ? phoneSubFields.countryCode?.value || 'US' : '',
+                                },
+                                phoneNumber: {
+                                  value: phoneSubFields.phoneNumber?.value || '',
+                                  placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                  ...(e.target.checked ? {} : { phoneMask: phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999' }),
+                                },
+                              };
+                              setPhoneSubFields(newSubFields);
+                              onUpdateField(selectedField.id, {
+                                subFields: newSubFields,
+                                placeholder: undefined,
+                              });
+                            }}
                             className="mr-2"
                           />
                           <span className="text-sm font-medium text-gray-700">Enable Country Code</span>
                         </label>
-                        {!enableCountryCode && (
-                          <div>
-                            <label className="text-xs text-gray-500">Input Mask</label>
-                            <input
-                              type="text"
-                              value={phoneInputMask}
-                              onChange={handlePhoneInputMaskChange}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter input mask (e.g., (999) 999-9999)"
-                            />
-                          </div>
-                        )}
-                        {enableCountryCode && (
+
+                        {/* Country Selector Dropdown */}
+                        {phoneSubFields.countryCode?.enabled && (
                           <div>
                             <label className="text-xs text-gray-500">Default Country Code</label>
                             <select
-                              value={selectedCountryCode}
+                              value={phoneSubFields.countryCode?.value || 'US'}
                               onChange={(e) => {
-                                const value = e.target.value;
-                                onUpdateField(selectedField.id, { selectedCountryCode: value });
+                                const newSubFields = {
+                                  ...phoneSubFields,
+                                  countryCode: {
+                                    ...phoneSubFields.countryCode,
+                                    value: e.target.value,
+                                  },
+                                  phoneNumber: {
+                                    value: phoneSubFields.phoneNumber?.value || '',
+                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                  },
+                                };
+                                setPhoneSubFields(newSubFields);
+                                onUpdateField(selectedField.id, { subFields: newSubFields });
                               }}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -1888,9 +2109,41 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             </select>
                           </div>
                         )}
+
+                        {/* Phone Mask Field — Only Show if Country Code Is Disabled */}
+                        {!phoneSubFields.countryCode?.enabled && (
+                          <div>
+                            <label className="text-xs text-gray-500 flex items-center gap-1">
+                              Phone Number Mask
+                              <FaInfoCircle
+                                className="text-blue-500 cursor-pointer"
+                                title="Use ( ) and - symbols to define a phone input mask. Example: (999) 999-9999"
+                              />
+                            </label>
+                            <input
+                              type="text"
+                              value={phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                              onChange={(e) => {
+                                const newSubFields = {
+                                  ...phoneSubFields,
+                                  phoneNumber: {
+                                    value: phoneSubFields.phoneNumber?.value || '',
+                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                    phoneMask: e.target.value,
+                                  },
+                                };
+                                setPhoneSubFields(newSubFields);
+                                onUpdateField(selectedField.id, { subFields: newSubFields });
+                              }}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="(999) 999-9999"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
+
                   {/* NEW: Price-specific properties */}
                   {isPrice && (
                     <div className="mb-4">
@@ -1965,7 +2218,24 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
             </button>
             {expandedSection === 'advanced' && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                
+                {/* Unique Name Feature */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unique Name</label>
+                  <input
+                    type="text"
+                    value={uniqueName}
+                    onChange={handleUniqueNameChange}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? 'border-red-500' : ''}`}
+                    placeholder="{uniqueName}"
+                    maxLength={50}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This can be used to pre-populate fields from a URL and pass data to another form automatically. It can't include spaces.
+                  </p>
+                  {uniqueNameError && (
+                    <p className="text-xs text-red-500 mt-1">{uniqueNameError}</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

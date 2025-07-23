@@ -1,0 +1,22 @@
+@keyframes scrollUp {
+  0% {
+    transform: translateY(0);
+  }
+
+  100% {
+    transform: translateY(calc(-100% + 12rem));
+    /* Adjust based on your form height */
+  }
+}
+.group-hover\:animate-scrollUp {
+  animation: none;
+}
+
+.group:hover .group-hover\:animate-scrollUp {
+  animation: scrollUp 4s ;
+  animation-iteration-count: 1;
+}
+
+.group:hover .group-hover\:animate-scrollUp {
+  animation-play-state: running;
+}

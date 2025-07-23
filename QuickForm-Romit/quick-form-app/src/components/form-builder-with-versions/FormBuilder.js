@@ -18,6 +18,7 @@ function FormBuilder({
   selectedSectionSide,
   setClipboard,
   clipboard,
+  selectedTheme,
 }) {
   const fieldsContainerRef = useRef(null);
 
@@ -65,7 +66,9 @@ function FormBuilder({
     setSelectedFieldId(fieldId);
     setSelectedSectionSide(sectionSide);
     setSelectedFooter(null);
-    setShowSidebar(false);
+    const isSectionField = fields.find((field) => field.id === fieldId && field.type === 'section');
+   setShowSidebar(!isSectionField || sectionSide !== null);
+    // setShowSidebar(false);
   };
 
   const handleFooterClick = (pageIndex, buttonType) => {
@@ -170,7 +173,11 @@ function FormBuilder({
   };
 
   return (
-    <div className="relative max-h-[calc(100vh-0px)] overflow-y-auto [&::-webkit-scrollbar]:w-2" ref={fieldsContainerRef}>
+    <div
+      className={`relative max-h-[calc(100vh-0px)] overflow-y-auto [&::-webkit-scrollbar]:w-2 `}
+      ref={fieldsContainerRef}
+      style={{ color: selectedTheme?.inputText ? undefined : undefined }}
+    >
       {pages.map((page, pageIndex) => (
         <div key={pageIndex}>
           <div className="relative group flex justify-center items-center mb-4 mx-auto opacity-75">
@@ -186,13 +193,13 @@ function FormBuilder({
             )}
           </div>
           <main
-            className="mx-auto bg-white rounded-lg shadow-md flex flex-col mb-8 border border-gray-200"
+            className={`mx-auto rounded-lg shadow-md flex flex-col mb-8 border border-gray-200 ${selectedTheme?.color || 'bg-white'}`}
             onDrop={(e) => handleDrop(e, false, pageIndex, page.fields.length)}
             onDragOver={handleDragOver}
           >
             {pageIndex === 0 && (
               <>
-                <div className="w-full flex items-center justify-center p-4">
+                <div className={`w-full flex items-center justify-center p-4 ${selectedTheme?.color || ''}`}>
                   <FormField
                     field={headerField}
                     isSelected={selectedFieldId === headerField.id}
@@ -205,6 +212,7 @@ function FormBuilder({
                     setClipboard={setClipboard}
                     clipboard={clipboard}
                     handlePaste={() => handlePaste(pageIndex, 0, null, null)}
+                    selectedTheme={selectedTheme}
                   />
                 </div>
                 <hr className="w-full border-gray-300 mb-4" />
@@ -241,6 +249,7 @@ function FormBuilder({
                         setClipboard={setClipboard}
                         clipboard={clipboard}
                         handlePaste={() => handlePaste(pageIndex, index + 1, null, null)}
+                        selectedTheme={selectedTheme}
                       />
                     </div>
                   ))}
@@ -252,7 +261,7 @@ function FormBuilder({
               {pageIndex > 0 && (
                 <button
                   type="button"
-                  className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                  className={`px-6 py-2 rounded-lg ${selectedTheme?.buttonBg || 'bg-gray-600'} ${selectedTheme?.buttonText || 'text-white'} hover:opacity-90`}
                   onClick={() => {
                     handlePrevious(pageIndex);
                     handleFooterClick(pageIndex, 'previous');
@@ -264,7 +273,7 @@ function FormBuilder({
               {pageIndex < pages.length - 1 && (
                 <button
                   type="button"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className={`px-6 py-2 rounded-lg ${selectedTheme?.buttonBg || 'bg-blue-600'} ${selectedTheme?.buttonText || 'text-white'} hover:opacity-90`}
                   onClick={() => {
                     handleNext(pageIndex);
                     handleFooterClick(pageIndex, 'next');
@@ -276,7 +285,7 @@ function FormBuilder({
               {pageIndex === pages.length - 1 && (
                 <button
                   type="button"
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className={`px-6 py-2 rounded-lg ${selectedTheme?.buttonBg || 'bg-blue-600'} ${selectedTheme?.buttonText || 'text-white'} hover:opacity-90`}
                   onClick={() => {
                     handleSubmit();
                     handleFooterClick(pageIndex, 'submit');
