@@ -7,11 +7,11 @@ export const handler = async (event) => {
   try {
     // Log the incoming event for debugging
     console.log('Received event:', JSON.stringify(event, null, 2));
-    
+
     // Parse the request body
     const body = JSON.parse(event.body || '{}');
     const { userId, instanceUrl, flowId, nodes, edges, mappings } = body;
-    
+
     // Extract the Authorization token
     const token = event.headers.Authorization?.split(' ')[1] || event.headers.authorization?.split(' ')[1];
 
@@ -102,8 +102,18 @@ export const handler = async (event) => {
         previousNodeId,
         label,
         order,
-        formVersionId,
+        formVersionId: mappingFormVersionId,
       } = mapping;
+
+      if (mappingFormVersionId !== formVersionId) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({
+            error: `All mappings must have the same formVersionId: ${formVersionId}`,
+          }),
+        };
+      }
 
       const isSpecialNode = nodeId === 'start' || nodeId === 'end';
       const effectiveActionType = actionType || (isSpecialNode ? (nodeId === 'start' ? 'Start' : 'End') : null);
@@ -113,7 +123,7 @@ export const handler = async (event) => {
         !nodeId ||
         !label ||
         !Number.isInteger(order) ||
-        !formVersionId ||
+        !mappingFormVersionId ||
         (!effectiveActionType && !isSpecialNode)
       ) {
         return {
@@ -255,7 +265,7 @@ export const handler = async (event) => {
                 statusCode: 400,
                 headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
                 body: JSON.stringify({
-                  error: `Condition node ${nodeId} with pathOption 'Rules' must include a Salesforce object andatial least one condition`,
+                  error: `Condition node ${nodeId} with pathOption 'Rules' must include a Salesforce object and at least one condition`,
                 }),
               };
             }
@@ -368,7 +378,7 @@ export const handler = async (event) => {
           }
           if (formatterConfig.formatType === 'date') {
             if (
-              (formatterConfig.operation === 'format_date' ||
+              (
                 formatterConfig.operation === 'format_datetime' ||
                 formatterConfig.operation === 'format_time') &&
               (!formatterConfig.options?.format || !formatterConfig.options?.timezone)
@@ -556,7 +566,7 @@ export const handler = async (event) => {
       const nodeData = nodes.find((node) => node.id === nodeId);
       const nodeConfiguration = nodeData
         ? {
-            position: nodeData.position || { x: 0, y: 0 }, 
+            position: nodeData.position || { x: 0, y: 0 },
           }
         : null;
 
@@ -573,7 +583,7 @@ export const handler = async (event) => {
 
       // Build Salesforce mapping payload
       const mappingPayload = {
-        Name:label,
+        Name: label,
         Type__c: effectiveActionType,
         Previous_Node_Id__c: previousNodeId || null,
         Next_Node_Id__c: nextNodeIds ? nextNodeIds.join(',') : null,
@@ -664,7 +674,7 @@ export const handler = async (event) => {
       mappingIds.set(nodeId, finalMappingId);
     }
 
-    // Update DynamoDB with mappings, nodes, and edges
+    // Update DynamoDB with combined data in FormRecords
     const currentTime = new Date().toISOString();
 
     // Retrieve existing data from DynamoDB using QueryCommand
@@ -690,181 +700,112 @@ export const handler = async (event) => {
       ExclusiveStartKey = queryResponse.LastEvaluatedKey;
     } while (ExclusiveStartKey);
 
-    let existingMetadata = {},
-      existingFormRecords = [],
-      existingMappings = {},
-      existingNodes = [],
-      existingEdges = [],
-      createdAt = currentTime;
+    // Reconstruct the full FormRecords from chunks
+let combinedFormRecords = '';
+const formRecordChunks = allItems
+  .filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'))
+  .sort((a, b) => {
+    const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+    const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+    return aNum - bNum;
+  });
 
-    if (allItems.length > 0) {
-      const metadataItem = allItems.find(item => item.ChunkIndex?.S === 'Metadata');
-      const formRecordsItem = allItems.find(item => item.ChunkIndex?.S === 'FormRecords');
-      const mappingItems = allItems.filter(item => item.ChunkIndex?.S?.startsWith('Mapping_'));
-      const nodesItems = allItems.filter(item => item.ChunkIndex?.S?.startsWith('Nodes_'));
-      const edgesItems = allItems.filter(item => item.ChunkIndex?.S?.startsWith('Edges_'));
+for (const chunk of formRecordChunks) {
+  combinedFormRecords += chunk.FormRecords.S;
+}
 
-      if (metadataItem?.Metadata?.S) {
-        existingMetadata = JSON.parse(metadataItem.Metadata.S);
-      }
-      if (formRecordsItem?.FormRecords?.S) {
-        existingFormRecords = JSON.parse(formRecordsItem.FormRecords.S);
-      }
-      if (mappingItems.length > 0) {
-        try {
-          const sortedMappingChunks = mappingItems
-            .sort((a, b) => {
-              const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-              const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-              return aNum - bNum;
-            })
-            .map(item => item.Mapping.S);
-          const combinedMappings = sortedMappingChunks.join('');
-          existingMappings = JSON.parse(combinedMappings);
-        } catch (e) {
-          console.warn('Failed to process Mapping chunks:', e.message, '\nStack trace:', e.stack);
-          existingMappings = {};
+let formRecords = [];
+try {
+  formRecords = JSON.parse(combinedFormRecords || '[]');
+} catch (e) {
+  console.error('Failed to parse FormRecords:', e);
+  formRecords = [];
+}
+
+// Create mappings structure with Salesforce IDs
+const updatedMappings = {};
+mappings.forEach((mapping) => {
+  updatedMappings[mapping.nodeId] = {
+    id: mappingIds.get(mapping.nodeId),
+    ...mapping,
+  };
+});
+
+
+   // Find and update the specific form version in formRecords
+let formVersionFound = false;
+formRecords = formRecords.map(form => {
+  const versionIndex = form.FormVersions?.findIndex(v => v.Id === formVersionId);
+  if (versionIndex >= 0) {
+    formVersionFound = true;
+    return {
+      ...form,
+      FormVersions: form.FormVersions.map((version, idx) => {
+        if (idx === versionIndex) {
+          return {
+            ...version,
+            Mappings: {
+              Id: version.Id,
+              FlowId: flowId,
+              Mappings: updatedMappings,
+              Nodes: nodes, // Use nodes exactly as received in request
+              Edges: edges, // Use edges exactly as received in request
+            }
+          };
         }
-      }
-      if (nodesItems.length > 0) {
-        try {
-          const sortedNodesChunks = nodesItems
-            .sort((a, b) => {
-              const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-              const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-              return aNum - bNum;
-            })
-            .map(item => item.Nodes.S);
-          const combinedNodes = sortedNodesChunks.join('');
-          existingNodes = JSON.parse(combinedNodes);
-        } catch (e) {
-          console.warn('Failed to process Nodes chunks:', e.message, '\nStack trace:', e.stack);
-          existingNodes = [];
-        }
-      }
-      if (edgesItems.length > 0) {
-        try {
-          const sortedEdgesChunks = edgesItems
-            .sort((a, b) => {
-              const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-              const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-              return aNum - bNum;
-            })
-            .map(item => item.Edges.S);
-          const combinedEdges = sortedEdgesChunks.join('');
-          existingEdges = JSON.parse(combinedEdges);
-        } catch (e) {
-          console.warn('Failed to process Edges chunks:', e.message, '\nStack trace:', e.stack);
-          existingEdges = [];
-        }
-      }
-      createdAt = metadataItem?.CreatedAt?.S || currentTime;
-    } else {
-      console.warn(
-        'No existing DynamoDB items found for InstanceUrl:',
-        cleanedInstanceUrl,
-        'UserId:',
-        userId
-      );
-    }
+        return version;
+      })
+    };
+  }
+  return form;
+});
 
-    // Update mappings with Salesforce IDs
-    const updatedMappings = {};
-    mappings.forEach((mapping) => {
-      updatedMappings[mapping.nodeId] = {
-        id: mappingIds.get(mapping.nodeId),
-        ...mapping,
-      };
-    });
+if (!formVersionFound) {
+  return {
+    statusCode: 404,
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    body: JSON.stringify({
+      error: `Form version ${formVersionId} not found in existing records`,
+    }),
+  };
+}
 
-    // Store nodes and edges
-    const updatedNodes = nodes;
-    const updatedEdges = edges;
-
-    // Chunk large data for DynamoDB
-    const CHUNK_SIZE = 370000;
-    const mappingString = JSON.stringify(updatedMappings);
-    const nodesString = JSON.stringify(updatedNodes);
-    const edgesString = JSON.stringify(updatedEdges);
-    const mappingChunks = [];
-    for (let i = 0; i < mappingString.length; i += CHUNK_SIZE) {
-      mappingChunks.push(mappingString.slice(i, i + CHUNK_SIZE));
-    }
-
-    const nodesChunks = [];
-    for (let i = 0; i < nodesString.length; i += CHUNK_SIZE) {
-      nodesChunks.push(nodesString.slice(i, i + CHUNK_SIZE));
-    }
-
-    const edgesChunks = [];
-    for (let i = 0; i < edgesString.length; i += CHUNK_SIZE) {
-      edgesChunks.push(edgesString.slice(i, i + CHUNK_SIZE));
-    }
+// Chunk formRecords for DynamoDB
+const formRecordsString = JSON.stringify(formRecords);
+const CHUNK_SIZE = 370000;
+const chunks = [];
+for (let i = 0; i < formRecordsString.length; i += CHUNK_SIZE) {
+  chunks.push(formRecordsString.slice(i, i + CHUNK_SIZE));
+}
 
     // Prepare batch write requests
-    const writeRequests = [
-      {
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: 'Metadata' },
-            InstanceUrl: { S: cleanedInstanceUrl },
-            Metadata: { S: JSON.stringify(existingMetadata) },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: currentTime },
-            FlowId: { S: flowId },
-          },
-        },
+const writeRequests = [
+  {
+    PutRequest: {
+      Item: {
+        UserId: { S: userId },
+        ChunkIndex: { S: 'Metadata' },
+        InstanceUrl: { S: cleanedInstanceUrl },
+        Metadata: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.Metadata?.S || '{}' },
+        CreatedAt: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.CreatedAt?.S || currentTime },
+        UpdatedAt: { S: currentTime },
+        FlowId: { S: flowId },
       },
-      {
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: 'FormRecords' },
-            FormRecords: { S: JSON.stringify(existingFormRecords) },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: currentTime },
-            FlowId: { S: flowId },
-          },
-        },
+    },
+  },
+  ...chunks.map((chunk, index) => ({
+    PutRequest: {
+      Item: {
+        UserId: { S: userId },
+        ChunkIndex: { S: `FormRecords_${index}` },
+        FormRecords: { S: chunk },
+        CreatedAt: { S: currentTime },
+        UpdatedAt: { S: currentTime },
+        FlowId: { S: flowId },
       },
-      ...mappingChunks.map((chunk, index) => ({
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: `Mapping_${index}` },
-            Mapping: { S: chunk },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: currentTime },
-            FlowId: { S: flowId },
-          },
-        },
-      })),
-      ...nodesChunks.map((chunk, index) => ({
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: `Nodes_${index}` },
-            Nodes: { S: chunk },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: currentTime },
-            FlowId: { S: flowId },
-          },
-        },
-      })),
-      ...edgesChunks.map((chunk, index) => ({
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: `Edges_${index}` },
-            Edges: { S: chunk },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: currentTime },
-            FlowId: { S: flowId },
-          },
-        },
-      })),
-    ];
+    },
+  })),
+];
 
     // Write to DynamoDB
     await dynamoClient.send(

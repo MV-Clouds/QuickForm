@@ -14,9 +14,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    // sessionStorage.setItem('isLoggedIn', 'true');
-    // sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    sessionStorage.setItem('isLoggedIn', 'true');
+    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
+    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login flag
     if (isLoggedIn) {
       navigate('/guest'); // Redirect to home if already logged in

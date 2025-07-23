@@ -154,7 +154,7 @@ const MappingFields = () => {
           }
 
           return acc;
-        }, []);
+        }, []);        
         setFormFields(normalizedFields);
       } else {
         console.warn('Form version not found or has no fields');
