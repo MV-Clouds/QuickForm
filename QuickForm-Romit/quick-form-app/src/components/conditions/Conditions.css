@@ -1,0 +1,12 @@
+/* Hover effect for edges */
+.react-flow__edge-path:hover {
+    stroke-width: 4;
+    stroke-opacity: 0.9;
+  }
+  
+  /* Remove React Flow branding */
+  .react-flow__attribution {
+    a{
+      display: none !important;
+    }
+  }

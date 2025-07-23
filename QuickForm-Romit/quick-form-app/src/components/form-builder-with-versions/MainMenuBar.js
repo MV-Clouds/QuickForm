@@ -1,6 +1,38 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId }) {
+  const navigate = useNavigate();
+
+  const handleMappingClick = () => {
+    // Find the selected form version
+    try {
+      const currentFormRecord = formRecords.find((record) =>
+        record.FormVersions.some((version) => version.Id === selectedVersionId)
+      );
+
+      const currentVersion = currentFormRecord?.FormVersions.find(
+        (version) => version.Id === selectedVersionId
+      );
+
+      if (!currentVersion) {
+        console.warn('No matching form version found');
+        return;
+      }
+
+      // Extract values
+      const formVersionId = currentVersion.Id;
+      console.log('form version ',formVersionId);
+      
+      // Navigate
+      navigate(`/mapping/${selectedVersionId}`);
+    } catch (error) {
+      console.log('error in navigate ');
+      
+    }
+    
+  };
+
   return (
     <aside
       className={`fixed top-0 left-0 z-20 h-screen transition-all ease-in-out duration-300 ${
@@ -33,7 +65,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
       <div className="relative h-full flex flex-col px-3agnesium-4 overflow-y-auto shadow-md dark:shadow-zinc-800">
         <a
           className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 text-primary underline-offset-4 hover:underline h-9 px-4 py-2 transition-transform ease-in-out duration-300 mt-4 translate-x-0"
-          href="/dashboard"
+          href="/home"
         >
           <img
             src="/quickform-logo.png"
@@ -107,7 +139,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                       <a
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/fields"
+                        href="/form-builder"
                       >
                         <span className="mr-4">
                           <svg
@@ -132,10 +164,10 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                       </a>
                     </div>
                     <div className="w-full">
-                      <a
+                      <button
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/notification"
+                        onClick={() => selectedVersionId && navigate(`/notifications/${selectedVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg
@@ -157,14 +189,20 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Notifications
                         </p>
-                      </a>
+                      </button>
                     </div>
                     <div className="w-full">
-                      <a
+                      <button
+                        onClick={()=>handleMappingClick()}
+                        className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
+                        data-state="closed"
+                      >
+                      {/* <a
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
                         href="/mapping"
-                      >
+                        onClick={()=>handleMappingClick()}
+                      > */}
                         <span className="mr-4">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -186,15 +224,15 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Mapping
                         </p>
-                      </a>
+                      {/* </a> */}
+                      </button>
                     </div>
                   </li>
                   <li className="w-full">
                     <div className="w-full">
-                      <a
+                      <button
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
-                        data-state="closed"
-                        href="/conditions"
+                        onClick={() => selectedVersionId && navigate(`/conditions/${selectedVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg
@@ -217,13 +255,13 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Conditions
                         </p>
-                      </a>
+                      </button>
                     </div>
                     <div className="w-full">
-                      <a
-                        className="inline-flex items-center  whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
+                      <button
+                        className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/thankyou"
+                        onClick={() => navigate(`/thankyou/${selectedVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg
@@ -246,7 +284,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar }) {
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Thank You
                         </p>
-                      </a>
+                      </button>
                     </div>
                   </li>
                   <div className="w-full absolute bottom-8">

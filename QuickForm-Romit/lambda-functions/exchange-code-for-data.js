@@ -6,15 +6,16 @@ import {
 import {
   DynamoDBClient,
   PutItemCommand,
+  GetItemCommand,
   QueryCommand,
-  GetItemCommand
+  BatchWriteItemCommand,
 } from '@aws-sdk/client-dynamodb';
 
 const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const TOKEN_TABLE_NAME = 'SalesforceAuthTokens';
+const METADATA_TABLE_NAME = 'SalesforceChunkData';
 
 export const handler = async (event) => {
   // Extract query parameters from the Lambda event
@@ -41,27 +42,24 @@ export const handler = async (event) => {
 
     // 1. Upsert token to DynamoDB (similar to the iframe flow)
     const tokenItem = {
-      InstanceUrl: { S: cleanedInstanceUrl },
       UserId: { S: userId },
+      InstanceUrl: { S: cleanedInstanceUrl },
       RefreshToken: { S: refresh_token || '' },
       AccessToken: { S: access_token },
       CreatedAt: { S: currentTime },
       UpdatedAt: { S: currentTime },
     };
-
     const queryResponse = await dynamoClient.send(
-      new QueryCommand({
+      new GetItemCommand({
         TableName: TOKEN_TABLE_NAME,
-        IndexName: 'UserId-InstanceUrl-Index',
-        KeyConditionExpression: 'UserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: userId },
+        Key: {
+          UserId: { S: userId },
         },
       })
     );
-
-    if (queryResponse.Items && queryResponse.Items.length > 0) {
-      tokenItem.CreatedAt = queryResponse.Items[0].CreatedAt;
+    
+    if (queryResponse.Item) {
+      tokenItem.CreatedAt = queryResponse.Item.CreatedAt || { S : currentTime};
     }
     
     await dynamoClient.send(
@@ -137,120 +135,179 @@ export const handler = async (event) => {
       }));
 
     // 3. Fetch Form__c records
-    let formRecords = [];
-    try {
-      const query = `SELECT Id, Name, Active_Version__c,
-                     (SELECT Id, Name, Form__c, Description__c, Version__c, Publish_Link__c, Stage__c, Submission_Count__c,
-                       (SELECT Id, Name, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c 
-                        FROM Form_Fields__r) 
-                      FROM Form_Versions__r ORDER BY Version__c DESC)
-                     FROM Form__c`;
-      const queryUrl = `${instance_url}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
-      const queryRes = await fetch(queryUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!queryRes.ok) {
-        const errorData = await queryRes.json();
-        throw new Error(errorData[0]?.message || 'Failed to fetch Form_Version__c records');
+    const fetchSalesforceData = async (accessToken, instanceUrl, query) => {
+      let allRecords = [];
+      let nextUrl = `${instanceUrl}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
+      const queryStart = Date.now();
+    
+      while (nextUrl) {
+        const queryRes = await fetch(nextUrl, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+    
+        if (!queryRes.ok) {
+          const errorData = await queryRes.json();
+          throw new Error(errorData[0]?.message || `Failed to fetch records for query: ${query}`);
+        }
+    
+        const queryData = await queryRes.json();
+        allRecords.push(...(queryData.records || []));
+    
+        nextUrl = queryData.nextRecordsUrl
+          ? `${instanceUrl}${queryData.nextRecordsUrl}`
+          : null;
       }
+    
+      return allRecords;
+    };
 
-      const queryData = await queryRes.json();
-      formRecords = (queryData.records || []).map(record => ({
-        Id: record.Id,
-        Name: record.Name,
-        Active_Version__c: record.Active_Version__c || null,
-        FormVersions: (record.Form_Versions__r?.records || []).map(version => ({
+    const [forms, formVersions, formFields, formConditions] = await Promise.all([
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id, Name, Active_Version__c, Publish_Link__c FROM Form__c'
+      ),
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id, Name, Form__c, Description__c, Object_Info__c, Version__c, Stage__c, Submission_Count__c FROM Form_Version__c'
+      ),
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id, Name, Form_Version__c, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c FROM Form_Field__c'
+      ),
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id, Form_Version__c, Condition_Type__c, Condition_Data__c FROM Form_Condition__c'
+      ),
+    ]);
+    const formRecords = forms.map(form => ({
+      Id: form.Id,
+      Name: form.Name,
+      Active_Version__c: form.Active_Version__c || null,
+      Source: 'Form__c',
+      FormVersions: formVersions
+        .filter(version => version.Form__c === form.Id)
+        .map(version => ({
           Id: version.Id,
           FormId: version.Form__c,
           Name: version.Name,
+          Object_Info__c: version.Object_Info__c || null,
           Description__c: version.Description__c || null,
           Version__c: version.Version__c || '1',
           Publish_Link__c: version.Publish_Link__c || null,
           Stage__c: version.Stage__c || 'Draft',
           Submission_Count__c: version.Submission_Count__c || 0,
-          Fields: (version.Form_Fields__r?.records || []).map(field => ({
-            Id: field.Id,
-            Name: field.Name,
-            Field_Type__c: field.Field_Type__c,
-            Page_Number__c: field.Page_Number__c,
-            Order_Number__c: field.Order_Number__c,
-            Properties__c: field.Properties__c,
-            Unique_Key__c: field.Unique_Key__c,
-          })),
           Source: 'Form_Version__c',
-        })),
-        Source: 'Form__c',
-      }));
-    } catch (queryError) {
-      console.warn(`Error fetching Form_Version__c records: ${queryError.message}`);
+          Fields: formFields
+            .filter(field => field.Form_Version__c === version.Id)
+            .map(field => ({
+              Id: field.Id,
+              Name: field.Name,
+              Field_Type__c: field.Field_Type__c,
+              Page_Number__c: field.Page_Number__c,
+              Order_Number__c: field.Order_Number__c,
+              Properties__c: field.Properties__c,
+              Unique_Key__c: field.Unique_Key__c,
+            })),
+          Conditions: formConditions
+            .filter(condition => condition.Form_Version__c === version.Id)
+            .flatMap(condition => {
+              try {
+                return JSON.parse(condition.Condition_Data__c || '[]').map(cond => ({
+                  Id: cond.Id,
+                  type: cond.type,
+                  ...(cond.type === 'dependent'
+                    ? {
+                        ifField: cond.ifField,
+                        value: cond.value || null,
+                        dependentField: cond.dependentField,
+                        dependentValues: cond.dependentValues || [],
+                      }
+                    : {
+                        conditions: cond.conditions?.map(c => ({
+                          ifField: c.ifField,
+                          operator: c.operator || 'equals',
+                          value: c.value || null,
+                        })) || [],
+                        logic: cond.logic || 'AND',
+                        ...(cond.type === 'show_hide'
+                          ? { thenAction: cond.thenAction, thenFields: cond.thenFields || [] }
+                          : cond.type === 'skip_hide_page'
+                          ? { thenAction: cond.thenAction, sourcePage: cond.sourcePage, targetPage: cond.targetPage }
+                          : {
+                              thenAction: cond.thenAction,
+                              thenFields: cond.thenFields || [],
+                              ...(cond.thenAction === 'set mask' ? { maskPattern: cond.maskPattern } : {}),
+                              ...(cond.thenAction === 'unmask' ? { maskPattern: null } : {}),
+                            }),
+                      }),
+                }));
+              } catch (e) {
+                console.warn(`Failed to parse Condition_Data__c for condition ${condition.Id}:`, e);
+                return [];
+              }
+            }),
+        }))
+        .sort((a, b) => (b.Version__c || '1').localeCompare(a.Version__c || '1')), // Sort by Version__c DESC
+    }));
+
+  const queryResponseData = await dynamoClient.send(
+    new QueryCommand({
+      TableName: METADATA_TABLE_NAME,
+      KeyConditionExpression: 'UserId = :userId',
+      ExpressionAttributeValues: {
+        ':userId': { S: userId },
+      },
+    })
+  );
+  
+    const formRecordsString = JSON.stringify(formRecords);
+    const CHUNK_SIZE = 370000;
+    const chunks = [];
+    for (let i = 0; i < formRecordsString.length; i += CHUNK_SIZE) {
+      chunks.push(formRecordsString.slice(i, i + CHUNK_SIZE));
     }
 
-    // 4. Check existing metadata from DynamoDB
-    const existingMetadataRes = await dynamoClient.send(
-      new GetItemCommand({
-        TableName: METADATA_TABLE_NAME,
-        Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
-          UserId: { S: userId },
+    const writeRequests = [
+      {
+        PutRequest: {
+          Item: {
+            UserId: { S: userId },
+            ChunkIndex: { S: 'Metadata' },
+            InstanceUrl: { S: cleanedInstanceUrl },
+            Metadata: { S: JSON.stringify(metadata) },
+            CreatedAt: { S: queryResponseData.Items?.find(item => item.ChunkIndex?.S === 'Metadata')?.CreatedAt?.S || currentTime },
+            UpdatedAt: { S: currentTime },
+          },
+        },
+      },
+      ...chunks.map((chunk, index) => ({
+        PutRequest: {
+          Item: {
+            UserId: { S: userId },
+            ChunkIndex: { S: `FormRecords_${index}` },
+            FormRecords: { S: chunk },
+            CreatedAt: { S: currentTime },
+            UpdatedAt: { S: currentTime },
+          },
+        },
+      })),
+    ];
+
+    await dynamoClient.send(
+      new BatchWriteItemCommand({
+        RequestItems: {
+          [METADATA_TABLE_NAME]: writeRequests,
         },
       })
-    );
-
-    let existingMetadata = null;
-    let existingFormRecords = [];
-
-    if (existingMetadataRes.Item?.Metadata?.S) {
-      try {
-        existingMetadata = JSON.parse(existingMetadataRes.Item.Metadata.S);
-      } catch (e) {
-        console.warn('Failed to parse existing metadata:', e);
-      }
-    }
-
-    if (existingMetadataRes.Item?.FormRecords?.S) {
-      try {
-        existingFormRecords = JSON.parse(existingMetadataRes.Item.FormRecords.S);
-      } catch (e) {
-        console.warn('Failed to parse existing FormRecords:', e);
-      }
-    }
-
-    const isSameMetadata =
-      existingMetadata &&
-      JSON.stringify(existingMetadata) === JSON.stringify(metadata);
-
-    const isSameFormRecords =
-      JSON.stringify(existingFormRecords) === JSON.stringify(formRecords);
-      
-    // 5. Only write metadata if it has changed
-    if (!isSameMetadata || !isSameFormRecords) {
-      const itemToWrite = {
-        InstanceUrl: { S: cleanedInstanceUrl },
-        UserId: { S: userId },
-        Metadata: { S: JSON.stringify(metadata) },
-        FormRecords: { S: JSON.stringify(formRecords) },
-        CreatedAt: {
-          S: existingMetadataRes.Item?.CreatedAt?.S || currentTime,
-        },
-        UpdatedAt: { S: currentTime },
-      };
-      
-      console.log('Writing this item to DynamoDB:', JSON.stringify(itemToWrite, null, 2));
-      await dynamoClient.send(
-        new PutItemCommand({
-          TableName: METADATA_TABLE_NAME,
-          Item: itemToWrite,
-        })
-      );
-      console.log('Metadata updated in DynamoDB');
-    } else {
-      console.log('Metadata unchanged, skipping DynamoDB update');
-    }
+    )
     
     // 6. Return HTML to notify the parent window and close the popup
     const htmlResponse = `
@@ -268,7 +325,7 @@ export const handler = async (event) => {
       </body>
     </html>
     `;
-    
+
     return {
       statusCode: 200,
       headers: {

@@ -6,7 +6,6 @@ import {
 import {
   DynamoDBClient,
   PutItemCommand,
-  QueryCommand,
   GetItemCommand
 } from '@aws-sdk/client-dynamodb';
 
@@ -15,8 +14,8 @@ import jwt from 'jsonwebtoken';
 const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 
-const TOKEN_TABLE_NAME = 'SalesforceTokens';
-const METADATA_TABLE_NAME = 'SalesforceMetadata';
+const TOKEN_TABLE_NAME = 'SalesforceAuthTokens';
+const METADATA_TABLE_NAME = 'SalesforceData';
 
 export const handler = async (event) => {
   const { sessionId, userId, username, audience } = event;
@@ -35,18 +34,16 @@ export const handler = async (event) => {
 
     // 1. Try to reuse existing access token
     const existingTokenRes = await dynamoClient.send(
-      new QueryCommand({
+      new GetItemCommand({
         TableName: TOKEN_TABLE_NAME,
-        IndexName: 'UserId-InstanceUrl-Index',
-        KeyConditionExpression: 'UserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: userId },
+        Key: {
+          UserId: { S: userId },
         },
       })
     );
 
-    if (existingTokenRes.Items && existingTokenRes.Items.length > 0) {
-      const item = existingTokenRes.Items[0];
+    if (existingTokenRes.Item) {
+      const item = existingTokenRes.Item;
       access_token = item.AccessToken?.S;
       refresh_token = item.RefreshToken?.S || '';
       cleanedInstanceUrl = item.InstanceUrl?.S;
@@ -118,8 +115,8 @@ export const handler = async (event) => {
 
       // 4. Upsert new token to DynamoDB
       const tokenItem = {
-        InstanceUrl: { S: cleanedInstanceUrl },
         UserId: { S: userId },
+        InstanceUrl: { S: cleanedInstanceUrl },
         RefreshToken: { S: refresh_token },
         AccessToken: { S: access_token },
         CreatedAt: { S: currentTime },
@@ -127,7 +124,7 @@ export const handler = async (event) => {
       };
 
       if (existingTokenRes.Items?.length > 0) {
-        tokenItem.CreatedAt = existingTokenRes.Items[0].CreatedAt;
+        tokenItem.CreatedAt = existingTokenRes.Items[0].CreatedAt || { S: currentTime };
       }
 
       await dynamoClient.send(
@@ -189,15 +186,18 @@ export const handler = async (event) => {
 
     // 6. Fetch Form__c records
     let formRecords = [];
-    try {
-      const query = `SELECT Id, Name, Active_Version__c,
-                     (SELECT Id, Name, Form__c, Description__c, Version__c, Publish_Link__c, Stage__c, Submission_Count__c,
+    const query = `SELECT Id, Name, Active_Version__c,
+                     (SELECT Id, Name, Form__c, Description__c, Object_Info__c, Version__c, Publish_Link__c, Stage__c, Submission_Count__c,
                        (SELECT Id, Name, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c 
-                        FROM Form_Fields__r) 
+                        FROM Form_Fields__r),
+                        (SELECT Id, Condition_Type__c, Condition_Data__c 
+                          FROM Form_Condition__r)
                       FROM Form_Versions__r ORDER BY Version__c DESC)
                      FROM Form__c`;
-      const queryUrl = `${instance_url}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
-      const queryRes = await fetch(queryUrl, {
+    let nextUrl = `${instance_url}/services/data/v60.0/query?q=${encodeURIComponent(query)}`;
+
+    while (nextUrl) {
+      const queryRes = await fetch(nextUrl, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -207,11 +207,12 @@ export const handler = async (event) => {
 
       if (!queryRes.ok) {
         const errorData = await queryRes.json();
-        throw new Error(errorData[0]?.message || 'Failed to fetch Form_Version__c records');
+        throw new Error(errorData[0]?.message || 'Failed to fetch Form__c records');
       }
 
       const queryData = await queryRes.json();
-      formRecords = (queryData.records || []).map(record => ({
+
+      const batch = (queryData.records || []).map(record => ({
         Id: record.Id,
         Name: record.Name,
         Active_Version__c: record.Active_Version__c || null,
@@ -219,6 +220,7 @@ export const handler = async (event) => {
           Id: version.Id,
           FormId: version.Form__c,
           Name: version.Name,
+          Object_Info__c: version.Object_Info__c || null,
           Description__c: version.Description__c || null,
           Version__c: version.Version__c || '1',
           Publish_Link__c: version.Publish_Link__c || null,
@@ -233,12 +235,22 @@ export const handler = async (event) => {
             Properties__c: field.Properties__c,
             Unique_Key__c: field.Unique_Key__c,
           })),
+          Conditions: (version.Form_Condition__r?.records || []).map(condition => ({
+            Id: condition.Id,
+            Condition_Type__c: condition.Condition_Type__c,
+            Condition_Data__c: condition.Condition_Data__c,
+          })),
           Source: 'Form_Version__c',
         })),
         Source: 'Form__c',
       }));
-    } catch (queryError) {
-      console.warn(`Error fetching Form_Version__c records: ${queryError.message}`);
+
+      formRecords.push(...batch);
+
+      // Prepare for next batch if available
+      nextUrl = queryData.nextRecordsUrl
+        ? `${instance_url}${queryData.nextRecordsUrl}`
+        : null;
     }
 
 
@@ -247,7 +259,6 @@ export const handler = async (event) => {
       new GetItemCommand({
         TableName: METADATA_TABLE_NAME,
         Key: {
-          InstanceUrl: { S: cleanedInstanceUrl },
           UserId: { S: userId },
         },
       })
@@ -283,8 +294,8 @@ export const handler = async (event) => {
         new PutItemCommand({
           TableName: METADATA_TABLE_NAME,
           Item: {
-            InstanceUrl: { S: cleanedInstanceUrl },
             UserId: { S: userId },
+            InstanceUrl: { S: cleanedInstanceUrl },
             Metadata: { S: JSON.stringify(metadata) },
             FormRecords: { S: JSON.stringify(formRecords) },
             CreatedAt: {
