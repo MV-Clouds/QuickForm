@@ -411,7 +411,10 @@ const Home = () => {
               <div className="modal-header">
                 <h2 className="form-title">Create New Form</h2>
                 <button className="close-button-container" onClick={() => setIsModalOpen(false)}> 
-                      <img src="/images/close_icon.svg" alt="Close" />
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 1.00714L8.99286 0L5 3.99286L1.00714 0L0 1.00714L3.99286 5L0 8.99286L1.00714 10L5 6.00714L8.99286 10L10 8.99286L6.00714 5L10 1.00714Z" fill="#5F6165"/>
+                      </svg>
+
                 </button>
               </div>
               <div className="divider"></div>
@@ -421,7 +424,7 @@ const Home = () => {
                   <div className="options-container">
                     <div className="option-card scratch-option" onClick={() => handleOptionSelect('scratch')}>
                       <div className="preview-image">
-                        <img src="/images/form_scratch.svg" alt="Scratch Option" />
+                        <img src="/images/form_scratch.png" alt="Scratch Option" />
                       </div>
                       <div className="option-text">
                         <div className="option-title">Build from Scratch</div>
@@ -430,7 +433,7 @@ const Home = () => {
                     </div>
                     <div className="option-card salesforce-option" onClick={() => handleOptionSelect('salesforce')}>
                       <div className="preview-image">
-                        <img src="/images/form_build.svg" alt="Salesforce Option" />
+                        <img src="/images/form_build.png" alt="Salesforce Option" />
                       </div>
                       <div className="option-text">
                         <div className="option-title">Build using Salesforce</div>
@@ -439,7 +442,7 @@ const Home = () => {
                     </div>
                     <div className="option-card templates-option" onClick={() => handleOptionSelect('templates')}>
                       <div className="preview-image">
-                        <img src="/images/form_template.svg" alt="Templates Option" />
+                        <img src="/images/form_template.png" alt="Templates Option" />
                       </div>
                       <div className="option-text">
                         <div className="option-title">Use a Template</div>

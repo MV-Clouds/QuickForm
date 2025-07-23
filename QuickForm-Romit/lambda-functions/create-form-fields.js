@@ -218,48 +218,8 @@ export const handler = async (event) => {
           throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
         }
       }
-
-      // Delete existing Form_Field__c records
-      const query = `SELECT Id FROM Form_Field__c WHERE Form_Version__c = '${formVersionId}'`;
-      const queryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`;
-      const queryResponse = await fetch(queryUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!queryResponse.ok) {
-        const errorData = await queryResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to query Form_Field__c records');
-      }
-
-      const queryData = await queryResponse.json();
-      const existingFields = queryData.records || [];
-
-      const batchSize = 200;
-      for (let i = 0; i < existingFields.length; i += batchSize) {
-        const batchFields = existingFields.slice(i, i + batchSize);
-        const ids = batchFields.map(field => field.Id).join(',');
-
-        const deleteResponse = await fetch(
-          `${salesforceBaseUrl}/composite/sobjects?ids=${encodeURIComponent(ids)}&allOrNone=true`,
-          {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!deleteResponse.ok) {
-          const errorData = await deleteResponse.json();
-          throw new Error(errorData[0]?.message || 'Failed to delete Form_Field__c records');
-        }
-      }
     } else {
-      // Enforce one Draft per Form__c
+      // Enforce only one Draft per Form__c
       const draftQuery = `SELECT Id FROM Form_Version__c WHERE Form__c = '${formId}' AND Stage__c = 'Draft'`;
       const draftQueryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(draftQuery)}`;
       const draftQueryRes = await fetch(draftQueryUrl, {
@@ -299,154 +259,163 @@ export const handler = async (event) => {
       formVersionId = formVersionData.id;
     }
 
-    // Step 3: Update Form__c Active_Version__c
-    // const updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
-    //   method: 'PATCH',
-    //   headers: {
-    //     Authorization: `Bearer ${token}`,
-    //     'Content-Type': 'application/json',
-    //   },
-    //   body: JSON.stringify({
-    //     Active_Version__c: formVersion.Stage__c === 'Publish' ? `V${formVersion.Version__c}` : 'None',
-    //     Status__c: formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
-    //   }),
-    // });
+    // Differential updating Form_Field__c records
+    // Step 1: Query existing fields for this version
+    const query = `SELECT Id, Unique_Key__c, Name, Field_Type__c, Properties__c, Page_Number__c, Order_Number__c FROM Form_Field__c WHERE Form_Version__c = '${formVersionId}'`;
+    const queryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`;
+    const queryResponse = await fetch(queryUrl, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-    // if (!updateFormResponse.ok) {
-    //   const errorData = await updateFormResponse.json();
-    //   throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
-    // }
-    
-    // Step 4: Create Form_Field__c records
-    const createdFormFields = [];
-    const formFieldIds = {};
-    // if (formData.formFields.length > 0) {
-    //   const compositeRequest = {
-    //     allOrNone: true,
-    //     records: formData.formFields.map((formField) => {
-    //       let properties;
-    //       try {
-    //         properties = JSON.parse(formField.Properties__c);
-    //       } catch (e) {
-    //         console.warn(`Failed to parse Properties__c for field ${formField.Unique_Key__c}:`, e);
-    //         properties = {};
-    //       }
-    //       // Remove subFields from validation to avoid duplication
-    //       if (properties.validation && properties.validation.subFields) {
-    //         delete properties.validation.subFields;
-    //       }
-    //       return {
-    //         attributes: { type: 'Form_Field__c' },
-    //         ...formField,
-    //         Form_Version__c: formVersionId,
-    //         Properties__c: JSON.stringify({
-    //           ...properties,
-    //           subFields: properties.subFields || {},
-    //         }),
-    //       };
-    //     }),
-    //   };
-
-    //   const formFieldResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
-    //     method: 'POST',
-    //     headers: {
-    //       Authorization: `Bearer ${token}`,
-    //       'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify(compositeRequest),
-    //   });
-
-    //   if (!formFieldResponse.ok) {
-    //     const errorData = await formFieldResponse.json();
-    //     throw new Error(errorData[0]?.message || 'Failed to create Form_Field__c records');
-    //   }
-
-    //   const formFieldData = await formFieldResponse.json();
-    //   formFieldData.forEach((result, index) => {
-    //     if (result.success) {
-    //       const formField = formData.formFields[index];
-    //       createdFormFields.push({
-    //         Id: result.id,
-    //         Name: formField.Name,
-    //         Field_Type__c: formField.Field_Type__c,
-    //         Page_Number__c: formField.Page_Number__c,
-    //         Order_Number__c: formField.Order_Number__c,
-    //         Properties__c: formField.Properties__c,
-    //         Unique_Key__c: formField.Unique_Key__c,
-    //       });
-    //       formFieldIds[formField.Unique_Key__c] = result.id;
-    //     } else {
-    //       throw new Error(result.errors[0]?.message || 'Failed to create a Form_Field__c record');
-    //     }
-    //   });
-    // }
-
-    const batchSize = 200;
-    const groups = [];
-    for (let i = 0; i < formData.formFields.length; i += batchSize) {
-      groups.push(formData.formFields.slice(i, i + batchSize));
+    if (!queryResponse.ok) {
+      const errorData = await queryResponse.json();
+      throw new Error(errorData[0]?.message || 'Failed to query Form_Field__c records');
     }
 
-    for (const batch of groups) {
-      const compositeRequest = {
+    const queryData = await queryResponse.json();
+    const existingFields = queryData.records || [];
+
+    // Map existing fields by Unique_Key__c
+    const existingFieldsMap = {};
+    existingFields.forEach(f => {
+      existingFieldsMap[f.Unique_Key__c] = f;
+    });
+
+    // Map new fields by Unique_Key__c
+    const newFieldsMap = {};
+    formData.formFields.forEach(f => {
+      newFieldsMap[f.Unique_Key__c] = f;
+    });
+
+    // Determine fields to delete
+    const toDelete = existingFields.filter(f => !newFieldsMap[f.Unique_Key__c]);
+
+    // Determine fields to update
+    const toUpdate = formData.formFields.filter(f => {
+      const existing = existingFieldsMap[f.Unique_Key__c];
+      if (!existing) return false;
+      return (
+        existing.Name !== f.Name ||
+        existing.Field_Type__c !== f.Field_Type__c ||
+        existing.Properties__c !== f.Properties__c ||
+        existing.Page_Number__c !== f.Page_Number__c ||
+        existing.Order_Number__c !== f.Order_Number__c
+      );
+    })
+    .map(f => ({
+      ...f,
+      Id: existingFieldsMap[f.Unique_Key__c]?.Id, // add the existing Salesforce record ID here
+    }));;
+
+
+    // Determine fields to create
+    const toCreate = formData.formFields.filter(f => !existingFieldsMap[f.Unique_Key__c]);
+
+    const batchSize = 200;
+
+    // Batch delete
+    for (let i = 0; i < toDelete.length; i += batchSize) {
+      const batchFields = toDelete.slice(i, i + batchSize);
+      const ids = batchFields.map(f => f.Id).join(',');
+
+      const deleteResponse = await fetch(
+        `${salesforceBaseUrl}/composite/sobjects?ids=${encodeURIComponent(ids)}&allOrNone=true`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!deleteResponse.ok) {
+        const err = await deleteResponse.json();
+        throw new Error(err[0]?.message || 'Failed to batch delete form fields');
+      }
+    }
+
+    // Batch update
+    for (let i = 0; i < toUpdate.length; i += batchSize) {
+      const batch = toUpdate.slice(i, i + batchSize);
+      const compositeUpdateRequest = {
         allOrNone: true,
-        records: batch.map((formField) => {
-          let properties;
+        records: batch.map(f => {
+          let props;
           try {
-            properties = JSON.parse(formField.Properties__c);
-          } catch (e) {
-            console.warn(`Failed to parse Properties__c for field ${formField.Unique_Key__c}:`, e);
-            properties = {};
+            props = JSON.parse(f.Properties__c);
+          } catch {
+            props = {};
           }
-          if (properties.validation && properties.validation.subFields) {
-            delete properties.validation.subFields;
-          }
+          if (props.validation?.subFields) delete props.validation.subFields;
+
           return {
             attributes: { type: 'Form_Field__c' },
-            ...formField,
+            Id: f.Id,
             Form_Version__c: formVersionId,
-            Properties__c: JSON.stringify({
-              ...properties,
-              subFields: properties.subFields || {},
-            }),
+            Name: f.Name,
+            Field_Type__c: f.Field_Type__c,
+            Page_Number__c: f.Page_Number__c,
+            Order_Number__c: f.Order_Number__c,
+            Properties__c: JSON.stringify({ ...props, subFields: props.subFields || {} }),
+            Unique_Key__c: f.Unique_Key__c,
           };
         }),
       };
 
-      const formFieldResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+      const updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(compositeUpdateRequest),
+      });
+
+      if (!updateResponse.ok) {
+        const err = await updateResponse.json();
+        throw new Error(err[0]?.message || 'Failed to batch update form fields');
+      }
+    }
+
+    // Batch create
+    for (let i = 0; i < toCreate.length; i += batchSize) {
+      const batch = toCreate.slice(i, i + batchSize);
+      const compositeCreateRequest = {
+        allOrNone: true,
+        records: batch.map(f => {
+          let props;
+          try {
+            props = JSON.parse(f.Properties__c);
+          } catch {
+            props = {};
+          }
+          if (props.validation?.subFields) delete props.validation.subFields;
+
+          return {
+            attributes: { type: 'Form_Field__c' },
+            ...f,
+            Form_Version__c: formVersionId,
+            Properties__c: JSON.stringify({ ...props, subFields: props.subFields || {} }),
+          };
+        }),
+      };
+
+      const createResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(compositeRequest),
+        body: JSON.stringify(compositeCreateRequest),
       });
 
-      if (!formFieldResponse.ok) {
-        const errorData = await formFieldResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to create Form_Field__c records');
+      if (!createResponse.ok) {
+        const err = await createResponse.json();
+        throw new Error(err[0]?.message || 'Failed to batch create form fields');
       }
-
-      const formFieldData = await formFieldResponse.json();
-      formFieldData.forEach((result, index) => {
-        if (result.success) {
-          const formField = batch[index];
-          createdFormFields.push({
-            Id: result.id,
-            Name: formField.Name,
-            Field_Type__c: formField.Field_Type__c,
-            Page_Number__c: formField.Page_Number__c,
-            Order_Number__c: formField.Order_Number__c,
-            Properties__c: formField.Properties__c,
-            Unique_Key__c: formField.Unique_Key__c,
-          });
-          formFieldIds[formField.Unique_Key__c] = result.id;
-        } else {
-          throw new Error(result.errors[0]?.message || 'Failed to create a Form_Field__c record');
-        }
-      });
     }
-
 
     // Step 5: Update DynamoDB SalesforceMetadata table
     const currentTime = new Date().toISOString();
@@ -470,7 +439,7 @@ export const handler = async (event) => {
       Stage__c: formData.formVersion.Stage__c || 'Draft',
       Submission_Count__c: formData.formVersion.Submission_Count__c || 0,
       Object_Info__c: formData.formVersion.Object_Info__c || [],
-      Fields: createdFormFields,
+      Fields: formData.formFields, // Optionally replace with createdFormFields if needed
       Conditions: existingConditions,
       Source: 'Form_Version__c',
     };
@@ -547,7 +516,7 @@ export const handler = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId, formFieldIds }),
+      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId }),
     };
   } catch (error) {
     return {
