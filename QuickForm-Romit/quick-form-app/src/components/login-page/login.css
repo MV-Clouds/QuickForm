@@ -5,6 +5,10 @@
   box-sizing: border-box;
 }
 
+body {
+overflow: hidden;
+}
+
 /* Root variables for consistent theming */
 :root {
   --primary-dark: #001F3F;
@@ -433,6 +437,9 @@
 
 /* Media query for small screens (up to 768px) */
 @media (max-width: 768px) {
+  body{
+    overflow: auto;
+  }
   .content-container {
     flex-direction: column;
     min-height: 100vh;

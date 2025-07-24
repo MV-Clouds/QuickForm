@@ -2,6 +2,9 @@ import { motion } from 'framer-motion';
 import { Bot, MessageSquare } from 'lucide-react';
 
 const BotButton = ({ isOpen, setIsOpen , handleActivity }) => {
+  const userId = sessionStorage.getItem("userId");
+  if(!userId)
+    return null;
   return (
     <motion.button
       whileHover={{
