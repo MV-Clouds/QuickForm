@@ -25,6 +25,7 @@ const Login = () => {
   ];
 
   const [displayedFeatures, setDisplayedFeatures] = useState([]);
+  const [isLoginProgress, setIsLoginProgress] = useState(false);
 
   const validateCustomUrl = (url) => {
     if (!url) return false;
@@ -37,9 +38,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    sessionStorage.setItem('isLoggedIn', 'true');
-    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    // sessionStorage.setItem('isLoggedIn', 'true');
+    // sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
+    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -78,6 +79,7 @@ const Login = () => {
           alert('Login failed. Please try again.'); // Show error
         }
       }
+      setIsLoginProgress(false);
     };
 
     window.addEventListener('message', handleMessage); // Add event listener
@@ -101,6 +103,7 @@ const Login = () => {
   }, [org, customUrl]);
 
   const handleOrgChange = (value) => {
+    if(isLoginProgress) return;
     setOrg(value); // Update state
     if (value !== 'custom') {
       setCustomUrl(''); // Clear custom URL if not custom
@@ -109,6 +112,7 @@ const Login = () => {
   };
 
   const openPopup = () => {
+    setIsLoginProgress(true);
     if (org === 'Pick an option' || (org === 'custom' && !validateCustomUrl(customUrl))) return; // Do nothing if org not selected
     let effectiveOrg = org;
     if (org === 'custom') {
@@ -226,6 +230,7 @@ const Login = () => {
                         placeholder = "Pick an option"
                         style={{ width: '100%' }}
                         className="dropdown"
+                        disabled={isLoginProgress}
                       >
                         <Option value="production">Production (login.salesforce.com)</Option>
                         <Option value="sandbox">Sandbox (test.salesforce.com)</Option>
@@ -254,6 +259,7 @@ const Login = () => {
                         placeholder="yourdomain.my.salesforce.com"
                         style={{ width: '100%' }}
                         className=''
+                        disabled={isLoginProgress}
                       />
                     </motion.div>
                   )}
@@ -261,8 +267,8 @@ const Login = () => {
                 <button
                   id="login-button"
                   onClick={openPopup}
-                  disabled={isButtonDisabled}
-                  className={`login-button ${isButtonDisabled ? 'disabled' : ''}`}
+                  disabled={isButtonDisabled || isLoginProgress}
+                  className={`login-button ${isButtonDisabled || isLoginProgress ? 'disabled' : ''}`}
                 >
                   <svg className="gate-logo"  width="20" height="19" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1.60059 9.16661H13.3612M13.3612 9.16661L10.421 6.64648M13.3612 9.16661L10.421 11.6867" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

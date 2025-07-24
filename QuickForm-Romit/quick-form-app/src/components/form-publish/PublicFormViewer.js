@@ -12,6 +12,10 @@ import 'react-phone-input-2/lib/style.css';
 import { AiOutlineStar, AiFillStar, AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { FaRegLightbulb, FaLightbulb, FaBolt } from 'react-icons/fa';
 import { parsePhoneNumberFromString, getExampleNumber } from 'libphonenumber-js';
+import { Select, Tooltip  } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
+
+const { Option } = Select;
 
 function PublicFormViewer() {
   const { linkId } = useParams();
@@ -67,7 +71,7 @@ function PublicFormViewer() {
       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, formId, accessToken: token }),
+        body: JSON.stringify({ userId, formId }),
       });
 
       const data = await response.json();
@@ -110,27 +114,27 @@ function PublicFormViewer() {
 
         if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
           // Safely access subFields properties with defaults
-          initialValues[`${field.Id}_countryCode`] =
+          initialValues[`${field.Id || properties.id}_countryCode`] =
             properties.subFields?.countryCode?.value ?? 'US';
-          initialValues[field.Id] =
+          initialValues[field.Id || properties.id] =
             properties.subFields?.phoneNumber?.value ?? '';
         } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-          initialValues[field.Id] = properties.defaultValue || [];
+          initialValues[field.Id || properties.id] = properties.defaultValue || [];
         } else if (fieldType === 'datetime' || fieldType === 'date') {
-          initialValues[field.Id] = properties.defaultValue || null;
+          initialValues[field.Id || properties.id] = properties.defaultValue || null;
         } else if (fieldType === 'time') {
-          initialValues[field.Id] = properties.defaultValue || '';
+          initialValues[field.Id || properties.id] = properties.defaultValue || '';
         } else if (fieldType === 'scalerating') {
-          initialValues[field.Id] = {};
+          initialValues[field.Id || properties.id] = {};
         } else {
-          initialValues[field.Id] = properties.defaultValue || '';
+          initialValues[field.Id || properties.id] = properties.defaultValue || '';
         }
 
-        initialSignatures[field.Id] = null;
-        initialFilePreviews[field.Id] = null;
-        initialRatings[field.Id] = null;
-        initialSelectedOptions[field.Id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
-        initialToggles[field.Id] = false;
+        initialSignatures[field.Id || properties.id] = null;
+        initialFilePreviews[field.Id || properties.id] = null;
+        initialRatings[field.Id || properties.id] = null;
+        initialSelectedOptions[field.Id || properties.id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
+        initialToggles[field.Id || properties.id] = false;
       });
 
       setFormValues(initialValues);
@@ -166,8 +170,27 @@ function PublicFormViewer() {
 
   const handleChange = (fieldId, value, isFile = false) => {
     setFormValues((prev) => ({ ...prev, [fieldId]: isFile ? value : value }));
-    setErrors((prev) => ({ ...prev, [fieldId]: null }));
+
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      // Clear error for changed field
+      if (newErrors[fieldId]) {
+        delete newErrors[fieldId];
+      }
+
+      // Also clear error for parent field if this is a subfield, e.g. "fieldId_subfield"
+      const underscoreIndex = fieldId.indexOf('_');
+      if (underscoreIndex > 0) {
+        const parentFieldId = fieldId.substring(0, underscoreIndex);
+        if (newErrors[parentFieldId]) {
+          delete newErrors[parentFieldId];
+        }
+      }
+
+      return newErrors;
+    });
   };
+
 
   const handleRatingChange = (fieldId, value) => {
     setSelectedRatings((prev) => ({ ...prev, [fieldId]: value }));
@@ -208,19 +231,12 @@ function PublicFormViewer() {
     }
   };
 
-  const handleSignatureEnd = (fieldId, sigCanvasRef) => {
-    if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
-      const dataUrl = sigCanvasRef.current.toDataURL('image/png');
+  const handleSignatureEnd = (fieldId, sigCanvasInstance) => {
+    if (sigCanvasInstance && !sigCanvasInstance.isEmpty()) {
+      // Use getTrimmedCanvas() for a cleaner result, fallback to getCanvas()
+      const dataUrl = sigCanvasInstance.toDataURL('image/png');
       setSignatures((prev) => ({ ...prev, [fieldId]: dataUrl }));
       handleChange(fieldId, dataUrl);
-    }
-  };
-
-  const clearSignature = (fieldId, sigCanvasRef) => {
-    if (sigCanvasRef && sigCanvasRef.current) {
-      sigCanvasRef.current.clear();
-      setSignatures((prev) => ({ ...prev, [fieldId]: null }));
-      handleChange(fieldId, null);
     }
   };
 
@@ -229,175 +245,32 @@ function PublicFormViewer() {
     const newErrors = {};
 
     formData.Fields.forEach((field) => {
-      const properties = JSON.parse(field.Properties__c || '{}');
-      const value = formValues[field.Id];
-      const fieldType = field.Field_Type__c;
-      const fieldLabel = properties.label || field.Name;
-
-      const isRequired = properties.isRequired;
-      if (isRequired) {
-        if (
-          value === '' ||
-          value == null ||
-          (Array.isArray(value) && value.length === 0) ||
-          (fieldType === 'fileupload' && !value) ||
-          (fieldType === 'imageuploader' && !value) ||
-          (fieldType === 'signature' && !signatures[field.Id]) ||
-          (fieldType === 'terms' && !value) ||
-          (fieldType === 'scalerating' && (!value || Object.keys(value).length === 0))
-        ) {
-          newErrors[field.Id] = `${fieldLabel} is required`;
+      // For section fields, recursively validate their subfields
+      const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
+      if (field.Field_Type__c === "section" && properties.subFields) {
+        if (properties.subFields.leftField) {
+          const leftError = validateSingleField(
+            properties.subFields.leftField,
+            formValues[properties.subFields.leftField.id],
+            formValues, {signaturesObj: signatures}
+          );
+          if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
-      }
-
-      switch (fieldType) {
-        case 'number':
-          if (value !== '' && isNaN(parseFloat(value))) {
-            newErrors[field.Id] = `${fieldLabel} must be a valid number`;
-          } else if (properties.numberValueLimits?.enabled) {
-            const numValue = parseFloat(value);
-            const { min, max } = properties.numberValueLimits;
-            if (min != null && numValue < parseFloat(min)) {
-              newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
-            }
-            if (max != null && numValue > parseFloat(max)) {
-              newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
-            }
-          }
-          break;
-        case 'phone':
-          if (value) {
-            const isCountryCodeEnabled = properties.subFields?.countryCode?.enabled;
-
-            if (isCountryCodeEnabled) {
-              const countryCode = formValues[`${field.Id}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
-              try {
-                const adjustedValue = value.replace(/\D/g, '');
-                const phoneNumber = parsePhoneNumberFromString(adjustedValue, countryCode);
-
-                if (!phoneNumber || !phoneNumber.isValid()) {
-                  newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
-                } else {
-                  const maxDigits = phoneNumber.countryCallingCode === '+1' ? 10 : phoneNumber.nationalNumber.length <= 15 ? phoneNumber.nationalNumber.length : 15;
-
-                  if (adjustedValue.length > maxDigits) {
-                    newErrors[field.Id] = `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
-                  }
-
-                  if (countryCode === 'US' && !/^[2-9]\d{2}$/.test(phoneNumber.nationalNumber.slice(0, 3))) {
-                    newErrors[field.Id] = `${fieldLabel} must include a valid US area code`;
-                  }
-                }
-              } catch (error) {
-                newErrors[field.Id] = `${fieldLabel} is not a valid phone number for ${countryCode}`;
-              }
-            } else {
-              // If country code is not enabled, you can optionally clear any existing error:
-              delete newErrors[field.Id];
-            }
-          }
-          break;
-
-        case 'price':
-          if (value !== '' && isNaN(parseFloat(value))) {
-            newErrors[field.Id] = `${fieldLabel} must be a valid number`;
-          } else if (properties.priceLimits?.enabled) {
-            const numValue = parseFloat(value);
-            const { min, max } = properties.priceLimits;
-            if (min != null && numValue < parseFloat(min)) {
-              newErrors[field.Id] = `${fieldLabel} must be at least ${min}`;
-            }
-            if (max != null && numValue > parseFloat(max)) {
-              newErrors[field.Id] = `${fieldLabel} must be at most ${max}`;
-            }
-          }
-          break;
-        case 'shorttext':
-          if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars) {
-            newErrors[field.Id] = `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
-          }
-          break;
-        case 'longtext':
-          if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars) {
-            newErrors[field.Id] = `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
-          }
-          break;
-        case 'email':
-          if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-            newErrors[field.Id] = `${fieldLabel} must be a valid email address`;
-          }
-          if (properties.allowedDomains && value) {
-            const domains = properties.allowedDomains.split(',').map((d) => d.trim());
-            const domain = value.split('@')[1];
-            if (!domains.includes(domain)) {
-              newErrors[field.Id] = `${fieldLabel} must be from one of these domains: ${domains.join(', ')}`;
-            }
-          }
-          if (properties.enableConfirmation && value !== formValues[`${field.Id}_confirmation`]) {
-            newErrors[`${field.Id}_confirmation`] = 'Email confirmation does not match';
-          }
-          break;
-        case 'fileupload':
-        case 'imageuploader':
-          if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024) {
-            newErrors[field.Id] = `File size exceeds ${properties.maxFileSize}MB limit`;
-          }
-          if (value && properties.allowedFileTypes) {
-            const extension = value.name.split('.').pop().toLowerCase();
-            const allowed = properties.allowedFileTypes.split(',').map((type) => type.trim().toLowerCase());
-            if (!allowed.includes(extension)) {
-              newErrors[field.Id] = `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
-            }
-          }
-          break;
-        case 'date':
-          if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD format`;
-          }
-          if (properties.enableAgeVerification && value) {
-            const today = new Date();
-            const birthDate = new Date(value);
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-              age--;
-            }
-            if (age < properties.minAge) {
-              newErrors[field.Id] = `You must be at least ${properties.minAge} years old`;
-            }
-          }
-          break;
-        case 'datetime':
-          if (value && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value)) {
-            newErrors[field.Id] = `${fieldLabel} must be in YYYY-MM-DD HH:MM format`;
-          }
-          break;
-        default:
-          break;
+        if (properties.subFields.rightField) {
+          const rightError = validateSingleField(
+            properties.subFields.rightField,
+            formValues[properties.subFields.rightField.id],
+            formValues, {signaturesObj: signatures}
+          );
+          if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
+        }
+      } else {
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures});
+        if (error) newErrors[field.Id || properties.id] = error;
       }
     });
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const uploadFileToSalesforce = async (file, submissionId) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('submissionId', submissionId);
-    formData.append('userId', linkData.userId);
-
-    const response = await fetch(process.env.REACT_APP_UPLOAD_DOCUMENT_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: formData,
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to upload file');
-    }
-    return data.documentId;
   };
 
   // const handleSubmit = async (e) => {
@@ -562,6 +435,202 @@ function PublicFormViewer() {
   //   }
   // };
 
+  // Utility: Validation for a single field (returns an error message string if invalid, or null if valid)
+  const validateSingleField = (field, value, allValues, {signaturesObj} = {}) => {
+    let properties = {};
+    if (field.Properties__c) {
+      properties = typeof field.Properties__c === "string"
+        ? JSON.parse(field.Properties__c || "{}")
+        : (field.Properties__c || {});
+    }
+    // For SECTION FIELDS, copy key props from top level into properties if not present
+    // (e.g. label, maxChars, allowedDomains, min, max, etc.)
+    [
+      "label", "isRequired", "maxChars", "shortTextMaxChars", "longTextMaxChars", "allowedDomains",
+      "enableConfirmation", "allowedFileTypes", "maxFileSize", "min", "max", "priceLimits", "numberValueLimits",
+      "enableAgeVerification", "minAge", "restrictAmPm", "subFields"
+    ].forEach((key) => {
+      if (
+        (typeof properties[key] === "undefined" || properties[key] === null)
+        && typeof field[key] !== "undefined"
+      ) {
+        properties[key] = field[key];
+      }
+    });
+    const fieldType = field.Field_Type__c || field.type;
+    const fieldLabel = properties.label || field.Name || field.id || properties.id;
+    const isRequired = properties.isRequired;
+
+    // Required logic (handles most types including special cases)
+    if (
+      isRequired && 
+      fieldType !== "address" &&
+      fieldType !== "fullname" &&
+      fieldType !== "phone" && (
+        value === "" ||
+        value == null ||
+        (Array.isArray(value) && value.length === 0) ||
+        (fieldType === "fileupload" && !value) ||
+        (fieldType === "imageuploader" && !value) ||
+        (fieldType === "signature" && signaturesObj && !signaturesObj[field.Id]) ||
+        (fieldType === "terms" && !value) ||
+        (fieldType === "scalerating" && (!value || Object.keys(value).length === 0))
+      )
+    ) {
+      return `${fieldLabel} is required`;
+    }
+
+    // Specialized validation cases
+    switch (fieldType) {
+      case "number":
+        if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
+        if (properties.numberValueLimits?.enabled) {
+          const numValue = parseFloat(value);
+          const { min, max } = properties.numberValueLimits;
+          if (min != null && numValue < parseFloat(min)) return `${fieldLabel} must be at least ${min}`;
+          if (max != null && numValue > parseFloat(max)) return `${fieldLabel} must be at most ${max}`;
+        }
+        break;
+      case "price":
+        if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
+        if (properties.priceLimits?.enabled) {
+          const numValue = parseFloat(value);
+          const { min, max } = properties.priceLimits;
+          if (min != null && numValue < parseFloat(min)) return `${fieldLabel} must be at least ${min}`;
+          if (max != null && numValue > parseFloat(max)) return `${fieldLabel} must be at most ${max}`;
+        }
+        break;
+      case "shorttext":
+        if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars)
+          return `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
+        break;
+      case "longtext":
+        if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars)
+          return `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
+        break;
+      case "email":
+        if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+          return `${fieldLabel} must be a valid email address`;
+        if (properties.allowedDomains && value) {
+          const domains = properties.allowedDomains.split(",").map((d) => d.trim());
+          const domain = value.split("@")[1];
+          if (!domains.includes(domain)) return `${fieldLabel} must be from one of these domains: ${domains.join(", ")}`;
+        }
+        if (properties.enableConfirmation && value !== allValues[`${field.Id || properties.id}_confirmation`]) {
+          return `Email confirmation does not match`;
+        }
+        break;
+      case "fileupload":
+      case "imageuploader":
+        if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024)
+          return `File size exceeds ${properties.maxFileSize}MB limit`;
+        if (value && properties.allowedFileTypes) {
+          const extension = value.name.split(".").pop().toLowerCase();
+          const allowed = properties.allowedFileTypes.split(",").map((type) => type.trim().toLowerCase());
+          if (!allowed.includes(extension))
+            return `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
+        }
+        break;
+      case "date":
+        if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value))
+          return `${fieldLabel} must be in YYYY-MM-DD format`;
+        if (properties.enableAgeVerification && value) {
+          const today = new Date();
+          const birthDate = new Date(value);
+          let age = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+          if (age < properties.minAge) return `You must be at least ${properties.minAge} years old`;
+        }
+        break;
+      case "datetime":
+        if (value && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value))
+          return `${fieldLabel} must be in YYYY-MM-DD HH:MM format`;
+        break;
+      case "time":
+        if (value && properties.restrictAmPm) {
+          const [hourStr] = value.split(":");
+          const hour = parseInt(hourStr, 10);
+          const isAm = hour >= 0 && hour < 12;
+          if ((properties.restrictAmPm === "AM" && !isAm) || (properties.restrictAmPm === "PM" && isAm)) {
+            return `Time must be ${properties.restrictAmPm}`;
+          }
+        }
+        break;
+      case "phone":
+        if (value) {
+          const isCountryCodeEnabled = properties.subFields?.countryCode?.enabled;
+          if (isCountryCodeEnabled) {
+            const countryCode = allValues[`${field.Id || properties.id}_countryCode`] || properties.subFields?.countryCode?.value || "US";
+            try {
+              const adjustedValue = value.replace(/\D/g, "");
+              const phoneNumber = parsePhoneNumberFromString(adjustedValue, countryCode);
+              if (!phoneNumber || !phoneNumber.isValid()) return `${fieldLabel} is not a valid phone number for ${countryCode}`;
+              const maxDigits = phoneNumber.countryCallingCode === "+1" ? 10 : phoneNumber.nationalNumber.length <= 15 ? phoneNumber.nationalNumber.length : 15;
+              if (adjustedValue.length > maxDigits) return `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
+              if (countryCode === "US" && !/^[2-9]\d{2}$/.test(phoneNumber.nationalNumber.slice(0, 3))) {
+                return `${fieldLabel} must include a valid US area code`;
+              }
+            } catch (error) {
+              return `${fieldLabel} is not a valid phone number for ${countryCode}`;
+            }
+          }
+        }
+        break;
+      case "address":
+        if (isRequired && properties.subFields) {
+          const subfieldsToCheck = ["street", "city", "state", "country", "postal"];
+          const missingFields = [];
+
+          for (const subfield of subfieldsToCheck) {
+            const subConfig = properties.subFields[subfield];
+            if (
+              (subfield === "street"
+                ? subConfig?.visiblesubFields !== false
+                : subConfig?.visible !== false)
+            ) {
+              
+              const subValue = allValues[`${field.id || field.Id || properties.id}_${subfield}`] || '';
+              if (!subValue || (typeof subValue === "string" && subValue.trim() === "")) {
+                missingFields.push(subConfig?.label || subfield);
+              }
+            }
+          }
+          
+          if (missingFields.length > 0) {
+            // Return generic message or list missing fields
+            return `Please fill out all the fields in Address`; // Or: `Please fill out: ${missingFields.join(", ")}`
+          }
+        }
+        break;
+      case "fullname":
+        if (isRequired && properties.subFields) {
+          const subfieldsToCheck = ["salutation", "first", "last"];
+          const missingFields = [];
+
+          for (const subfield of subfieldsToCheck) {
+            const subConfig = properties.subFields[subfield];
+            if (subConfig?.enabled !== false) {
+              const subValue = allValues[`${field.id || field.Id || properties.id}_${subfield}`] || '';
+              if (!subValue || (typeof subValue === "string" && subValue.trim() === "")) {
+                missingFields.push(subConfig?.label || subfield);
+              }
+            }
+          }
+
+          if (missingFields.length > 0) {
+            return `Please fill out all the fields in full name.`;
+          }
+        }
+        break;
+      
+      default:
+        break;
+    }
+
+    return null; // No error
+  };
+
   // In handleSubmit function
 
   const handleSubmit = async (e) => {
@@ -622,6 +691,45 @@ function PublicFormViewer() {
       }
     }
 
+    const uploadToS3 = async (file) => {
+    const reader = new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+
+    const base64String = await reader;
+
+    const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      body: base64String,
+      headers: { 'Content-Type': 'application/octet-stream' }
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Upload to S3 failed');
+    }
+
+    const data = await response.json();
+    return data.fileUrl;  // S3 URL
+  };
+
+  // Upload all files and assign URLs into submissionData
+  for (const [key, file] of Object.entries(filesToUpload)) {
+    try {
+      const s3Url = await uploadToS3(file);
+      submissionData[key] = s3Url;
+    } catch (uploadErr) {
+      console.error(`Failed to upload ${key}`, uploadErr);
+      setIsSubmitting(false);
+      return;  // stop submission on error or handle as needed
+    }
+  }
+
     const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
       method: 'POST',
       headers: {
@@ -647,10 +755,6 @@ function PublicFormViewer() {
     const submissionId = data.submissionId;
 
     const updatedSubmissionData = { ...submissionData };
-    for (const [key, file] of Object.entries(filesToUpload)) {
-      const documentId = await uploadFileToSalesforce(file, submissionId);
-      updatedSubmissionData[key] = documentId;
-    }
 
     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
       method: 'POST',
@@ -699,16 +803,16 @@ function PublicFormViewer() {
       const properties = JSON.parse(field.Properties__c || '{}');
       const fieldType = field.Field_Type__c;
       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-        initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
-        initialValues[field.Id] = '';
+        initialValues[`${field.Id || properties.id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+        initialValues[field.Id || properties.id] = '';
       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-        initialValues[field.Id] = [];
+        initialValues[field.Id || properties.id] = [];
       } else if (fieldType === 'datetime' || fieldType === 'date') {
-        initialValues[field.Id] = null;
+        initialValues[field.Id || properties.id] = null;
       } else if (fieldType === 'scalerating') {
-        initialValues[field.Id] = {};
+        initialValues[field.Id || properties.id] = {};
       } else {
-        initialValues[field.Id] = '';
+        initialValues[field.Id || properties.id] = '';
       }
     });
     setFormValues(initialValues);
@@ -720,40 +824,84 @@ function PublicFormViewer() {
     setToggles({});
     setCurrentPage(0);
   } catch (error) {
-    if (error.message.includes('INVALID_JWT_FORMAT')) {
-      let decrypted;
-      try {
-        decrypted = decrypt(linkId);
-      } catch (e) {
-        throw new Error(e.message || 'Invalid link format');
-      }
+    // if (error.message.includes('INVALID_JWT_FORMAT')) {
+    //   let decrypted;
+    //   try {
+    //     decrypted = decrypt(linkId);
+    //   } catch (e) {
+    //     throw new Error(e.message || 'Invalid link format');
+    //   }
 
-      const [userId, formId] = decrypted.split('$');
-      const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
+    //   const [userId, formId] = decrypted.split('$');
+    //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ userId }),
+    //   });
 
-      const tokenData = await tokenResponse.json();
-      if (!tokenResponse.ok || tokenData.error) {
-        throw new Error(tokenData.error || 'Failed to fetch access token');
-      }
-      const token = tokenData.access_token;
-      setAccessToken(token);
-      handleSubmit(e);
-    } else {
-      console.error('Error submitting form:', error);
-      setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
-    }
+    //   const tokenData = await tokenResponse.json();
+    //   if (!tokenResponse.ok || tokenData.error) {
+    //     throw new Error(tokenData.error || 'Failed to fetch access token');
+    //   }
+    //   const token = tokenData.access_token;
+    //   setAccessToken(token);
+    //   handleSubmit(e);
+    // } else {
+    //   console.error('Error submitting form:', error);
+    //   setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
+    // }
   } finally {
     setIsSubmitting(false);
   }
 };
 
-  const handleNextPage = () => {
-    if (currentPage < pages.length - 1) {
-      setCurrentPage(currentPage + 1);
+  const handleNextPage = (e) => {
+    e.preventDefault();
+    if (!formData) return;
+
+    const currentFields = pages[currentPage] || [];
+    const newErrors = {};
+
+    currentFields.forEach((field) => {
+      const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
+      if (field.Field_Type__c === "section" && properties.subFields) {
+        if (properties.subFields.leftField) {
+          const leftError = validateSingleField(
+            properties.subFields.leftField,
+            formValues[properties.subFields.leftField.id],
+            formValues, {signaturesObj: signatures}
+          );
+          if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
+        }
+        if (properties.subFields.rightField) {
+          const rightError = validateSingleField(
+            properties.subFields.rightField,
+            formValues[properties.subFields.rightField.id],
+            formValues, {signaturesObj: signatures}
+          );
+          if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
+        }
+      } else {
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures});
+        if (error) newErrors[field.Id || properties.id] = error;
+      }
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...newErrors }));
+      return newErrors;
+    } else {
+      setErrors((prev) => {
+        const updatedErrors = { ...prev };
+        currentFields.forEach((field) => {
+          const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
+          if (updatedErrors[field.Id || properties.id]) delete updatedErrors[field.Id || properties.id];
+        });
+        return updatedErrors;
+      });
+      if (currentPage < pages.length - 1) {
+        setCurrentPage(currentPage + 1);
+      }
     }
   };
 
@@ -773,7 +921,7 @@ function PublicFormViewer() {
 
   const renderField = (field) => {
     const properties = JSON.parse(field.Properties__c || '{}');
-    const fieldId = field.Id;
+    const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
     const isDisabled = properties.isDisabled || false;
@@ -790,7 +938,13 @@ function PublicFormViewer() {
       className: `w-full p-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${hasError ? 'border-red-500' : 'border-gray-300'}`,
     };
 
-    const labelClass = `block text-sm font-medium mb-1 ${hasError ? 'text-red-600' : 'text-gray-700'}`;
+    const labelAlignmentClass =
+    labelAlignment === 'center'
+      ? 'text-center'
+      : labelAlignment === 'right'
+      ? 'text-right'
+      : 'text-left';
+    const labelClass = `block text-sm font-medium mb-1 ${labelAlignmentClass} ${hasError ? 'text-red-600' : 'text-gray-700'}`;
 
     const renderLabel = () => (
       <label htmlFor={fieldId} className={labelClass}>
@@ -815,9 +969,15 @@ function PublicFormViewer() {
 
     switch (fieldType) {
       case 'shorttext':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <input
               type="text"
               {...commonProps}
@@ -826,15 +986,20 @@ function PublicFormViewer() {
               placeholder={properties.placeholder?.main || ''}
               maxLength={properties.shortTextMaxChars}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'longtext':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             {properties.isRichText ? (
               <ReactQuill
                 theme="snow"
@@ -870,15 +1035,26 @@ function PublicFormViewer() {
                 maxLength={properties.longTextMaxChars}
               />
             )}
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'number':
+        if (properties.isHidden) return null;
+        const containerClass =
+        labelAlignment === 'center'
+          ? 'text-center'
+          : labelAlignment === 'right'
+          ? 'text-right'
+          : 'text-left';
         return (
-          <div className="mb-4">
+          <div className={`mb-4 ${containerClass}`}>
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <input
               type="number"
               {...commonProps}
@@ -888,15 +1064,20 @@ function PublicFormViewer() {
               min={properties.numberValueLimits?.min}
               max={properties.numberValueLimits?.max}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'price':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-gray-700">{properties.currencyType || 'USD'}</span>
               <input
@@ -910,15 +1091,20 @@ function PublicFormViewer() {
                 max={properties.priceLimits?.max}
               />
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'email':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <input
               type="email"
               {...commonProps}
@@ -948,12 +1134,12 @@ function PublicFormViewer() {
                 )}
               </div>
             )}
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'phone':
+        if (properties.isHidden) return null;
         const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
         let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
         try {
@@ -968,6 +1154,11 @@ function PublicFormViewer() {
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             {properties.subFields?.countryCode?.enabled ? (
               <div className="flex items-center gap-3">
                 <div className="w-1/3">
@@ -1014,15 +1205,20 @@ function PublicFormViewer() {
                 disabled={isDisabled}
               />
             )}
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'date':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <DatePicker
               format={properties.dateFormat?.replace(/\//g, properties.dateSeparator || '-') || 'yyyy-MM-dd'}
               value={formValues[fieldId] ? new Date(formValues[fieldId] + 'T00:00:00') : null}
@@ -1065,15 +1261,20 @@ function PublicFormViewer() {
                 return false;
               }}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'datetime':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <DatePicker
               format={
                 properties.dateFormat && properties.timeFormat
@@ -1105,15 +1306,20 @@ function PublicFormViewer() {
               disabled={isDisabled}
               showMeridian={properties.timeFormat === 'hh:mm a'}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'time':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <DatePicker
               format={properties.timeFormat || 'HH:mm'}
               value={formValues[fieldId] ? new Date(`1970-01-01T${formValues[fieldId]}`) : null}
@@ -1139,12 +1345,12 @@ function PublicFormViewer() {
                 return {};
               }}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'checkbox':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             <label className={labelClass}>
@@ -1173,12 +1379,12 @@ function PublicFormViewer() {
                 </div>
               ))}
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'radio':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             <label className={labelClass}>
@@ -1204,46 +1410,49 @@ function PublicFormViewer() {
                 </div>
               ))}
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'dropdown':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
-            <div className="relative">
-              <select
-                {...commonProps}
-                value={formValues[fieldId] || (properties.allowMultipleSelections ? [] : '')}
-                onChange={(e) => {
-                  const value = properties.allowMultipleSelections
-                    ? Array.from(e.target.selectedOptions, (option) => option.value)
-                    : e.target.value;
-                  handleChange(fieldId, value);
-                }}
-                multiple={properties.allowMultipleSelections}
-              >
-                <option value="" disabled={!properties.allowMultipleSelections}>
-                  {properties.placeholder?.main || 'Select an option'}
-                </option>
-                {(properties.options || ['Option 1', 'Option 2', 'Option 3']).map((option, idx) => (
-                  <option key={idx} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {renderHelpText()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
+            <Select
+              style={{ width: '100%' }}
+              value={formValues[fieldId] || undefined}
+              onChange={val => handleChange(fieldId, val)}
+              mode={properties.allowMultipleSelections ? 'multiple' : undefined}
+              placeholder={properties.placeholder?.main || 'Select an option'}
+              disabled={isDisabled}
+              className={`w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+            >
+              {(properties.options || []).map((option, idx) => (
+                <Option key={option} value={option}>
+                  {option}
+                </Option>
+              ))}
+            </Select>
             {renderError()}
           </div>
         );
 
       case 'fileupload':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <input
               type="file"
               {...commonProps}
@@ -1267,9 +1476,15 @@ function PublicFormViewer() {
         );
 
       case 'imageuploader':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <div className="relative w-1/2">
               <input
                 type="file"
@@ -1290,12 +1505,12 @@ function PublicFormViewer() {
                 )}
               </label>
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'toggle':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             <div className="flex items-center">
@@ -1316,66 +1531,68 @@ function PublicFormViewer() {
                 </div>
               </label>
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'fullname':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <div className="flex gap-3">
-              {properties.enableSalutation && (
-                <div className="w-1/5">
-                  <label className="text-xs text-gray-500">Salutation</label>
-                  <select
-                    className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                    value={formValues[`${fieldId}_salutation`] || ''}
-                    onChange={(e) => handleChange(`${fieldId}_salutation`, e.target.value)}
-                    disabled={isDisabled}
-                  >
-                    <option value="">{properties.placeholder?.salutation || 'Select'}</option>
-                    {properties.salutations?.map((sal, idx) => (
-                      <option key={idx} value={sal}>{sal}</option>
-                    ))}
-                  </select>
-                </div>
+              {properties.subFields?.salutation?.enabled && (
+                <Select
+                  style={{ width: '33%' }}
+                  value={formValues[`${fieldId}_salutation`] || properties.subFields.salutation.placeholder}
+                  onChange={(value) => handleChange(`${fieldId}_salutation`, value)}
+                  disabled={isDisabled}
+                  className="w-1/5"
+                  placeholder={properties.subFields.salutation.placeholder || 'Select'}
+                  options={(properties.subFields.salutation.options || []).map((option) => ({
+                    label: option,
+                    value: option,
+                  }))}
+                />
               )}
-              <div className={properties.enableSalutation ? 'w-2/5' : 'w-1/2'}>
-                <label className="text-xs text-gray-500">First Name</label>
-                <input
-                  type="text"
-                  className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                  value={formValues[`${fieldId}_first`] || ''}
-                  onChange={(e) => handleChange(`${fieldId}_first`, e.target.value)}
-                  placeholder={properties.placeholder?.first || 'First Name'}
-                  disabled={isDisabled}
-                />
-              </div>
-              <div className={properties.enableSalutation ? 'w-2/5' : 'w-1/2'}>
-                <label className="text-xs text-gray-500">Last Name</label>
-                <input
-                  type="text"
-                  className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                  value={formValues[`${fieldId}_last`] || ''}
-                  onChange={(e) => handleChange(`${fieldId}_last`, e.target.value)}
-                  placeholder={properties.placeholder?.last || 'Last Name'}
-                  disabled={isDisabled}
-                />
-              </div>
+              <input
+                type="text"
+                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                value={formValues[`${fieldId}_first`] || ''}
+                onChange={(e) => handleChange(`${fieldId}_first`, e.target.value)}
+                placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
+                disabled={isDisabled}
+              />
+              <input
+                type="text"
+                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                value={formValues[`${fieldId}_last`] || ''}
+                onChange={(e) => handleChange(`${fieldId}_last`, e.target.value)}
+                placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
+                disabled={isDisabled}
+              />
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'address':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <div className="space-y-3">
-              {properties.visibleSubFields?.street && (
+              {properties.subFields?.street?.visiblesubFields !== false && (
                 <div>
                   <label className="text-xs text-gray-500">{properties.subLabels?.street || 'Street Address'}</label>
                   <input
@@ -1389,7 +1606,7 @@ function PublicFormViewer() {
                 </div>
               )}
               <div className="flex gap-3">
-                {properties.visibleSubFields?.city && (
+                {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
                     <label className="text-xs text-gray-500">{properties.subLabels?.city || 'City'}</label>
                     <input
@@ -1402,7 +1619,7 @@ function PublicFormViewer() {
                     />
                   </div>
                 )}
-                {properties.visibleSubFields?.state && (
+                {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
                     <label className="text-xs text-gray-500">{properties.subLabels?.state || 'State'}</label>
                     <input
@@ -1417,7 +1634,7 @@ function PublicFormViewer() {
                 )}
               </div>
               <div className="flex gap-3">
-                {properties.visibleSubFields?.country && (
+                {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
                     <label className="text-xs text-gray-500">{properties.subLabels?.country || 'Country'}</label>
                     <input
@@ -1430,7 +1647,7 @@ function PublicFormViewer() {
                     />
                   </div>
                 )}
-                {properties.visibleSubFields?.postal && (
+                {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
                     <label className="text-xs text-gray-500">{properties.subLabels?.postal || 'Postal Code'}</label>
                     <input
@@ -1445,44 +1662,56 @@ function PublicFormViewer() {
                 )}
               </div>
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'signature':
+        if (properties.isHidden) return null;
         return (
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col items-start">
             {renderLabel()}
-            <div className="flex flex-col gap-2">
-              <SignatureCanvas
-                ref={(ref) => (signatureRefs.current[fieldId] = ref)}
-                canvasProps={{
-                  className: `border rounded w-full h-32 ${hasError ? 'border-red-500' : 'border-gray-300'}`,
-                  style: { backgroundColor: '#fff' }
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
+            <SignatureCanvas
+              penColor="black"
+              canvasProps={{ width: 280, height: 100, className: "border rounded bg-white mb-2" }}
+              ref={ref => (signatureRefs.current[fieldId] = ref)}
+              onEnd={() => handleSignatureEnd(fieldId, signatureRefs.current[fieldId])}
+              backgroundColor="#fff"
+            />
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                className="px-2 py-1 text-xs bg-gray-100 rounded"
+                onClick={() => {
+                  const sig = signatureRefs.current[fieldId];
+                  if (sig) {
+                    sig.clear();
+                    setSignatures((prev) => ({ ...prev, [fieldId]: null }));
+                    handleChange(fieldId, null);
+                  }
                 }}
-                onEnd={() => handleSignatureEnd(fieldId, signatureRefs.current[fieldId])}
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => clearSignature(fieldId, signatureRefs.current[fieldId])}
-                  className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                  disabled={isDisabled}
-                >
-                  Clear
-                </button>
-              </div>
-              {signatures[fieldId] && (
-                <img src={signatures[fieldId]} alt="Signature Preview" className="w-32 h-16 object-contain" />
-              )}
+              >
+                Clear
+              </button>
             </div>
-            {renderHelpText()}
+            {signatures[fieldId] && (
+              <img
+                src={signatures[fieldId]}
+                alt="Signature Preview"
+                className="border rounded shadow-sm w-44 h-auto"
+              />
+            )}
             {renderError()}
           </div>
         );
 
       case 'terms':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             <div className="flex items-start">
@@ -1515,12 +1744,12 @@ function PublicFormViewer() {
                 </label>
               </div>
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'displaytext':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             <div
@@ -1533,6 +1762,7 @@ function PublicFormViewer() {
         );
 
       case 'header':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-6">
             <h2 className={`text-2xl font-bold text-gray-800 ${
@@ -1546,6 +1776,7 @@ function PublicFormViewer() {
         );
 
       case 'rating':
+        if (properties.isHidden) return null;
         const ratingRange = properties.ratingRange || 5;
         const ratingOptions = {
           emoji: Array.from({ length: ratingRange }, (_, i) => ({
@@ -1577,6 +1808,11 @@ function PublicFormViewer() {
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <div className="flex flex-col gap-4">
               <div className="flex gap-2">
                 {ratingOptions[properties.ratingType || 'star'].map((option, idx) => (
@@ -1607,28 +1843,38 @@ function PublicFormViewer() {
                 </p>
               )}
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'scalerating':
-        const rows = properties.rows || ['Row 1', 'Row 2'];
-        const columns = properties.columns || ['1', '2', '3', '4', '5'];
-
+      if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
-            <div className="space-y-2">
-              {rows.map((row, rowIdx) => (
-                <div key={rowIdx} className="flex items-center space-x-4">
-                  <span className="w-1/4 text-gray-700 font-semibold">{row}</span>
-                  <div className="flex space-x-2">
-                    {columns.map((col, colIdx) => (
-                      <label key={colIdx} className="flex items-center space-x-1">
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="border border-gray-300 p-2"></th>
+                  {properties.columns?.map((col, idx) => (
+                    <th key={idx} className="border border-gray-300 p-2 text-center">{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {properties.rows?.map((row, rowIdx) => (
+                  <tr key={rowIdx} className="odd:bg-white even:bg-gray-50">
+                    <td className="border border-gray-300 p-2 font-semibold">{row}</td>
+                    {properties.columns.map((col, colIdx) => (
+                      <td key={colIdx} className="border border-gray-300 p-2 text-center">
                         <input
                           type="radio"
-                          name={`scale-row-${fieldId}-${rowIdx}`}
+                          name={`${fieldId}_row_${rowIdx}`}
                           value={col}
                           checked={formValues[fieldId]?.[row] === col}
                           onChange={() => {
@@ -1636,27 +1882,31 @@ function PublicFormViewer() {
                             handleChange(fieldId, newValue);
                           }}
                           disabled={isDisabled}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                         />
-                        <span>{col}</span>
-                      </label>
+                      </td>
                     ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {renderHelpText()}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
             {renderError()}
           </div>
         );
 
       case 'divider':
+        if (properties.isHidden) return null;
         return <hr className="border-gray-300 my-4" />;
 
       case 'formcalculation':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <input
               type="text"
               {...commonProps}
@@ -1664,15 +1914,20 @@ function PublicFormViewer() {
               readOnly
               className={`w-full p-2 border rounded-md ${hasError ? 'border-red-500' : 'border-gray-300'}`}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'link':
+        if (properties.isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
             <input
               type="url"
               {...commonProps}
@@ -1680,52 +1935,56 @@ function PublicFormViewer() {
               onChange={(e) => handleChange(fieldId, e.target.value)}
               placeholder={properties.placeholder?.main || 'https://example.com'}
             />
-            {renderHelpText()}
             {renderError()}
           </div>
         );
 
       case 'section':
+        if (properties.isHidden) return null;
+        
+        // Parse the subFields from properties
+        const leftFieldProps = properties.subFields?.leftField;
+        const rightFieldProps = properties.subFields?.rightField;
+
+        // Find the actual field objects from formData.Fields
+        const leftField = formData.Fields.find(f => f.Id === leftFieldProps?.id);
+        const rightField = formData.Fields.find(f => f.Id === rightFieldProps?.id);
+
+        const normalizedLeftField = leftField ? { 
+          ...leftField, 
+          Id: leftField.Id || leftField.id 
+        } : null;
+
+        const normalizedRightField = rightField ? { 
+          ...rightField, 
+          Id: rightField.Id || rightField.id 
+        } : null;
+
+        // If fields aren't found in formData.Fields, create mock field objects
+        const createFieldFromProps = (fieldProps) => {
+          if (!fieldProps) return null;
+          return {
+            Id: fieldProps.id,
+            Field_Type__c: fieldProps.type,
+            Properties__c: JSON.stringify(fieldProps),
+            // Add other required properties with defaults
+            Name: fieldProps.label || '',
+            Page_Number__c: field.Page_Number__c, // Use section's page number
+            Order_Number__c: field.Order_Number__c, // Use section's order number
+            Unique_Key__c: fieldProps.id
+          };
+        };
+
+        const leftFieldToRender = normalizedLeftField || createFieldFromProps(leftFieldProps);
+        const rightFieldToRender = normalizedRightField || createFieldFromProps(rightFieldProps);
+
         return (
           <div className="mb-4 border p-4 rounded">
-            <h3 className="text-lg font-semibold mb-2">{fieldLabel}</h3>
+            <h3 className="text-lg font-semibold mb-4">{fieldLabel}</h3>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                {properties.leftField ? (
-                  <div className="p-2 border rounded bg-gray-50">
-                    <div className="text-xs text-gray-500 mb-1">Type: {properties.leftField.type}</div>
-                    <input
-                      type="text"
-                      className="w-full p-2 border rounded"
-                      value={formValues[properties.leftField.id] || ''}
-                      onChange={(e) => handleChange(properties.leftField.id, e.target.value)}
-                      placeholder={properties.leftField.label || 'Left Field'}
-                      disabled={properties.leftField.isDisabled}
-                    />
-                  </div>
-                ) : (
-                  <div></div>
-                )}
-              </div>
-              <div>
-                {properties.rightField ? (
-                  <div className="p-2 border rounded bg-gray-50">
-                    <div className="text-xs text-gray-500 mb-1">Type: </div>
-                    <input
-                      type={properties.rightField.type}
-                      className="w-full p-2 border rounded"
-                      value={formValues[properties.rightField.id] || ''}
-                      onChange={(e) => handleChange(properties.rightField.id, e.target.value)}
-                      placeholder={properties.rightField.label || 'Right Field'}
-                      disabled={properties.rightField.isDisabled}
-                    />
-                  </div>
-                ) : (
-                  <div></div>
-                )}
-              </div>
+              {leftFieldToRender && renderField(leftFieldToRender)}
+              {rightFieldToRender && renderField(rightFieldToRender)}
             </div>
-            {renderHelpText()}
             {renderError()}
           </div>
         );
@@ -1736,100 +1995,66 @@ function PublicFormViewer() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
-      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
-        <div className="page">
-          {pages[currentPage]?.map((field) => (
-            <div key={field.Unique_Key__c}>
-              {renderField(field)}
-            </div>
-          ))}
-        </div>
+  <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
+    <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
+    <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
+      <div className="page">
+        {pages[currentPage]?.map((field) => (
+          <div key={field.Unique_Key__c}>{renderField(field)}</div>
+        ))}
+      </div>
 
-        {pages.length > 1 && (
-          <div className="flex justify-between mt-6">
-            <button
-              type="button"
-              onClick={handlePreviousPage}
-              disabled={currentPage === 0}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                currentPage === 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-              aria-label="Previous Page"
-            >
-              Previous
-            </button>
-            <span className="text-gray-600">
-              Page {currentPage + 1} of {pages.length}
-            </span>
-            <button
-              type="button"
-              onClick={handleNextPage}
-              disabled={currentPage === pages.length - 1}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                currentPage === pages.length - 1
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-              aria-label="Next Page"
-            >
-              Next
-            </button>
-          </div>
-        )}
+      <div className="flex justify-between mt-6">
+        {/* Show Previous button only if more than one page */}
+        {pages.length > 1 ? (
+          <button
+            type="button"
+            onClick={handlePreviousPage}
+            disabled={currentPage === 0}
+            className={`py-2 px-4 rounded-md font-medium transition ${
+              currentPage === 0
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            aria-label="Previous Page"
+          >
+            Previous
+          </button>
+        ) : ''}
 
-        {currentPage === pages.length - 1 && (
-          <>
-            {errors.submit && (
-              <p className="text-red-500 text-sm mt-2 text-center" role="alert">
-                {errors.submit}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={isSubmitting || !accessToken}
-              className={`w-full py-2 px-4 bg-blue-600 text-white rounded-md font-medium transition ${
-                isSubmitting || !accessToken ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
-              }`}
-              aria-label="Submit Form"
-            >
-              {isSubmitting ? (
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="animate-spin h-5 w-5 mr-2 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Submitting...
-                </span>
-              ) : (
-                'Submit'
-              )}
-            </button>
-          </>
+        <span className="text-gray-600">
+          Page {currentPage + 1} of {pages.length}
+        </span>
+
+        {/* Show Next or Submit button */}
+        {currentPage < pages.length - 1 ? (
+          <button
+            type="button"
+            onClick={handleNextPage}
+            className="py-2 px-4 rounded-md font-medium transition bg-blue-600 text-white hover:bg-blue-700"
+            aria-label="Next Page"
+          >
+            Next
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={isSubmitting || !accessToken}
+            className={`py-2 px-4 rounded-md font-medium transition ${
+              isSubmitting || !accessToken
+                ? 'opacity-50 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+            aria-label="Submit Form"
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit'}
+          </button>
         )}
-      </form>
-    </div>
-  );
+      </div>
+    </form>
+  </div>
+);
+
 }
 
 export default PublicFormViewer;
