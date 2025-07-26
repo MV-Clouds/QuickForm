@@ -7,6 +7,7 @@ export const SalesforceDataProvider = ({ children }) => {
   const [formRecords, setFormRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [userProfile, setuserProfile] = useState([]); // User Profile Data
 
   const fetchSalesforceData = async (userId, instanceUrl) => {
     if (!userId || !instanceUrl) {
@@ -18,7 +19,7 @@ export const SalesforceDataProvider = ({ children }) => {
       setIsLoading(true);
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
       const fetchStart = Date.now();
-      console.log('Metadata Context initialize')
+      console.log('Metadata Context initialize',userId, cleanedInstanceUrl);
       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,9 +64,10 @@ export const SalesforceDataProvider = ({ children }) => {
 
       // Usage:
       const parsedFormRecords = parseFormRecords(data.FormRecords);
-      
+      const userProfileData = data?.UserProfile || {};
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
+      setuserProfile(JSON.parse(userProfileData));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,6 +100,7 @@ export const SalesforceDataProvider = ({ children }) => {
         error,
         refreshData,
         fetchSalesforceData, // Expose fetchSalesforceData
+        userProfile
       }}
     >
       {children}

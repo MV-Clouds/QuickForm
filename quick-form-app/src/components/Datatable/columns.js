@@ -13,14 +13,26 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
     accessorKey: 'formName',
     header: ({ column }) => (
       <button
-        className="flex items-center mx-auto font-semibold text-gray-700 hover:text-indigo-600"
+        className="flex items-center mx-auto text-gray-700 hover:text-indigo-600 justify-center w-full"
+        style={{ minWidth: 120, maxWidth: 200 }}
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       >
-        Title
-        {/* <ArrowUpDown className="ml-2 h-4 w-4" /> */}
+        TITLE
       </button>
     ),
-    cell: ({ row }) => (<div className="font-medium text-center">{row.getValue('formName') || 'form'}</div>),
+    cell: ({ row }) => {
+      const value = row.getValue('formName') || 'form';
+      const display = value.length > 10 ? value.slice(0, 15) + '...' : value;
+      return (
+        <div
+          className="font-medium text-center truncate w-full mx-auto"
+          style={{ minWidth: 120, maxWidth: 200 }}
+          title={value.length > 10 ? value : undefined}
+        >
+          {display}
+        </div>
+      );
+    },
   },
   {
     accessorKey: 'activeVersion',
@@ -49,13 +61,12 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
             className={`relative w-12 h-7 rounded-full border transition-colors duration-200 focus:outline-none ${row.getValue('status') === 'Active' ? 'bg-green-400 border-green-500' : 'bg-gray-300 border-gray-400'}`}
             initial={row.getValue('status') === 'Active'}
             disabled = {row.getValue('activeVersion') === 'None'}
-            animate={{ backgroundColor: row.getValue('status') === 'Active' ? '#4ade80' : '#d1d5db', borderColor: row.getValue('status') === 'Active' ? '#22c55e' : '#9ca3af' }}
+            animate={{ backgroundColor: row.getValue('status') === 'Active' ? '#00C853' : '#d1d5db', borderColor: row.getValue('status') === 'Active' ? '#22c55e' : '#9ca3af' }}
           >
             <motion.span
-              className="absolute left-0 top-0 w-6 h-6 bg-white rounded-full shadow-md"
-              layout
+              className="absolute left-1 top-[3px] bg-white rounded-full shadow-md"
               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              style={{ x: row.getValue('status') === 'Active' ? 22 : 0 }}
+              style={{ x: row.getValue('status') === 'Active' ? 19 : 0 , height : '20px' , width : '20px'}}
             />
           </motion.button>
         </div>
@@ -66,10 +77,10 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
     accessorKey: 'submissionCount',
     header: ({ column }) => (
       <button
-        className="flex items-center mx-auto font-semibold text-gray-700 hover:text-indigo-600"
+        className="flex items-center mx-auto  text-gray-700 hover:text-indigo-600"
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       >
-        Submissions
+        SUBMISSIONS
         <ArrowUpDown className="ml-2 h-4 w-4" />
       </button>
     ),
@@ -95,36 +106,59 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
     id: 'actions',
     cell: function ActionsCell({ row }) {
       const [open, setOpen] = React.useState(false);
+      const [dropUp, setDropUp] = React.useState(false);
       const ref = React.useRef();
+      const btnRef = React.useRef();
 
-      // Close popup on outside click
+      // Close popup on outside click or ESC
       React.useEffect(() => {
         function handleClickOutside(event) {
           if (ref.current && !ref.current.contains(event.target)) {
             setOpen(false);
           }
         }
+        function handleEsc(event) {
+          if (event.key === 'Escape') setOpen(false);
+        }
         if (open) {
           document.addEventListener('mousedown', handleClickOutside);
+          document.addEventListener('keydown', handleEsc);
         } else {
           document.removeEventListener('mousedown', handleClickOutside);
+          document.removeEventListener('keydown', handleEsc);
         }
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+          document.removeEventListener('keydown', handleEsc);
+        };
       }, [open]);
 
-      const handleDelete = (formId) =>{
+      // Dynamic dropdown direction
+      React.useEffect(() => {
+        if (open && btnRef.current && ref.current) {
+          const btnRect = btnRef.current.getBoundingClientRect();
+          const dropdownHeight = 280; // px, estimate
+          const spaceBelow = window.innerHeight - btnRect.bottom;
+          setDropUp(spaceBelow < dropdownHeight + 16); // 16px margin
+        }
+      }, [open]);
+
+      const handleDelete = (formId) => {
         handleDeleteForm(formId);
-      }
+      };
       return (
         <div className="relative text-center" ref={ref}>
           <button
-            className="p-2 rounded-full hover:bg-gray-100 focus:outline-none"
+            ref={btnRef}
+            className="p-2 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+            aria-haspopup="menu"
+            aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
+              width="20"
+              height="20"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -138,52 +172,51 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
           <AnimatePresence>
             {open && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                initial={{ opacity: 0, y: dropUp ? 10 : -10, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: dropUp ? 10 : -10, scale: 0.97 }}
                 transition={{ duration: 0.18 }}
-                className="absolute right-0 z-[99999] mt-2 w-32 rounded-lg bg-white shadow-xl border border-gray-200 py-2 flex flex-col"
+                className={`absolute right-0 z-[99999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? 'mb-2 bottom-full' : 'mt-2 top-full'}`}
+                style={{ boxShadow: '0 8px 32px 0 rgba(60,60,60,0.12)' }}
               >
                 <button
-                  className="px-4 py-2 text-sm hover:bg-indigo-50 text-indigo-700 font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-800 font-medium transition-colors"
                   onClick={() => {
                     setOpen(false);
-                    // console.log(row.original.id)
-                    // console.log(forms.filter(val => val.Id == row.original.id ))
-                    handleEditForm(forms.filter(val => val.Id == row.original.id )[0]);
+                    handleEditForm(forms.filter(val => val.Id === row.original.id )[0]);
                   }}
                 >
-                  {/* <Edit className='w-2 h-2'/>  */}
+                  <Edit className='w-4 h-4' />
                   Edit
                 </button>
                 <button
-                  className="px-4 py-2  text-sm hover:bg-red-50 text-red-600 font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-red-50 text-red-600 font-medium transition-colors"
                   onClick={() => {
                     setOpen(false);
                     handleDelete(row.original.id);
                   }}
                 >
-                  {/* <Trash  className='w-4 h-4'/>  */}
+                  <Trash className='w-4 h-4' />
                   Delete
                 </button>
                 <button
-                  className="px-4 py-2  text-sm  font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-700 font-medium transition-colors"
                   onClick={() => {
                     setOpen(false);
-                    // handleDelete(row.original.id);
+                    // handle favorite logic here
                   }}
                 >
-                  {/* <Heart  className='w-2 h-2'/>  */}
+                  <Heart className='w-4 h-4' />
                   Add to favorites
                 </button>
                 <button
-                  className="px-4 py-2 text-sm hover:bg-gray-50 text-gray-600 font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-700 font-medium transition-colors"
                   onClick={() => {
                     setOpen(false);
-                    // handleDelete(row.original.id);
+                    // handle folder logic here
                   }}
                 >
-                 {/* <Folder  className='w-2 h-2'/> */}
+                  <Folder className='w-4 h-4' />
                   Add to folder
                 </button>
               </motion.div>

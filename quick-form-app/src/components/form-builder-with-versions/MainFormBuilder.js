@@ -1267,7 +1267,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
                 ></path>
               </svg>
             </div>
-          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage /> :  showMapping ? <MappingFields /> : (
+          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage currentFields = {formVersions[0]?.Fields}/> :  showMapping ? <MappingFields /> : (
             <div className="flex w-full mt-4 px-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
