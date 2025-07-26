@@ -6,27 +6,34 @@ import Sidebar from './sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import Integrations from '../integrations/Integrations';
 import InactivityTracker from '../time-out/InactivityTracker';
+import { useSalesforceData } from '../Context/MetadataContext';
 import './home.css';
-const dummyUsername = 'Jane Cooper';
+import RecentFilesSlider from './RecentFilesSlider';
+import FolderManager from './FolderManager';
 
 const Home = () => {
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    metadata,
+    formRecords,
+    isLoading: contextLoading,
+    error: contextError,
+    fetchSalesforceData,
+    userProfile
+  } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [hoveredOption, setHoveredOption] = useState(null);
-  const [forms, setForms] = useState([]);
-  const [selectedVersions, setSelectedVersions] = useState({});
-  const [fetchError, setFetchError] = useState(null);
+  // const [selectedVersions, setSelectedVersions] = useState({});
   const [isFormNameOpen, setIsFormNameOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedNav, setSelectedNav] = useState('home');
   const [token, settoken] = useState();
   const navigate = useNavigate();
-
+  const userId = sessionStorage.getItem('userId');
+  const instanceUrl = sessionStorage.getItem('instanceUrl');
   // Analytics data (dynamic)
-  const totalForms = forms.length;
-  const activeForms = forms.filter(f => f.Status__c === 'Active').length;
-  const totalSubmissions = forms.reduce((acc, f) => acc + (f.Total_Submission_Count__c || 500), 0);
-
+  const totalForms = formRecords.length;
+  const activeForms = formRecords.filter(f => f.Status__c === 'Active').length;
+  const totalSubmissions = formRecords.reduce((acc, f) => acc + (f.Total_Submission_Count__c || 500), 0);
+  const [isCreating ,setisCreating] = useState(false);
   // Fetch access token from Lambda
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
@@ -49,66 +56,6 @@ const Home = () => {
     } catch (error) {
       console.error('Error fetching access token:', error);
       return null;
-    }
-  };
-
-  // Fetch forms from DynamoDB via Lambda
-  const fetchForms = async (userId, instanceUrl) => {
-    setIsLoading(true);
-    try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch metadata');
-      }
-
-      // Parse FormRecords
-      let formRecords = [];
-      if (data.FormRecords) {
-        try {
-          formRecords = JSON.parse(data.FormRecords);
-        } catch (e) {
-          console.warn('Failed to parse FormRecords:', e);
-        }
-      }
-
-      setForms(formRecords);
-    } catch (error) {
-      console.error('Error fetching forms:', error);
-      setFetchError(error.message || 'Failed to load forms');
-    } finally {
-      setIsLoading(false)
-    }
-  };
-
-  // Warm up fetchMetadata Lambda function
-  const warmFetchMetadata = async (userId, instanceUrl, token) => {
-    try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-        }),
-      });
-    } catch (error) {
-      console.error('Error warming fetchMetadata Lambda:', error);
     }
   };
 
@@ -135,7 +82,7 @@ const Home = () => {
     }
   };
 
-  // Initialize page by fetching forms and warming Lambdas
+  // Initialize page by fetching formRecords and warming Lambdas
   const initializePage = async () => {
     const params = new URLSearchParams(window.location.search);
     let userId = params.get('userId');
@@ -154,8 +101,7 @@ const Home = () => {
       settoken(token);
       if (token) {
         await Promise.all([
-          fetchForms(userId, instanceUrl),
-          warmFetchMetadata(userId, instanceUrl, token),
+          fetchSalesforceData(userId, instanceUrl),
           warmFetchFieldsForObject(userId, instanceUrl, token),
         ]);
       }
@@ -173,11 +119,9 @@ const Home = () => {
   };
 
   const handleDeleteForm = async (formId) => {
-    // setIsLoading(true);
     console.log('deleting...', formId)
     try {
-      const userId = sessionStorage.getItem('userId');
-      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      
       const response = await fetch('https://kd1xkj8zo2.execute-api.us-east-1.amazonaws.com/delete-user-data', {
         method: 'POST',
         headers: {
@@ -195,16 +139,13 @@ const Home = () => {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete form');
       }
-      setForms((prev) => prev.filter((form) => form.Id !== formId));
     } catch (error) {
       console.error('Error deleting form:', error);
-      setFetchError(error.message || 'Failed to delete form');
     } finally {
-      setIsLoading(false);
+      fetchSalesforceData(sessionStorage.getItem('userId'), sessionStorage.getItem('instanceUrl'));
     }
   };
   const handleOptionSelect = (option) => {
-    setIsLoading(true);
     setIsModalOpen(false);
 
     const params = new URLSearchParams(window.location.search);
@@ -219,10 +160,8 @@ const Home = () => {
     if (option === 'salesforce') {
       navigate('/wizard');
     } else if (option === 'scratch') {
-      setIsLoading(false);
       setIsFormNameOpen(true);
     } else if (option === 'templates') {
-      setIsLoading(false);
       navigate('/template');
     }
   };
@@ -295,160 +234,236 @@ const Home = () => {
       navigate(`/form-builder/${data.formVersionId}`);
     } catch (error) {
       console.error('Error creating new version:', error);
-      setFetchError('Failed to create new version');
     }
   };
 
-  const handleVersionChange = (formName, versionId) => {
-    setSelectedVersions((prev) => ({
-      ...prev,
-      [formName]: versionId,
-    }));
-  };
+  // Handler for creating a folder (for now, just log)
+  const handleCreateFolder = async (folderName, selectedFormIds) => {
+    // TODO: Implement backend update logic here
+    console.log('Create folder:', folderName, 'with forms:', selectedFormIds);
+    // Make API call to backend to create/update folder
+    
+      try {
+        // Get userId and instanceUrl from userProfile/context
+        
+        if (!userId || !instanceUrl) {
+          console.error('Missing userId or instanceUrl for folder creation');
+          return;
+        }
+        // Call the folder API
+        const response = await fetch('https://8rq1el4sv2.execute-api.us-east-1.amazonaws.com/folder', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            folderName,
+            formIds: selectedFormIds,
+            instanceUrl,
+            token,
+            userId,
+          }),
+        });
 
-  const getFormDisplayName = (form) => {
-    const publishedVersion = form.FormVersions.find(
-      (version) => version.Stage__c === 'Publish'
-    );
-    return publishedVersion?.Name || 'Unnamed Form';
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to create/update folder');
+        }
+        console.log('Folder created/updated successfully:', data);
+        // Optionally, refresh data or show success message here
+      } catch (error) {
+        console.error('Error creating/updating folder:', error);
+      }finally{
+        fetchSalesforceData(userId , instanceUrl);
+      }
+    
+
+    // You would update Folder__c for each selected form in your backend
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <InactivityTracker />
+    <div className={`flex min-h-screen`} style={{ marginLeft: `${!sidebarOpen ? '60px' : ''}` }}>
+      {
+        selectedNav === 'home' ? (
+          // {/* Analytics Cards - Top Right */}
+          <div className="analytics-cards-container">
+            <div className="analytics-card">
+              <div className="analytics-card-content">
+                <div>
+                  <h3>Forms</h3>
+                  <span>{totalForms}</span>
+                </div>
+                <img
+                  src="/images/file.png"
+                  alt="Forms"
+                  className="analytics-card-image"
+                />
+              </div>
+            </div>
+            <div className="analytics-card">
+              <div className="analytics-card-content">
+                <div>
+                  <h3>Active Forms</h3>
+                  <span>{activeForms}</span>
+                </div>
+                <img
+                  src="/images/file2.png"
+                  alt="Active Forms"
+                  className="analytics-card-image"
+                />
+              </div>
+            </div>
+            <div className="analytics-card">
+              <div className="analytics-card-content">
+                <div>
+                  <h3>Submissions</h3>
+                  <span>{totalSubmissions}</span>
+                </div>
+                <img
+                  src="/images/file3.png"
+                  alt="Submissions"
+                  className="analytics-card-image"
+                />
+              </div>
+            </div>
+          </div>
+        ) : ''
+      }
+      {/* <InactivityTracker /> */}
       <Sidebar
-        username={dummyUsername}
+        username={userProfile.user_name}
         selected={selectedNav}
         open={sidebarOpen}
         setOpen={setSidebarOpen}
         onSelect={setSelectedNav}
       />
-      <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+      <div className={`flex-1 transition-all  duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         {selectedNav === 'integration' ? (
-          <Integrations />
+          <Integrations token={token} />
+        ) : selectedNav === 'folders' ? (
+          <div className='w-[95%] h-[90%] mx-auto mt-4 rounded-xl shadow-xl flex flex-col py-5'>
+            {/* <RecentFilesSlider
+              recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
+              onViewForm={handleEditForm}
+            /> */}
+            <FolderManager
+              recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
+              handleCreateFolder={handleCreateFolder}
+            />
+          </div>
         ) : (
           <>
-            <div className=" px-10 py-8 rounded-b-xl shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
+            <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
                 className="mb-6"
               >
-                <h1 className="text-3xl font-bold text-white mb-1">Hey, {dummyUsername}</h1>
-                <p className="text-lg text-blue-100">Define the Contact Form of the list view</p>
-              </motion.div>
-              {/* Analytics Cards */}
-              <motion.div
-                className="flex gap-6 absolute -bottom-16 "
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.5 }}
-                style={{ left: '707px' }}
-              >
-                <motion.div className="bg-white rounded-2xl shadow-lg px-8 py-6 flex flex-col items-center min-w-[160px] border border-blue-100" whileHover={{ scale: 1.04 }}>
-                  <div className='flex flex-col'>
-                    <span className="text-3xl font-bold text-blue-700">{totalForms}</span>
-                    <span className="text-gray-500 mt-1">Forms</span>
-                    <img
-                      src='/images/file.png'
-                      alt="Analytics Visual"
-                      className="w-12 h-12 object-contain ml-24 -rotate-12 hidden md:block"
-                      style={{ alignSelf: 'center', opacity: 0.5 }}
-                    />
-                  </div>
-                </motion.div>
-                <motion.div className="bg-white rounded-2xl shadow-lg px-8 py-6 flex flex-col items-center min-w-[160px] border border-blue-100" whileHover={{ scale: 1.04 }}>
-                  <div className='flex flex-col '>
-                    <span className="text-3xl font-bold text-blue-700">{activeForms}</span>
-                    <span className="text-gray-500 mt-1">Active Forms</span>
-                    <img
-                      src={'/images/file2.png'}
-                      alt="Analytics Visual"
-                      className="w-14 h-14 object-contain ml-24 -rotate-12 hidden md:block"
-                      style={{ alignSelf: 'center', opacity: 0.5 }}
-                    />
-                  </div>
-                </motion.div>
-                <motion.div className="bg-white rounded-2xl shadow-lg px-8 py-6 flex flex-col items-center min-w-[160px] border border-blue-100" whileHover={{ scale: 1.04 }}>
-                  <div className='flex flex-col '>
-                    <span className="text-3xl font-bold text-blue-700">{totalSubmissions}</span>
-                    <span className="text-gray-500 mt-1">Submission</span>
-                    <img
-                      src={'/images/file3.png'}
-                      alt="Analytics Visual"
-                      className="w-12 h-12 object-contain ml-24 -rotate-12 hidden md:block"
-                      style={{ alignSelf: 'center', opacity: 0.5 }}
-                    />
-                  </div>
-                </motion.div>
+                {userProfile.user_name ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, type: "spring", stiffness: 80 }}
+                  >
+                    <motion.h1
+                      className="text-3xl font-bold text-white mt-2"
+                      initial={{ opacity: 0, x: -30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1, duration: 0.5, type: "spring", stiffness: 60 }}
+                    >
+                      Hey, {userProfile.user_name}
+                    </motion.h1>
+                    <motion.p
+                      className="text-md text-blue-100"
+                      initial={{ opacity: 0, x: 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.2, duration: 0.5, type: "spring", stiffness: 60 }}
+                    >
+                      Define the Contact Form of the list view
+                    </motion.p>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="h-8 w-48 bg-blue-200/40 rounded animate-pulse"></div>
+                      <div className="h-4 w-64 bg-blue-100/40 rounded animate-pulse"></div>
+                    </div>
+                  </motion.div>
+                )}
               </motion.div>
             </div>
-            <div className="pt-12 px-10 pb-10">
-              <AnimatePresence>
-                <motion.div
-                  key="datatable"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Datatable forms={forms} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={isLoading} handleDeleteForm={handleDeleteForm} />
-                </motion.div>
-              </AnimatePresence>
+            <div className="mt-5">
+              {/* <AnimatePresence> */}
+              <motion.div
+                style={{ padding: '26px 26px 0 26px' }}
+                key="datatable"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} />
+              </motion.div>
+              {/* </AnimatePresence> */}
             </div>
           </>
         )}
       </div>
-   
-+      {/* Modal for selecting form creation option */}
+
+      {/* Modal for selecting form creation option */}
       {isModalOpen && (
-          <div className="modal-overlay">
-            <div className="modal-container">
-              <div className="modal-header">
-                <h2 className="form-title">Create New Form</h2>
-                <button className="close-button-container" onClick={() => setIsModalOpen(false)}> 
-                      <img src="/images/close_icon.svg" alt="Close" />
-                </button>
-              </div>
-              <div className="divider"></div>
-              <div className="form-content">
-                <div className="form-content-inner">
-                  <div className="instruction-text">Select how you’d like to create your form:</div>
-                  <div className="options-container">
-                    <div className="option-card scratch-option" onClick={() => handleOptionSelect('scratch')}>
-                      <div className="preview-image">
-                        <img src="/images/form_scratch.svg" alt="Scratch Option" />
-                      </div>
-                      <div className="option-text">
-                        <div className="option-title">Build from Scratch</div>
-                        <div className="option-description">Start with a blank canvas and full cutomization</div>
-                      </div>
+        <div className="modal-overlay">
+          <div className="modal-container">
+            <div className="modal-header">
+              <h2 className="form-title">Create New Form</h2>
+              <button className="close-button-container" onClick={() => setIsModalOpen(false)}>
+                <img src="/images/close_icon.svg" alt="Close" />
+              </button>
+            </div>
+            <div className="divider"></div>
+            <div className="form-content">
+              <div className="form-content-inner">
+                <div className="instruction-text">Select how you’d like to create your form:</div>
+                <div className="options-container">
+                  <div className="option-card scratch-option" onClick={() => handleOptionSelect('scratch')}>
+                    <div className="preview-image">
+                      <img src="/images/form_scratch.svg" alt="Scratch Option" />
                     </div>
-                    <div className="option-card salesforce-option" onClick={() => handleOptionSelect('salesforce')}>
-                      <div className="preview-image">
-                        <img src="/images/form_build.svg" alt="Salesforce Option" />
-                      </div>
-                      <div className="option-text">
-                        <div className="option-title">Build using Salesforce</div>
-                        <div className="option-description">Connect to your Salesforce data and object</div>
-                      </div>
+                    <div className="option-text">
+                      <div className="option-title">Build from Scratch</div>
+                      <div className="option-description">Start with a blank canvas and full cutomization</div>
                     </div>
-                    <div className="option-card templates-option" onClick={() => handleOptionSelect('templates')}>
-                      <div className="preview-image">
-                        <img src="/images/form_template.svg" alt="Templates Option" />
-                      </div>
-                      <div className="option-text">
-                        <div className="option-title">Use a Template</div>
-                        <div className="option-description">Start with professionally design template</div>
-                      </div>
+                  </div>
+                  <div className="option-card salesforce-option" onClick={() => handleOptionSelect('salesforce')}>
+                    <div className="preview-image">
+                      <img src="/images/form_build.svg" alt="Salesforce Option" />
+                    </div>
+                    <div className="option-text">
+                      <div className="option-title">Build using Salesforce</div>
+                      <div className="option-description">Connect to your Salesforce data and object</div>
+                    </div>
+                  </div>
+                  <div className="option-card templates-option" onClick={() => handleOptionSelect('templates')}>
+                    <div className="preview-image">
+                      <img src="/images/form_template.svg" alt="Templates Option" />
+                    </div>
+                    <div className="option-text">
+                      <div className="option-title">Use a Template</div>
+                      <div className="option-description">Start with professionally design template</div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
       {isFormNameOpen && (
         <FormName
           onClose={() => setIsFormNameOpen(false)}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Select, Button } from 'antd';
+import { Select, Button, Input } from 'antd';
 import './login.css'; // Import your CSS styles
 
 const { Option } = Select;
@@ -9,14 +9,48 @@ const { Option } = Select;
 const Login = () => {
   const [org, setOrg] = useState('Pick an option'); // Store selected Salesforce org
   const [isButtonDisabled, setIsButtonDisabled] = useState(true); // Track login button state
+  const [customUrl, setCustomUrl] = useState(''); // Store custom URL
   const navigate = useNavigate(); // React Router navigation
   let popup = null; // Reference to popup window
+  const allFeatures = [
+    { title: 'Lightning Fast', desc: 'Create and deploy forms in minutes, not hours.', icon: 'flash_icon.svg' },
+    { title: 'Deep Integration', desc: 'Native Salesforce connectivity for real-time data sync.', icon: 'deep_integration_icon.svg' },
+    { title: 'Customizable', desc: 'Tailor forms to your exact needs with powerful design tools.', icon: 'customizable_icon.svg' },
+    { title: 'Secure & Reliable', desc: 'Enterprise-grade security to protect your valuable data.', icon: 'secure_icon.svg' },
+    { title: 'No-Code Forms', desc: 'No coding required! Simply click, drag-drop: turning complexity into simplicity effortlessly!', icon: 'flash_icon.svg' },
+    { title: 'Boost Productivity', desc: 'Auto-magically fill your Salesforce objects with every form submission.', icon: 'deep_integration_icon.svg' },
+    { title: 'Limitless Design Possibilities', desc: 'Make your forms an extension of your brand with just a few clicks.', icon: 'customizable_icon.svg' },
+    { title: 'Submission Alerts', desc: 'Get instant email alerts and optional PDF attachments when your forms are filled out.', icon: 'secure_icon.svg' },
+    { title: 'Hassle-free Publish', desc: 'An uncomplicated process with several options to publish forms.', icon: 'flash_icon.svg' },
+  ];
+
+  const [displayedFeatures, setDisplayedFeatures] = useState([]);
+
+  const validateCustomUrl = (url) => {
+    if (!url) return false;
+    const trimmedUrl = url.trim();
+    return (
+      trimmedUrl.startsWith('https://') &&
+      trimmedUrl.endsWith('.my.salesforce.com') &&
+      trimmedUrl.length > 'https://.my.salesforce.com'.length
+    );
+  };
 
   // Check if already logged in on mount
   useEffect(() => {
     sessionStorage.setItem('isLoggedIn', 'true');
     sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
     sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    const shuffleArray = (array) => {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled.slice(0, 4); // Return first 4 items
+    };
+
+    setDisplayedFeatures(shuffleArray(allFeatures));
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login flag
     if (isLoggedIn) {
       navigate('/guest'); // Redirect to home if already logged in
@@ -55,14 +89,32 @@ const Login = () => {
     };
   }, [navigate]);
 
+  useEffect(() => {
+    let isValid = false;
+    if (org !== 'Pick an option') {
+      if (org === 'custom') {
+        isValid = validateCustomUrl(customUrl);
+      } else {
+        isValid = true;
+      }
+    }
+    setIsButtonDisabled(!isValid);
+  }, [org, customUrl]);
+
   const handleOrgChange = (value) => {
     setOrg(value); // Update state
+    if (value !== 'custom') {
+      setCustomUrl(''); // Clear custom URL if not custom
+    }
     setIsButtonDisabled(!value); // Enable button if org selected
   };
 
   const openPopup = () => {
-    if (!org) return; // Do nothing if org not selected
-
+    if (org === 'Pick an option' || (org === 'custom' && !validateCustomUrl(customUrl))) return; // Do nothing if org not selected
+    let effectiveOrg = org;
+    if (org === 'custom') {
+      effectiveOrg = customUrl.trim();
+    }
     let base = 'https://d2bri1qui9cr5s.cloudfront.net/auth/login'; // Base login URL
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login status
 
@@ -70,8 +122,8 @@ const Login = () => {
       base += '.html'; // Append .html if already logged in
     }
 
-    const loginUrl = `${base}?org=${org}`; // Construct full login URL
-    sessionStorage.setItem('org', org); // Store selected org
+    const loginUrl = `${base}?org=${encodeURIComponent(effectiveOrg)}`; // Construct full login URL
+    sessionStorage.setItem('org', effectiveOrg); // Store selected org
 
     const width = 600, height = 700; // Popup dimensions
     const left = window.screenX + (window.innerWidth - width) / 2; // Center horizontally
@@ -132,46 +184,19 @@ const Login = () => {
                 </p>
               </div>
               <div className="features-container">
-                <div className="feature">
-                  <div className="icon-wrapper">
-                    <img src="/images/flash_icon.svg" alt="Lightning Icon" className="feature-icon" />
+                {displayedFeatures.map((feature, index) => (
+                  <div key={index} className="feature">
+                    <div className="icon-wrapper">
+                      <img src={`/images/${feature.icon}`} alt={`${feature.title} Icon`} className="feature-icon" />
+                    </div>
+                    <p className="feature-title">{feature.title}</p>
+                    <p className="feature-description">{feature.desc}</p>
                   </div>
-                  <p className="feature-title">Lightning Fast</p>
-                  <p className="feature-description">
-                    Create and deploy forms in minutes, not hours.
-                  </p>
-                </div>
-                <div className="feature">
-                  <div className="icon-wrapper">
-                    <img src="/images/deep_integration_icon.svg" alt="Camera Icon" className="feature-icon" />
-                  </div>
-                  <p className="feature-title">Deep Integration</p>
-                  <p className="feature-description">
-                    Native Salesforce connectivity for real-time data sync.
-                  </p>
-                </div>
-                <div className="feature">
-                  <div className="icon-wrapper">
-                    <img src="/images/customizable_icon.svg" alt="Gear Icon" className="feature-icon" />
-                  </div>
-                  <p className="feature-title">Customizable</p>
-                  <p className="feature-description">
-                    Tailor forms to your exact needs with powerful design tools.
-                  </p>
-                </div>
-                <div className="feature">
-                  <div className="icon-wrapper">
-                    <img src="/images/secure_icon.svg" alt="Shield Icon" className="feature-icon" />
-                  </div>
-                  <p className="feature-title">Secure & Reliable</p>
-                  <p className="feature-description">
-                    Enterprise-grade security to protect your valuable data.
-                  </p>
-                </div>
+                ))}
               </div>
             </div>
             <div className="footer">
-              <p className="footer-text">© 2025, made with ♥ by MVCouds a better web.</p>
+              <p className="footer-text">© 2025, made with ♥ by MV Clouds.</p>
             </div>
           </div>
           <div className="right-container">
@@ -205,17 +230,47 @@ const Login = () => {
                       >
                         <Option value="production">Production (login.salesforce.com)</Option>
                         <Option value="sandbox">Sandbox (test.salesforce.com)</Option>
+                        <Option value="custom">Custom Domain</Option>
                       </Select>
                     </motion.div>
                   </AnimatePresence>
                 </div>
+                <AnimatePresence>
+                  {org === 'custom' && (
+                    <motion.div
+                      key="custom-input"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                      style={{ marginTop: '16px' }}
+                    >
+                      <label htmlFor="custom-url" className="label">
+                        Enter Custom Domain URL
+                      </label>
+                      <Input
+                        id="custom-url"
+                        value={customUrl}
+                        onChange={(e) => setCustomUrl(e.target.value)}
+                        placeholder="https://yourdomain.my.salesforce.com"
+                        style={{ width: '100%' }}
+                        className=''
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 <button
                   id="login-button"
                   onClick={openPopup}
                   disabled={isButtonDisabled}
                   className={`login-button ${isButtonDisabled ? 'disabled' : ''}`}
                 >
-                  <img src="/images/login_gate.svg" alt="Login logo" className="gate-logo"/> Login with Salesforce
+                  <svg className="gate-logo"  width="20" height="19" viewBox="0 0 20 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1.60059 9.16661H13.3612M13.3612 9.16661L10.421 6.64648M13.3612 9.16661L10.421 11.6867" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M7.48169 4.9673C7.49177 3.14021 7.57325 2.15064 8.21841 1.50549C8.9568 0.76709 10.1446 0.76709 12.5203 0.76709H13.3603C15.7368 0.76709 16.9246 0.76709 17.663 1.50549C18.4006 2.24304 18.4006 3.4317 18.4006 5.80734V12.5277C18.4006 14.9033 18.4006 16.092 17.663 16.8295C16.9238 17.5679 15.7368 17.5679 13.3603 17.5679H12.5203C10.1446 17.5679 8.9568 17.5679 8.21841 16.8295C7.57325 16.1844 7.49177 15.1948 7.48169 13.3677" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+
+                     Login to QuickForm
                 </button>
               </div>
             </div>
