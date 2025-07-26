@@ -25,7 +25,23 @@ export const handler = async (event) => {
   const refresh_token = queryStringParameters.refresh_token;
   const userId = queryStringParameters.userId;
   const org = queryStringParameters.org || 'production';
+  const user_name = queryStringParameters.user_name;
+  const user_email = queryStringParameters.user_email;
+  const user_preferred_username = queryStringParameters.user_preferred_username;
+  const user_zoneinfo = queryStringParameters.user_zoneinfo;
+  const user_locale = queryStringParameters.user_locale;
+  const user_language = queryStringParameters.user_locale;
 
+
+  // User Profile Data
+  const user_profile_data = {
+    user_name,
+    user_email,
+    user_preferred_username,
+    user_zoneinfo,
+    user_locale,
+    user_language,
+  };
   // Validate required parameters
   if (!access_token || !instance_url || !userId || !refresh_token) {
     return {
@@ -165,11 +181,11 @@ export const handler = async (event) => {
       return allRecords;
     };
 
-    const [forms, formVersions, formFields, formConditions] = await Promise.all([
+    const [forms, formVersions, formFields, formConditions, Mappings] = await Promise.all([
       fetchSalesforceData(
         access_token,
         instance_url,
-        'SELECT Id, Name, Active_Version__c, Publish_Link__c FROM Form__c'
+        'SELECT Id, Name, Active_Version__c, Publish_Link__c , Status__c, LastModifiedDate , Folder__c FROM Form__c'
       ),
       fetchSalesforceData(
         access_token,
@@ -186,77 +202,208 @@ export const handler = async (event) => {
         instance_url,
         'SELECT Id, Form_Version__c, Condition_Type__c, Condition_Data__c FROM Form_Condition__c'
       ),
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id, Name, Order__c, Node_Configuration__c,Form_Version__c,Conditions__c,Salesforce_Object__c,Next_Node_Id__c,Previous_Node_Id__c,Type__c,Field_Mappings__c,Node_Id__c,Loop_Config__c,Formatter_Config__c FROM QF_Mapping__c'
+      ),
     ]);
-    const formRecords = forms.map(form => ({
-      Id: form.Id,
-      Name: form.Name,
-      Active_Version__c: form.Active_Version__c || null,
-      Source: 'Form__c',
-      FormVersions: formVersions
+    const formRecords = forms.map(form => {
+      const versions = formVersions
         .filter(version => version.Form__c === form.Id)
-        .map(version => ({
-          Id: version.Id,
-          FormId: version.Form__c,
-          Name: version.Name,
-          Object_Info__c: version.Object_Info__c || null,
-          Description__c: version.Description__c || null,
-          Version__c: version.Version__c || '1',
-          Publish_Link__c: version.Publish_Link__c || null,
-          Stage__c: version.Stage__c || 'Draft',
-          Submission_Count__c: version.Submission_Count__c || 0,
-          Source: 'Form_Version__c',
-          Fields: formFields
-            .filter(field => field.Form_Version__c === version.Id)
-            .map(field => ({
-              Id: field.Id,
-              Name: field.Name,
-              Field_Type__c: field.Field_Type__c,
-              Page_Number__c: field.Page_Number__c,
-              Order_Number__c: field.Order_Number__c,
-              Properties__c: field.Properties__c,
-              Unique_Key__c: field.Unique_Key__c,
-            })),
-          Conditions: formConditions
-            .filter(condition => condition.Form_Version__c === version.Id)
-            .flatMap(condition => {
-              try {
-                return JSON.parse(condition.Condition_Data__c || '[]').map(cond => ({
-                  Id: cond.Id,
-                  type: cond.type,
-                  ...(cond.type === 'dependent'
-                    ? {
-                        ifField: cond.ifField,
-                        value: cond.value || null,
-                        dependentField: cond.dependentField,
-                        dependentValues: cond.dependentValues || [],
-                      }
-                    : {
-                        conditions: cond.conditions?.map(c => ({
-                          ifField: c.ifField,
-                          operator: c.operator || 'equals',
-                          value: c.value || null,
-                        })) || [],
-                        logic: cond.logic || 'AND',
-                        ...(cond.type === 'show_hide'
-                          ? { thenAction: cond.thenAction, thenFields: cond.thenFields || [] }
-                          : cond.type === 'skip_hide_page'
-                          ? { thenAction: cond.thenAction, sourcePage: cond.sourcePage, targetPage: cond.targetPage }
-                          : {
-                              thenAction: cond.thenAction,
-                              thenFields: cond.thenFields || [],
-                              ...(cond.thenAction === 'set mask' ? { maskPattern: cond.maskPattern } : {}),
-                              ...(cond.thenAction === 'unmask' ? { maskPattern: null } : {}),
-                            }),
-                      }),
-                }));
-              } catch (e) {
-                console.warn(`Failed to parse Condition_Data__c for condition ${condition.Id}:`, e);
-                return [];
+        .map(version => {
+          // Filter QF_Mapping__c records for this Form_Version__c
+          const versionMappings = Mappings.filter(mapping => mapping.Form_Version__c === version.Id);
+    
+          // Initialize Mappings structure
+          const mappingsObject = {
+            Id: version.Id, // Use Form_Version__c ID as top-level ID
+            FlowId: version.Id, // Same as Id for consistency
+            Mappings: {},
+            Nodes: [],
+            Edges: [],
+          };
+    
+          // Function to validate and parse JSON
+          const parseJsonField = (fieldValue, fieldName, mappingId) => {
+            if (!fieldValue || typeof fieldValue !== 'string') {
+              return {};
+            }
+            try {
+              // Check if the string starts with a valid JSON character ({, [, or ")
+              if (!fieldValue.match(/^\s*[\{\[\"]/)) {
+                console.warn(`Invalid JSON in ${fieldName} for mapping ${mappingId}: "${fieldValue}"`);
+                return {};
               }
-            }),
-        }))
-        .sort((a, b) => (b.Version__c || '1').localeCompare(a.Version__c || '1')), // Sort by Version__c DESC
-    }));
+              return JSON.parse(fieldValue);
+            } catch (e) {
+              console.warn(`Failed to parse ${fieldName} for mapping ${mappingId}:`, e.message);
+              return {};
+            }
+          };
+    
+          // Process each QF_Mapping__c record to build Mappings, Nodes, and Edges
+          versionMappings.forEach(mapping => {
+            // Parse JSON fields with validation
+            const nodeConfig = parseJsonField(mapping.Node_Configuration__c, 'Node_Configuration__c', mapping.Id);
+            const formatterConfig = parseJsonField(mapping.Formatter_Config__c, 'Formatter_Config__c', mapping.Id);
+            const fieldMappings = parseJsonField(mapping.Field_Mappings__c, 'Field_Mappings__c', mapping.Id);
+            const conditions = parseJsonField(mapping.Conditions__c, 'Conditions__c', mapping.Id);
+            const loopConfig = parseJsonField(mapping.Loop_Config__c, 'Loop_Config__c', mapping.Id);
+    
+            // Parse Next_Node_Id__c as JSON array or split comma-separated string
+            let nextNodeIds = [];
+            if (mapping.Next_Node_Id__c) {
+              try {
+                nextNodeIds = JSON.parse(mapping.Next_Node_Id__c);
+                if (!Array.isArray(nextNodeIds)) {
+                  console.warn(`Next_Node_Id__c for mapping ${mapping.Id} is not an array:`, nextNodeIds);
+                  nextNodeIds = [];
+                }
+              } catch (e) {
+                console.warn(`Failed to parse Next_Node_Id__c for mapping ${mapping.Id}:`, e.message);
+                // Fallback to splitting comma-separated string if JSON parsing fails
+                if (typeof mapping.Next_Node_Id__c === 'string') {
+                  nextNodeIds = mapping.Next_Node_Id__c.split(',').map(id => id.trim()).filter(id => id);
+                }
+              }
+            }
+    
+            // Build the Mappings sub-object
+            mappingsObject.Mappings[mapping.Node_Id__c] = {
+              id: mapping.Id,
+              nodeId: mapping.Node_Id__c,
+              actionType: mapping.Type__c || 'Unknown',
+              salesforceObject: mapping.Salesforce_Object__c || '',
+              fieldMappings: Array.isArray(fieldMappings) ? fieldMappings : [],
+              conditions: conditions.conditions || [],
+              logicType: conditions.logicType || null,
+              customLogic: conditions.customLogic || '',
+              formatterConfig: mapping.Type__c === 'Formatter' ? formatterConfig : {},
+              loopConfig: mapping.Type__c === 'Loop' ? loopConfig : {},
+              enableConditions: mapping.Type__c === 'CreateUpdate' ? !!conditions.conditions?.length : undefined,
+              returnLimit: ['Find', 'Filter', 'Condition'].includes(mapping.Type__c) ? conditions.returnLimit || null : undefined,
+              sortField: ['Find', 'Filter', 'Condition'].includes(mapping.Type__c) ? conditions.sortField || null : undefined,
+              sortOrder: ['Find', 'Filter', 'Condition'].includes(mapping.Type__c) ? conditions.sortOrder || null : undefined,
+              pathOption: mapping.Type__c === 'Condition' ? conditions.pathOption || 'Rules' : undefined,
+              nextNodeIds,
+              previousNodeId: mapping.Previous_Node_Id__c || null,
+              label: mapping.Name || mapping.Node_Id__c,
+              order: parseInt(mapping.Order__c) || 0,
+              formVersionId: version.Id,
+            };
+    
+            // Build the Nodes array with formatterConfig and loopConfig merged into data
+            mappingsObject.Nodes.push({
+              id: mapping.Node_Id__c,
+              type: 'custom',
+              position: nodeConfig.position || { x: 0, y: 0 },
+              data: {
+                label: mapping.Name || mapping.Node_Id__c,
+                displayLabel: nodeConfig.displayLabel || mapping.Name || mapping.Node_Id__c,
+                order: parseInt(mapping.Order__c) || 0,
+                type: mapping.Type__c?.toLowerCase() || 'unknown',
+                action: mapping.Type__c || 'Unknown',
+                ...(mapping.Type__c === 'Formatter' && formatterConfig ? { formatterConfig } : {}),
+                ...(mapping.Type__c === 'Loop' && loopConfig ? { loopConfig } : {}),
+              },
+              draggable: true,
+              width: nodeConfig.width || 120,
+              height: nodeConfig.height || 52,
+            });
+    
+            // Build the Edges array
+            nextNodeIds.forEach(nextNodeId => {
+              mappingsObject.Edges.push({
+                id: `e${mapping.Node_Id__c}-${nextNodeId}`,
+                source: mapping.Node_Id__c,
+                sourceHandle: 'bottom',
+                target: nextNodeId,
+                targetHandle: 'top',
+                type: 'default',
+                animated: false,
+              });
+            });
+          });
+    
+          return {
+            Id: version.Id,
+            FormId: version.Form__c,
+            Name: version.Name,
+            Object_Info__c: version.Object_Info__c || null,
+            Description__c: version.Description__c || null,
+            Version__c: version.Version__c || '1',
+            Publish_Link__c: version.Publish_Link__c || null,
+            Stage__c: version.Stage__c || 'Draft',
+            Submission_Count__c: version.Submission_Count__c || 0,
+            Source: 'Form_Version__c',
+            Mappings: mappingsObject,
+            Fields: formFields
+              .filter(field => field.Form_Version__c === version.Id)
+              .map(field => ({
+                Id: field.Id,
+                Name: field.Name,
+                Field_Type__c: field.Field_Type__c, // Fixed typo from 'Field_Type'
+                Page_Number__c: field.Page_Number__c,
+                Order_Number__c: field.Order_Number__c,
+                Properties__c: field.Properties__c,
+                Unique_Key__c: field.Unique_Key__c,
+              })),
+            Conditions: formConditions
+              .filter(condition => condition.Form_Version__c === version.Id)
+              .flatMap(condition => {
+                try {
+                  return JSON.parse(condition.Condition_Data__c || '[]').map(cond => ({
+                    Id: cond.Id,
+                    type: cond.type,
+                    ...(cond.type === 'dependent'
+                      ? {
+                          ifField: cond.ifField,
+                          value: cond.value || null,
+                          dependentField: cond.dependentField,
+                          dependentValues: cond.dependentValues || [],
+                        }
+                      : {
+                          conditions: cond.conditions?.map(c => ({
+                            ifField: c.ifField,
+                            operator: c.operator || 'equals',
+                            value: c.value || null,
+                          })) || [],
+                          logic: cond.logic || 'AND',
+                          logicExpression: cond.logicExpression || '',
+                          ...(cond.type === 'show_hide'
+                            ? { thenAction: cond.thenAction, thenFields: cond.thenFields || [] }
+                            : cond.type === 'skip_hide_page'
+                            ? { thenAction: cond.thenAction, sourcePage: cond.sourcePage, targetPage: cond.targetPage }
+                            : {
+                                thenAction: cond.thenAction,
+                                thenFields: cond.thenFields || [],
+                                ...(cond.thenAction === 'set mask' ? { maskPattern: cond.maskPattern } : {}),
+                                ...(cond.thenAction === 'unmask' ? { maskPattern: null } : {}),
+                              }),
+                        }),
+                  }));
+                } catch (e) {
+                  console.warn(`Failed to parse Condition_Data__c for condition ${condition.Id}:`, e);
+                  return [];
+                }
+              }),
+          };
+        })
+        .sort((a, b) => (b.Version__c || '1').localeCompare(a.Version__c || '1')); // Sort by Version__c DESC
+    
+      return {
+        Id: form.Id,
+        Name: form.Name,
+        Active_Version__c: form.Active_Version__c || null,
+        Publish_Link__c: form.Publish_Link__c || null,
+        Status__c: form.Status__c || 'Inactive',
+        Source: 'Form__c',
+        LastModifiedDate: form.LastModifiedDate || Date.now(),
+        Folder__c : form.Folder__c || null,
+        FormVersions: versions,
+      };
+    });
 
   const queryResponseData = await dynamoClient.send(
     new QueryCommand({
@@ -282,6 +429,7 @@ export const handler = async (event) => {
             UserId: { S: userId },
             ChunkIndex: { S: 'Metadata' },
             InstanceUrl: { S: cleanedInstanceUrl },
+            UserProfile : { S : JSON.stringify(user_profile_data)},
             Metadata: { S: JSON.stringify(metadata) },
             CreatedAt: { S: queryResponseData.Items?.find(item => item.ChunkIndex?.S === 'Metadata')?.CreatedAt?.S || currentTime },
             UpdatedAt: { S: currentTime },
