@@ -8,6 +8,7 @@ import Integrations from '../integrations/Integrations';
 import InactivityTracker from '../time-out/InactivityTracker';
 import { useSalesforceData } from '../Context/MetadataContext';
 import './home.css';
+import CreateFormWizard from './createFormWizard';
 import RecentFilesSlider from './RecentFilesSlider';
 import FolderManager from './FolderManager';
 
@@ -29,6 +30,7 @@ const Home = () => {
   const navigate = useNavigate();
   const userId = sessionStorage.getItem('userId');
   const instanceUrl = sessionStorage.getItem('instanceUrl');
+  const [showCreateFormWizard, setShowCreateFormWizard] = useState(false);
   // Analytics data (dynamic)
   const totalForms = formRecords.length;
   const activeForms = formRecords.filter(f => f.Status__c === 'Active').length;
