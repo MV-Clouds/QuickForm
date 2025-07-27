@@ -521,6 +521,8 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       const previousNodeId = incomingEdge?.source;
       const nextNodeIds = outgoingEdges.map((e) => e.target).filter((id, index, self) => self.indexOf(id) === index);
 
+      console.log('nodeMapping:', nodeMapping);
+      
       let actionType = nodeMapping.actionType || node.data.action;
       if (node.id === "start") actionType = "Start";
       else if (node.id === "end") actionType = "End";
@@ -591,7 +593,8 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         return;
       }
     }
-
+    console.log('allMappings:', allMappings);
+    
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
     const saveMappingsUrl = process.env.REACT_APP_SAVE_MAPPINGS_URL;
 
