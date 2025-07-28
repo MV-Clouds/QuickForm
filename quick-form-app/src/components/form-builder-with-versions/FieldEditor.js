@@ -81,8 +81,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [helpText, setHelpText] = useState(selectedField?.helpText || '');
 
   // State for header and footer properties
-  const [headerText, setHeaderText] = useState('Form');
-  const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
+  // const [headerText, setHeaderText] = useState('Form');
+  // const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
   const [footerText, setFooterText] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.text || selectedFooter.buttonType.charAt(0).toUpperCase() + selectedFooter.buttonType.slice(1)) : '');
   const [footerBgColor, setFooterBgColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.bgColor || (selectedFooter.buttonType === 'previous' ? 'bg-gray-600' : 'bg-blue-600')) : '');
   const [footerTextColor, setFooterTextColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.textColor || 'white') : 'white');
@@ -597,11 +597,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { helpText: e.target.value });
   };
 
-  // Handlers for header and footer
-  const handleHeaderTextChange = (e) => {
-    setHeaderText(e.target.value);
-    onUpdateField(selectedField.id, { heading: e.target.value });
-  };
   //handle for form heading
   const handleHeadingTextChange = (e) => {
     setHeadingText(e.target.value);
@@ -611,11 +606,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setHeadingAlignment(e.target.value);
     onUpdateField(selectedField.id, { alignment: e.target.value });
   };
-  const handleHeaderAlignmentChange = (e) => {
-    setHeaderAlignment(e.target.value);
-    onUpdateField(selectedField.id, { alignment: e.target.value });
-  };
-
   const handleFooterTextChange = (e) => {
     setFooterText(e.target.value);
     const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
@@ -943,32 +933,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
             </button>
             {expandedSection === 'common' && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                {isHeader ? (
-                  <>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Header Text</label>
-                      <input
-                        type="text"
-                        value={headerText}
-                        onChange={handleHeaderTextChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter header text"
-                      />
-                    </div>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Header Alignment</label>
-                      <select
-                        value={headerAlignment}
-                        onChange={handleHeaderAlignmentChange}
-                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="left">Left</option>
-                        <option value="center">Center</option>
-                        <option value="right">Right</option>
-                      </select>
-                    </div>
-                  </>
-                ) : isHeading ?
+                {isHeading ?
                   <>
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>

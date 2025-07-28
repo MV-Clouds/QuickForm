@@ -72,15 +72,15 @@
     border: 1px solid rgba(228, 231, 236, 1);
     background-color: white;
     border-radius: 5px;
-    padding: 20px;
+    padding: 15px;
   display: flex;
   flex-direction: column;
   height: 100%;
-  position: relative;
   max-height: calc(100vh - 0px);
   overflow-y: auto;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none;  /* IE/Edge */
+
 }
 
 .builder-container::-webkit-scrollbar {
@@ -91,9 +91,6 @@
     background-color: white;
     justify-content: space-between;
     align-items: center;
-    padding: 10px;
-    border: 1px solid rgb(216 216 216 / 27%);
-    border-radius: 5px;
     width: 100%;
 }
 
@@ -101,4 +98,80 @@
     /* box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px; */
     box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
     margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: white;
+  border-top: 1px solid #e5e7eb; /* Tailwind's gray-200 */
+  padding: 0.5rem; /* Tailwind's p-2 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem; /* Tailwind's gap-2 */
+  z-index: 10;
+}
+
+.individual-page{
+    border: 1px solid rgb(216 216 216 / 27%);
+    border-radius: 5px;
+    width: 100%;
+    padding: 10px;
+}
+/* Add Page Divider */
+.add-page-divider {
+  position: relative;
+  margin: 2rem 0;
+  display: flex;
+  align-items: center;
+}
+
+.add-page-line {
+  flex-grow: 1;
+  height: 1px;
+  background-color: #e5e7eb; /* border-gray-200 */
+}
+
+.add-page-button-container {
+  padding: 0 1rem; /* Add horizontal spacing around the button */
+}
+
+.add-page-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid rgba(228, 231, 236, 1);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  color: rgba(95, 97, 101, 1);
+  background-color: white;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.add-page-button:hover {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #bfdbfe;
+}
+
+.add-page-icon {
+  height: 1.15rem;
+  width: 1.15rem;
+  border: 1px solid rgb(149 149 149);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-page-icon svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
