@@ -89,6 +89,8 @@ const MappingFields = () => {
   ];
 
   const initialEdges = [];
+  console.log(metadata, 'metadata');
+  
   console.log('formRecords ', formRecords);
 
 
@@ -152,13 +154,29 @@ const MappingFields = () => {
           }
 
           return acc;
-        }, []);
+        }, []);        
         setFormFields(normalizedFields);
       } else {
         console.warn('Form version not found or has no fields');
       }
     }
   }, [formVersionId, formRecords]);
+
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl && !token) {
+      fetchAccessToken(userId, instanceUrl);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    const instanceUrl = sessionStorage.getItem('instanceUrl');
+    if (userId && instanceUrl && (!formRecords || formRecords.length === 0)) {
+      refreshData();
+    }
+  }, []);
 
   const fetchAccessToken = async (userId, instanceUrl, retries = 2) => {
     try {
@@ -187,7 +205,7 @@ const MappingFields = () => {
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
-
+console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       if (!token || !instanceUrl || !userId) {
         throw new Error('User not authenticated or instance URL missing');
       }
@@ -503,6 +521,8 @@ const MappingFields = () => {
       const previousNodeId = incomingEdge?.source;
       const nextNodeIds = outgoingEdges.map((e) => e.target).filter((id, index, self) => self.indexOf(id) === index);
 
+      console.log('nodeMapping:', nodeMapping);
+      
       let actionType = nodeMapping.actionType || node.data.action;
       if (node.id === "start") actionType = "Start";
       else if (node.id === "end") actionType = "End";
@@ -573,7 +593,8 @@ const MappingFields = () => {
         return;
       }
     }
-
+    console.log('allMappings:', allMappings);
+    
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
     const saveMappingsUrl = process.env.REACT_APP_SAVE_MAPPINGS_URL;
 
@@ -729,7 +750,7 @@ const MappingFields = () => {
                   ...node.data,
                   label: mapping.label,
                   displayLabel: mapping.displayLabel || mapping.label,
-                  action: mapping.actionType,
+                  action: mapping.actionType === "CreateUpdate" ? "Create/Update" : mapping.actionType, 
                   type: mapping.type,
                   order: mapping.order,
                   salesforceObject: mapping.salesforceObject,
@@ -790,7 +811,7 @@ const MappingFields = () => {
 
   useEffect(() => {
     initializeData();
-  }, [formVersionId]);
+  }, [formVersionId,formRecords]);
 
   const onDragStart = (event, nodeType, action) => {
     event.dataTransfer.setData("application/reactflow-type", nodeType);
@@ -859,7 +880,7 @@ const MappingFields = () => {
                   </ReactFlowProvider>
                 </div>
 
-                {selectedNode && ["Create/Update", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
+                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
                   <ActionPanel
                     nodeId={selectedNode.id}
                     nodeType={selectedNode.data.action}

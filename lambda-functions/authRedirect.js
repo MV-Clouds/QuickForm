@@ -13,6 +13,7 @@ const parseCookies = (cookieHeader) => {
 };
 
 let org;
+let salesforceLoginDomain;
 export const handler = async (event) => {
   const request = event.Records[0].cf.request;
   const headers = request.headers;
@@ -23,11 +24,18 @@ export const handler = async (event) => {
   
   // Get org param: 'production' or 'sandbox' from query string (for /auth/login) or state (for /auth/callback)
   if (uri === '/auth/login') {
-    org = params.get('org') || 'production'; // From query string in initial request
+    let orgParam = params.get('org') || org; // From query string in initial request
+    org = decodeURIComponent(orgParam);
+    if (org === 'production') {
+      salesforceLoginDomain = 'login.salesforce.com';
+    } else if (org === 'sandbox') {
+      salesforceLoginDomain = 'test.salesforce.com';
+    } else if (org.endsWith('.my.salesforce.com')) {
+      salesforceLoginDomain = org; // Remove 'https://'
+    }
   }
   
   // Use Salesforce login endpoint based on org
-  const salesforceLoginDomain = org === 'sandbox' ? 'test.salesforce.com' : 'login.salesforce.com';
 
   // Fetch Salesforce client credentials once
   let client_id, client_secret;
@@ -139,6 +147,12 @@ export const handler = async (event) => {
 
     // Fetch userId dynamically using the access token
     let userId;
+    let user_name;
+    let user_email;
+    let user_preferred_username;
+    let user_zoneinfo;
+    let user_locale;
+    let user_language;
     try {
       const userInfoRes = await fetch(`https://${salesforceLoginDomain}/services/oauth2/userinfo`, {
         method: 'GET',
@@ -152,9 +166,14 @@ export const handler = async (event) => {
         const errorData = await userInfoRes.json();
         throw new Error(errorData.error_description || 'Failed to fetch user info');
       }
-
       const userInfo = await userInfoRes.json();
       userId = userInfo.user_id;
+      user_name = userInfo.name;
+      user_email = userInfo.email;
+      user_preferred_username = userInfo.preferred_username;
+      user_zoneinfo = userInfo.zoneinfo;
+      user_locale = userInfo.locale;
+      user_language = userInfo.language;
       if (!userId) {
         throw new Error('User ID not found in userinfo response');
       }
@@ -176,6 +195,12 @@ export const handler = async (event) => {
     storeMetadataUrl.searchParams.append('instance_url', instance_url);
     storeMetadataUrl.searchParams.append('userId', userId);
     storeMetadataUrl.searchParams.append('org', org);
+    storeMetadataUrl.searchParams.append('user_name', user_name);
+    storeMetadataUrl.searchParams.append('user_email', user_email);
+    storeMetadataUrl.searchParams.append('user_preferred_username', user_preferred_username);
+    storeMetadataUrl.searchParams.append('user_zoneinfo', user_zoneinfo);
+    storeMetadataUrl.searchParams.append('user_locale', user_locale);
+    storeMetadataUrl.searchParams.append('user_language', user_language);
 
     return {
       status: '302',
@@ -218,7 +243,7 @@ export const handler = async (event) => {
   // }
 
   // 3. Redirect to Salesforce login OAuth URL
-  const authUrl = `https://${salesforceLoginDomain}/services/oauth2/authorize?response_type=code&client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=api%20refresh_token%20openid`;
+  const authUrl = `https://${salesforceLoginDomain}/services/oauth2/authorize?response_type=code&client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=api%20refresh_token%20openid&state=${encodeURIComponent(org)}`;
 
   return {
     status: '302',

@@ -1,4 +1,34 @@
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import moment from 'moment-timezone';
+import { parsePhoneNumber,getCountryCallingCode } from 'libphonenumber-js';
+
+// Input format patterns for parsing
+const INPUT_DATE_FORMATS = [
+  'YYYY-MM-DD',
+  'DD/MM/YYYY',
+  'MM/DD/YYYY',
+  'DD-MM-YYYY',
+  'MM-DD-YYYY',
+  moment.ISO_8601
+];
+
+const INPUT_TIME_FORMATS = [
+  'HH:mm:ss',
+  'hh:mm:ss A',
+  'HH:mm',
+  'hh:mm A',
+  'hh:mm:ss A', // Explicitly include AM/PM formats
+  'HH:mm:ss.SSS'
+];
+
+const INPUT_DATETIME_FORMATS = [
+  'YYYY-MM-DD HH:mm:ss',
+  'DD-MM-YYYY HH:mm:ss',
+  'MM-DD-YYYY hh:mm:ss A',
+  'YYYY-MM-DD HH:mm',
+  'DD/MM/YYYY HH:mm:ss',
+  moment.ISO_8601
+];
 
 const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
 const METADATA_TABLE_NAME = 'SalesforceChunkData';
@@ -110,7 +140,7 @@ const evaluateCustomLogic = (conditions, customLogic, record) => {
     .replace(/\bOR\b/gi, '||')
     .replace(/\d+/g, (match) => {
       const index = parseInt(match) - 1;
-      return conditionResults[index] !== undefined ? 
+      return conditionResults[index] !== undefined ?
         `(${conditionResults[index]})` : 'false';
     });
 
@@ -135,7 +165,6 @@ const buildSOQLQuery = (node) => {
 
   let conds, logicType, customLogic, returnLimit, sortField, sortOrder;
 
-  // Handle both direct condition arrays and nested conditions object
   if (Array.isArray(conditions)) {
     conds = conditions;
     logicType = null;
@@ -149,14 +178,14 @@ const buildSOQLQuery = (node) => {
 
   if (!conds || conds.length === 0) {
     if (type === 'CreateUpdate') {
-      return null; // No query needed for creation
+      return null;
     }
     throw new Error(`Node ${nodeId} of type ${type} must have conditions`);
   }
 
   const fields = [...new Set(conds.map(cond => cond.field))];
   const query = `SELECT Id, ${fields.join(', ')} FROM ${salesforceObject} WHERE `;
-  
+
   const conditionClauses = conds.map(buildSOQLCondition).filter(clause => clause);
 
   let soqlQuery;
@@ -218,12 +247,11 @@ const processQueryResults = (data, conditions) => {
     return [];
   }
 
-  // Handle both direct condition arrays and nested conditions object
   const conds = Array.isArray(conditions) ? conditions : conditions?.conditions;
   const customLogic = !Array.isArray(conditions) ? conditions?.customLogic : null;
 
   if (customLogic) {
-    return data.records.filter(record => 
+    return data.records.filter(record =>
       evaluateCustomLogic(conds, customLogic, record)
     );
   }
@@ -233,34 +261,35 @@ const processQueryResults = (data, conditions) => {
 
 const createUpdateNode = async (node, formData, salesforceBaseUrl, token) => {
   const { salesforceObject, conditions, fieldMappings, nodeId } = node;
-  let recordId = null;
+  let matchedRecords = [];
 
-  console.log('Processing CreateUpdate Node:', nodeId);
-  console.log('Form Data:', JSON.stringify(formData, null, 2));
-  console.log('Field Mappings:', JSON.stringify(fieldMappings, null, 2));
-
+  // Step 1: Match existing records
   if (conditions && (Array.isArray(conditions) ? conditions.length > 0 : conditions.conditions?.length > 0)) {
     const soqlQuery = buildSOQLQuery(node);
     if (soqlQuery) {
       const queryData = await executeSOQLQuery(soqlQuery, salesforceBaseUrl, token);
-      const matchedRecords = processQueryResults(queryData, conditions);
-      
-      if (matchedRecords.length > 0) {
-        recordId = matchedRecords[0].Id;
-        console.log(`Found matching record ID: ${recordId}`);
-      } else {
-        console.log('No matching records found');
-      }
+      matchedRecords = processQueryResults(queryData, conditions);
+      console.log(`Matched Records: ${matchedRecords.length}`);
     }
   }
 
+  // Step 2: Build payload from fieldMappings
   const payload = {};
   let hasValidMapping = false;
 
   fieldMappings.forEach(mapping => {
-    let value = mapping.formFieldId === '' && mapping.picklistValue !== undefined
-      ? mapping.picklistValue
-      : formData[mapping.formFieldId];
+    let value;
+
+    if (mapping.formFieldId.includes('_')) {
+      const [baseFieldId, subfield] = mapping.formFieldId.split('_');
+      if (baseFieldId in formData) {
+        value = formData[mapping.formFieldId] || '';
+      }
+    } else {
+      value = mapping.formFieldId === '' && mapping.picklistValue !== undefined
+        ? mapping.picklistValue
+        : formData[mapping.formFieldId];
+    }
 
     if (value !== undefined && value !== null) {
       if (mapping.fieldType === 'number' || mapping.fieldType === 'price') {
@@ -268,6 +297,7 @@ const createUpdateNode = async (node, formData, salesforceBaseUrl, token) => {
       } else if (mapping.fieldType === 'picklist' || mapping.fieldType === 'shorttext' || mapping.fieldType === 'longtext') {
         value = String(value);
       }
+
       payload[mapping.salesforceField] = value;
       hasValidMapping = true;
       console.log(`Mapping ${mapping.formFieldId || 'predefined'} to ${mapping.salesforceField}: ${value}`);
@@ -277,46 +307,126 @@ const createUpdateNode = async (node, formData, salesforceBaseUrl, token) => {
   });
 
   if (!hasValidMapping) {
-    throw new Error(`No valid field mappings for node ${nodeId}. Form Data: ${JSON.stringify(formData)}`);
-  }
+    const missingFields = fieldMappings
+      .filter(mapping => !formData[mapping.formFieldId] && !(mapping.formFieldId === '' && mapping.picklistValue !== undefined))
+      .map(mapping => mapping.formFieldId);
 
-  // Validate required fields
-  if (salesforceObject === 'Account' && !payload.Name) {
-    throw new Error(`Missing required field 'Name' in payload for node ${nodeId}`);
-  }
-  if (salesforceObject === 'Contact' && !payload.LastName) {
-    throw new Error(`Missing required field 'LastName' in payload for node ${nodeId}`);
+    throw new Error(`No valid field mappings for node ${nodeId}. Missing or invalid fields: ${missingFields.join(', ')}. Form Data: ${JSON.stringify(formData)}`);
   }
 
   console.log('Constructed Payload:', JSON.stringify(payload, null, 2));
 
-  const method = recordId ? 'PATCH' : 'POST';
-  const url = recordId 
-    ? `${salesforceBaseUrl}/sobjects/${salesforceObject}/${recordId}`
-    : `${salesforceBaseUrl}/sobjects/${salesforceObject}`;
+  // Step 3: Update matched records or create new one
+  if (matchedRecords.length > 0) {
+    const MAX_BATCH_SIZE = 25;
+    const allRecordIds = matchedRecords.map(record => record.Id);
+    const successfulIds = [];
+    const failedRecords = [];
 
-  try {
-    const response = await fetch(url, {
-      method,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    for (let i = 0; i < allRecordIds.length; i += MAX_BATCH_SIZE) {
+      const chunk = allRecordIds.slice(i, i + MAX_BATCH_SIZE);
 
-    const responseData = await response.json();
-    console.log('Salesforce API Response:', JSON.stringify(responseData, null, 2));
+      const batchRequests = chunk.map((recordId, index) => ({
+        method: 'PATCH',
+        url: `/services/data/v60.0/sobjects/${salesforceObject}/${recordId}`,
+        richInput: payload
+      }));
 
-    if (!response.ok) {
-      throw new Error(`Failed to ${recordId ? 'update' : 'create'} ${salesforceObject}: ${JSON.stringify(responseData)}`);
+      const batchPayload = { batchRequests };
+
+      try {
+        const batchResponse = await fetch(`${salesforceBaseUrl}/composite/batch`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(batchPayload)
+        });
+
+        const batchResult = await batchResponse.json();
+
+        if (!batchResponse.ok || batchResult.hasErrors) {
+          if (Array.isArray(batchResult.results)) {
+            batchResult.results.forEach((res, idx) => {
+              const recId = chunk[idx];
+              if (res.status >= 400) {
+                failedRecords.push({
+                  recordId: recId,
+                  error: res.result?.[0]?.message || res.result?.message || `HTTP ${res.status}`
+                });
+              } else {
+                successfulIds.push(recId);
+              }
+            });
+          } else {
+            // Unexpected structure — push all as failed
+            chunk.forEach(recordId => {
+              failedRecords.push({
+                recordId,
+                error: `Unexpected batch response: ${JSON.stringify(batchResult)}`
+              });
+            });
+          }
+        }
+         else {
+          successfulIds.push(...chunk);
+        }
+
+      } catch (error) {
+        chunk.forEach(recordId => {
+          failedRecords.push({ recordId, error: error.message });
+        });
+      }
     }
 
-    if (!responseData.id && !responseData.success) {
-      throw new Error(`No record created/updated for node ${nodeId}: ${JSON.stringify(responseData)}`);
-    }
+    return {
+      nodeId,
+      success: failedRecords.length === 0,
+      updatedRecords: successfulIds,
+      failedRecords,
+      status: failedRecords.length > 0 ? 'partial' : 'success'
+    };
 
-    return { nodeId, recordId: recordId || responseData.id };
-  } catch (error) {
-    console.error(`Error in ${method} request for node ${nodeId}:`, error);
-    throw error;
+  } else {
+    // No match: create new record
+    try {
+      const response = await fetch(`${salesforceBaseUrl}/sobjects/${salesforceObject}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const responseText = await response.text();
+      let responseData = {};
+
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch (e) {
+        console.warn('Non-JSON response:', responseText);
+      }
+
+      if (!response.ok) {
+        throw new Error(responseData[0]?.message || responseData.message || `HTTP ${response.status}`);
+      }
+
+      return {
+        nodeId,
+        recordId: responseData.id,
+        success: true
+      };
+    } catch (error) {
+      console.error('Create record error:', error);
+      return {
+        nodeId,
+        error: error.message,
+        success: false,
+        status: 'failed'
+      };
+    }
   }
 };
 
@@ -333,8 +443,8 @@ const processLoopNode = async (node, previousResults, formData, salesforceBaseUr
     throw new Error(`Source collection ${loopConfig.loopCollection} is invalid or contains an error: ${JSON.stringify(sourceCollection)}`);
   }
 
-  const itemsToProcess = Array.isArray(sourceCollection.ids) 
-    ? sourceCollection.ids 
+  const itemsToProcess = Array.isArray(sourceCollection.ids)
+    ? sourceCollection.ids
     : [sourceCollection.ids];
 
   if (!itemsToProcess || itemsToProcess.length === 0 || itemsToProcess.includes(undefined)) {
@@ -372,16 +482,16 @@ const processLoopNode = async (node, previousResults, formData, salesforceBaseUr
     const loopContext = {
       ...formData,
       [loopConfig.currentItemVariableName]: loopVariables.currentItem,
-      ...(loopVariables.currentIndex !== null && { 
-        [`${loopConfig.currentItemVariableName}_index`]: loopVariables.currentIndex 
+      ...(loopVariables.currentIndex !== null && {
+        [`${loopConfig.currentItemVariableName}_index`]: loopVariables.currentIndex
       }),
-      ...(loopVariables.counter !== null && { 
-        [`${loopConfig.currentItemVariableName}_counter`]: loopVariables.counter 
+      ...(loopVariables.counter !== null && {
+        [`${loopConfig.currentItemVariableName}_counter`]: loopVariables.counter
       })
     };
 
     console.log(`Processing loop iteration ${processedCount + 1} with item:`, loopVariables.currentItem);
-    
+
     loopResults.push({
       item: loopVariables.currentItem,
       index: loopVariables.currentIndex,
@@ -392,135 +502,957 @@ const processLoopNode = async (node, previousResults, formData, salesforceBaseUr
     processedCount++;
   }
 
-  return { 
-    nodeId, 
+  return {
+    nodeId,
     processedCount,
     loopResults,
     loopContext: loopResults.length > 0 ? loopResults[0].context : formData
   };
 };
 
+const processConditionNode = async (node, context, salesforceBaseUrl, token) => {
+  const {
+    Node_Id__c: nodeId,
+    Salesforce_Object__c: salesforceObject,
+    Conditions__c: conditionsStr,
+    Next_Node_Id__c: nextNodeId,
+    Fallback_Node_Id__c: fallbackNodeId
+  } = node;
+
+  // Initialize result object
+  const result = {
+    nodeId,
+    status: 'processed',
+    shouldContinue: false,
+    skipUntilNextCondition: false,
+    isAlwaysRun: false,
+    isFallback: false,
+    recordsMatched: 0,
+    nextNodeId: null,
+    fallbackNodeId: null
+  };
+
+  // Parse conditions configuration
+  let conditionsConfig = {};
+  try {
+    conditionsConfig = conditionsStr ? JSON.parse(conditionsStr) : {};
+  } catch (e) {
+    console.error(`Error parsing conditions for node ${nodeId}:`, e);
+    return {
+      ...result,
+      status: 'failed',
+      error: 'Invalid conditions configuration'
+    };
+  }
+
+  const {
+    pathOption = 'Rules',
+    conditions = [],
+    logicType = 'AND',
+    customLogic = null
+  } = conditionsConfig;
+
+  // Handle "Always Run" path option
+  if (pathOption === 'Always Run') {
+    return {
+      ...result,
+      shouldContinue: true,
+      isAlwaysRun: true,
+      nextNodeId: nextNodeId,
+      message: 'Always Run path - proceeding to next node'
+    };
+  }
+
+  // Handle "Fallback" path option
+  if (pathOption === 'Fallback') {
+    return {
+      ...result,
+      shouldContinue: true,
+      isFallback: true,
+      nextNodeId: nextNodeId,
+      message: 'Fallback path - proceeding to next node'
+    };
+  }
+
+  // Validate we have conditions for Rules path
+  if (conditions.length === 0) {
+    return {
+      ...result,
+      status: 'failed',
+      error: 'No conditions defined for Rules path'
+    };
+  }
+
+  try {
+    // For Salesforce object conditions
+    if (salesforceObject) {
+      const queryNode = {
+        ...node,
+        salesforceObject,
+        conditions: {
+          conditions,
+          logicType,
+          customLogic
+        },
+        type: 'Find'
+      };
+
+      const soqlQuery = buildSOQLQuery(queryNode);
+      if (!soqlQuery) {
+        throw new Error('Failed to build SOQL query');
+      }
+
+      const queryData = await executeSOQLQuery(soqlQuery, salesforceBaseUrl, token);
+      const matchedRecords = processQueryResults(queryData, queryNode.conditions);
+      result.recordsMatched = matchedRecords.length;
+
+      // Determine if we should continue
+      if (customLogic) {
+        result.shouldContinue = evaluateCustomLogic(
+          conditions,
+          customLogic,
+          matchedRecords.length > 0 ? matchedRecords[0] : {}
+        );
+      } else {
+        result.shouldContinue = matchedRecords.length > 0;
+      }
+
+      // Set next nodes based on evaluation
+      if (result.shouldContinue) {
+        result.nextNodeId = nextNodeId;
+        result.message = `${matchedRecords.length} records matched - proceeding to next node`;
+      } else {
+        result.skipUntilNextCondition = true;
+        result.fallbackNodeId = fallbackNodeId;
+        result.message = 'No records matched - skipping until next condition';
+      }
+    } 
+    // For form data conditions
+    else {
+      const evaluationResults = conditions.map(cond => 
+        evaluateCondition(context, cond)
+      );
+
+      if (customLogic) {
+        result.shouldContinue = evaluateCustomLogic(
+          conditions,
+          customLogic,
+          context
+        );
+      } else {
+        result.shouldContinue = evaluationResults.every(r => r);
+      }
+
+      // Set next nodes based on evaluation
+      if (result.shouldContinue) {
+        result.nextNodeId = nextNodeId;
+        result.message = 'Conditions met - proceeding to next node';
+      } else {
+        result.skipUntilNextCondition = true;
+        result.fallbackNodeId = fallbackNodeId;
+        result.message = 'Conditions not met - skipping until next condition';
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`Error processing condition node ${nodeId}:`, error);
+    return {
+      ...result,
+      status: 'failed',
+      error: error.message,
+      shouldContinue: false,
+      skipUntilNextCondition: true, // Skip on error
+      fallbackNodeId: fallbackNodeId
+    };
+  }
+};
+
 const queryNode = async (node, salesforceBaseUrl, token) => {
   const soqlQuery = buildSOQLQuery(node);
   const queryData = await executeSOQLQuery(soqlQuery, salesforceBaseUrl, token);
   const matchedRecords = processQueryResults(queryData, node.conditions);
-  
+
   const ids = matchedRecords.map(record => record.Id);
-  return { 
-    nodeId: node.nodeId, 
-    ids: ids.length > 1 ? ids : ids[0] 
+  return {
+    nodeId: node.nodeId,
+    ids: ids.length > 1 ? ids : ids[0]
   };
 };
 
-const getNodeData = async (nodeId, userId) => {
-  let allItems = [];
-  let ExclusiveStartKey = undefined;
+const getNodeData = async (nodeId, userId, formVersionId) => {
+  try {
+    let allItems = [];
+    let ExclusiveStartKey = undefined;
 
-  do {
-    const queryResponse = await dynamoClient.send(
-      new QueryCommand({
-        TableName: METADATA_TABLE_NAME,
-        KeyConditionExpression: 'UserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: userId },
-        },
-        ExclusiveStartKey,
-      })
-    );
+    do {
+      const queryResponse = await dynamoClient.send(
+        new QueryCommand({
+          TableName: METADATA_TABLE_NAME,
+          KeyConditionExpression: 'UserId = :userId',
+          ExpressionAttributeValues: {
+            ':userId': { S: userId },
+          },
+          ExclusiveStartKey,
+        })
+      );
 
-    if (queryResponse.Items) {
-      allItems.push(...queryResponse.Items);
+      if (queryResponse.Items) {
+        allItems.push(...queryResponse.Items);
+      }
+
+      ExclusiveStartKey = queryResponse.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+
+    // Find the form record that contains our form version
+    let formRecords = [];
+    const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
+
+    if (formRecordItems.length > 0) {
+      try {
+        const sortedChunks = formRecordItems
+          .sort((a, b) => {
+            const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+            const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+            return aNum - bNum;
+          });
+
+        const combinedFormRecords = sortedChunks.map(item => item.FormRecords.S).join('');
+        formRecords = JSON.parse(combinedFormRecords);
+      } catch (e) {
+        console.warn('Failed to parse FormRecords chunks:', e);
+        return null;
+      }
     }
 
-    ExclusiveStartKey = queryResponse.LastEvaluatedKey;
-  } while (ExclusiveStartKey);
+    // Find the specific form version with our mappings
+    const formVersion = formRecords
+      .flatMap(form => form.FormVersions || [])
+      .find(version => version.Id === formVersionId);
 
-  const mappingItems = allItems.filter(item => item.ChunkIndex?.S?.startsWith('Mapping_'));
-  let nodeData = null;
-
-  if (mappingItems.length > 0) {
-    try {
-      const sortedMappingChunks = mappingItems
-        .sort((a, b) => {
-          const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-          const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-          return aNum - bNum;
-        })
-        .map(item => item.Mapping.S);
-      const combinedMappings = sortedMappingChunks.join('');
-      const mappings = JSON.parse(combinedMappings);
-
-      if (mappings[nodeId]) {
-        nodeData = {
-          nodeId,
-          type: mappings[nodeId].actionType || null,
-          salesforceObject: mappings[nodeId].salesforceObject || null,
-          conditions: mappings[nodeId].conditions ? JSON.parse(JSON.stringify(mappings[nodeId].conditions)) : null,
-          fieldMappings: mappings[nodeId].fieldMappings || [],
-          loopConfig: mappings[nodeId].loopConfig ? JSON.parse(JSON.stringify(mappings[nodeId].loopConfig)) : null,
-          formatterConfig: mappings[nodeId].formatterConfig ? JSON.parse(JSON.stringify(mappings[nodeId].formatterConfig)) : null
-        };
-      }
-    } catch (e) {
-      console.warn('Failed to process Mapping chunks:', e.message, '\nStack trace:', e.stack);
+    if (!formVersion || !formVersion.Mappings) {
+      console.warn(`Form version ${formVersionId} not found or has no mappings`);
       return null;
     }
-  }
 
-  return nodeData;
+    // Get the specific node mapping
+    const nodeMapping = formVersion.Mappings.Mappings?.[nodeId];
+    if (!nodeMapping) {
+      console.warn(`Node ${nodeId} not found in mappings`);
+      return null;
+    }
+
+    return {
+      nodeId,
+      type: nodeMapping.actionType || null,
+      salesforceObject: nodeMapping.salesforceObject || null,
+      conditions: nodeMapping.conditions ? JSON.parse(JSON.stringify(nodeMapping.conditions)) : null,
+      fieldMappings: nodeMapping.fieldMappings || [],
+      loopConfig: nodeMapping.loopConfig ? JSON.parse(JSON.stringify(nodeMapping.loopConfig)) : null,
+      formatterConfig: nodeMapping.formatterConfig ? JSON.parse(JSON.stringify(nodeMapping.formatterConfig)) : null
+    };
+  } catch (error) {
+    console.error('Error getting node data:', error);
+    return null;
+  }
 };
 
-const runFlow = async (nodes, formData, instanceUrl, token, userId) => {
+// Helper to detect input format
+const detectInputFormat = (value, formatArray) => {
+  for (const format of formatArray) {
+    if (moment(value, format, true).isValid()) {
+      return format;
+    }
+  }
+  return null;
+};
+
+// Date/Time formatter operations
+const dateFormatters = {
+  format_date: (value, format, timezone) => {
+    const date = moment.tz(value, INPUT_DATE_FORMATS, true, timezone);
+    if (!date.isValid()) {
+      console.warn(`Invalid date format for value: ${value}`);
+      return value;
+    }
+    return date.format(format);
+  },
+  format_time: (value, format, timezone, targetTimezone) => {
+    const date = moment.tz(value, INPUT_TIME_FORMATS, true, timezone);
+    if (!date.isValid()) {
+      console.warn(`Invalid time format for value: ${value}`);
+      return value;
+    }
+    if (targetTimezone && targetTimezone !== timezone) {
+      return date.tz(targetTimezone).format(format);
+    }
+    return date.format(format);
+  },
+  format_datetime: (value, format, timezone, targetTimezone) => {
+    const date = moment.tz(value, INPUT_DATETIME_FORMATS, true, timezone);
+    if (!date.isValid()) {
+      console.warn(`Invalid datetime format for value: ${value}`);
+      return value;
+    }
+    if (targetTimezone && targetTimezone !== timezone) {
+      return date.tz(targetTimezone).format(format);
+    }
+    return date.format(format);
+  },
+  timezone_conversion: (value, sourceTimezone, targetTimezone) => {
+    const date = moment.tz(value, [...INPUT_DATE_FORMATS, ...INPUT_TIME_FORMATS, ...INPUT_DATETIME_FORMATS], true, sourceTimezone);
+    if (!date.isValid()) {
+      console.warn(`Invalid date/time format for timezone conversion: ${value}`);
+      return value;
+    }
+    const inputFormat = detectInputFormat(value, [...INPUT_DATE_FORMATS, ...INPUT_TIME_FORMATS, ...INPUT_DATETIME_FORMATS]);
+    return date.tz(targetTimezone).format(inputFormat || 'YYYY-MM-DD HH:mm:ss');
+  },
+  add_date: (value, unit, amount, timezone) => {
+    const inputFormat = detectInputFormat(value, [...INPUT_DATE_FORMATS, ...INPUT_DATETIME_FORMATS]);
+    const date = moment.tz(value, [...INPUT_DATE_FORMATS, ...INPUT_DATETIME_FORMATS], true, timezone);
+    if (!date.isValid()) {
+      console.warn(`Invalid date/time format for add_date: ${value}`);
+      return value;
+    }
+    return date.add(Number(amount), unit).format(inputFormat || 'YYYY-MM-DD');
+  },
+  subtract_date: (value, unit, amount, timezone) => {
+    const inputFormat = detectInputFormat(value, [...INPUT_DATE_FORMATS, ...INPUT_DATETIME_FORMATS]);
+    const date = moment.tz(value, [...INPUT_DATE_FORMATS, ...INPUT_DATETIME_FORMATS], true, timezone);
+    if (!date.isValid()) {
+      console.warn(`Invalid date/time format for subtract_date: ${value}`);
+      return value;
+    }
+    return date.subtract(Number(amount), unit).format(inputFormat || 'YYYY-MM-DD');
+  },
+  date_difference: (value1, value2, unit, timezone) => {
+    const date1 = moment.tz(value1, [...INPUT_DATE_FORMATS, ...INPUT_DATETIME_FORMATS], true, timezone);
+    const date2 = moment.tz(value2, [...INPUT_DATE_FORMATS, ...INPUT_DATETIME_FORMATS], true, timezone);
+    if (!date1.isValid() || !date2.isValid()) {
+      console.warn(`Invalid date/time format for date_difference: date1=${value1}, date2=${value2}`);
+      throw new Error(`Invalid date/time format: date1=${value1}, date2=${value2}`);
+    }
+    return Math.abs(date1.diff(date2, unit || 'days'));
+  }
+};
+
+// Text formatter operations
+const textFormatters = {
+  uppercase: (value) => {
+    if (typeof value !== 'string') return value;
+    return value.toUpperCase();
+  },
+  lowercase: (value) => {
+    if (typeof value !== 'string') return value;
+    return value.toLowerCase();
+  },
+  title_case: (value) => {
+    if (typeof value !== 'string') return value;
+    return value.replace(/\w\S*/g, (txt) => {
+      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    });
+  },
+  trim_whitespace: (value) => {
+    if (typeof value !== 'string') return value;
+    return value.trim();
+  },
+  replace: (value, params) => {
+    if (typeof value !== 'string') return value;
+    const { searchValue, replaceValue } = params;
+    if (!searchValue) return value;
+    const escapedSearchValue = searchValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return value.replace(new RegExp(escapedSearchValue, 'g'), replaceValue || '');
+  },
+  extract_email: (value) => {
+    if (typeof value !== 'string') return value;
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const matches = value.match(emailRegex);
+    return matches ? matches[0] : value;
+  },
+  split: (value, params) => {
+    if (typeof value !== 'string') return value;
+    const { delimiter, index } = params;
+    if (!delimiter) return value;
+
+    const parts = value.split(delimiter);
+    if (parts.length <= 1) return value;
+
+    switch (index) {
+      case 'first': return parts[0] || value;
+      case 'second': return parts[1] || value;
+      case 'last': return parts[parts.length - 1] || value;
+      case 'second_from_last':
+        return parts.length >= 2 ? parts[parts.length - 2] : value;
+      case 'all': return parts.join(', ');
+      default: return value;
+    }
+  },
+  word_count: (value) => {
+    if (typeof value !== 'string') return value;
+    const str = value.trim();
+    return str === '' ? 0 : str.split(/\s+/).length;
+  },
+  url_encode: (value) => {
+    if (typeof value !== 'string') return value;
+    try {
+      return encodeURIComponent(value);
+    } catch (e) {
+      return value;
+    }
+  }
+};
+
+// In numberFormatters object
+const numberFormatters = {
+  locale_format: (value, locale) => {
+    if (isNaN(value) || value === null || value === undefined) {
+      console.warn(`Invalid number for locale_format: ${value}`);
+      return value;
+    }
+    try {
+      // Use 'latn' numbering system to ensure standard Arabic numerals (0-9)
+      return new Intl.NumberFormat(locale || 'en-US', { numberingSystem: 'latn' }).format(Number(value));
+    } catch (error) {
+      console.warn(`Invalid locale for locale_format: ${locale}`);
+      return value;
+    }
+  },
+  currency_format: (value, currency, locale) => {
+    if (isNaN(value) || value === null || value === undefined) {
+      console.warn(`Invalid number for currency_format: ${value}`);
+      return value;
+    }
+    if (!currency) {
+      console.warn(`Missing currency code for currency_format`);
+      return value;
+    }
+    try {
+      // Use 'latn' numbering system for currency formatting as well
+      return new Intl.NumberFormat(locale || 'en-US', {
+        style: 'currency',
+        currency: currency,
+        numberingSystem: 'latn'
+      }).format(Number(value));
+    } catch (error) {
+      console.warn(`Invalid currency code or locale for currency_format: currency=${currency}, locale=${locale}`);
+      return value;
+    }
+  },
+  round_number: (value, decimals) => {
+    if (isNaN(value) || value === null || value === undefined) {
+      console.warn(`Invalid number for round_number: ${value}`);
+      return value;
+    }
+    const decimalPlaces = parseInt(decimals) || 0;
+    if (decimalPlaces < 0) {
+      console.warn(`Invalid decimal places for round_number: ${decimals}`);
+      return value;
+    }
+    try {
+      return Number(Number(value).toFixed(decimalPlaces));
+    } catch (error) {
+      console.warn(`Error rounding number: ${value}`);
+      return value;
+    }
+  },
+  phone_format: (value, format, countryCode, formData, inputField, inputType = 'combined') => {
+    if (typeof value !== 'string' || !value.trim()) {
+      return { 
+        output: value, 
+        error: 'Phone number cannot be empty',
+        status: 'skipped' 
+      };
+    }
+
+    // Determine country code - check for _countryCode field first
+    let effectiveCountryCode = countryCode;
+    if (formData && inputField) {
+      const countryCodeKey = `${inputField}_countryCode`;
+      effectiveCountryCode = formData[countryCodeKey] || countryCode;
+    }
+
+    try {
+      let phoneNumber;
+      
+      // Handle case where input is just a country code (like "IN")
+      if (inputType === 'country_code' || value.length <= 3) {
+        try {
+          // Try to get calling code for the input value (might be country code or calling code)
+          let callingCode;
+          
+          if (/^\+?\d+$/.test(value)) {
+            // If it's numeric (like "91" or "+91")
+            callingCode = value.startsWith('+') ? value : `+${value}`;
+          } else {
+            // If it's a country code (like "IN")
+            callingCode = `+${getCountryCallingCode(value.toUpperCase())}`;
+          }
+          
+          // Get calling code for target country
+          const targetCallingCode = `+${getCountryCallingCode(countryCode)}`;
+          
+          return {
+            output: targetCallingCode,
+            status: 'completed'
+          };
+        } catch (e) {
+          return { 
+            output: value, 
+            error: 'Could not convert country code',
+            status: 'skipped' 
+          };
+        }
+      }
+
+      // Handle different input types
+      if (inputType === 'phone_number') {
+        // Case: Only phone number is selected - validate and add country code
+        if (!effectiveCountryCode) {
+          return { 
+            output: value, 
+            error: 'Country code is required for phone number validation',
+            status: 'skipped' 
+          };
+        }
+        
+        phoneNumber = parsePhoneNumber(value, effectiveCountryCode);
+        
+        if (!phoneNumber || !phoneNumber.isValid()) {
+          return { 
+            output: value, 
+            error: `Invalid phone number for country ${effectiveCountryCode}`,
+            status: 'skipped' 
+          };
+        }
+      } 
+      else {
+        // Case: Combined input - parse and replace country code if needed
+        if (!effectiveCountryCode && !countryCode) {
+          return { 
+            output: value, 
+            error: 'Country code is required for combined phone number validation',
+            status: 'skipped' 
+          };
+        }
+
+        // First parse with original country code (if available)
+        const originalCountry = effectiveCountryCode || countryCode || 'US';
+        phoneNumber = parsePhoneNumber(value, originalCountry);
+        
+        if (!phoneNumber || !phoneNumber.isValid()) {
+          return { 
+            output: value, 
+            error: `Invalid phone number for country ${originalCountry}`,
+            status: 'skipped' 
+          };
+        }
+
+        // If we have a new country code to apply (different from original)
+        if (countryCode && phoneNumber.country !== countryCode) {
+          phoneNumber = parsePhoneNumber(phoneNumber.nationalNumber, countryCode);
+          
+          if (!phoneNumber || !phoneNumber.isValid()) {
+            return { 
+              output: value, 
+              error: `Invalid phone number format for country ${countryCode}`,
+              status: 'skipped' 
+            };
+          }
+        }
+      }
+
+      // Format based on requested format
+      let formattedNumber;
+      switch (format) {
+        case 'E.164':
+          formattedNumber = phoneNumber.format('E.164');
+          break;
+        case 'International':
+          formattedNumber = phoneNumber.format('INTERNATIONAL');
+          break;
+        case 'National':
+          formattedNumber = phoneNumber.format('NATIONAL');
+          break;
+        case 'No Country Code':
+          formattedNumber = phoneNumber.format('NATIONAL')
+            .replace(/^[+\d\s-]+/, '')
+            .trim();
+          break;
+        case 'Clean National':
+          formattedNumber = phoneNumber.format('NATIONAL')
+            .replace(/[\s()-]/g, '')
+            .replace(/^[+\d]+/, '');
+          break;
+        default:
+          return { 
+            output: value, 
+            error: `Unsupported format: ${format}`,
+            status: 'skipped' 
+          };
+      }
+
+      return { 
+        output: formattedNumber,
+        status: 'completed'
+      };
+    } catch (error) {
+      return { 
+        output: value, 
+        error: `Formatting failed: ${error.message}`,
+        status: 'skipped' 
+      };
+    }
+  },
+  math_operation: (value1, value2, operation) => {
+    if (isNaN(value1) || value1 === null || value1 === undefined || isNaN(value2) || value2 === null || value2 === undefined) {
+      console.warn(`Invalid numbers for math_operation: value1=${value1}, value2=${value2}`);
+      throw new Error(`Invalid numbers: value1=${value1}, value2=${value2}`);
+    }
+    const num1 = Number(value1);
+    const num2 = Number(value2);
+    switch (operation) {
+      case 'add':
+        return num1 + num2;
+      case 'subtract':
+        return num1 - num2;
+      case 'multiply':
+        return num1 * num2;
+      case 'divide':
+        if (num2 === 0) {
+          throw new Error('Division by zero');
+        }
+        return num1 / num2;
+      default:
+        console.warn(`Unsupported math operation: ${operation}`);
+        throw new Error(`Unsupported math operation: ${operation}`);
+    }
+  }
+};
+
+// Updated processFormatter function
+const processFormatter = (formatterConfig, formData) => {
+  const { formatType, operation, inputField, inputField2, options, useCustomInput, customValue, outputVariable } = formatterConfig;
+  const result = {
+    nodeId: formatterConfig.nodeId || `formatter_${Date.now()}`,
+    status: 'processed',
+    operation,
+    inputField,
+    originalValue: undefined,
+    secondInputField: inputField2 || undefined,
+    secondOriginalValue: undefined,
+    output: undefined
+  };
+
+  console.log('Form Data received:', JSON.stringify(formData, null, 2));
+  let userValue = useCustomInput && customValue ? customValue : formData[inputField];
+  let secondValue = inputField2 ? formData[inputField2] : (useCustomInput && customValue ? customValue : null);
+
+  result.originalValue = userValue;
+  result.secondOriginalValue = secondValue;
+
+   // Handle missing values more gracefully
+   if (userValue === undefined || userValue === null || userValue === '') {
+    console.warn(`Missing value for field ${inputField}. Available keys: ${Object.keys(formData).join(', ')}`);
+    result.status = 'skipped';
+    result.output = userValue;
+    result.error = `Missing value for field ${inputField}`;
+    return result;
+  }
+
+  console.log(`Processing formatter for field ${inputField} with user value:`, userValue);
+
+  try {
+    let formattedValue = userValue;
+
+    if (formatType === 'number' && operation === 'phone_format') {
+      const countryCodeKey = inputField.endsWith('_phoneNumber')
+        ? inputField.replace('_phoneNumber', '_countryCode')
+        : `${inputField}_countryCode`;
+      console.log(`Phone format inputs - inputField: ${inputField}, countryCode: ${options.countryCode}, inputType: ${options.inputType || 'phone_number'}, countryCodeKey: ${countryCodeKey}, countryCodeValue: ${formData[countryCodeKey] || 'not found'}`);
+      const phoneResult = numberFormatters.phone_format(
+        userValue,
+        options.format,
+        options.countryCode,
+        formData,
+        inputField,
+        options.inputType || 'phone_number'
+      );
+      
+      formattedValue = phoneResult.output;
+      result.status = phoneResult.status;
+      if (phoneResult.error) {
+        result.error = phoneResult.error;
+        result.status = 'skipped'; // Ensure skipped status for phone format errors
+      }
+    } else if (formatType === 'date') {
+      switch (operation) {
+        case 'format_date':
+          formattedValue = dateFormatters.format_date(userValue, options.format, options.timezone || 'UTC');
+          break;
+        case 'format_time':
+          formattedValue = dateFormatters.format_time(userValue, options.format, options.timezone || 'UTC', options.targetTimezone);
+          break;
+        case 'format_datetime':
+          formattedValue = dateFormatters.format_datetime(userValue, options.format, options.timezone || 'UTC', options.targetTimezone);
+          break;
+        case 'timezone_conversion':
+          if (!options.timezone || !options.targetTimezone) {
+            throw new Error('Timezone conversion requires both source and target timezones');
+          }
+          formattedValue = dateFormatters.timezone_conversion(userValue, options.timezone, options.targetTimezone);
+          break;
+        case 'add_date':
+          if (!options.unit || !options.value) {
+            throw new Error('Add date requires unit and value');
+          }
+          formattedValue = dateFormatters.add_date(userValue, options.unit, options.value, options.timezone || 'UTC');
+          break;
+        case 'subtract_date':
+          if (!options.unit || !options.value) {
+            throw new Error('Subtract date requires unit and value');
+          }
+          formattedValue = dateFormatters.subtract_date(userValue, options.unit, options.value, options.timezone || 'UTC');
+          break;
+        case 'date_difference':
+          if (!inputField2 || secondValue === undefined || secondValue === null) {
+            throw new Error(`Date difference requires a valid second input value for field ${inputField2 || 'none'}`);
+          }
+          formattedValue = dateFormatters.date_difference(userValue, secondValue, options.unit || 'days', options.timezone || 'UTC');
+          break;
+        default:
+          console.warn(`Unsupported date formatter operation: ${operation}`);
+          formattedValue = userValue;
+      }
+    } else if (formatType === 'text') {
+      switch (operation) {
+        case 'uppercase':
+          formattedValue = textFormatters.uppercase(String(formattedValue));
+          break;
+        case 'lowercase':
+          formattedValue = textFormatters.lowercase(String(formattedValue));
+          break;
+        case 'title_case':
+          formattedValue = textFormatters.title_case(String(formattedValue));
+          break;
+        case 'trim_whitespace':
+          formattedValue = textFormatters.trim_whitespace(String(formattedValue));
+          break;
+        case 'replace':
+          formattedValue = textFormatters.replace(
+            String(formattedValue),
+            {
+              searchValue: options?.searchValue,
+              replaceValue: options?.replaceValue
+            }
+          );
+          break;
+        case 'extract_email':
+          formattedValue = textFormatters.extract_email(String(formattedValue));
+          break;
+        case 'split':
+          formattedValue = textFormatters.split(
+            String(formattedValue),
+            {
+              delimiter: options?.delimiter,
+              index: options?.index
+            }
+          );
+          break;
+        case 'word_count':
+          formattedValue = textFormatters.word_count(String(formattedValue));
+          break;
+        case 'url_encode':
+          formattedValue = textFormatters.url_encode(String(formattedValue));
+          break;
+        default:
+          console.warn(`Unsupported text formatter operation: ${operation}`);
+          formattedValue = userValue;
+      }
+    } else if (formatType === 'number') {
+      switch (operation) {
+        case 'locale_format':
+          formattedValue = numberFormatters.locale_format(userValue, options.locale);
+          break;
+        case 'currency_format':
+          formattedValue = numberFormatters.currency_format(userValue, options.currency, options.locale);
+          break;
+        case 'round_number':
+          formattedValue = numberFormatters.round_number(userValue, options.decimals);
+          break;
+        case 'phone_format':
+          formattedValue = numberFormatters.phone_format(userValue, options.format, options.countryCode, formData, inputField);
+          break;
+        case 'math_operation':
+          if (!inputField2 || secondValue === undefined || secondValue === null) {
+            throw new Error(`Math operation requires a valid second input value for field ${inputField2 || 'none'}`);
+          }
+          formattedValue = numberFormatters.math_operation(userValue, secondValue, options.operation);
+          break;
+        default:
+          console.warn(`Unsupported number formatter operation: ${operation}`);
+          formattedValue = userValue;
+      }
+    } else {
+      console.warn(`Unsupported formatter type: ${formatType}`);
+      formattedValue = userValue;
+    }
+
+    result.output = formattedValue;
+    if (result.status !== 'skipped') {
+      result.status = 'completed';
+    }
+    if (outputVariable) {
+      result.outputVariable = outputVariable;
+    }
+
+    console.log(`Formatted result:`, JSON.stringify(result, null, 2));
+
+  } catch (error) {
+    console.error(`Error applying formatter ${operation} to field ${inputField}:`, error);
+    result.output = userValue;
+    result.status = operation === 'phone_format' ? 'skipped' : 'failed';
+    result.error = error.message;
+  }
+
+  return result;
+};
+
+const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionId) => {
   const salesforceBaseUrl = `https://${instanceUrl.replace(/https?:\/\//, '')}/services/data/v60.0`;
   const results = {};
+  const processedNodeIds = new Set();
   
-  const sortedNodes = nodes.sort((a, b) => parseInt(a.order) - parseInt(b.order));
-  let currentContext = formData;
+  // Create node map for quick lookup
+  const nodeMap = {};
+  nodes.forEach(node => {
+    nodeMap[node.Node_Id__c || node.nodeId] = node;
+  });
 
-  console.log(`Running flow with ${sortedNodes.length} nodes`);
-  console.log('Nodes to process:', JSON.stringify(sortedNodes, null, 2));
+  // Sort nodes by order
+  const sortedNodes = [...nodes].sort((a, b) => 
+    parseInt(a.Order__c || a.order) - parseInt(b.Order__c || b.order)
+  );
+
+  let currentContext = { ...formData };
+  let skipUntilNextCondition = false;
 
   for (const node of sortedNodes) {
-    if (node.type === 'Start' || node.type === 'End') {
-      console.log(`Skipping node ${node.nodeId} of type ${node.type}`);
+    const nodeId = node.Node_Id__c || node.nodeId;
+    const nodeType = node.Type__c || node.type;
+
+    if (nodeType === 'Start' || nodeType === 'End' || processedNodeIds.has(nodeId)) {
       continue;
     }
 
-    console.log(`Processing node ${node.nodeId} of type ${node.type}`);
-    let nodeData = node;
-    
-    if (!node.salesforceObject || !node.fieldMappings?.length) {
-      nodeData = await getNodeData(node.nodeId, userId);
-      if (!nodeData) {
-        console.error(`Node ${node.nodeId} not found in DynamoDB`);
-        results[node.nodeId] = { error: `Node ${node.nodeId} not found in DynamoDB` };
-        continue;
-      }
+    console.log(`Processing node ${nodeId} of type ${nodeType}`);
+
+    // Skip nodes until we hit the next condition node
+    if (skipUntilNextCondition && nodeType !== 'Condition') {
+      results[nodeId] = {
+        nodeId,
+        status: 'skipped',
+        reason: 'Previous condition not met'
+      };
+      processedNodeIds.add(nodeId);
+      continue;
     }
 
     try {
-      switch (nodeData.type) {
-        case 'CreateUpdate':
-          results[nodeData.nodeId] = await createUpdateNode(nodeData, currentContext, salesforceBaseUrl, token);
-          break;
-        case 'Find':
-        case 'Filter':
-          results[nodeData.nodeId] = await queryNode(nodeData, salesforceBaseUrl, token);
-          break;
-        case 'Loop':
-          const loopResult = await processLoopNode(nodeData, results, currentContext, salesforceBaseUrl, token);
-          results[nodeData.nodeId] = loopResult;
-          if (loopResult.loopContext) {
-            currentContext = loopResult.loopContext;
+      // Handle Condition nodes
+      if (nodeType === 'Condition') {
+        const conditions = node.Conditions__c ? JSON.parse(node.Conditions__c) : node.conditions || {};
+        const pathOption = conditions.pathOption || 'Rules';
+
+        // Always Run path - just continue to next node
+        if (pathOption === 'Always Run') {
+          skipUntilNextCondition = false;
+          results[nodeId] = {
+            nodeId,
+            status: 'processed',
+            message: 'Always Run path - proceeding to next node'
+          };
+          continue;
+        }
+
+        // Rules path - evaluate conditions
+        if (pathOption === 'Rules') {
+          const soqlQuery = buildSOQLQuery({
+            ...node,
+            type: 'Find',
+            conditions: conditions
+          });
+
+          if (!soqlQuery) {
+            throw new Error('Failed to build SOQL query');
           }
-          break;
-        default:
-          console.warn(`Unsupported node type: ${nodeData.type}`);
-          results[nodeData.nodeId] = { error: `Unsupported node type: ${nodeData.type}` };
+
+          const queryData = await executeSOQLQuery(soqlQuery, salesforceBaseUrl, token);
+          const matchedRecords = processQueryResults(queryData, conditions);
+
+          if (matchedRecords.length > 0) {
+            skipUntilNextCondition = false;
+            results[nodeId] = {
+              nodeId,
+              status: 'processed',
+              message: `${matchedRecords.length} records matched - proceeding`,
+              recordsMatched: matchedRecords.length
+            };
+          } else {
+            skipUntilNextCondition = true;
+            results[nodeId] = {
+              nodeId,
+              status: 'processed',
+              message: 'No records matched - skipping until next condition',
+              recordsMatched: 0
+            };
+          }
+          continue;
+        }
+
+        // Fallback path - only runs when Rules path fails
+        if (pathOption === 'Fallback') {
+          if (!skipUntilNextCondition) {
+            results[nodeId] = {
+              nodeId,
+              status: 'skipped',
+              reason: 'Previous condition succeeded - fallback not needed'
+            };
+            continue;
+          }
+          
+          skipUntilNextCondition = false;
+          results[nodeId] = {
+            nodeId,
+            status: 'processed',
+            message: 'Fallback path - proceeding to next node'
+          };
+          continue;
+        }
       }
+
+      // Process other node types only if not skipping
+      if (!skipUntilNextCondition) {
+        switch (nodeType) {
+          case 'CreateUpdate':
+            results[nodeId] = await createUpdateNode(node, currentContext, salesforceBaseUrl, token);
+            break;
+          case 'Find':
+          case 'Filter':
+            results[nodeId] = await queryNode(node, salesforceBaseUrl, token);
+            break;
+          case 'Path':
+            results[nodeId] = { status: 'processed', message: 'Path node processed' };
+            break;
+          default:
+            results[nodeId] = { error: `Unsupported node type: ${nodeType}` };
+        }
+      }
+
+      processedNodeIds.add(nodeId);
     } catch (error) {
-      console.error(`Error processing node ${nodeData.nodeId}:`, error);
-      results[nodeData.nodeId] = { error: error.message };
+      console.error(`Error processing node ${nodeId}:`, error);
+      results[nodeId] = { error: error.message };
     }
   }
 
@@ -529,7 +1461,6 @@ const runFlow = async (nodes, formData, instanceUrl, token, userId) => {
 
 export const handler = async (event) => {
   try {
-    console.log('Received event:', JSON.stringify(event, null, 2));
     const body = JSON.parse(event.body || '{}');
     const { userId, instanceUrl, formVersionId, formData, nodes } = body;
     const token = event.headers.Authorization?.split(' ')[1] || event.headers.authorization?.split(' ')[1];
@@ -544,36 +1475,22 @@ export const handler = async (event) => {
       };
     }
 
-    console.log('Raw Nodes Input:', JSON.stringify(nodes, null, 2));
-
+    console.log('formData :: ', formData);
     const parsedNodes = nodes.map(node => {
-      if (!node.Node_Id__c && !node.nodeId) {
-        throw new Error(`Node is missing required field Node_Id__c or nodeId: ${JSON.stringify(node)}`);
-      }
-      if (!node.Type__c && !node.actionType) {
-        throw new Error(`Node ${node.Node_Id__c || node.nodeId} is missing required field Type__c or actionType`);
-      }
-
-      const conditions = node.Conditions__c ? JSON.parse(node.Conditions__c) : node.conditions;
-      console.log(`Parsed conditions for node ${node.Node_Id__c || node.nodeId}:`, JSON.stringify(conditions, null, 2));
-
       return {
         nodeId: node.Node_Id__c || node.nodeId,
         type: node.Type__c || node.actionType,
         order: node.Order__c || node.order || 0,
         salesforceObject: node.Salesforce_Object__c || node.salesforceObject,
-        conditions,
+        conditions: node.Conditions__c ? JSON.parse(node.Conditions__c) : node.conditions,
         fieldMappings: node.Field_Mappings__c ? JSON.parse(node.Field_Mappings__c) : node.fieldMappings,
         loopConfig: node.Loop_Config__c ? JSON.parse(node.Loop_Config__c) : node.loopConfig,
-        nodeConfiguration: node.Node_Configuration__c ? JSON.parse(node.Node_Configuration__c) : node.nodeConfiguration
+        formatterConfig: node.Formatter_Config__c ? JSON.parse(node.Formatter_Config__c) : node.formatterConfig,
       };
     });
 
-    console.log('Parsed Nodes:', JSON.stringify(parsedNodes, null, 2));
-
     const actionNodes = parsedNodes.filter(node => !['Start', 'End'].includes(node.type));
     if (actionNodes.length === 0) {
-      console.error('No action nodes found');
       return {
         statusCode: 400,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
@@ -581,16 +1498,20 @@ export const handler = async (event) => {
       };
     }
 
-    const flowResults = await runFlow(parsedNodes, formData, instanceUrl, token, userId);
+    const flowResults = await runFlow(parsedNodes, formData, instanceUrl, token, userId, formVersionId);
 
-    const hasErrors = Object.values(flowResults).some(result => result.error);
-    if (hasErrors) {
+    // Only consider results with status: 'failed' as critical errors
+    const hasCriticalErrors = Object.values(flowResults).some(result => 
+      result.status === 'failed' || (result.error && result.status !== 'skipped')
+    );
+
+    if (hasCriticalErrors) {
       return {
         statusCode: 500,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({
           success: false,
-          message: 'Flow executed with errors',
+          message: 'Flow executed with critical errors',
           results: flowResults,
         }),
       };

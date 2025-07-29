@@ -1,0 +1,104 @@
+/* Header styles for the form builder with versions */
+
+.header-main {
+    background: linear-gradient(to right, #008AB0, #8FDCF1);
+}
+
+.my-version-btn {
+    background: #60b7ce;
+    color: #fff;
+    border: 0.1rem solid #fff;
+    border-radius: 10px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+.save-btn,
+.preview-btn {
+    padding: 0.2rem 1rem;
+    border-radius: 0.375rem;
+    border: 0.1rem solid #fff;
+    background: #60b7ce;
+    font-weight: 400;
+    font-size: 1rem;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+.publish-btn {
+    padding: 0.2rem 1rem;
+    border-radius: 0.375rem;
+    border: 0.1rem solid #fff;
+    background: linear-gradient(to left, #0B295E, #1D6D9E);
+    font-weight: 400;
+    font-size: 1rem;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+.stack-modal {
+    position: absolute;
+    z-index: 50;
+    margin-top: 7rem;
+    right: 15rem;
+    background-color: #fff;
+    color: #000;
+    border-radius: 0.375rem;
+    box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+    padding: 0.5rem;
+}
+
+/* Form Builder styles */
+
+.add-icon {
+    border: 1px solid black;
+    border-radius: 50%;
+    padding: 4px;
+    height: 1.2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.builder-start{
+    background-color: rgb(95 95 95 / 5%);
+    padding: 15px;
+    padding-left: 25px;
+    padding-right: 25px;
+    gap: 1.5rem;
+}
+
+.builder-container {
+    border: 1px solid rgba(228, 231, 236, 1);
+    background-color: white;
+    border-radius: 5px;
+    padding: 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  max-height: calc(100vh - 0px);
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE/Edge */
+}
+
+.builder-container::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.builder-subheader{
+    background-color: white;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid rgb(216 216 216 / 27%);
+    border-radius: 5px;
+    width: 100%;
+}
+
+.form-builder-container {
+    /* box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px; */
+    box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+    margin-top: 1rem;
+}
