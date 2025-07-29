@@ -61,59 +61,80 @@
 }
 
 .builder-start{
-    background-color: rgb(95 95 95 / 5%);
+    background-color: rgb(248 250 252);
     padding: 15px;
     padding-left: 25px;
-    padding-right: 25px;
+    padding-right: 0;
     gap: 1.5rem;
 }
 
 .builder-container {
-    border: 1px solid rgba(228, 231, 236, 1);
-    background-color: white;
-    border-radius: 5px;
-    padding: 15px;
+    /* background-color: transparent;
+    padding: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: calc(100vh - 0px);
   overflow-y: auto;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none;  /* IE/Edge */
-
+  position: relative; */
 }
 
 .builder-container::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;                   /* Chrome, Safari and Opera */
 }
 
 .builder-subheader{
-    background-color: white;
+    background-color: transparent;
     justify-content: space-between;
     align-items: center;
     width: 100%;
 }
 
+.builder-subheader::-webkit-scrollbar {
+  display: none;                   /* Chrome, Safari and Opera */
+}
+
 .form-builder-container {
-    /* box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px; */
-    box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+    /* Remove box shadow and styling for transparent background */
+    background: transparent;
     margin-top: 1rem;
     margin-bottom: 1rem;
+    overflow-y: auto;
+    /* position: relative; */
+}
+
+.form-builder-container::-webkit-scrollbar {
+  display: none;                   /* Chrome, Safari and Opera */
+}
+
+.inner-builder-container{
+  height: 100%;
+  position: relative;
+}
+
+.all-page-container::-webkit-scrollbar {
+  display: none;                   /* Chrome, Safari and Opera */
 }
 
 .bottom-bar {
-  position: fixed;
+  position: absolute;
+  width: 100%;
   bottom: 0;
-  left: 0;
-  right: 0;
   background-color: white;
-  border-top: 1px solid #e5e7eb; /* Tailwind's gray-200 */
-  padding: 0.5rem; /* Tailwind's p-2 */
+  border-top: 1px solid rgba(228, 231, 236, 0.5);
+  border-left: 1px solid rgba(228, 231, 236, 0.5);
+  border-right: 1px solid rgba(228, 231, 236, 0.5);
+  box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0),
+   -2px 0 2px rgba(0, 0, 0, 0),
+    0 -0.5px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 0.35rem;
+  padding: 0.7rem; /* Tailwind's p-2 */
   display: flex;
-  justify-content: center;
+  justify-content: space-evenly;
   align-items: center;
   gap: 0.5rem; /* Tailwind's gap-2 */
-  z-index: 10;
+  z-index: 50;
 }
 
 .individual-page{
@@ -122,10 +143,37 @@
     width: 100%;
     padding: 10px;
 }
+
+.individual-page-card {
+    background-color: white;
+    border: 1px solid rgba(228, 231, 236, 0.5);
+    border-radius: 0.35rem;
+    /* box-shadow: rgba(149, 157, 165, 0.15) 0px 4px 16px; */
+    box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0),
+   -2px 0 2px rgba(0, 0, 0, 0),
+    0 -0.5px 8px rgba(0, 0, 0, 0.05);
+    padding: 20px;
+    width: 100%;
+}
+
+.all-page-container {
+  overflow-y: auto;
+  /* height: calc(100vh - 150px); */
+  background-color: transparent;
+}
+
+/* Hide scrollbar for Chrome, Safari, Edge */
+.all-page-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* Add Page Divider */
 .add-page-divider {
   position: relative;
-  margin: 2rem 0;
+  margin: 1rem auto;
   display: flex;
   align-items: center;
 }
@@ -174,4 +222,41 @@
 .add-page-icon svg {
   width: 0.75rem;
   height: 0.75rem;
+}
+
+.page-button {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid rgb(240, 241, 243);
+  border-radius: 5px; /* rounded-md */
+  font-size: 0.875rem; /* text-sm */
+  color: #4b5563; /* text-gray-600 */
+  transition: background-color 0.2s ease;
+}
+
+.page-button:hover {
+  background-color: #f3f4f6; /* hover:bg-gray-100 */
+}
+
+.page-button.active {
+  color: rgba(2, 138, 176, 1); /* text-blue-600 */
+  font-weight: 500; /* font-medium */
+}
+
+
+/* Sidebar styles */
+
+.custom-builder-card {
+  background-color: white;
+  color: #1f2937; /* Tailwind's text-gray-800 */
+  border-radius: 0.35rem; /* Tailwind's rounded */
+  min-width: 270px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(228, 231, 236, 0.5);
+  margin-top: 1.1rem; /* Tailwind's mt-4 */
+   box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0),
+   -2px 0 2px rgba(0, 0, 0, 0),
+    0 -0.5px 8px rgba(0, 0, 0, 0.05);
 }

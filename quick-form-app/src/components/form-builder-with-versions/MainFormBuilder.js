@@ -107,6 +107,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState(themes[0]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  
   const [formRecords, setFormRecords] = useState([]);
 
   const [
@@ -124,8 +125,6 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
   const [saveError, setSaveError] = useState(null);
   const fields = fieldsState.present;
 
-  console.log(formRecords);
-  
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
       const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
@@ -238,7 +237,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
           formVersion.Form__c = form.Id;
           setFormVersions(form.FormVersions);
           setFormId(form.Id);
-          setFormName(formVersion.Name); 
+          setFormName(formVersion.Name);
           break;
         }
       }
@@ -310,11 +309,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       navigate(`/form-builder/${newVersionId}`);
     }
   };
-
-  useEffect(() => {
-    console.log(fieldsState);
-  }, [fieldsState]);
-
+  
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -356,8 +351,6 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       pages.push({ fields: currentPage, pageNumber });
     }
 
-    console.log('Preparing form data:', currentFormVersion);
-    
     const formVersion = {
       Name: currentFormVersion?.Name || formName || 'Contact Form',
       Description__c: '',
@@ -445,8 +438,6 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       if (!token) throw new Error('Failed to obtain access token.');
       const { formVersion, formFields } = prepareFormData();
 
-      console.log('Saving form data:', formVersion );
-      
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -464,8 +455,6 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
         throw new Error(JSON.stringify(data) || 'Failed to save form.');
       }
       alert('Form saved successfully!');
-      console.log('Form saved successfully:', formRecords);
-      
       await refreshData();
       if (hasChanges || !formVersion.Id) {
         const newFormVersionId = data.formVersionId;
@@ -837,8 +826,11 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
 
   const handleDeletePage = (pageIndex) => {
     setHasChanges(true);
+
+    // Step 1: Split fields into pages, preserving empty pages
     const pages = [];
     let currentPage = [];
+
     fields.forEach((field) => {
       if (field.type === 'pagebreak') {
         pages.push({ fields: currentPage });
@@ -847,23 +839,29 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
         currentPage.push(field);
       }
     });
-    if (currentPage.length > 0 || pages.length === 0) {
-      pages.push({ fields: currentPage });
-    }
+    // Push last page (even if empty)
+    pages.push({ fields: currentPage });
 
+    // Step 2: Do not delete if only one page exists
     if (pages.length <= 1) return;
 
+    // Step 3: Remove the selected page
     pages.splice(pageIndex, 1);
+
+    // Step 4: Flatten pages back to fields with pagebreaks between them
     const flattenedFields = pages.flatMap((page, idx) => [
       ...page.fields,
       ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
     ]);
 
+    // Step 5: Set updated fields
     setFields(flattenedFields);
   };
 
   const handleAddPage = () => {
     setHasChanges(true);
+
+    // Break existing fields into pages
     const pages = [];
     let currentPage = [];
     fields.forEach((field) => {
@@ -878,15 +876,76 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       pages.push({ fields: currentPage });
     }
 
-    setFields(prevFields => {
-      const updatedFields = [
-        ...prevFields,
-        { id: `pagebreak-${Date.now()}`, type: 'pagebreak' },
-      ];
-      return updatedFields;
-    });
+    // Create the new field array with an added pagebreak
+    const newField = { id: `pagebreak-${Date.now()}`, type: 'pagebreak' };
+    const updatedFields = [...fields, newField];
 
+    // Assign the updated fields
+    setFields(updatedFields);
+
+    // Set current page index to the new page
     setCurrentPageIndex(pages.length);
+  };
+
+  const handleMovePageUp = (pageIndex) => {
+    if (pageIndex <= 0) return;
+    setHasChanges(true);
+
+    // Split fields into pages, preserving empty pages
+    const pages = [];
+    let currentPage = [];
+    fields.forEach((field) => {
+      if (field?.type === 'pagebreak') {
+        pages.push({ fields: currentPage });
+        currentPage = [];
+      } else {
+        currentPage.push(field);
+      }
+    });
+    // Always push the last page (even if empty)
+    pages.push({ fields: currentPage });
+
+    // Swap pages
+    [pages[pageIndex - 1], pages[pageIndex]] = [pages[pageIndex], pages[pageIndex - 1]];
+
+    // Flatten back to fields with pagebreaks
+    const flattenedFields = pages.flatMap((page, idx) => [
+      ...page.fields,
+      ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
+    ]);
+
+    setFields(flattenedFields);
+  };
+
+  const handleMovePageDown = (pageIndex) => {
+    setHasChanges(true);
+
+    // Split fields into pages, preserving empty pages
+    const pages = [];
+    let currentPage = [];
+    fields.forEach((field) => {
+      if (field?.type === 'pagebreak') {
+        pages.push({ fields: currentPage });
+        currentPage = [];
+      } else {
+        currentPage.push(field);
+      }
+    });
+    // Always push the last page (even if empty)
+    pages.push({ fields: currentPage });
+
+    if (pageIndex >= pages.length - 1) return;
+
+    // Swap pages
+    [pages[pageIndex], pages[pageIndex + 1]] = [pages[pageIndex + 1], pages[pageIndex]];
+
+    // Flatten back to fields with pagebreaks
+    const flattenedFields = pages.flatMap((page, idx) => [
+      ...page.fields,
+      ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
+    ]);
+
+    setFields(flattenedFields);
   };
 
   const toggleSidebar = () => {
@@ -927,9 +986,8 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
         selectedVersionId={selectedVersionId}
       />
       <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-16'
-        }`}
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
+          }`}
       >
         <div className="inset-x-1 h-screen flex flex-col">
           <div className="text-white p-5 w-full flex justify-between items-center header-main">
@@ -1060,8 +1118,8 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
             <MappingFields />
           ) : (
             <div className="flex w-full h-screen builder-start">
-              <div className="w-3/4">
-                <div className="bg-transparent rounded-lg h-full overflow-y-auto form-builder-container">
+              <div className="w-3/4 inner-builder-container">
+                <div className="bg-transparent rounded-lg h-full form-builder-container">
                   <FormBuilder
                     fields={fields}
                     onDrop={handleDrop}
@@ -1082,6 +1140,12 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
                     currentPageIndex={currentPageIndex}
                     setCurrentPageIndex={setCurrentPageIndex}
                     onAddPage={handleAddPage}
+                    onMovePageUp={handleMovePageUp}
+                    onMovePageDown={handleMovePageDown}
+                     canUndo={canUndo}
+                    canRedo={canRedo}
+                    onUndo={undo}
+                    onRedo={redo}
                   />
                 </div>
               </div>
