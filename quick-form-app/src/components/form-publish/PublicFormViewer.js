@@ -505,7 +505,7 @@ function PublicFormViewer() {
     // Specialized validation cases
     switch (fieldType) {
       case "number":
-        if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
+        // if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
         if (properties.numberValueLimits?.enabled) {
           const numValue = parseFloat(value);
           const { min, max } = properties.numberValueLimits;
@@ -514,7 +514,7 @@ function PublicFormViewer() {
         }
         break;
       case "price":
-        if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
+        // if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
         if (properties.priceLimits?.enabled) {
           const numValue = parseFloat(value);
           const { min, max } = properties.priceLimits;
@@ -681,6 +681,62 @@ function PublicFormViewer() {
     });
     const submissionData = {};
     const filesToUpload = {};
+
+    const loopPageKeys = pages
+    .map(arr => {
+      const pageArr = arr;
+      const pageId = `page_${pageArr[0]?.Page_Number__c}`;
+      const loopCond = getLoopConditionForPage(pageArr, filteredFormValues);
+      return loopCond ? pageId : null;
+    })
+    .filter(Boolean);
+
+    const loopFieldsByPage = {};
+    loopPageKeys.forEach(pageId => {
+      // Get all fields on this page (including section subfields etc)
+      loopFieldsByPage[pageId] = pages.find(arr => `page_${arr[0]?.Page_Number__c}` === pageId)
+        .map(f => {
+          const properties = typeof f.Properties__c === "string" ? JSON.parse(f.Properties__c || "{}") : (f.Properties__c || {});
+          // Collect main field and subfields (e.g. for fullname, address)
+          let fieldIds = [f.Id || properties.id];
+          if (f.Field_Type__c === "phone" && properties.subFields?.countryCode?.enabled) {
+            fieldIds.push(`${f.Id || properties.id}_countryCode`);
+          }
+          if (f.Field_Type__c === "fullname" && properties.subFields) {
+            fieldIds = fieldIds.concat(
+              ["salutation", "first", "last"].map(sub => `${f.Id || properties.id}_${sub}`)
+            );
+          }
+          if (f.Field_Type__c === "address" && properties.subFields) {
+            fieldIds = fieldIds.concat(
+              ["street", "city", "state", "country", "postal"].map(sub => `${f.Id || properties.id}_${sub}`)
+            );
+          }
+          return fieldIds;
+        })
+        .flat();
+    });
+
+    // Move answers of loop pages from root to loop array
+    loopPageKeys.forEach(loopKey => {
+      const loopArray = filteredFormValues[`${loopKey}_loop`];
+      if (!Array.isArray(loopArray)) return;
+      // Each element of the loop is a set of values for this page's fields
+      submissionData[`${loopKey}_loop`] = loopArray.map(ansSet => {
+        // Each ansSet is a map of (fieldId: value) only for that loop round.
+        // For consistency, also copy any subfields for e.g. phone, fullname, address.
+        const obj = {};
+        loopFieldsByPage[loopKey].forEach(fid => {
+          if (ansSet[fid] !== undefined) obj[fid] = ansSet[fid];
+        });
+        return obj;
+      });
+      // Remove these fields from root: do not store latest loop round separately
+      loopFieldsByPage[loopKey].forEach(fid => {
+        if (submissionData[fid] !== undefined) delete submissionData[fid];
+        if (submissionData[`${fid}_countryCode`] !== undefined) delete submissionData[`${fid}_countryCode`];
+      });
+    });
 
     for (const key of Object.keys(filteredFormValues)) {
       const field = formData.Fields.find((f) => f.Id === key);
@@ -893,31 +949,67 @@ function PublicFormViewer() {
   }
 };
 
-  const evaluateCondition = (condition, values) => {
+  const evaluateCondition = (condition, values, loopArrayKey = null) => {
     if (!condition) return false;
+    
+    // Helper for getting a field value, including from loop arrays
+    function getValueForField(fieldId) {
+      // Try direct value
+      const plainValue = values[localIdToSFId[fieldId] || fieldId];
+      if (plainValue !== undefined) return plainValue;
 
-    // Translate condition field references from local id to salesforce id
-    const ifFieldSFId = localIdToSFId[condition.ifField] || condition.ifField;
+      // Search all page_x_loop keys for this field in any iteration if not found
+      const loopVals = Object.keys(values)
+        .filter(key => key.endsWith('_loop') && Array.isArray(values[key]))
+        .flatMap(loopKey =>
+          values[loopKey]
+            .map(iteration => iteration[localIdToSFId[fieldId] || fieldId])
+            .filter(v => v !== undefined)
+        );
+      // If found in any loop, return the array (for some/any logic)
+      if (loopVals.length) return loopVals;
+      return undefined;
+    }
 
-    // Build the list of booleans for each condition
-    const condBools = (condition.conditions || []).map(cond => {
-      const value = values[localIdToSFId[cond.ifField] || cond.ifField];
-
-      switch (cond.operator) {
-        case 'equals': return value === cond.value;
-        case 'not equals': return value !== cond.value;
-        case 'contains': return (value || '').toLowerCase().includes((cond.value || '').toLowerCase());
-        case 'does not contain': return !(value || '').toLowerCase().includes((cond.value || '').toLowerCase());
-        case 'greater than': return Number(value) > Number(cond.value);
-        case 'greater than or equal to': return Number(value) >= Number(cond.value);
-        case 'smaller than': return Number(value) < Number(cond.value);
-        case 'smaller than or equal to': return Number(value) <= Number(cond.value);
-        case 'is null': return value == null || value === '';
-        case 'is not null': return value != null && value !== '';
-        default: return false;
+    // Evaluate each subcondition
+    const condBools = (condition.conditions || []).map((cond) => {
+      let val = getValueForField(cond.ifField);
+      // If val is an array (loop), match any iteration meeting the condition
+      if (Array.isArray(val)) {
+        return val.some(itVal => {
+          switch (cond.operator) {
+            case 'equals': return itVal === cond.value;
+            case 'not equals': return itVal !== cond.value;
+            case 'contains': return (itVal || '').toLowerCase().includes((cond.value || '').toLowerCase());
+            case 'does not contain': return !(itVal || '').toLowerCase().includes((cond.value || '').toLowerCase());
+            case 'greater than': return Number(itVal) > Number(cond.value);
+            case 'greater than or equal to': return Number(itVal) >= Number(cond.value);
+            case 'smaller than': return Number(itVal) < Number(cond.value);
+            case 'smaller than or equal to': return Number(itVal) <= Number(cond.value);
+            case 'is null': return itVal == null || itVal === '';
+            case 'is not null': return itVal != null && itVal !== '';
+            default: return false;
+          }
+        });
+      } else {
+        // Not a loop field
+        switch (cond.operator) {
+          case 'equals': return val === cond.value;
+          case 'not equals': return val !== cond.value;
+          case 'contains': return (val || '').toLowerCase().includes((cond.value || '').toLowerCase());
+          case 'does not contain': return !(val || '').toLowerCase().includes((cond.value || '').toLowerCase());
+          case 'greater than': return Number(val) > Number(cond.value);
+          case 'greater than or equal to': return Number(val) >= Number(cond.value);
+          case 'smaller than': return Number(val) < Number(cond.value);
+          case 'smaller than or equal to': return Number(val) <= Number(cond.value);
+          case 'is null': return val == null || val === '';
+          case 'is not null': return val != null && val !== '';
+          default: return false;
+        }
       }
     });
 
+    // Logic handling (unchanged)
     if (condition.logic === 'Custom' && condition.logicExpression) {
       let expr = condition.logicExpression;
       condBools.forEach((v, idx) => {
@@ -929,8 +1021,7 @@ function PublicFormViewer() {
         return eval(expr);
       } catch { return false; }
     }
-    if (condition.logic === 'OR')
-      return condBools.some(Boolean);
+    if (condition.logic === 'OR') return condBools.some(Boolean);
     return condBools.every(Boolean);
   };
 
@@ -1034,8 +1125,8 @@ function PublicFormViewer() {
 
     if (isLoopPage) {
       let n = 1;
-      if (loopCond.loopType === 'field' && loopCond.loopField && formValues[loopCond.loopField]) {
-        n = Number(formValues[loopCond.loopField]) || 1;
+      if (loopCond.loopType === 'field' && loopCond.loopField && formValues[localIdToSFId[loopCond.loopField]]) {
+        n = Number(formValues[localIdToSFId[loopCond.loopField]]) || 1;
         n = Math.max(1, n);
       } else if (loopCond.loopType === 'static' && loopCond.loopValue) {
         n = Number(loopCond.loopValue) || 1;
@@ -1091,6 +1182,7 @@ function PublicFormViewer() {
     const currentFields = pages[currentPage] || [];
     const newErrors = {};
 
+    // Validate current iteration or page fields
     currentFields.forEach((field) => {
       const fieldId = (typeof field.Properties__c === 'string' ? JSON.parse(field.Properties__c || '{}').id : field.Properties__c?.id) || field.Id;
       const currentState = getFieldUiState(fieldId, formValues);
@@ -1122,6 +1214,7 @@ function PublicFormViewer() {
       setErrors((prev) => ({ ...prev, ...newErrors }));
       return newErrors;
     } else {
+      // Clear errors for current fields
       setErrors((prev) => {
         const updatedErrors = { ...prev };
         currentFields.forEach((field) => {
@@ -1130,14 +1223,26 @@ function PublicFormViewer() {
         });
         return updatedErrors;
       });
+
       if (isLoopPage) {
         // Save answers for this loop instance
         const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        // Save current iteration answers including subfields
         const loopValues = {};
-        pageFields.forEach(f => { loopValues[f] = formValues[f]; });
+        pageFields.forEach(f => {
+          loopValues[f] = formValues[f];
+          Object.keys(formValues).forEach(key => {
+            if (key.startsWith(`${f}_`)) {
+              loopValues[key] = formValues[key];
+            }
+          });
+        });
+
+        // Update answers array with current iteration
         const newAnswers = [...currentLoopState.answers];
         newAnswers[currentLoopState.index] = { ...loopValues };
 
+        // If not last iteration, move to next iteration
         if (currentLoopState.index < currentLoopState.count - 1) {
           // Move to next round of this page
           setLoopCounters(lc => ({
@@ -1148,35 +1253,157 @@ function PublicFormViewer() {
               answers: newAnswers
             }
           }));
-          // Clear form values for this page fields
-          const nextValues = { ...formValues };
-          pageFields.forEach(f => { nextValues[f] = ''; });
-          setFormValues(nextValues);
+          // Load next iteration answers into formValues or clear if none saved
+          setFormValues(prevFormValues => {
+            
+            const nextIterationVals = newAnswers[currentLoopState.index + 1] || {};
+            const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+            const updatedFormValues = { ...prevFormValues };
+            
+            // Clear the loop page fields and their subfields in formValues
+            pageFields.forEach(f => {
+              delete updatedFormValues[f];
+              Object.keys(updatedFormValues).forEach(key => {
+                if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
+              });
+            });
+            
+            // Overwrite with next iteration values
+            Object.assign(updatedFormValues, nextIterationVals);
+            
+            return updatedFormValues;
+          });
+
           return;
         } else {
-          // Done all loops - store as array in formValues
-          const pageLoopKey = `${currentPageId}_loop`;
-          setFormValues(vals => ({ ...vals, [pageLoopKey]: newAnswers }));
+          // On last iteration, update answers
           setLoopCounters(lc => ({
             ...lc,
             [currentPageId]: { ...currentLoopState, answers: newAnswers }
           }));
-          // proceed to next page as usual
+
+          // Save loop answers array in formValues with cleanup of individual loop fields
+          setFormValues(vals => {
+            const cleanedVals = { ...vals };
+            pageFields.forEach(f => {
+              delete cleanedVals[f];
+              Object.keys(cleanedVals).forEach(key => {
+                if (key.startsWith(`${f}_`)) delete cleanedVals[key];
+              });
+            });
+            cleanedVals[`${currentPageId}_loop`] = newAnswers;
+            return cleanedVals;
+          });
+
+          // Proceed to next page below
         }
       }
+
       const nextIdx = getNextPageIndex(currentPage, formValues);
       if (nextIdx !== currentPage) {
         setCurrentPage(nextIdx);
-      }
-      else if (currentPage < pages.length - 1) {
+      } else if (currentPage < pages.length - 1) {
         setCurrentPage(currentPage + 1);
       }
     }
   };
 
   const handlePreviousPage = () => {
-    const prevIdx = getPrevPageIndex(currentPage, formValues);
-    if (prevIdx !== currentPage) setCurrentPage(prevIdx);
+    if (isLoopPage && currentLoopState.index > 0) {
+      // Save current iteration answers before going back
+      const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+      const loopValues = {};
+      pageFields.forEach(f => {
+        loopValues[f] = formValues[f];
+        Object.keys(formValues).forEach(key => {
+          if (key.startsWith(`${f}_`)) {
+            loopValues[key] = formValues[key];
+          }
+        });
+      });
+      const newAnswers = [...currentLoopState.answers];
+      newAnswers[currentLoopState.index] = { ...loopValues };
+
+      // Move to previous iteration and load
+      setLoopCounters(lc => ({
+        ...lc,
+        [currentPageId]: {
+          ...currentLoopState,
+          index: currentLoopState.index - 1,
+          answers: newAnswers
+        }
+      }));
+
+      // Load previous iteration answers (or empty)
+      setFormValues(prevFormValues => {
+        const prevIterationVals = newAnswers[currentLoopState.index - 1] || {};
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const updatedFormValues = { ...prevFormValues };
+        
+        // Clear the loop page fields and their subfields in formValues
+        pageFields.forEach(f => {
+          delete updatedFormValues[f];
+          Object.keys(updatedFormValues).forEach(key => {
+            if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
+          });
+        });
+        
+        // Overwrite with previous iteration values
+        Object.assign(updatedFormValues, prevIterationVals);
+        
+        return updatedFormValues;
+      });
+
+    } else {
+      // Normal page back, save current iteration first if loop page
+      if (isLoopPage) {
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const loopValues = {};
+        pageFields.forEach(f => {
+          loopValues[f] = formValues[f];
+          Object.keys(formValues).forEach(key => {
+            if (key.startsWith(`${f}_`)) {
+              loopValues[key] = formValues[key];
+            }
+          });
+        });
+        const newAnswers = [...currentLoopState.answers];
+        newAnswers[currentLoopState.index] = { ...loopValues };
+        setLoopCounters(lc => ({
+          ...lc,
+          [currentPageId]: { ...currentLoopState, answers: newAnswers }
+        }));
+      }
+
+      const prevIdx = getPrevPageIndex(currentPage, formValues);
+      if (prevIdx !== currentPage) {
+        setCurrentPage(prevIdx);
+        // Load first iteration answers of that new page if loop page
+        const newPageId = `page_${pages[prevIdx]?.[0]?.Page_Number__c}`;
+        const newLoopState = loopCounters[newPageId];
+        if (newLoopState && newLoopState.count > 0) {
+          setFormValues(prevFormValues => {
+            const iterationVals = newLoopState.answers[newLoopState.index] || {};
+            const pageFields = (pages[prevIdx] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+            const updatedFormValues = { ...prevFormValues };
+
+            // Clear the loop page fields and their subfields in formValues
+            pageFields.forEach(f => {
+              delete updatedFormValues[f];
+              Object.keys(updatedFormValues).forEach(key => {
+                if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
+              });
+            });
+
+            // Merge in the iteration's answers
+            Object.assign(updatedFormValues, iterationVals);
+
+            return updatedFormValues;
+          });
+
+        }
+      }
+    }
   };
 
   if (fetchError) {

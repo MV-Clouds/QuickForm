@@ -160,7 +160,7 @@ const Home = () => {
     }
 
     if (option === 'salesforce') {
-      navigate('/wizard');
+       setShowCreateFormWizard(true);  // Open the wizard modal right here
     } else if (option === 'scratch') {
       setIsFormNameOpen(true);
     } else if (option === 'templates') {

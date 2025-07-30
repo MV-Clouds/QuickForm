@@ -416,7 +416,46 @@ export const handler = async (event) => {
       }
     }
 
+    // // Batch create
+    // for (let i = 0; i < toCreate.length; i += batchSize) {
+    //   const batch = toCreate.slice(i, i + batchSize);
+    //   const compositeCreateRequest = {
+    //     allOrNone: true,
+    //     records: batch.map(f => {
+    //       let props;
+    //       try {
+    //         props = JSON.parse(f.Properties__c);
+    //       } catch {
+    //         props = {};
+    //       }
+    //       if (props.validation?.subFields) delete props.validation.subFields;
+
+    //       return {
+    //         attributes: { type: 'Form_Field__c' },
+    //         ...f,
+    //         Form_Version__c: formVersionId,
+    //         Properties__c: JSON.stringify({ ...props, subFields: props.subFields || {} }),
+    //       };
+    //     }),
+    //   };
+
+    //   const createResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+    //     method: 'POST',
+    //     headers: {
+    //       Authorization: `Bearer ${token}`,
+    //       'Content-Type': 'application/json',
+    //     },
+    //     body: JSON.stringify(compositeCreateRequest),
+    //   });
+
+    //   if (!createResponse.ok) {
+    //     const err = await createResponse.json();
+    //     throw new Error(err[0]?.message || 'Failed to batch create form fields');
+    //   }
+    // }
+
     // Batch create
+    const createdFields = []; // To store fields with their Salesforce IDs
     for (let i = 0; i < toCreate.length; i += batchSize) {
       const batch = toCreate.slice(i, i + batchSize);
       const compositeCreateRequest = {
@@ -452,7 +491,139 @@ export const handler = async (event) => {
         const err = await createResponse.json();
         throw new Error(err[0]?.message || 'Failed to batch create form fields');
       }
+
+      // Capture the created record IDs
+      const createResponseData = await createResponse.json();
+      createResponseData.forEach((result, index) => {
+        if (result.success) {
+          createdFields.push({
+            ...batch[index],
+            Id: result.id, // Add the Salesforce ID to the field
+          });
+        } else {
+          throw new Error(result.errors[0]?.message || 'Failed to create a form field');
+        }
+      });
     }
+
+    // Batch update
+    const updatedFields = toUpdate; // Already have IDs from existingFieldsMap
+    for (let i = 0; i < toUpdate.length; i += batchSize) {
+      const batch = toUpdate.slice(i, i + batchSize);
+      const compositeUpdateRequest = {
+        allOrNone: true,
+        records: batch.map(f => {
+          let props;
+          try {
+            props = JSON.parse(f.Properties__c);
+          } catch {
+            props = {};
+          }
+          if (props.validation?.subFields) delete props.validation.subFields;
+
+          return {
+            attributes: { type: 'Form_Field__c' },
+            Id: f.Id,
+            Form_Version__c: formVersionId,
+            Name: f.Name,
+            Field_Type__c: f.Field_Type__c,
+            Page_Number__c: f.Page_Number__c,
+            Order_Number__c: f.Order_Number__c,
+            Properties__c: JSON.stringify({ ...props, subFields: props.subFields || {} }),
+            Unique_Key__c: f.Unique_Key__c,
+          };
+        }),
+      };
+
+      const updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(compositeUpdateRequest),
+      });
+
+      if (!updateResponse.ok) {
+        const err = await updateResponse.json();
+        throw new Error(err[0]?.message || 'Failed to batch update form fields');
+      }
+    }
+
+    // Combine created and updated fields, preserving existing fields that weren't updated
+    const allFields = [
+      ...createdFields,
+      ...updatedFields,
+      ...existingFields.filter(f =>
+        !createdFields.some(cf => cf.Unique_Key__c === f.Unique_Key__c) &&
+        !updatedFields.some(uf => uf.Unique_Key__c === f.Unique_Key__c) &&
+        !toDelete.some(d => d.Unique_Key__c === f.Unique_Key__c)
+        ).map(f => ({
+          Id: f.Id,
+          Name: f.Name,
+          Field_Type__c: f.Field_Type__c,
+          Page_Number__c: f.Page_Number__c,
+          Order_Number__c: f.Order_Number__c,
+          Properties__c: f.Properties__c,
+          Unique_Key__c: f.Unique_Key__c,
+        })),
+    ];
+    // // Step 5: Update DynamoDB SalesforceMetadata table
+    // const currentTime = new Date().toISOString();
+
+    // let existingConditions = [];
+    // if (Id) {
+    //   const existingFormVersion = formRecords
+    //     .flatMap(form => form.FormVersions)
+    //     .find(version => version.Id === Id);
+    //   if (existingFormVersion && existingFormVersion.Conditions) {
+    //     existingConditions = existingFormVersion.Conditions;
+    //   }
+    // }
+    // // Construct new or updated form record
+    // const newFormVersionRecord = {
+    //   Id: formVersionId,
+    //   FormId: formId,
+    //   Name: formData.formVersion.Name,
+    //   Description__c: formData.formVersion.Description__c || '',
+    //   Version__c: formData.formVersion.Version__c || '1',
+    //   Stage__c: formData.formVersion.Stage__c || 'Draft',
+    //   Submission_Count__c: formData.formVersion.Submission_Count__c || 0,
+    //   Object_Info__c: formData.formVersion.Object_Info__c || [],
+    //   Fields: formData.formFields, // Optionally replace with createdFormFields if needed
+    //   Conditions: existingConditions,
+    //   Source: 'Form_Version__c',
+    // };
+
+    // let updatedFormRecords = [...formRecords];
+    // console.log('updatedFormRecords ',JSON.stringify(updatedFormRecords));
+    // const formIndex = updatedFormRecords.findIndex(f => f.Id === formId);
+    // if (formIndex >= 0) {
+    //   const otherVersions = updatedFormRecords[formIndex].FormVersions.filter(v => v.Id !== formVersionId);
+    //   if (formData.formVersion.Stage__c === 'Publish') {
+    //     otherVersions.forEach(v => {
+    //       if (v.Stage__c === 'Publish') v.Stage__c = 'Locked';
+    //     });
+    //   }
+    //   updatedFormRecords[formIndex] = {
+    //     ...updatedFormRecords[formIndex],
+    //     LastModifiedDate: currentTime,
+    //     Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
+    //     Publish_Link__c: formUpdate?.Publish_Link__c || '',
+    //     Status__c: formData.formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
+    //     FormVersions: [newFormVersionRecord, ...otherVersions],
+    //   };
+    // } else {
+    //   updatedFormRecords.push({
+    //     Id: formId,
+    //     Name: `FORM-${formId.slice(-4)}`,
+    //     LastModifiedDate: currentTime,
+    //     Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
+    //     FormVersions: [newFormVersionRecord],
+    //     Status__c: formData.formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
+    //     Source: 'Form__c',
+    //   });
+    // }
 
     // Step 5: Update DynamoDB SalesforceMetadata table
     const currentTime = new Date().toISOString();
@@ -466,7 +637,8 @@ export const handler = async (event) => {
         existingConditions = existingFormVersion.Conditions;
       }
     }
-    // Construct new or updated form record
+
+    // Construct new or updated form version record
     const newFormVersionRecord = {
       Id: formVersionId,
       FormId: formId,
@@ -476,7 +648,7 @@ export const handler = async (event) => {
       Stage__c: formData.formVersion.Stage__c || 'Draft',
       Submission_Count__c: formData.formVersion.Submission_Count__c || 0,
       Object_Info__c: formData.formVersion.Object_Info__c || [],
-      Fields: formData.formFields, // Optionally replace with createdFormFields if needed
+      Fields: allFields, // Use the combined fields with IDs
       Conditions: existingConditions,
       Source: 'Form_Version__c',
     };
@@ -526,6 +698,7 @@ export const handler = async (event) => {
             InstanceUrl: { S: cleanedInstanceUrl },
             Metadata: { S: JSON.stringify(existingMetadata) },
             UserProfile: { S: metadataItem.UserProfile?.S },
+            Fieldset : { S: metadataItem.Fieldset?.S || {} },
             CreatedAt: { S: createdAt },
             UpdatedAt: { S: currentTime },
           },
