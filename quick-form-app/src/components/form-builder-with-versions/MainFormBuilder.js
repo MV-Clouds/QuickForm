@@ -992,7 +992,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
         <div className="inset-x-1 h-screen flex flex-col">
           <div className="text-white p-5 w-full flex justify-between items-center header-main">
             <div className="flex items-center">
-              <span className="w-10 h-10 flex items-center justify-center">
+              <span className="w-10 h-10 flex items-center justify-center cursor-pointer" onClick={() => navigate('/home')}>
                 <IoIosUndo className="text-[#f2f6f7] text-3xl" />
               </span>
               <Whisper
