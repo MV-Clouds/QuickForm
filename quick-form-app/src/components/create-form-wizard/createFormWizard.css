@@ -190,7 +190,7 @@
   color: #2d2d2e;
   background: #fff;
 }
-.wizard-listbox-entry:last-child { border-bottom: none; }
+/* .wizard-listbox-entry:last-child { border-bottom: none; } */
 .wizard-listbox-entry.selected, .wizard-listbox-entry.active {
   background: #e2f5fe !important;
 }

@@ -8,7 +8,21 @@ export default function AnimatedTooltip({ children, content, positionLeft = fals
   const [hovered, setHovered] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
 
+  useEffect(() => {
+    if (!hovered) return;
 
+    function handleScrollOrResize() {
+      setHovered(false);
+    }
+
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [hovered]);
    useEffect(() => {
     if (hovered && wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();

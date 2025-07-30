@@ -157,7 +157,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       const token = (await fetchAccessToken(userId, instanceUrl));
       const rawString = `${userId}$${formId}`;
       const encryptedLinkId = encrypt(rawString);
-      const publishLink = `https://d2gg09yhu3xa1a.cloudfront.net/public-form/${encryptedLinkId}`;
+      const publishLink = `http://localhost:3000/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';

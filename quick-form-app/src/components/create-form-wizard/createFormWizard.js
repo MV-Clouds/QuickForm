@@ -499,7 +499,7 @@ const CreateFormWizard = ({ onClose }) => {
                     </button>
                   </div>
                   <div className="wizard-listbox">
-                    <div className={`${filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                    <div className={`${filteredMetadata.filter(obj => !selectedObjects.includes(obj.name)).length === 0 || filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       <AnimatePresence>
                         {filteredMetadata
                           .filter((obj) => !selectedObjects.includes(obj.name))
@@ -533,7 +533,7 @@ const CreateFormWizard = ({ onClose }) => {
                             </motion.div>
                           ))}
                       </AnimatePresence>
-                      {filteredMetadata.length === 0 && (
+                      {filteredMetadata.filter(obj => !selectedObjects.includes(obj.name)).length === 0 && (
                         <div className="wizard-listbox-empty">
                           No objects available
                         </div>
@@ -712,8 +712,12 @@ const CreateFormWizard = ({ onClose }) => {
                     </button>
                   </div>
                   <div className="wizard-listbox">
-                    <div className={`${filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
-                      {filteredFields.length > 0 ? (
+                    <div className={`${filteredFields.filter(
+                        field => !(selectedFields[currentObject] || []).includes(field.name)
+                      ).length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                      {filteredFields.filter(
+                        field => !(selectedFields[currentObject] || []).includes(field.name)
+                      ).length > 0 ? (
                         <AnimatePresence>
                           {filteredFields
                             .filter(
@@ -777,7 +781,7 @@ const CreateFormWizard = ({ onClose }) => {
                     </button>
                   </div>
                   <div className="wizard-listbox selected">
-                    <div className={`${selectedObjects.length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                    <div className={`${selectedFields[currentObject].length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       {(selectedFields[currentObject] || []).length > 0 ? (
                         <AnimatePresence>
                           {(selectedFields[currentObject] || []).map((fieldName) => {
