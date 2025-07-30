@@ -10,7 +10,8 @@ import { useSalesforceData } from '../Context/MetadataContext';
 import './home.css';
 import RecentFilesSlider from './RecentFilesSlider';
 import FolderManager from './FolderManager';
-
+import FieldsetPage from './FieldSetPageNew';
+import Bin from './Bin'
 const Home = () => {
   const {
     metadata,
@@ -18,7 +19,8 @@ const Home = () => {
     isLoading: contextLoading,
     error: contextError,
     fetchSalesforceData,
-    userProfile
+    userProfile,
+    Fieldset
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -240,6 +242,7 @@ const Home = () => {
   // Handler for creating a folder (for now, just log)
   const handleCreateFolder = async (folderName, selectedFormIds) => {
     // TODO: Implement backend update logic here
+    setisCreating(true);
     console.log('Create folder:', folderName, 'with forms:', selectedFormIds);
     // Make API call to backend to create/update folder
     
@@ -275,11 +278,19 @@ const Home = () => {
       } catch (error) {
         console.error('Error creating/updating folder:', error);
       }finally{
+        setisCreating(false)
         fetchSalesforceData(userId , instanceUrl);
       }
     
 
     // You would update Folder__c for each selected form in your backend
+  };
+
+  // Handler for toggling form status
+  const handleToggleStatus = async (formId) => {
+    console.log('Toggling status for form:', formId);
+    // Implement status toggle logic here
+    // This would typically involve an API call to update the form status
   };
 
   return (
@@ -349,10 +360,17 @@ const Home = () => {
             /> */}
             <FolderManager
               recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
-              handleCreateFolder={handleCreateFolder}
+              handleCreateFolder={handleCreateFolder} 
+              isCreating={isCreating}
+              onViewForm={handleEditForm}
+              onEditForm={handleEditForm}
+              onDeleteForm={handleDeleteForm}
+              onToggleStatus={handleToggleStatus}
             />
           </div>
-        ) : (
+        ) : selectedNav === 'fieldset' ? (
+          <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
+        ) : selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div

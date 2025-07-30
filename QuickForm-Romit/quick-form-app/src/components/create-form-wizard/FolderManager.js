@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PlusCircle } from 'lucide-react';
+import FolderView from './FolderView';
 
 const FOLDER_ICON = (
     <svg width="57" height="46" viewBox="0 0 57 46" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -11,19 +12,20 @@ const FOLDER_ICON = (
             </linearGradient>
         </defs>
     </svg>
-
 );
 
 const FOLDERS_PER_PAGE = 16;
 
-const FolderManager = ({ recentForms = [], handleCreateFolder }) => {
+const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onViewForm, onEditForm, onDeleteForm, onToggleStatus }) => {
     // Extract unique folders and counts
     const [search, setSearch] = useState('');
     const [modalOpen, setModalOpen] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [selectedFormIds, setSelectedFormIds] = useState([]);
     const [page, setPage] = useState(0);
+    const [selectedFolder, setSelectedFolder] = useState(null);
     console.log('forms ==>' , recentForms)
+    
     // All folders: { name, count }
     const folders = useMemo(() => {
         const folderMap = {};
@@ -50,6 +52,7 @@ const FolderManager = ({ recentForms = [], handleCreateFolder }) => {
         filteredFolders.slice(page * FOLDERS_PER_PAGE, (page + 1) * FOLDERS_PER_PAGE),
         [filteredFolders, page]
     );
+    
     // All forms for modal
     const allForms = useMemo(() =>
         recentForms.map(f => ({
@@ -60,10 +63,19 @@ const FolderManager = ({ recentForms = [], handleCreateFolder }) => {
         [recentForms]
     );
 
+    // Get forms for selected folder
+    const getFormsForFolder = (folderName) => {
+        return recentForms.filter(form => 
+            form.Folder__c && 
+            form.Folder__c.split('<>').map(name => name.trim()).includes(folderName)
+        );
+    };
+
     // Modal logic
     const handleFormCheckbox = (id) => {
         setSelectedFormIds(prev => prev.includes(id) ? prev.filter(fid => fid !== id) : [...prev, id]);
     };
+    
     const handleModalSave = () => {
         if (newFolderName.trim()) {
             handleCreateFolder(newFolderName.trim(), selectedFormIds);
@@ -73,8 +85,34 @@ const FolderManager = ({ recentForms = [], handleCreateFolder }) => {
         }
     };
 
+    // Handle folder click
+    const handleFolderClick = (folderName) => {
+        setSelectedFolder(folderName);
+    };
+
+    // Handle back to folders view
+    const handleBackToFolders = () => {
+        setSelectedFolder(null);
+    };
+
     // Pagination logic
     const totalPages = Math.ceil(filteredFolders.length / FOLDERS_PER_PAGE);
+
+    // If a folder is selected, show the folder view
+    if (selectedFolder) {
+        const folderForms = getFormsForFolder(selectedFolder);
+        return (
+            <FolderView
+                folderName={selectedFolder}
+                forms={folderForms}
+                onViewForm={onViewForm}
+                onEditForm={onEditForm}
+                onDeleteForm={onDeleteForm}
+                onToggleStatus={onToggleStatus}
+                onBack={handleBackToFolders}
+            />
+        );
+    }
 
     return (
         <div className="mt-6 px-8">
@@ -101,17 +139,17 @@ const FolderManager = ({ recentForms = [], handleCreateFolder }) => {
                     <div className="col-span-4 text-gray-400 text-center py-12">No folders found.</div>
                 )}
                 {paginatedFolders.map((folder, idx) => (
-                    <div key={folder.name} className="flex  items-center bg-white rounded-xl shadow p-6 hover:shadow-lg transition-all border border-yellow-100">
+                    <div 
+                        key={folder.name} 
+                        className="flex items-center bg-white rounded-xl shadow p-6 hover:shadow-lg transition-all border border-yellow-100 cursor-pointer hover:scale-105 transform duration-200"
+                        onClick={() => handleFolderClick(folder.name)}
+                    >
                         <div className="mb-3 ">{FOLDER_ICON}</div>
                         <div className='ml-2'>
                             <div className="font-bold text-lg  mb-1 truncate max-w-[150px]">{folder.name}</div>
                             <div className="text-sm text-gray-500 flex">
-                                {/* <div>
-                                <svg width="5" height="4" viewBox="0 0 5 4" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <circle cx="2.75" cy="2" r="2" fill="#5F6165" />
-                                </svg>
-                            </div> */}
-                                <div>{folder.count} item{folder.count > 1 ? 's' : ''}</div></div>
+                                <div>{folder.count} item{folder.count > 1 ? 's' : ''}</div>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -163,7 +201,7 @@ const FolderManager = ({ recentForms = [], handleCreateFolder }) => {
                             onClick={handleModalSave}
                             disabled={!newFolderName.trim()}
                         >
-                            Save Folder
+                          {isCreating ? 'Saving...' : 'Save Folder'}  
                         </button>
                     </div>
                 </div>

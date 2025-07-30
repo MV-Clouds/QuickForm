@@ -591,7 +591,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {isSelected && type !== 'pagebreak' && type !== 'header' && (
+      {isSelected && type !== 'pagebreak' && (
         <div className="absolute top-0 right-0 flex gap-1 z-20" style={{ transform: 'translate(0, -50%)' }}>
           <button
             onClick={handleCut}
@@ -621,17 +621,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       )}
       {children}
       {/* Paste Above/Below buttons, only if not cut/blurred */}
-      {isHovered && clipboard.field && type !== 'pagebreak' && type !== 'header' && !sectionId && !isCut && (
+      {isHovered && clipboard.field && type !== 'pagebreak' && !sectionId && !isCut && (
         <div className="flex flex-col gap-1 w-full">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handlePaste('above');
-            }}
-            className="w-full text-center text-blue-600 border border-dashed border-blue-500 rounded py-1 hover:bg-blue-50 z-20"
-          >
-            ------Paste above-------
-          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -646,7 +637,11 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     </div>
   );
 
-  const wrapperProps = { alignment: type === 'header' ? alignment : labelAlignment, showHelpText, helpText };
+  const wrapperProps = { 
+    alignment: labelAlignment, 
+    showHelpText, 
+    helpText 
+  };
 
   const formatDateForRsuite = (dateString) => {
     if (!dateString) return null;
@@ -903,22 +898,6 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-    case 'header':
-      return (
-        <div className="relative group">
-          <SelectionWrapper>
-            <FieldWrapper {...wrapperProps} labelContent={
-              <div className={`text-2xl font-bold ${alignment === 'left' ? 'text-left' : alignment === 'right' ? 'text-right' : 'text-center'} w-full ${selectedTheme?.textColor || 'text-gray-700'}`}>
-                {heading || 'Form'}
-                {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
-                {isRequired && <span className="text-red-500 ml-1">*</span>}
-              </div>
-            }>
-              <div className="flex flex-col items-center" />
-            </FieldWrapper>
-          </SelectionWrapper>
-        </div>
-      );
     case 'heading':
       return (
         <div className="relative group">

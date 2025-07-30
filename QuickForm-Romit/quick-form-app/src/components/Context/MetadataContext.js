@@ -8,7 +8,8 @@ export const SalesforceDataProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [userProfile, setuserProfile] = useState([]); // User Profile Data
-
+  const [Fieldset , setFieldset] = useState([]); // Field Set Data
+  const [deletedData , setdeletedData] = useState([]) //Deleted Data for Bin 
   const fetchSalesforceData = async (userId, instanceUrl) => {
     if (!userId || !instanceUrl) {
       setError('Missing userId or instanceUrl');
@@ -61,13 +62,17 @@ export const SalesforceDataProvider = ({ children }) => {
           }
         }
       };
-
+      console.log('Data from DB ==>' , data);  
       // Usage:
       const parsedFormRecords = parseFormRecords(data.FormRecords);
       const userProfileData = data?.UserProfile || {};
+      const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
+      const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
+      setFieldset(parsedFieldset);
+      setdeletedData(parsedDeletedData); 
     } catch (err) {
       setError(err.message);
     } finally {
@@ -100,7 +105,9 @@ export const SalesforceDataProvider = ({ children }) => {
         error,
         refreshData,
         fetchSalesforceData, // Expose fetchSalesforceData
-        userProfile
+        userProfile,
+        Fieldset,
+        deletedData
       }}
     >
       {children}

@@ -24,8 +24,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-" + Date.now() + "-" + Math.random().toString(36).substring(2, 11),
                     "Field_Type__c": "text",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -67,8 +67,8 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "field-1750671907483-e7ebhers5",
                     Field_Type__c: "fullname",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": "^[a-zA-Z\\s'-]+$",
                         "description": "Only letters, spaces, hyphens, and apostrophes allowed."
@@ -77,8 +77,8 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "field-1750671918396-6fv3i3eet",
                     Field_Type__c: "email",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                         "description": "Must be a valid email (e.g., user@example.com)."
@@ -91,13 +91,12 @@ const GetFormTemplate = () => {
                     Unique_Key__c: "field-1750671925232-pfejvalym",
                     Field_Type__c: "phone",
                     Name: "Contact Number",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": ".*",
                         "description": "No specific validation rules."
                     },
-                    Name: "Contact Number",
                     "placeholder": {
                         "main": "(000) 000-0000"
                     }
@@ -105,33 +104,20 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "field-1750671975080-niyu32n02",
                     Field_Type__c: "address",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": "^[\\w\\s\\-\\.,#]+$",
                         "description": "Alphanumeric, spaces, hyphens, commas, and periods allowed."
                     },
                     Name: "Billing Address",
-                    "visibleSubFields": {
-                        "street": true,
-                        "city": true,
-                        "state": true,
-                        "country": true,
-                        "postal": true
-                    },
-                    "subLabels": {
-                        "street": "",
-                        "city": "",
-                        "state": "",
-                        "country": "",
-                        "postal": ""
-                    }
+                    "subFields": { "street": { "visiblesubFields": true, "label": "Street Address", "value": "", "placeholder": "Enter street", "visible": true }, "city": { "visible": true, "label": "City", "value": "", "placeholder": "Enter city" }, "state": { "visible": true, "label": "State", "value": "", "placeholder": "Enter state" }, "country": { "visible": true, "label": "Country", "value": "", "placeholder": "Enter country" }, "postal": { "visible": false, "label": "Postal Code", "value": "", "placeholder": "Enter postal code" } }, "label": "Address"
                 },
                 {
                     Unique_Key__c: "field-1750672045350-9wbl9xlc3",
                     Field_Type__c: "radio",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": ".*",
                         "description": "No specific validation rules."
@@ -150,8 +136,8 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "field-1750672298683-lgmpit52v",
                     Field_Type__c: "radio",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": ".*",
                         "description": "No specific validation rules."
@@ -170,8 +156,8 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "field-1750672393033-d77q92460",
                     Field_Type__c: "longtext",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": "^.{1,1000}$",
                         "description": "Maximum 1000 characters allowed."
@@ -184,8 +170,8 @@ const GetFormTemplate = () => {
                 {
                     Unique_Key__c: "field-1750672619291-bbffaj921",
                     Field_Type__c: "dropdown",
-                     
-                    
+
+
                     Properties__c: {
                         "pattern": ".*",
                         "description": "No specific validation rules."
@@ -228,8 +214,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678901-abc123def",
                     "Field_Type__c": "fullname",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[a-zA-Z\\s'-]+$",
                         "description": "Name as it should appear on your badge",
@@ -240,8 +226,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678902-ghi456jkl",
                     "Field_Type__c": "email",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                         "description": "Event confirmation will be sent here",
@@ -255,8 +241,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678903-mno789pqr",
                     "Field_Type__c": "phone",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[\\d\\s\\-\\(\\)]{10,15}$",
                         "description": "For urgent event updates",
@@ -270,8 +256,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678904-stu123vwx",
                     "Field_Type__c": "dropdown",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select your registration type",
@@ -301,8 +287,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678905-yza456bcd",
                     "Field_Type__c": "price",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^\\$?\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?$",
                         "description": "Total amount to be paid",
@@ -316,8 +302,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678906-efg789hij",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select all that apply",
@@ -340,8 +326,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678907-klm123nop",
                     "Field_Type__c": "radio",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -364,8 +350,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678908-qrs456tuv",
                     "Field_Type__c": "longtext",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^.{0,500}$",
                         "description": "Maximum 500 characters",
@@ -379,8 +365,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678909-wxy789zab",
                     "Field_Type__c": "fileupload",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*\\.(pdf|jpg|jpeg|png)$",
                         "description": "For student/group discounts (max 5MB)",
@@ -393,8 +379,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678910-cde123fgh",
                     "Field_Type__c": "dropdown",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "How did you hear about this event?",
@@ -413,8 +399,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678911-ijk456lmn",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -430,8 +416,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678912-opq789rst",
                     "Field_Type__c": "payment",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Secure payment processing",
@@ -481,8 +467,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678901-abc123def",
                     "Field_Type__c": "radio",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -509,8 +495,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678902-ghi456jkl",
                     "Field_Type__c": "dropdown",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "What was the nature of your interaction?",
@@ -532,8 +518,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678903-mno789pqr",
                     "Field_Type__c": "rating",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Rate your experience (1-5 stars)",
@@ -553,8 +539,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678904-stu123vwx",
                     "Field_Type__c": "longtext",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^.{0,1000}$",
                         "description": "Please provide details about your experience",
@@ -568,8 +554,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678905-yza456bcd",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select all that apply",
@@ -588,8 +574,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678906-efg789hij",
                     "Field_Type__c": "radio",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -608,8 +594,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678907-klm123nop",
                     "Field_Type__c": "fullname",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[a-zA-Z\\s'-]+$",
                         "description": "Optional - if you'd like us to follow up",
@@ -620,8 +606,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678908-qrs456tuv",
                     "Field_Type__c": "email",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                         "description": "Optional - for follow-up if needed",
@@ -635,8 +621,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678909-wxy789zab",
                     "Field_Type__c": "phone",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[\\d\\s\\-\\(\\)]{10,15}$",
                         "description": "Optional - for urgent follow-up",
@@ -650,8 +636,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678910-cde123fgh",
                     "Field_Type__c": "fileupload",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*\\.(jpg|jpeg|png|pdf)$",
                         "description": "Upload photos or documents if relevant (max 5MB)",
@@ -664,8 +650,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678911-ijk456lmn",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -709,8 +695,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678901-abc123def",
                     "Field_Type__c": "fullname",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[a-zA-Z\\s'-]+$",
                         "description": "How should we address you?",
@@ -721,8 +707,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678902-ghi456jkl",
                     "Field_Type__c": "email",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                         "description": "Where should we reply?",
@@ -736,8 +722,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678903-mno789pqr",
                     "Field_Type__c": "phone",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[\\d\\s\\-\\(\\)]{10,15}$",
                         "description": "Optional - for urgent matters",
@@ -751,8 +737,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678904-stu123vwx",
                     "Field_Type__c": "dropdown",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "What is this regarding?",
@@ -778,8 +764,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678905-yza456bcd",
                     "Field_Type__c": "longtext",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^.{10,2000}$",
                         "description": "Please provide details (10-2000 characters)",
@@ -793,8 +779,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678906-efg789hij",
                     "Field_Type__c": "fileupload",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*\\.(pdf|doc|docx|jpg|jpeg|png)$",
                         "description": "Optional attachments (max 5MB total)",
@@ -814,8 +800,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678907-klm123nop",
                     "Field_Type__c": "radio",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -832,8 +818,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678908-qrs456tuv",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -848,8 +834,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678909-wxy789zab",
                     "Field_Type__c": "captcha",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Please verify you're not a robot",
@@ -889,8 +875,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678901-abc123def",
                     "Field_Type__c": "fullname",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[a-zA-Z\\s'-]+$",
                         "description": "Please enter your full legal name",
@@ -901,8 +887,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678902-ghi456jkl",
                     "Field_Type__c": "email",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                         "description": "We'll contact you at this email",
@@ -916,8 +902,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678903-mno789pqr",
                     "Field_Type__c": "phone",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[\\d\\s\\-\\(\\)]{10,15}$",
                         "description": "Include area code",
@@ -931,8 +917,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678904-stu123vwx",
                     "Field_Type__c": "address",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[\\w\\s\\-\\.,#]+$",
                         "description": "Your current address",
@@ -950,8 +936,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678905-yza456bcd",
                     "Field_Type__c": "link",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^(https?:\\/\\/)?([\\da-z\\.-]+)\\.([a-z\\.]{2,6})([\\/\\w \\.-]*)*\\/?$",
                         "description": "Link to your professional profile",
@@ -965,8 +951,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678906-efg789hij",
                     "Field_Type__c": "dropdown",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select the position you're applying for",
@@ -988,8 +974,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678907-klm123nop",
                     "Field_Type__c": "price",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^\\$?\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?$",
                         "description": "Your expected annual salary",
@@ -1004,8 +990,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678908-qrs456tuv",
                     "Field_Type__c": "fileupload",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*\\.(pdf|doc|docx)$",
                         "description": "PDF or Word documents only (max 5MB)",
@@ -1018,8 +1004,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678909-wxy789zab",
                     "Field_Type__c": "fileupload",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*\\.(pdf|doc|docx)$",
                         "description": "Optional cover letter (PDF or Word)",
@@ -1032,8 +1018,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678910-cde123fgh",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Check all that apply",
@@ -1051,8 +1037,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678911-ijk456lmn",
                     "Field_Type__c": "imageuploader",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*\\.(jpg|jpeg|png)$",
                         "description": "Professional headshot (optional)",
@@ -1069,8 +1055,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678912-opq789rst",
                     "Field_Type__c": "longtext",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^.{1,2000}$",
                         "description": "Explain why you're a good fit for this role",
@@ -1141,8 +1127,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678902-ghi456jkl",
                     "Field_Type__c": "email",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
                         "description": "Institution email preferred",
@@ -1156,8 +1142,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678903-mno789pqr",
                     "Field_Type__c": "phone",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": "^[\\d\\s\\-\\(\\)]{10,15}$",
                         "description": "Primary contact number",
@@ -1171,8 +1157,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678904-stu123vwx",
                     "Field_Type__c": "dropdown",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select your program of study",
@@ -1194,8 +1180,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678905-yza456bcd",
                     "Field_Type__c": "checkbox",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select all courses you wish to enroll in",
@@ -1221,8 +1207,8 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678906-efg789hij",
                     "Field_Type__c": "radio",
-                     
-                    
+
+
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -1245,8 +1231,6 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678907-klm123nop",
                     "Field_Type__c": "fileupload",
-                     
-                    
                     "Properties__c": {
                         "pattern": ".*\\.(pdf|jpg|jpeg|png)$",
                         "description": "Upload proof of prerequisites (transcripts/certificates)",
@@ -1263,8 +1247,6 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678908-qrs456tuv",
                     "Field_Type__c": "price",
-                     
-                    
                     "Properties__c": {
                         "pattern": "^\\$?\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?$",
                         "description": "Calculated based on course selection",
@@ -1278,8 +1260,6 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678909-wxy789zab",
                     "Field_Type__c": "dropdown",
-                     
-                    
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Select your payment method",
@@ -1300,8 +1280,6 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678910-cde123fgh",
                     "Field_Type__c": "checkbox",
-                     
-                    
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "",
@@ -1317,8 +1295,6 @@ const GetFormTemplate = () => {
                 {
                     "Unique_Key__c": "field-1712345678911-ijk456lmn",
                     "Field_Type__c": "signature",
-                     
-                    
                     "Properties__c": {
                         "pattern": ".*",
                         "description": "Sign to confirm your enrollment",
