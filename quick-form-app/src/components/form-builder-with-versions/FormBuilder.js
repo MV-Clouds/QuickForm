@@ -27,6 +27,7 @@ function FormBuilder({
   onRedo,
   onMovePageUp,
   onMovePageDown,
+  isSidebarOpen = true,
 }) {
   const fieldsContainerRef = useRef(null);
   const pageRefs = useRef([]);
@@ -71,18 +72,28 @@ function FormBuilder({
     }
   }, [pages.length, pageWindowStart]);
 
-  // Scroll to current page when currentPageIndex changes
+  // Track if page change was from explicit navigation (not from adding pages)
+  const [isExplicitNavigation, setIsExplicitNavigation] = useState(false);
+
+  // Scroll to current page when currentPageIndex changes (only when user explicitly navigates)
   useEffect(() => {
-    if (pageRefs.current[currentPageIndex] && !isScrolling) {
+    // Only auto-scroll if user explicitly navigated and it's not during scrolling
+    if (pageRefs.current[currentPageIndex] && !isScrolling && isExplicitNavigation) {
       setIsScrolling(true);
       pageRefs.current[currentPageIndex].scrollIntoView({
         behavior: 'smooth',
         block: 'start'
       });
-      const timer = setTimeout(() => setIsScrolling(false), 300);
+      const timer = setTimeout(() => {
+        setIsScrolling(false);
+        setIsExplicitNavigation(false); // Reset after scrolling
+      }, 300);
       return () => clearTimeout(timer);
+    } else {
+      // Reset explicit navigation flag if no scrolling occurred
+      setIsExplicitNavigation(false);
     }
-  }, [currentPageIndex, isScrolling]);
+  }, [currentPageIndex, isScrolling, isExplicitNavigation]);
 
   const handleDrop = (e, pageIndex = 0, dropIndex = null, sectionId = null, sectionSide = null) => {
     e.preventDefault();
@@ -155,8 +166,10 @@ function FormBuilder({
 
   const handleFooterClick = (pageIndex, buttonType) => {
     if (buttonType === 'previous' && pageIndex > 0) {
+      setIsExplicitNavigation(true);
       setCurrentPageIndex(pageIndex - 1);
     } else if (buttonType === 'next' && pageIndex < pages.length - 1) {
+      setIsExplicitNavigation(true);
       setCurrentPageIndex(pageIndex + 1);
     }
     setSelectedFooter({ pageIndex, buttonType });
@@ -260,95 +273,6 @@ function FormBuilder({
 
   return (
     <div className="builder-container">
-
-      {/* Page Navigation Footer */}
-      <div className="bottom-bar flex items-center">
-        <div className="page-nav flex items-center gap-2">
-          {/* Slide Left */}
-          <button
-            onClick={() => setPageWindowStart(Math.max(0, pageWindowStart - 1))}
-            disabled={pageWindowStart === 0}
-            className="text-gray-500 hover:bg-gray-100 border rounded-md disabled:opacity-50"
-          >
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" fill="white" />
-              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" />
-              <path d="M18.2505 11.25L13.8605 15.74C13.8254 15.7736 13.7975 15.814 13.7784 15.8586C13.7593 15.9033 13.7495 15.9514 13.7495 16C13.7495 16.0486 13.7593 16.0967 13.7784 16.1414C13.7975 16.186 13.8254 16.2264 13.8605 16.26L18.2505 20.75" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-          </button>
-
-          {/* Visible Page Buttons */}
-          {pages
-            .slice(pageWindowStart, pageWindowStart + maxVisiblePages)
-            .map((page, index) => {
-              const actualIndex = pageWindowStart + index;
-              return (
-                <button
-                  key={actualIndex}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setIsScrolling(true);
-                    setCurrentPageIndex(actualIndex);
-                    if (pageRefs.current[actualIndex]) {
-                      pageRefs.current[actualIndex].scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                      });
-                    }
-                    setTimeout(() => setIsScrolling(false), 300);
-                  }}
-                  className={`page-button ${currentPageIndex === actualIndex ? 'active' : ''}`}
-                  title={page.name}
-                >
-                  Page {actualIndex + 1}
-                </button>
-              );
-            })}
-
-          {/* Slide Right */}
-          <button
-            onClick={() =>
-              setPageWindowStart(prev =>
-                Math.min(pages.length - maxVisiblePages, prev + 1)
-              )
-            }
-            disabled={pageWindowStart + maxVisiblePages >= pages.length}
-            className="border text-gray-500 hover:bg-gray-100 rounded-md disabled:opacity-50"
-          >
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" fill="white" />
-              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" />
-              <path d="M13.7495 11.25L18.1395 15.74C18.1746 15.7736 18.2025 15.814 18.2216 15.8586C18.2407 15.9033 18.2505 15.9514 18.2505 16C18.2505 16.0486 18.2407 16.0967 18.2216 16.1414C18.2025 16.186 18.1746 16.2264 18.1395 16.26L13.7495 20.75" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            className={`rounded-md ${!canUndo ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-100'}`}
-            title="Undo"
-          >
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0.666667" y="0.666667" width="30.6667" height="30.6667" rx="3.33333" stroke="#F2F4F7" stroke-width="1.33333" />
-              <path d="M15 23H18.75C20.1424 23 21.4777 22.4469 22.4623 21.4623C23.4469 20.4777 24 19.1424 24 17.75C24 16.3576 23.4469 15.0223 22.4623 14.0377C21.4777 13.0531 20.1424 12.5 18.75 12.5H9M11.5 9L8 12.5L11.5 16" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-
-          </button>
-          <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            className={`rounded-md ${!canRedo ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-100'}`}
-            title="Redo"
-          >
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="-0.666667" y="0.666667" width="30.6667" height="30.6667" rx="3.33333" transform="matrix(-1 0 0 1 30.6667 0)" stroke="#F2F4F7" stroke-width="1.33333" />
-              <path d="M17 23H13.25C11.8576 23 10.5223 22.4469 9.53769 21.4623C8.55312 20.4777 8 19.1424 8 17.75C8 16.3576 8.55312 15.0223 9.53769 14.0377C10.5223 13.0531 11.8576 12.5 13.25 12.5H23M20.5 9L24 12.5L20.5 16" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
       {/* Main content container with all pages */}
       <div
         className="all-page-container "
@@ -497,7 +421,7 @@ function FormBuilder({
             <div className="add-page-divider">
               <div className="add-page-line"></div>
               <div className="add-page-button-container">
-                <button onClick={onAddPage} className="add-page-button">
+                <button onClick={() => onAddPage(pageIndex)} className="add-page-button">
                   Add Page
                   <span className="add-page-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -513,6 +437,103 @@ function FormBuilder({
           </React.Fragment>
         ))}
       </div>
+
+      {/* Page Navigation Footer */}
+      <div 
+        className="bottom-bar"
+        style={{
+          width: `calc(75vw - ${isSidebarOpen ? '14.3rem' : '5.3rem'})`, 
+          left: isSidebarOpen ? '17.56rem' : '5.56rem' 
+        }}
+      >
+        <div className="page-nav flex items-center gap-2">
+          {/* Slide Left */}
+          <button
+            onClick={() => setPageWindowStart(Math.max(0, pageWindowStart - 1))}
+            disabled={pageWindowStart === 0}
+            className="text-gray-500 hover:bg-gray-100 border rounded-md disabled:opacity-50"
+          >
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" fill="white" />
+              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" />
+              <path d="M18.2505 11.25L13.8605 15.74C13.8254 15.7736 13.7975 15.814 13.7784 15.8586C13.7593 15.9033 13.7495 15.9514 13.7495 16C13.7495 16.0486 13.7593 16.0967 13.7784 16.1414C13.7975 16.186 13.8254 16.2264 13.8605 16.26L18.2505 20.75" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
+
+          {/* Visible Page Buttons */}
+          {pages
+            .slice(pageWindowStart, pageWindowStart + maxVisiblePages)
+            .map((page, index) => {
+              const actualIndex = pageWindowStart + index;
+              return (
+                <button
+                  key={actualIndex}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsExplicitNavigation(true);
+                    setIsScrolling(true);
+                    setCurrentPageIndex(actualIndex);
+                    if (pageRefs.current[actualIndex]) {
+                      pageRefs.current[actualIndex].scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                      });
+                    }
+                    setTimeout(() => setIsScrolling(false), 300);
+                  }}
+                  className={`page-button ${currentPageIndex === actualIndex ? 'active' : ''}`}
+                  title={page.name}
+                >
+                  Page {actualIndex + 1}
+                </button>
+              );
+            })}
+
+          {/* Slide Right */}
+          <button
+            onClick={() =>
+              setPageWindowStart(prev =>
+                Math.min(pages.length - maxVisiblePages, prev + 1)
+              )
+            }
+            disabled={pageWindowStart + maxVisiblePages >= pages.length}
+            className="border text-gray-500 hover:bg-gray-100 rounded-md disabled:opacity-50"
+          >
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" fill="white" />
+              <rect x="0.571429" y="0.571429" width="30.8571" height="30.8571" rx="3.42857" />
+              <path d="M13.7495 11.25L18.1395 15.74C18.1746 15.7736 18.2025 15.814 18.2216 15.8586C18.2407 15.9033 18.2505 15.9514 18.2505 16C18.2505 16.0486 18.2407 16.0967 18.2216 16.1414C18.2025 16.186 18.1746 16.2264 18.1395 16.26L13.7495 20.75" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            className={`rounded-md ${!canUndo ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-100'}`}
+            title="Undo"
+          >
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0.666667" y="0.666667" width="30.6667" height="30.6667" rx="3.33333" stroke="#F2F4F7" stroke-width="1.33333" />
+              <path d="M15 23H18.75C20.1424 23 21.4777 22.4469 22.4623 21.4623C23.4469 20.4777 24 19.1424 24 17.75C24 16.3576 23.4469 15.0223 22.4623 14.0377C21.4777 13.0531 20.1424 12.5 18.75 12.5H9M11.5 9L8 12.5L11.5 16" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+
+          </button>
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            className={`rounded-md ${!canRedo ? 'text-gray-400' : 'text-gray-700 hover:bg-gray-100'}`}
+            title="Redo"
+          >
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="-0.666667" y="0.666667" width="30.6667" height="30.6667" rx="3.33333" transform="matrix(-1 0 0 1 30.6667 0)" stroke="#F2F4F7" stroke-width="1.33333" />
+              <path d="M17 23H13.25C11.8576 23 10.5223 22.4469 9.53769 21.4623C8.55312 20.4777 8 19.1424 8 17.75C8 16.3576 8.55312 15.0223 9.53769 14.0377C10.5223 13.0531 11.8576 12.5 13.25 12.5H23M20.5 9L24 12.5L20.5 16" stroke="#000000" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      
     </div>
   );
 }

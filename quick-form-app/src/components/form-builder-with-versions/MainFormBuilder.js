@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { MdUndo, MdRedo } from 'react-icons/md';
 import { FaRegStar } from 'react-icons/fa';
 import { BsStack } from "react-icons/bs";
 import { IoIosUndo } from "react-icons/io";
@@ -107,7 +106,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState(themes[0]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  
+
   const [formRecords, setFormRecords] = useState([]);
 
   const [
@@ -309,7 +308,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       navigate(`/form-builder/${newVersionId}`);
     }
   };
-  
+
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -858,7 +857,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
     setFields(flattenedFields);
   };
 
-  const handleAddPage = () => {
+  const handleAddPage = (afterPageIndex = null) => {
     setHasChanges(true);
 
     // Break existing fields into pages
@@ -876,15 +875,42 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       pages.push({ fields: currentPage });
     }
 
-    // Create the new field array with an added pagebreak
+    // Determine where to insert the new page
+    const insertAfterIndex = afterPageIndex !== null ? afterPageIndex : pages.length - 1;
+    const newPageIndex = insertAfterIndex + 1;
+
+    // Create the new pagebreak field
     const newField = { id: `pagebreak-${Date.now()}`, type: 'pagebreak' };
-    const updatedFields = [...fields, newField];
 
-    // Assign the updated fields
-    setFields(updatedFields);
+    // If adding after the last page, just append
+    if (insertAfterIndex >= pages.length - 1) {
+      const updatedFields = [...fields, newField];
+      setFields(updatedFields);
+      // Just highlight the new page without scrolling
+      setCurrentPageIndex(pages.length);
+    } else {
+      // Insert pagebreak at the correct position
+      // Find the position in fields array where we need to insert
+      let fieldsBeforeNewPage = [];
+      let fieldsAfterNewPage = [];
+      let pageCount = 0;
+      
+      for (let i = 0; i < fields.length; i++) {
+        if (pageCount <= insertAfterIndex) {
+          fieldsBeforeNewPage.push(fields[i]);
+          if (fields[i].type === 'pagebreak') {
+            pageCount++;
+          }
+        } else {
+          fieldsAfterNewPage.push(fields[i]);
+        }
+      }
 
-    // Set current page index to the new page
-    setCurrentPageIndex(pages.length);
+      const updatedFields = [...fieldsBeforeNewPage, newField, ...fieldsAfterNewPage];
+      setFields(updatedFields);
+      // Just highlight the new page without scrolling
+      setCurrentPageIndex(newPageIndex);
+    }
   };
 
   const handleMovePageUp = (pageIndex) => {
@@ -976,6 +1002,9 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
   };
 
   const selectedField = getSelectedField();
+
+  console.log('fields:: ', fields);
+
 
   return (
     <div className="flex h-screen">
@@ -1142,10 +1171,11 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
                     onAddPage={handleAddPage}
                     onMovePageUp={handleMovePageUp}
                     onMovePageDown={handleMovePageDown}
-                     canUndo={canUndo}
+                    canUndo={canUndo}
                     canRedo={canRedo}
                     onUndo={undo}
                     onRedo={redo}
+                    isSidebarOpen={isSidebarOpen}
                   />
                 </div>
               </div>

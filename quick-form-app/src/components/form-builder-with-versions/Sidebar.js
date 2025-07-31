@@ -369,9 +369,9 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto builder-content-card">
         {activeMainTab === 'Form' && activeSubTab === 'Fields' && (
-          <div className="p-4">
+          <div className="inner-card">
             {/* Search Bar */}
             <div className="relative mb-4">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
