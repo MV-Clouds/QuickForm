@@ -13,6 +13,7 @@ import MappingFields from '../form-mapping/MappingFields'
 import { useSalesforceData } from '../Context/MetadataContext';
 import ThankYouPageBuilder from '../Thankyou/TY';
 import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js'
+import Conditions from '../conditions/Conditions'; // Or your actual path
 const themes = [
   {
     name: 'Remove Theme'
@@ -79,7 +80,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
+function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition}) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -157,7 +158,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       const token = (await fetchAccessToken(userId, instanceUrl));
       const rawString = `${userId}$${formId}`;
       const encryptedLinkId = encrypt(rawString);
-      const publishLink = `http://localhost:3000/public-form/${encryptedLinkId}`;
+      const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';
@@ -1267,7 +1268,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
                 ></path>
               </svg>
             </div>
-          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage currentFields = {formVersions[0]?.Fields}/> :  showMapping ? <MappingFields /> : (
+          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage currentFields = {formVersions[0]?.Fields}/> : showCondition ? <Conditions formVersionId={formVersionId} /> : showMapping ? <MappingFields /> :  (
             <div className="flex w-full mt-4 px-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">

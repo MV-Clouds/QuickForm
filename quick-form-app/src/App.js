@@ -56,7 +56,7 @@ function App() {
               <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
               <Route
                 path="/conditions/:formVersionId"
-                element={<ProtectedRoute element={<Conditions />} />}
+                element={<ProtectedRoute element={<MainFormBuilder showCondition/>} />}
               />
                <Route
                 path="/notifications/:formVersionId"

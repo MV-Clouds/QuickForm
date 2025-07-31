@@ -1420,7 +1420,14 @@ function PublicFormViewer() {
 
   let currentLoopState = loopCounters[currentPageId] || { count: 1, index: 0, answers: [] };
   const inLoop = isLoopPage && currentLoopState.count > 0;
-
+  function convertUserMaskToInputMask(mask) {
+    if (!mask) return '';
+    return mask
+      .replace(/@/g, 'a')
+      .replace(/#/g, '9')
+      // '*' stays the same
+      ;
+  }
   const renderField = (field) => {
     const properties = JSON.parse(field.Properties__c || '{}');
     const state = getFieldUiState(properties.id || field.Id || field.id, formValues);
@@ -1434,7 +1441,8 @@ function PublicFormViewer() {
     const hasError = !!errors[fieldId];
     const helpText = properties.showHelpText ? properties.helpText : null;
     const labelAlignment = properties.labelAlignment || 'top';
-    const mask = state.mask || properties.maskPattern || null;
+    const inputMask = state.mask || properties.maskPattern || null;
+    const mask = convertUserMaskToInputMask(inputMask);
 
     const commonProps = {
       id: fieldId,
@@ -1484,17 +1492,43 @@ function PublicFormViewer() {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            <input
-              type="text"
-              {...commonProps}
-              value={formValues[fieldId] || ''}
-              onChange={(e) => handleChange(fieldId, e.target.value)}
-              placeholder={properties.placeholder?.main || ''}
-              maxLength={properties.shortTextMaxChars}
-            />
+            {mask ? (
+              <>
+                <InputMask
+                  mask={mask}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  disabled={isDisabled}
+                  maskPlaceholder=" "
+                >
+                  {(inputProps) => (
+                    <input
+                      type="text"
+                      {...commonProps}
+                      {...inputProps}
+                      maxLength={properties.shortTextMaxChars}
+                      disabled={isDisabled}
+                    />
+                  )}
+                </InputMask>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+              </>
+            ) : (
+              <input
+                type="text"
+                {...commonProps}
+                value={formValues[fieldId] || ''}
+                onChange={(e) => handleChange(fieldId, e.target.value)}
+                placeholder={properties.placeholder?.main || ''}
+                maxLength={properties.shortTextMaxChars}
+                disabled={isDisabled}
+              />
+            )}
             {renderError()}
           </div>
         );
+
 
       case 'longtext':
         if (isHidden) return null;
@@ -1506,7 +1540,30 @@ function PublicFormViewer() {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            {properties.isRichText ? (
+            {mask ? (
+              <>
+                <InputMask
+                  mask={mask}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  disabled={isDisabled}
+                  maskPlaceholder=" "
+                >
+                  {(inputProps) => (
+                    <input
+                      type="text"  // use text input for masked longtext
+                      {...commonProps}
+                      {...inputProps}
+                      disabled={isDisabled}
+                      maxLength={properties.longTextMaxChars}
+                      style={{ minHeight: '4rem' }} // optional, keeps textarea height similar
+                    />
+                  )}
+                </InputMask>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+              </>
+            ) : properties.isRichText ? (
               <ReactQuill
                 theme="snow"
                 value={formValues[fieldId] || ''}
@@ -1514,21 +1571,23 @@ function PublicFormViewer() {
                 readOnly={isDisabled}
                 placeholder={properties.placeholder?.main || ''}
                 modules={{
-                  toolbar: isDisabled ? false : [
-                    ['bold', 'italic', 'underline', 'strike'],
-                    ['blockquote', 'code-block'],
-                    [{ 'header': 1 }, { 'header': 2 }],
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    [{ 'script': 'sub'}, { 'script': 'super' }],
-                    [{ 'indent': '-1'}, { 'indent': '+1' }],
-                    [{ 'direction': 'rtl' }],
-                    [{ 'size': ['small', false, 'large', 'huge'] }],
-                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                    [{ 'color': [] }, { 'background': [] }],
-                    [{ 'font': [] }],
-                    [{ 'align': [] }],
-                    ['clean']
-                  ]
+                  toolbar: isDisabled
+                    ? false
+                    : [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        ['blockquote', 'code-block'],
+                        [{ header: 1 }, { header: 2 }],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        [{ script: 'sub' }, { script: 'super' }],
+                        [{ indent: '-1' }, { indent: '+1' }],
+                        [{ direction: 'rtl' }],
+                        [{ size: ['small', false, 'large', 'huge'] }],
+                        [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                        [{ color: [] }, { background: [] }],
+                        [{ font: [] }],
+                        [{ align: [] }],
+                        ['clean'],
+                      ],
                 }}
               />
             ) : (
@@ -1539,8 +1598,10 @@ function PublicFormViewer() {
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.longTextMaxChars}
+                disabled={isDisabled}
               />
             )}
+
             {renderError()}
           </div>
         );
@@ -1561,15 +1622,42 @@ function PublicFormViewer() {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            <input
-              type="number"
-              {...commonProps}
-              value={formValues[fieldId] || ''}
-              onChange={(e) => handleChange(fieldId, e.target.value)}
-              placeholder={properties.placeholder?.main || ''}
-              min={properties.numberValueLimits?.min}
-              max={properties.numberValueLimits?.max}
-            />
+            {mask ? (
+              <>
+                <InputMask
+                  mask={mask}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  disabled={isDisabled}
+                  maskPlaceholder=" "
+                >
+                  {(inputProps) => (
+                    <input
+                      type="text" // force text input for masked number field
+                      {...commonProps}
+                      {...inputProps}
+                      min={properties.numberValueLimits?.min}
+                      max={properties.numberValueLimits?.max}
+                      disabled={isDisabled}
+                    />
+                  )}
+                </InputMask>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+              </>
+            ) : (
+              <input
+                type="number"
+                {...commonProps}
+                value={formValues[fieldId] || ''}
+                onChange={(e) => handleChange(fieldId, e.target.value)}
+                placeholder={properties.placeholder?.main || ''}
+                min={properties.numberValueLimits?.min}
+                max={properties.numberValueLimits?.max}
+                disabled={isDisabled}
+              />
+            )}
+
             {renderError()}
           </div>
         );
@@ -1586,16 +1674,44 @@ function PublicFormViewer() {
             )}
             <div className="flex items-center gap-2">
               <span className="text-gray-700">{properties.currencyType || 'USD'}</span>
-              <input
-                type="number"
-                {...commonProps}
-                step="0.01"
-                value={formValues[fieldId] || ''}
-                onChange={(e) => handleChange(fieldId, e.target.value)}
-                placeholder={properties.placeholder?.main || ''}
-                min={properties.priceLimits?.min}
-                max={properties.priceLimits?.max}
-              />
+              {mask ? (
+                <>
+                  <InputMask
+                    mask={mask}
+                    value={formValues[fieldId] || ''}
+                    onChange={(e) => handleChange(fieldId, e.target.value)}
+                    placeholder={properties.placeholder?.main || ''}
+                    disabled={isDisabled}
+                    maskPlaceholder=" "
+                  >
+                    {(inputProps) => (
+                      <input
+                        type="text" // force text input for masked field
+                        {...commonProps}
+                        {...inputProps}
+                        step="0.01"
+                        min={properties.priceLimits?.min}
+                        max={properties.priceLimits?.max}
+                        disabled={isDisabled}
+                      />
+                    )}
+                  </InputMask>
+                  <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+                </>
+              ) : (
+                <input
+                  type="number"
+                  {...commonProps}
+                  step="0.01"
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  min={properties.priceLimits?.min}
+                  max={properties.priceLimits?.max}
+                  disabled={isDisabled}
+                />
+              )}
+
             </div>
             {renderError()}
           </div>
@@ -1618,6 +1734,7 @@ function PublicFormViewer() {
               onChange={(e) => handleChange(fieldId, e.target.value)}
               placeholder={properties.placeholder?.main || 'example@domain.com'}
               maxLength={properties.maxChars}
+              disabled={isDisabled}
             />
             {properties.enableConfirmation && (
               <div className="mt-2">
@@ -1701,7 +1818,7 @@ function PublicFormViewer() {
                   />
                 </div>
               </div>
-            ) : (
+            ) : mask ? (
               <InputMask
                 mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
                 value={formValues[fieldId] || ''}
@@ -1710,7 +1827,17 @@ function PublicFormViewer() {
                 placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
               />
-            )}
+            ): (
+                <input
+                  type="text"
+                  {...commonProps}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+                  disabled={isDisabled}
+                />
+              )
+            }
             {renderError()}
           </div>
         );
@@ -2321,7 +2448,7 @@ function PublicFormViewer() {
             )}
             <div className="flex flex-col gap-4">
               <div className="flex gap-2">
-                {ratingOptions[properties.ratingType || 'star'].map((option, idx) => (
+                {ratingOptions[properties.ratingType || 'emoji'].map((option, idx) => (
                   <button
                     key={option.value}
                     type="button"
@@ -2345,7 +2472,7 @@ function PublicFormViewer() {
               </div>
               {selectedRatings[fieldId] && (
                 <p className="text-sm text-gray-600">
-                  Selected: {ratingOptions[properties.ratingType || 'star'].find(o => o.value === selectedRatings[fieldId])?.label}
+                  Selected: {ratingOptions[properties.ratingType || 'emoji'].find(o => o.value === selectedRatings[fieldId])?.label}
                 </p>
               )}
             </div>

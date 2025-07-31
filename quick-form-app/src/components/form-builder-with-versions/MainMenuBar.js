@@ -136,10 +136,10 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
                   </li>
                   <li className="w-full">
                     <div className="w-full">
-                      <a
+                      <button
                         className="inline-flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground px-4 py-2 w-full justify-start h-10 mb-1"
                         data-state="closed"
-                        href="/form-builder"
+                        onClick={() => selectedVersionId && navigate(`/form-builder/${selectedVersionId}`)}
                       >
                         <span className="mr-4">
                           <svg
@@ -161,7 +161,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
                         <p className={`max-w-[200px] truncate translate-x-0 opacity-100 ${isSidebarOpen ? '' : 'hidden'}`}>
                           Fields
                         </p>
-                      </a>
+                      </button>
                     </div>
                     <div className="w-full">
                       <button
