@@ -5,6 +5,7 @@ import { AiOutlineStar, AiOutlineHeart } from 'react-icons/ai';
 import { BiBoltCircle } from 'react-icons/bi';
 import EmojiPicker from 'emoji-picker-react';
 import { getCountryList } from './getCountries';
+import ToggleSwitch from './ToggleSwitch';
 
 // FieldEditor component for editing form fields and footer buttons
 function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteField, onClose, fields }) {
@@ -81,8 +82,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [helpText, setHelpText] = useState(selectedField?.helpText || '');
 
   // State for header and footer properties
-  const [headerText, setHeaderText] = useState('Form');
-  const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
+  // const [headerText, setHeaderText] = useState('Form');
+  // const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
   const [footerText, setFooterText] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.text || selectedFooter.buttonType.charAt(0).toUpperCase() + selectedFooter.buttonType.slice(1)) : '');
   const [footerBgColor, setFooterBgColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.bgColor || (selectedFooter.buttonType === 'previous' ? 'bg-gray-600' : 'bg-blue-600')) : '');
   const [footerTextColor, setFooterTextColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.textColor || 'white') : 'white');
@@ -120,8 +121,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   // State for tab navigation
   const [activeTab, setActiveTab] = useState('settings');
 
-  // State for expandable sections
-  const [expandedSection, setExpandedSection] = useState('common');
+  // State for expandable sections (allow multiple sections to be open)
+  const [expandedSections, setExpandedSections] = useState(['common']);
 
   const [showMultiRowModal, setShowMultiRowModal] = useState(false);
   const [showMultiColumnModal, setShowMultiColumnModal] = useState(false);
@@ -597,11 +598,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { helpText: e.target.value });
   };
 
-  // Handlers for header and footer
-  const handleHeaderTextChange = (e) => {
-    setHeaderText(e.target.value);
-    onUpdateField(selectedField.id, { heading: e.target.value });
-  };
   //handle for form heading
   const handleHeadingTextChange = (e) => {
     setHeadingText(e.target.value);
@@ -611,11 +607,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     setHeadingAlignment(e.target.value);
     onUpdateField(selectedField.id, { alignment: e.target.value });
   };
-  const handleHeaderAlignmentChange = (e) => {
-    setHeaderAlignment(e.target.value);
-    onUpdateField(selectedField.id, { alignment: e.target.value });
-  };
-
   const handleFooterTextChange = (e) => {
     setFooterText(e.target.value);
     const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
@@ -640,9 +631,42 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onClose();
   };
 
-  // Toggle expandable sections
+  // Toggle expandable sections (allow multiple sections to be open)
   const toggleSection = (section) => {
-    setExpandedSection(expandedSection === section ? null : section);
+  setExpandedSections(prev => 
+  prev.includes(section) 
+  ? prev.filter(s => s !== section)
+  : [...prev, section]
+  );
+  };
+
+  // Helper function to check if additional properties section has content
+  const hasAdditionalProperties = () => {
+    if (!selectedField) return false;
+    
+    const isScaleRating = selectedField.type === 'scalerating';
+    const hasOptions = isOptionsSupported && ['checkbox', 'radio'].includes(selectedField.type);
+    const hasDropdownOptions = isDropdownSupported && selectedField.type === 'dropdown';
+    const hasAddress = isAddress;
+    const hasFullname = isFullname;
+    const hasPhone = isPhone;
+    const hasEmail = isEmail;
+    const hasFileUpload = isFileUploadSupported && selectedField.type === 'fileupload';
+    const hasShortText = isShortTextSupported && selectedField.type === 'shorttext';
+    const hasLongText = isLongText;
+    const hasNumber = isNumber;
+    const hasPrice = isPrice;
+    const hasDate = isDate;
+    const hasDatetime = isDatetime;
+    const hasTime = isTime;
+    const hasRating = isRating;
+    const hasTerms = isTerms;
+    const hasMatrix = isMatrix;
+    
+    return isScaleRating || hasOptions || hasDropdownOptions || hasAddress || hasFullname || 
+           hasPhone || hasEmail || hasFileUpload || hasShortText || 
+           hasLongText || hasNumber || hasPrice || hasDate || 
+           hasDatetime || hasTime || hasRating || hasTerms || hasMatrix;
   };
 
   const handleInputTypeChange = (e) => {
@@ -889,14 +913,28 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isPhone = selectedField?.type === 'phone';
   const isPrice = selectedField?.type === 'price';
   const isHeading = selectedField?.type === 'heading'; // For Headings in form
+  
+  // Add missing field type definitions
+  const isDropdownSupported = selectedField?.type === 'dropdown';
+  const isFileUploadSupported = selectedField?.type === 'fileupload';
+  const isShortTextSupported = selectedField?.type === 'shorttext';
+  const isDatetime = selectedField?.type === 'datetime';
+  const isMatrix = selectedField?.type === 'matrix';
+  
   // Get dynamic country list
   const countries = getCountryList();
 
   return (
-    <div className="field-editor mt-10 bg-white text-gray-800 p-4 overflow-y-auto max-h-screen shadow-md rounded-lg">
+    <div className="custom-builder-card">
       {/* Header and Close Button */}
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">{selectedFooter ? 'Edit Footer Button' : 'Edit Field'}</h2>
+      <div className="flex justify-between items-center m-3">
+        <div className='flex gap-2 items-center'>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M11 18H14.75C16.1424 18 17.4777 17.4469 18.4623 16.4623C19.4469 15.4777 20 14.1424 20 12.75C20 11.3576 19.4469 10.0223 18.4623 9.03769C17.4777 8.05312 16.1424 7.5 14.75 7.5H5M7.5 4L4 7.5L7.5 11" stroke="#0B0A0A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <h2 className="text-xl font-semibold text-gray-800">Property</h2>
+        </div>
+
         <button
           type="button"
           className="text-gray-500 hover:text-gray-700"
@@ -906,1403 +944,1378 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
         </button>
       </div>
 
-      {/* Tabs for Settings and Widget */}
-      <div className="flex border-b mb-4">
-        <button
-          className={`px-4 py-2 font-medium text-sm ${activeTab === 'settings'
-            ? 'border-b-2 border-blue-500 text-blue-600'
-            : 'text-gray-500 hover:text-blue-600'
-            }`}
-          onClick={() => setActiveTab('settings')}
-        >
-          Settings
-        </button>
-        {isFormCalculation && (
-          <button
-            className={`px-4 py-2 font-medium text-sm ${activeTab === 'widget'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-blue-600'
-              }`}
-            onClick={() => setActiveTab('widget')}
-          >
-            Widget
-          </button>
-        )}
-      </div>
+      <div className="bg-white">
 
-      {activeTab === 'settings' && selectedField && (
-        <div>
-          {/* Common Properties Section */}
-          <div className="mb-2">
+        {/* Tabs for Settings and Widget */}
+        <div className="flex border-b mx-4 mt-4 mb-4">
+          <div className="relative">
             <button
-              className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-              onClick={() => toggleSection('common')}
+              className={`px-4 py-2 font-medium text-sm relative z-10 ${activeTab === 'settings'
+                  ? 'text-gray-900'
+                  : 'text-gray-500'
+                }`}
+              onClick={() => setActiveTab('settings')}
             >
-              <h3 className="text-lg font-semibold text-gray-800">Common Properties</h3>
-              {expandedSection === 'common' ? <FaChevronUp /> : <FaChevronDown />}
+              Settings
             </button>
-            {expandedSection === 'common' && (
-              <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                {isHeader ? (
-                  <>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Header Text</label>
-                      <input
-                        type="text"
-                        value={headerText}
-                        onChange={handleHeaderTextChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter header text"
-                      />
-                    </div>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Header Alignment</label>
-                      <select
-                        value={headerAlignment}
-                        onChange={handleHeaderAlignmentChange}
-                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="left">Left</option>
-                        <option value="center">Center</option>
-                        <option value="right">Right</option>
-                      </select>
-                    </div>
-                  </>
-                ) : isHeading ?
-                  <>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
-                      <input
-                        type="text"
-                        value={headingText}
-                        onChange={handleHeadingTextChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter header text"
-                      />
-                    </div>
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Alignment</label>
-                      <select
-                        value={headingAlignment}
-                        onChange={handleHeadingAlignmentChange}
-                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="left">Left</option>
-                        <option value="center">Center</option>
-                        <option value="right">Right</option>
-                      </select>
-                    </div>
-                  </> : (
-                    <>
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
-                        <input
-                          type="text"
-                          value={label}
-                          onChange={handleLabelChange}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="Enter field label"
-                        />
-                      </div>
-                      {isPlaceholderSupported && (
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
-                          {isAddress ? (
-                            <div className="flex flex-col gap-2">
-                              {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                                <div key={key}>
-                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
-                                  <input
-                                    type="text"
-                                    value={subFields[key]?.placeholder || ''}
-                                    onChange={(e) => handleAddressPlaceholderChange(key, e.target.value)}
-                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                    placeholder={`Enter ${key} placeholder`}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          ) : isFullname ? (
-                            <div className="flex flex-col gap-2">
-                              {['firstName', 'lastName'].map((key) => (
-                                <div key={key}>
-                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
-                                  <input
-                                    type="text"
-                                    value={fullnameSubFields[key]?.placeholder || ''}
-                                    onChange={(e) => handleFullnamePlaceholderChange(key, e.target.value)}
-                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                    placeholder={`Enter ${key} placeholder`}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          ) : isPhone ? (
-                            <div className="flex flex-col gap-2">
-                              <div>
-                                <label className="text-xs text-gray-500">Phone Number</label>
-                                <input
-                                  type="text"
-                                  value={phoneSubFields.phoneNumber?.placeholder || ''}
-                                  onChange={(e) => {
-                                    const newSubFields = {
-                                      ...phoneSubFields,
-                                      phoneNumber: {
-                                        ...phoneSubFields.phoneNumber,
-                                        placeholder: e.target.value
-                                      }
-                                    };
-                                    setPhoneSubFields(newSubFields);
-                                    onUpdateField(selectedField.id, { subFields: newSubFields });
-                                  }}
-                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                  placeholder="Enter phone number"
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <input
-                              type="text"
-                              value={placeholder.main || ''}
-                              onChange={(e) => handlePlaceholderChange('main', e.target.value)}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter placeholder text"
-                            />
-                          )}
-                        </div>
-                      )}
-                      {isAlignmentSupported && (
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Label Alignment</label>
-                          <select
-                            value={labelAlignment}
-                            onChange={handleAlignmentChange}
-                            className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="top">Top</option>
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                          </select>
-                        </div>
-                      )}
-                      {/* Default Value Feature */}
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
-                        <input
-                          type="text"
-                          value={defaultValue}
-                          onChange={handleDefaultValueChange}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="Enter default value"
-                        />
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isRequired}
-                            onChange={handleRequiredChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Required</span>
-                        </label>
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isDisabled}
-                            onChange={handleDisabledChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
-                        </label>
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isHidden}
-                            onChange={handleHiddenChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Hidden Field</span>
-                        </label>
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={showHelpText}
-                            onChange={handleShowHelpTextChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Show Help Text</span>
-                        </label>
-                        {showHelpText && (
-                          <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
-                            <textarea
-                              value={helpText}
-                              onChange={handleHelpTextChange}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter help text"
-                              rows="4"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-              </div>
+            {activeTab === 'settings' && (
+              <div className="gradient-border"></div>
             )}
           </div>
 
-          {selectedField && (
-            <div className="mb-2">
+          {isFormCalculation && (
+            <div className="relative">
               <button
-                className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-                onClick={() => toggleSection('additional')}
+                className={`px-4 py-2 font-medium text-sm ${activeTab === 'widget'
+                  ? 'text-gray-900'
+                  : 'text-gray-500'
+                  }`}
+                onClick={() => setActiveTab('widget')}
               >
-                <h3 className="text-lg font-semibold text-gray-800">Additional Properties</h3>
-                {expandedSection === 'additional' ? <FaChevronUp /> : <FaChevronDown />}
+                Widget
               </button>
-              {expandedSection === 'additional' && (
-                <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                  {isOptionsSupported && ['checkbox', 'radio'].includes(selectedField.type) && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
-                      <select
-                        value={predefinedOptionSet}
-                        onChange={handlePredefinedOptionSetChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      >
-                        <option value="">Custom</option>
-                        <option value="days">Days of the Week</option>
-                        <option value="week">Weeks</option>
-                        <option value="gender">Gender</option>
-                      </select>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
-                      {options.map((opt, idx) => (
-                        <div key={idx} className="flex items-center mb-2 gap-2">
-                          <input
-                            type="text"
-                            value={opt}
-                            onChange={(e) => handleOptionChange(idx, e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder={`Option ${idx + 1}`}
-                          />
-                          <input
-                            type="text"
-                            value={relatedValues[opt] || ''}
-                            onChange={(e) => handleRelatedValueChange(opt, e.target.value)}
-                            className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Related value"
-                          />
-                          <button
-                            onClick={() => handleRemoveOption(idx)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={handleAddOption}
-                        className="text-blue-600 hover:underline"
-                      >
-                        + Add Item
-                      </button>
-                    </div>
-                  )}
-                  {selectedField?.type === 'imageuploader' && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedField.imageWidth || ''}
-                        onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="e.g. 200"
-                      />
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={selectedField.imageHeight || ''}
-                        onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="e.g. 100"
-                      />
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
-                      <select
-                        value={selectedField.imageAlign || 'center'}
-                        onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
-                        className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="left">Left</option>
-                        <option value="center">Center</option>
-                        <option value="right">Right</option>
-                      </select>
-                    </div>
-                  )}
-                  {isOptionsSupported && selectedField.type === 'dropdown' && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
-                      <select
-                        value={predefinedOptionSet}
-                        onChange={handlePredefinedOptionSetChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      >
-                        <option value="">Custom</option>
-                        <option value="days">Days of the Week</option>
-                        <option value="week">Weeks</option>
-                        <option value="gender">Gender</option>
-                      </select>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
-                      {options.map((opt, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center mb-2 gap-2"
-                          draggable={shuffleOptions}
-                          onDragStart={() => handleDragStart(idx)}
-                          onDragOver={(e) => handleDragOver(e, idx)}
-                          onDrop={() => handleDrop(idx)}
-                        >
-                          {shuffleOptions && (
-                            <FaArrowsAltV className="cursor-move text-gray-500" />
-                          )}
-                          <input
-                            type="text"
-                            value={opt}
-                            onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder={`Option ${idx + 1}`}
-                          />
-                          <input
-                            type="text"
-                            value={dropdownRelatedValues[opt] || ''}
-                            onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
-                            className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Related value"
-                          />
-                          <button
-                            onClick={() => handleDropdownRemoveOption(idx)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={handleDropdownAddOption}
-                        className="text-blue-600 hover:underline"
-                      >
-                        + Add Item
-                      </button>
-                      <div className="mt-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={allowMultipleSelections}
-                            onChange={handleAllowMultipleSelectionsChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
-                        </label>
-                      </div>
-                      <div className="mt-2">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={shuffleOptions}
-                            onChange={handleShuffleOptionsChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                  {isScaleRating && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
-                      <select
-                        value={inputType}
-                        onChange={handleInputTypeChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      >
-                        <option value="radio">Radio</option>
-                        <option value="checkbox">Checkbox</option>
-                        <option value="text">Text</option>
-                        <option value="dropdown">Dropdown</option>
-                      </select>
-                      {inputType === 'dropdown' && (
-                        <div className="mt-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Dropdown Options</label>
-                          <textarea
-                            value={dropdownOptionsInput}
-                            onChange={(e) => setDropdownOptionsInput(e.target.value)}
-                            className="w-full p-2 border rounded-lg text-gray-800"
-                            rows="5"
-                            placeholder="Enter one option per line"
-                          />
-                          <div className="flex justify-end mt-2">
-                            <button
-                              onClick={handleDropdownOptionsSave}
-                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rows</label>
-                      {rows.map((rowLabel, rowIdx) => (
-                        <div key={rowIdx} className="flex items-center mb-2">
-                          <input
-                            type="text"
-                            value={rowLabel}
-                            onChange={(e) => handleRowChange(rowIdx, e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder={`Criteria ${rowIdx}idx + 1}`}
-                          />
-                        </div>
-                      ))}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleAddRow}
-                          className="text-blue-600 hover:underline"
-                        >
-                          + Add Row
-                        </button>
-                        <button
-                          onClick={() => setShowMultiRowModal(true)}
-                          className="text-blue-600 hover:underline"
-                        >
-                          + Add Multiple Rows
-                        </button>
-                      </div>
-                      {showMultiRowModal && (
-                        <div className="bg-white p-4 rounded-lg w-96">
-                          <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
-                          <textarea
-                            value={multiRowInput}
-                            onChange={(e) => setMultiRowInput(e.target.value)}
-                            className="w-full p-2 border rounded-lg"
-                            rows="5"
-                            placeholder="Enter one row per line"
-                          />
-                          <div className="flex justify-end gap-2 mt-4">
-                            <button
-                              onClick={() => setShowMultiRowModal(false)}
-                              className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleMultiRowSave}
-                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Columns</label>
-                      {columns.map((colLabel, colIdx) => (
-                        <div key={colIdx} className="flex items-center mb-2">
-                          <input
-                            type="text"
-                            value={colLabel}
-                            onChange={(e) => handleColumnChange(colIdx, e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder={`Column ${colIdx}idx + 1}`}
-                          />
-                        </div>
-                      ))}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleAddColumn}
-                          className="text-blue-600 hover:underline"
-                        >
-                          + Add Column
-                        </button>
-                        <button
-                          onClick={() => setShowMultiColumnModal(true)}
-                          className="text-blue-600 hover:underline"
-                        >
-                          + Add Multiple Columns
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {showMultiColumnModal && (
-                    <div className="bg-white p-4 rounded-lg w-96">
-                      <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
-                      <textarea
-                        value={multiColumnInput}
-                        onChange={(e) => setMultiColumnInput(e.target.value)}
-                        className="w-full p-2 border rounded-lg"
-                        rows="5"
-                        placeholder="Enter one column per line"
-                      />
-                      <div className="flex justify-end gap-2 mt-4">
-                        <button
-                          onClick={() => setShowMultiColumnModal(false)}
-                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleMultiColumnSave}
-                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {isRating && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Rating Type</label>
-                      <div className="flex gap-4">
-                        <button
-                          onClick={() => {
-                            setRatingType('emoji');
-                            onUpdateField(selectedField.id, { ratingType: 'emoji' });
-                          }}
-                          className={`text-2xl ${ratingType === 'emoji' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
-                        >
-                          😀
-                        </button>
-                        <button
-                          onClick={() => {
-                            setRatingType('star');
-                            onUpdateField(selectedField.id, { ratingType: 'star' });
-                          }}
-                          className={`text-2xl ${ratingType === 'star' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
-                        >
-                          <AiOutlineStar />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setRatingType('heart');
-                            onUpdateField(selectedField.id, { ratingType: 'heart' });
-                          }}
-                          className={`text-2xl ${ratingType === 'heart' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
-                        >
-                          <AiOutlineHeart />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setRatingType('bulb');
-                            onUpdateField(selectedField.id, { ratingType: 'bulb' });
-                          }}
-                          className={`text-2xl ${ratingType === 'bulb' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
-                        >
-                          <FaRegLightbulb />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setRatingType('lightning');
-                            onUpdateField(selectedField.id, { ratingType: 'lightning' });
-                          }}
-                          className={`text-2xl ${ratingType === 'lightning' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
-                        >
-                          <BiBoltCircle />
-                        </button>
-                      </div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rating Range</label>
-                      <input
-                        type="number"
-                        value={ratingRange}
-                        onChange={handleRatingRangeChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter number of rating options (e.g., 5)"
-                        min="1"
-                        max="10"
-                      />
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rating Values</label>
-                      {ratingValues.map((value, idx) => (
-                        <div key={idx} className="flex items-center mb-2 gap-4 relative">
-                          <button
-                            onClick={() => setShowEmojiPicker(showEmojiPicker === idx ? null : idx)}
-                            className="text-2xl w-12 text-center text-gray-700 hover:text-blue-500"
-                          >
-                            {ratingType === 'emoji' ? ratingEmojis[idx] :
-                              ratingType === 'star' ? <AiOutlineStar /> :
-                                ratingType === 'heart' ? <AiOutlineHeart /> :
-                                  ratingType === 'bulb' ? <FaRegLightbulb /> :
-                                    ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
-                          </button>
-                          {ratingType === 'emoji' && showEmojiPicker === idx && (
-                            <div className="absolute top-10 left-0 z-10">
-                              <EmojiPicker
-                                onEmojiClick={(emojiObject) => handleEmojiChange(idx, emojiObject.emoji)}
-                                width={300}
-                                height={400}
-                              />
-                            </div>
-                          )}
-                          <input
-                            type="text"
-                            value={value}
-                            onChange={(e) => handleRatingValueChange(idx, e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder={`Value for Rating ${idx + 1}`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {isFullname && (
-                    <div className="mb-4">
-                      <label className="inline-flex items-center mb-2">
+              {activeTab === 'widget' && (
+                <div className="gradient-border"></div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {activeTab === 'settings' && selectedField && (
+          <div className="settings-area px-4 h-screen bg-white"
+        style={{ maxHeight: 'calc(100vh - 120px)' }}>
+            {/* Common Properties Section */}
+            <div className="mb-4">
+              <button
+                className="flex justify-between w-full p-2 bg-gray-100 hover:bg-gray-100 rounded-lg items-center transition-colors duration-200 border border-gray-200"
+                onClick={() => toggleSection('common')}
+              >
+                <h3 className="text-base font-semibold text-gray-800">Common Properties</h3>
+                {expandedSections.includes('common') ? <FaChevronUp className="text-gray-600" /> : <FaChevronDown className="text-gray-600" />}
+              </button>
+              {expandedSections.includes('common') && (
+                <div className="p-2 mt-1 rounded-b-lg">
+                  {isHeading ?
+                    <>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
                         <input
-                          type="checkbox"
-                          checked={fullnameSubFields.salutation.enabled}
-                          onChange={handleSalutationEnabledChange}
-                          className="mr-2"
+                          type="text"
+                          value={headingText}
+                          onChange={handleHeadingTextChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter header text"
                         />
-                        <span className="text-sm font-medium text-gray-700">Enable Salutation</span>
-                      </label>
-                      {fullnameSubFields.salutation.enabled && (
-                        <>
-                          <div className="mb-3">
-                            <label className="text-xs text-gray-500">Salutation Placeholder</label>
-                            <input
-                              type="text"
-                              value={fullnameSubFields.salutation.placeholder || ''}
-                              onChange={(e) => handleFullnamePlaceholderChange('salutation', e.target.value)}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter salutation dropdown placeholder"
-                            />
-                          </div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Edit Salutations</label>
-                          {fullnameSubFields.salutation.options.map((sal, idx) => (
-                            <div key={idx} className="flex items-center mb-2 gap-2">
-                              <input
-                                type="text"
-                                value={sal}
-                                onChange={(e) => handleSalutationOptionChange(idx, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Salutation ${idx + 1}`}
-                              />
-                              <button
-                                onClick={() => handleRemoveSalutationOption(idx)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <FaTimes />
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            onClick={handleAddSalutationOption}
-                            className="text-blue-600 hover:underline"
-                          >
-                            + Add Salutation
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {isAddress && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Sub-labels</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <div key={key} className="mb-2">
-                              <label className="text-xs text-gray-500 capitalize">{key}</label>
-                              <input
-                                type="text"
-                                value={subFields[key]?.label || ''}
-                                onChange={(e) => handleAddressSubLabelChange(key, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Enter ${key} sub-label`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Visible Sub-fields</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <label key={key} className="inline-flex items-center mb-2">
-                              <input
-                                type="checkbox"
-                                checked={subFields[key]?.visible}
-                                onChange={() => handleAddressVisibilityChange(key)}
-                                className="mr-2"
-                              />
-                              <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
-                            </label>
-                          ))}
-                        </div>
                       </div>
-                    </div>
-                  )}
-                  {isEmail && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Maximum Characters</label>
-                          <input
-                            type="number"
-                            value={maxChars}
-                            onChange={handleMaxCharsChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter max characters (e.g., 100)"
-                            min="1"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Allowed Domains</label>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Heading Alignment</label>
+                        <select
+                          value={headingAlignment}
+                          onChange={handleHeadingAlignmentChange}
+                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                    </> : (
+                      <>
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
                           <input
                             type="text"
-                            value={allowedDomains}
-                            onChange={handleAllowedDomainsChange}
+                            value={label}
+                            onChange={handleLabelChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter domains (e.g., gmail.com, yahoo.com)"
+                            placeholder="Enter field label"
                           />
                         </div>
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={enableConfirmation}
-                            onChange={handleConfirmationChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Enable Confirmation Field</span>
-                        </label>
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={enableVerification}
-                            onChange={handleVerificationChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Enable Verification Code</span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                  {isFileUpload && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">File Upload Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Maximum File Size (MB)</label>
-                          <input
-                            type="number"
-                            value={maxFileSize}
-                            onChange={handleMaxFileSizeChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter max file size (e.g., 5)"
-                            min="1"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Allowed File Types</label>
-                          <input
-                            type="text"
-                            value={allowedFileTypes}
-                            onChange={handleAllowedFileTypesChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter file types (e.g., pdf, jpg, png)"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">File Selection</label>
-                          <div className="flex gap-4">
-                            <label className="inline-flex items-center">
+                        {isPlaceholderSupported && (
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
+                            {isAddress ? (
+                              <div className="flex flex-col gap-2">
+                                {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                                  <div key={key}>
+                                    <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                    <input
+                                      type="text"
+                                      value={subFields[key]?.placeholder || ''}
+                                      onChange={(e) => handleAddressPlaceholderChange(key, e.target.value)}
+                                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                      placeholder={`Enter ${key} placeholder`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : isFullname ? (
+                              <div className="flex flex-col gap-2">
+                                {['firstName', 'lastName'].map((key) => (
+                                  <div key={key}>
+                                    <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                    <input
+                                      type="text"
+                                      value={fullnameSubFields[key]?.placeholder || ''}
+                                      onChange={(e) => handleFullnamePlaceholderChange(key, e.target.value)}
+                                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                      placeholder={`Enter ${key} placeholder`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : isPhone ? (
+                              <div className="flex flex-col gap-2">
+                                <div>
+                                  <label className="text-xs text-gray-500">Phone Number</label>
+                                  <input
+                                    type="text"
+                                    value={phoneSubFields.phoneNumber?.placeholder || ''}
+                                    onChange={(e) => {
+                                      const newSubFields = {
+                                        ...phoneSubFields,
+                                        phoneNumber: {
+                                          ...phoneSubFields.phoneNumber,
+                                          placeholder: e.target.value
+                                        }
+                                      };
+                                      setPhoneSubFields(newSubFields);
+                                      onUpdateField(selectedField.id, { subFields: newSubFields });
+                                    }}
+                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                    placeholder="Enter phone number"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
                               <input
-                                type="radio"
-                                checked={!multipleFiles}
-                                onChange={() => handleMultipleFilesChange(false)}
-                                className="mr-2"
+                                type="text"
+                                value={placeholder.main || ''}
+                                onChange={(e) => handlePlaceholderChange('main', e.target.value)}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter placeholder text"
                               />
-                              <span className="text-sm font-medium text-gray-700">Single File</span>
-                            </label>
-                            <label className="inline-flex items-center">
-                              <input
-                                type="radio"
-                                checked={multipleFiles}
-                                onChange={() => handleMultipleFilesChange(true)}
-                                className="mr-2"
-                              />
-                              <span className="text-sm font-medium text-gray-700">Multiple Files</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {isTerms && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Terms Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={makeAsLink}
-                            onChange={handleMakeAsLinkChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Make Text as Link</span>
-                        </label>
-                        {makeAsLink && (
-                          <div>
-                            <label className="text-xs text-gray-500">Link URL</label>
-                            <input
-                              type="url"
-                              value={termsLinkUrl}
-                              onChange={handleTermsLinkUrlChange}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter URL (e.g., https://example.com/terms)"
-                            />
+                            )}
                           </div>
                         )}
-                      </div>
-                    </div>
-                  )}
-                  {(isDate || isDateTime) && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Date Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Date Separator</label>
-                          <select
-                            value={dateSeparator}
-                            onChange={handleDateSeparatorChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          >
-                            <option value="-">-</option>
-                            <option value="/">/</option>
-                            <option value=".">.</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Date Format</label>
-                          <select
-                            value={dateFormat}
-                            onChange={handleDateFormatChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          >
-                            <option value="MM/dd/yyyy">MM/dd/yyyy</option>
-                            <option value="dd/MM/yyyy">dd/MM/yyyy</option>
-                            <option value="yyyy/MM/dd">yyyy/MM/dd</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Default Date</label>
-                          <input
-                            type="date"
-                            value={defaultDate}
-                            onChange={handleDefaultDateChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Week Start Day</label>
-                          <select
-                            value={weekStartDay}
-                            onChange={handleWeekStartDayChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          >
-                            <option value="Sunday">Sunday</option>
-                            <option value="Monday">Monday</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Custom Month Labels</label>
-                          {customMonthLabels.map((month, idx) => (
-                            <div key={idx} className="mb-2">
-                              <input
-                                type="text"
-                                value={month}
-                                onChange={(e) => handleCustomMonthLabelChange(idx, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Month ${idx + 1}`}
-                              />
+                        {isAlignmentSupported && (
+                          <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Label Alignment</label>
+                            <div className="relative">
+                              <select
+                                value={labelAlignment}
+                                onChange={handleAlignmentChange}
+                                className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer shadow-sm"
+                                style={{ paddingRight: '2.5rem' }}
+                              >
+                                <option value="top">Top</option>
+                                <option value="left">Left</option>
+                                <option value="right">Right</option>
+                              </select>
+                              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                </svg>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Custom Day Labels</label>
-                          {customDayLabels.map((day, idx) => (
-                            <div key={idx} className="mb-2">
-                              <input
-                                type="text"
-                                value={day}
-                                onChange={(e) => handleCustomDayLabelChange(idx, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Day ${idx + 1}`}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Custom Today Label</label>
+                          </div>
+                        )}
+                        {/* Default Value Feature */}
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
                           <input
                             type="text"
-                            value={customTodayLabel}
-                            onChange={handleCustomTodayLabelChange}
+                            value={defaultValue}
+                            onChange={handleDefaultValueChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Enter replacement text for 'Today'"
+                            placeholder="Enter default value"
                           />
                         </div>
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={enableAgeVerification}
-                            onChange={handleAgeVerificationChange}
-                            className="mr-2"
+                        <div className="mb-4 flex items-center">
+                          <ToggleSwitch
+                            checked={isRequired}
+                            onChange={handleRequiredChange}
+                            id="required-toggle"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Age Verification</span>
-                        </label>
-                        {enableAgeVerification && (
+                          <span className="text-sm font-medium text-gray-700">Required</span>
+                        </div>
+                        <div className="mb-4 flex items-center">
+                          <ToggleSwitch
+                            checked={isDisabled}
+                            onChange={handleDisabledChange}
+                            id="disabled-toggle"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
+                        </div>
+                        <div className="mb-4 flex items-center">
+                          <ToggleSwitch
+                            checked={isHidden}
+                            onChange={handleHiddenChange}
+                            id="hidden-toggle"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Hidden Field</span>
+                        </div>
+                        <div className="mb-4">
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={showHelpText}
+                              onChange={handleShowHelpTextChange}
+                              id="help-text-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Show Help Text</span>
+                          </div>
+                          {showHelpText && (
+                            <div className="mt-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
+                              <textarea
+                                value={helpText}
+                                onChange={handleHelpTextChange}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter help text"
+                                rows="4"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                </div>
+              )}
+            </div>
+
+            {selectedField && hasAdditionalProperties() && (
+              <div className="mb-4">
+                <button
+                  className="flex justify-between w-full p-3 bg-gray-100 hover:bg-gray-150 rounded-lg items-center transition-colors duration-200 border border-gray-200"
+                  onClick={() => toggleSection('additional')}
+                >
+                  <h3 className="text-base font-semibold text-gray-800">Additional Properties</h3>
+                  {expandedSections.includes('additional') ? <FaChevronUp className="text-gray-600" /> : <FaChevronDown className="text-gray-600" />}
+                </button>
+                {expandedSections.includes('additional') && (
+                  <div className="p-2 mt-1 bg-gray-50 rounded-b-lg">
+                    {isOptionsSupported && ['checkbox', 'radio'].includes(selectedField.type) && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
+                        <select
+                          value={predefinedOptionSet}
+                          onChange={handlePredefinedOptionSetChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        >
+                          <option value="">Custom</option>
+                          <option value="days">Days of the Week</option>
+                          <option value="week">Weeks</option>
+                          <option value="gender">Gender</option>
+                        </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
+                        {options.map((opt, idx) => (
+                          <div key={idx} className="flex items-center mb-3 gap-3">
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={(e) => handleOptionChange(idx, e.target.value)}
+                              className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder={`Option ${idx + 1}`}
+                            />
+                            <input
+                              type="text"
+                              value={relatedValues[opt] || ''}
+                              onChange={(e) => handleRelatedValueChange(opt, e.target.value)}
+                              className="w-32 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Value"
+                            />
+                            <button
+                              onClick={() => handleRemoveOption(idx)}
+                              className="text-red-500 hover:text-red-700 text-lg p-1 flex-shrink-0"
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={handleAddOption}
+                          className="text-blue-600 hover:underline"
+                        >
+                          + Add Item
+                        </button>
+                      </div>
+                    )}
+                    {selectedField?.type === 'imageuploader' && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedField.imageWidth || ''}
+                          onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="e.g. 200"
+                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedField.imageHeight || ''}
+                          onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="e.g. 100"
+                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
+                        <select
+                          value={selectedField.imageAlign || 'center'}
+                          onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
+                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                    )}
+                    {isOptionsSupported && selectedField.type === 'dropdown' && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
+                        <select
+                          value={predefinedOptionSet}
+                          onChange={handlePredefinedOptionSetChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        >
+                          <option value="">Custom</option>
+                          <option value="days">Days of the Week</option>
+                          <option value="week">Weeks</option>
+                          <option value="gender">Gender</option>
+                        </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
+                        {options.map((opt, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center mb-3 gap-3"
+                            draggable={shuffleOptions}
+                            onDragStart={() => handleDragStart(idx)}
+                            onDragOver={(e) => handleDragOver(e, idx)}
+                            onDrop={() => handleDrop(idx)}
+                          >
+                            {shuffleOptions && (
+                              <FaArrowsAltV className="cursor-move text-gray-500 flex-shrink-0" />
+                            )}
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
+                              className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder={`Option ${idx + 1}`}
+                            />
+                            <input
+                              type="text"
+                              value={dropdownRelatedValues[opt] || ''}
+                              onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
+                              className="w-32 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Value"
+                            />
+                            <button
+                              onClick={() => handleDropdownRemoveOption(idx)}
+                              className="text-red-500 hover:text-red-700 text-lg p-1 flex-shrink-0"
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={handleDropdownAddOption}
+                          className="text-blue-600 hover:underline"
+                        >
+                          + Add Item
+                        </button>
+                        <div className="flex items-center mt-4">
+                          <ToggleSwitch
+                            checked={allowMultipleSelections}
+                            onChange={handleAllowMultipleSelectionsChange}
+                            id="multiple-selections-toggle"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
+                        </div>
+                        <div className="flex items-center mt-2">
+                          <ToggleSwitch
+                            checked={shuffleOptions}
+                            onChange={handleShuffleOptionsChange}
+                            id="shuffle-toggle"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
+                        </div>
+                      </div>
+                    )}
+                    {isScaleRating && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
+                        <select
+                          value={inputType}
+                          onChange={handleInputTypeChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        >
+                          <option value="radio">Radio</option>
+                          <option value="checkbox">Checkbox</option>
+                          <option value="text">Text</option>
+                          <option value="dropdown">Dropdown</option>
+                        </select>
+                        {inputType === 'dropdown' && (
+                          <div className="mt-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Dropdown Options</label>
+                            <textarea
+                              value={dropdownOptionsInput}
+                              onChange={(e) => setDropdownOptionsInput(e.target.value)}
+                              className="w-full p-2 border rounded-lg text-gray-800"
+                              rows="5"
+                              placeholder="Enter one option per line"
+                            />
+                            <div className="flex justify-end mt-2">
+                              <button
+                                onClick={handleDropdownOptionsSave}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rows</label>
+                        {rows.map((rowLabel, rowIdx) => (
+                          <div key={rowIdx} className="flex items-center mb-2">
+                            <input
+                              type="text"
+                              value={rowLabel}
+                              onChange={(e) => handleRowChange(rowIdx, e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder={`Criteria ${rowIdx}idx + 1}`}
+                            />
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleAddRow}
+                            className="text-blue-600 hover:underline"
+                          >
+                            + Add Row
+                          </button>
+                          <button
+                            onClick={() => setShowMultiRowModal(true)}
+                            className="text-blue-600 hover:underline"
+                          >
+                            + Add Multiple Rows
+                          </button>
+                        </div>
+                        {showMultiRowModal && (
+                          <div className="bg-white p-4 rounded-lg w-96">
+                            <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
+                            <textarea
+                              value={multiRowInput}
+                              onChange={(e) => setMultiRowInput(e.target.value)}
+                              className="w-full p-2 border rounded-lg"
+                              rows="5"
+                              placeholder="Enter one row per line"
+                            />
+                            <div className="flex justify-end gap-2 mt-4">
+                              <button
+                                onClick={() => setShowMultiRowModal(false)}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleMultiRowSave}
+                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Columns</label>
+                        {columns.map((colLabel, colIdx) => (
+                          <div key={colIdx} className="flex items-center mb-2">
+                            <input
+                              type="text"
+                              value={colLabel}
+                              onChange={(e) => handleColumnChange(colIdx, e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder={`Column ${colIdx}idx + 1}`}
+                            />
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleAddColumn}
+                            className="text-blue-600 hover:underline"
+                          >
+                            + Add Column
+                          </button>
+                          <button
+                            onClick={() => setShowMultiColumnModal(true)}
+                            className="text-blue-600 hover:underline"
+                          >
+                            + Add Multiple Columns
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {showMultiColumnModal && (
+                      <div className="bg-white p-4 rounded-lg w-96">
+                        <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
+                        <textarea
+                          value={multiColumnInput}
+                          onChange={(e) => setMultiColumnInput(e.target.value)}
+                          className="w-full p-2 border rounded-lg"
+                          rows="5"
+                          placeholder="Enter one column per line"
+                        />
+                        <div className="flex justify-end gap-2 mt-4">
+                          <button
+                            onClick={() => setShowMultiColumnModal(false)}
+                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleMultiColumnSave}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {isRating && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Rating Type</label>
+                        <div className="flex gap-4">
+                          <button
+                            onClick={() => {
+                              setRatingType('emoji');
+                              onUpdateField(selectedField.id, { ratingType: 'emoji' });
+                            }}
+                            className={`text-2xl ${ratingType === 'emoji' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          >
+                            😀
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRatingType('star');
+                              onUpdateField(selectedField.id, { ratingType: 'star' });
+                            }}
+                            className={`text-2xl ${ratingType === 'star' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          >
+                            <AiOutlineStar />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRatingType('heart');
+                              onUpdateField(selectedField.id, { ratingType: 'heart' });
+                            }}
+                            className={`text-2xl ${ratingType === 'heart' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          >
+                            <AiOutlineHeart />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRatingType('bulb');
+                              onUpdateField(selectedField.id, { ratingType: 'bulb' });
+                            }}
+                            className={`text-2xl ${ratingType === 'bulb' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          >
+                            <FaRegLightbulb />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRatingType('lightning');
+                              onUpdateField(selectedField.id, { ratingType: 'lightning' });
+                            }}
+                            className={`text-2xl ${ratingType === 'lightning' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          >
+                            <BiBoltCircle />
+                          </button>
+                        </div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rating Range</label>
+                        <input
+                          type="number"
+                          value={ratingRange}
+                          onChange={handleRatingRangeChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="Enter number of rating options (e.g., 5)"
+                          min="1"
+                          max="10"
+                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rating Values</label>
+                        {ratingValues.map((value, idx) => (
+                          <div key={idx} className="flex items-center mb-2 gap-4 relative">
+                            <button
+                              onClick={() => setShowEmojiPicker(showEmojiPicker === idx ? null : idx)}
+                              className="text-2xl w-12 text-center text-gray-700 hover:text-blue-500"
+                            >
+                              {ratingType === 'emoji' ? ratingEmojis[idx] :
+                                ratingType === 'star' ? <AiOutlineStar /> :
+                                  ratingType === 'heart' ? <AiOutlineHeart /> :
+                                    ratingType === 'bulb' ? <FaRegLightbulb /> :
+                                      ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
+                            </button>
+                            {ratingType === 'emoji' && showEmojiPicker === idx && (
+                              <div className="absolute top-10 left-0 z-10">
+                                <EmojiPicker
+                                  onEmojiClick={(emojiObject) => handleEmojiChange(idx, emojiObject.emoji)}
+                                  width={300}
+                                  height={400}
+                                />
+                              </div>
+                            )}
+                            <input
+                              type="text"
+                              value={value}
+                              onChange={(e) => handleRatingValueChange(idx, e.target.value)}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder={`Value for Rating ${idx + 1}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {isFullname && (
+                      <div className="mb-4">
+                        <div className="flex items-center mb-2">
+                          <ToggleSwitch
+                            checked={fullnameSubFields.salutation.enabled}
+                            onChange={handleSalutationEnabledChange}
+                            id="salutation-toggle"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Enable Salutation</span>
+                        </div>
+                        {fullnameSubFields.salutation.enabled && (
+                          <>
+                            <div className="mb-3">
+                              <label className="text-xs text-gray-500">Salutation Placeholder</label>
+                              <input
+                                type="text"
+                                value={fullnameSubFields.salutation.placeholder || ''}
+                                onChange={(e) => handleFullnamePlaceholderChange('salutation', e.target.value)}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter salutation dropdown placeholder"
+                              />
+                            </div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Edit Salutations</label>
+                            {fullnameSubFields.salutation.options.map((sal, idx) => (
+                              <div key={idx} className="flex items-center mb-2 gap-2">
+                                <input
+                                  type="text"
+                                  value={sal}
+                                  onChange={(e) => handleSalutationOptionChange(idx, e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Salutation ${idx + 1}`}
+                                />
+                                <button
+                                  onClick={() => handleRemoveSalutationOption(idx)}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <FaTimes />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={handleAddSalutationOption}
+                              className="text-blue-600 hover:underline"
+                            >
+                              + Add Salutation
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {isAddress && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
+                        <div className="flex flex-col gap-2">
                           <div>
-                            <label className="text-xs text-gray-500">Minimum Age</label>
+                            <label className="text-xs text-gray-500">Sub-labels</label>
+                            {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                              <div key={key} className="mb-2">
+                                <label className="text-xs text-gray-500 capitalize">{key}</label>
+                                <input
+                                  type="text"
+                                  value={subFields[key]?.label || ''}
+                                  onChange={(e) => handleAddressSubLabelChange(key, e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Enter ${key} sub-label`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-3">Visible Sub-fields</label>
+                            <div className="space-y-2">
+                              {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                                <div key={key} className="flex items-center justify-between">
+                                  <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
+                                  <ToggleSwitch
+                                    checked={subFields[key]?.visible || false}
+                                    onChange={() => handleAddressVisibilityChange(key)}
+                                    id={`address-${key}-toggle`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {isEmail && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Settings</label>
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Maximum Characters</label>
                             <input
                               type="number"
-                              value={minAge}
-                              onChange={handleMinAgeChange}
+                              value={maxChars}
+                              onChange={handleMaxCharsChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter minimum age (e.g., 18)"
+                              placeholder="Enter max characters (e.g., 100)"
                               min="1"
                             />
                           </div>
-                        )}
-                        <div>
-                          <label className="text-xs text-gray-500">{isDateTime ? 'Start-End Date Range' : 'Date Range'}</label>
-                          <div className="flex gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Allowed Domains</label>
                             <input
-                              type={isDateTime ? 'datetime-local' : 'date'}
-                              value={isDateTime ? datetimeRange.start : dateRange.start}
-                              onChange={(e) => (isDateTime ? handleDatetimeRangeChange('start', e.target.value) : handleDateRangeChange('start', e.target.value))}
+                              type="text"
+                              value={allowedDomains}
+                              onChange={handleAllowedDomainsChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Start date"
-                            />
-                            <input
-                              type={isDateTime ? 'datetime-local' : 'date'}
-                              value={isDateTime ? datetimeRange.end : dateRange.end}
-                              onChange={(e) => (isDateTime ? handleDatetimeRangeChange('end', e.target.value) : handleDateRangeChange('end', e.target.value))}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="End date"
+                              placeholder="Enter domains (e.g., gmail.com, yahoo.com)"
                             />
                           </div>
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={enableConfirmation}
+                              onChange={handleConfirmationChange}
+                              id="confirmation-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Enable Confirmation Field</span>
+                          </div>
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={enableVerification}
+                              onChange={handleVerificationChange}
+                              id="verification-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Enable Verification Code</span>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Disabled Dates/Ranges</label>
-                          {disabledDates.map((date, idx) => (
-                            <div key={idx} className="flex items-center mb-2 gap-2">
+                      </div>
+                    )}
+                    {isFileUpload && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">File Upload Settings</label>
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Maximum File Size (MB)</label>
+                            <input
+                              type="number"
+                              value={maxFileSize}
+                              onChange={handleMaxFileSizeChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter max file size (e.g., 5)"
+                              min="1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Allowed File Types</label>
+                            <input
+                              type="text"
+                              value={allowedFileTypes}
+                              onChange={handleAllowedFileTypesChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter file types (e.g., pdf, jpg, png)"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">File Selection</label>
+                            <div className="flex gap-4">
+                              <label className="inline-flex items-center">
+                                <input
+                                  type="radio"
+                                  checked={!multipleFiles}
+                                  onChange={() => handleMultipleFilesChange(false)}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm font-medium text-gray-700">Single File</span>
+                              </label>
+                              <label className="inline-flex items-center">
+                                <input
+                                  type="radio"
+                                  checked={multipleFiles}
+                                  onChange={() => handleMultipleFilesChange(true)}
+                                  className="mr-2"
+                                />
+                                <span className="text-sm font-medium text-gray-700">Multiple Files</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {isTerms && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Terms Settings</label>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={makeAsLink}
+                              onChange={handleMakeAsLinkChange}
+                              id="link-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Make Text as Link</span>
+                          </div>
+                          {makeAsLink && (
+                            <div>
+                              <label className="text-xs text-gray-500">Link URL</label>
+                              <input
+                                type="url"
+                                value={termsLinkUrl}
+                                onChange={handleTermsLinkUrlChange}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter URL (e.g., https://example.com/terms)"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {(isDate || isDateTime) && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date Settings</label>
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Date Separator</label>
+                            <select
+                              value={dateSeparator}
+                              onChange={handleDateSeparatorChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="-">-</option>
+                              <option value="/">/</option>
+                              <option value=".">.</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Date Format</label>
+                            <select
+                              value={dateFormat}
+                              onChange={handleDateFormatChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="MM/dd/yyyy">MM/dd/yyyy</option>
+                              <option value="dd/MM/yyyy">dd/MM/yyyy</option>
+                              <option value="yyyy/MM/dd">yyyy/MM/dd</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Default Date</label>
+                            <input
+                              type="date"
+                              value={defaultDate}
+                              onChange={handleDefaultDateChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Week Start Day</label>
+                            <select
+                              value={weekStartDay}
+                              onChange={handleWeekStartDayChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="Sunday">Sunday</option>
+                              <option value="Monday">Monday</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Custom Month Labels</label>
+                            {customMonthLabels.map((month, idx) => (
+                              <div key={idx} className="mb-2">
+                                <input
+                                  type="text"
+                                  value={month}
+                                  onChange={(e) => handleCustomMonthLabelChange(idx, e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Month ${idx + 1}`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Custom Day Labels</label>
+                            {customDayLabels.map((day, idx) => (
+                              <div key={idx} className="mb-2">
+                                <input
+                                  type="text"
+                                  value={day}
+                                  onChange={(e) => handleCustomDayLabelChange(idx, e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Day ${idx + 1}`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Custom Today Label</label>
+                            <input
+                              type="text"
+                              value={customTodayLabel}
+                              onChange={handleCustomTodayLabelChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Enter replacement text for 'Today'"
+                            />
+                          </div>
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={enableAgeVerification}
+                              onChange={handleAgeVerificationChange}
+                              id="age-verification-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Enable Age Verification</span>
+                          </div>
+                          {enableAgeVerification && (
+                            <div>
+                              <label className="text-xs text-gray-500">Minimum Age</label>
+                              <input
+                                type="number"
+                                value={minAge}
+                                onChange={handleMinAgeChange}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter minimum age (e.g., 18)"
+                                min="1"
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <label className="text-xs text-gray-500">{isDateTime ? 'Start-End Date Range' : 'Date Range'}</label>
+                            <div className="flex gap-2">
                               <input
                                 type={isDateTime ? 'datetime-local' : 'date'}
-                                value={date}
-                                onChange={(e) => handleDisabledDateChange(idx, e.target.value)}
+                                value={isDateTime ? datetimeRange.start : dateRange.start}
+                                onChange={(e) => (isDateTime ? handleDatetimeRangeChange('start', e.target.value) : handleDateRangeChange('start', e.target.value))}
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder="Select disabled date"
+                                placeholder="Start date"
                               />
-                              <button
-                                onClick={() => handleRemoveDisabledDate(idx)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                <FaTimes />
-                              </button>
+                              <input
+                                type={isDateTime ? 'datetime-local' : 'date'}
+                                value={isDateTime ? datetimeRange.end : dateRange.end}
+                                onChange={(e) => (isDateTime ? handleDatetimeRangeChange('end', e.target.value) : handleDateRangeChange('end', e.target.value))}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="End date"
+                              />
                             </div>
-                          ))}
-                          <button
-                            onClick={handleAddDisabledDate}
-                            className="text-blue-600 hover:underline"
-                          >
-                            + Add Disabled Date
-                          </button>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Disabled Dates/Ranges</label>
+                            {disabledDates.map((date, idx) => (
+                              <div key={idx} className="flex items-center mb-2 gap-2">
+                                <input
+                                  type={isDateTime ? 'datetime-local' : 'date'}
+                                  value={date}
+                                  onChange={(e) => handleDisabledDateChange(idx, e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder="Select disabled date"
+                                />
+                                <button
+                                  onClick={() => handleRemoveDisabledDate(idx)}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <FaTimes />
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={handleAddDisabledDate}
+                              className="text-blue-600 hover:underline"
+                            >
+                              + Add Disabled Date
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {isTime && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Time Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500">Time Format</label>
-                          <select
-                            value={timeFormat}
-                            onChange={handleTimeFormatChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          >
-                            <option value="HH:mm">24-hour (HH:mm)</option>
-                            <option value="hh:mm a">12-hour (hh:mm AM/PM)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Default Time</label>
-                          <input
-                            type="time"
-                            value={defaultTime}
-                            onChange={handleDefaultTimeChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">Restrict AM/PM</label>
-                          <select
-                            value={restrictAmPm}
-                            onChange={handleRestrictAmPmChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          >
-                            <option value="">None</option>
-                            <option value="AM">AM Only</option>
-                            <option value="PM">PM Only</option>
-                          </select>
+                    )}
+                    {isTime && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Time Settings</label>
+                        <div className="flex flex-col gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Time Format</label>
+                            <select
+                              value={timeFormat}
+                              onChange={handleTimeFormatChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="HH:mm">24-hour (HH:mm)</option>
+                              <option value="hh:mm a">12-hour (hh:mm AM/PM)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Default Time</label>
+                            <input
+                              type="time"
+                              value={defaultTime}
+                              onChange={handleDefaultTimeChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">Restrict AM/PM</label>
+                            <select
+                              value={restrictAmPm}
+                              onChange={handleRestrictAmPmChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="">None</option>
+                              <option value="AM">AM Only</option>
+                              <option value="PM">PM Only</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {isShortText && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
-                      <input
-                        type="number"
-                        value={shortTextMaxChars}
-                        onChange={handleShortTextMaxCharsChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                        placeholder="Enter max characters (max 255)"
-                        min="1"
-                        max="255"
-                      />
-                    </div>
-                  )}
-                  {isLongText && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={isRichText}
-                          onChange={handleIsRichTextChange}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
-                      </label>
-                      <div className="mt-2">
+                    )}
+                    {isShortText && (
+                      <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
                         <input
                           type="number"
-                          value={longTextMaxChars}
-                          onChange={handleLongTextMaxCharsChange}
+                          value={shortTextMaxChars}
+                          onChange={handleShortTextMaxCharsChange}
                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="Enter max characters (max 131072)"
+                          placeholder="Enter max characters (max 255)"
                           min="1"
-                          max="131072"
+                          max="255"
                         />
                       </div>
-                    </div>
-                  )}
-                  {isNumber && (
-                    <div className="mb-4">
-                      <label className="inline-flex items-center mb-2">
-                        <input
-                          type="checkbox"
-                          checked={numberValueLimits.enabled}
-                          onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
-                          className="mr-2"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
-                      </label>
-                      {numberValueLimits.enabled && (
-                        <div className="flex gap-2">
-                          <div>
-                            <label className="text-xs text-gray-500">Minimum Value</label>
-                            <input
-                              type="number"
-                              value={numberValueLimits.min}
-                              onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter min value"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500">Maximum Value</label>
-                            <input
-                              type="number"
-                              value={numberValueLimits.max}
-                              onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter max value"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* NEW: Phone-specific properties */}
-                  {/* NEW: Phone-specific properties */}
-                  {isPhone && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Settings</label>
-                      <div className="flex flex-col gap-2">
-                        {/* Enable Country Code Checkbox */}
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={phoneSubFields.countryCode?.enabled || false}
-                            onChange={(e) => {
-                              const newSubFields = {
-                                ...phoneSubFields,
-                                countryCode: {
-                                  ...phoneSubFields.countryCode,
-                                  enabled: e.target.checked,
-                                  value: e.target.checked ? phoneSubFields.countryCode?.value || 'US' : '',
-                                },
-                                phoneNumber: {
-                                  value: phoneSubFields.phoneNumber?.value || '',
-                                  placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
-                                  ...(e.target.checked ? {} : { phoneMask: phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999' }),
-                                },
-                              };
-                              setPhoneSubFields(newSubFields);
-                              onUpdateField(selectedField.id, {
-                                subFields: newSubFields,
-                                placeholder: undefined,
-                              });
-                            }}
-                            className="mr-2"
+                    )}
+                    {isLongText && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
+                        <div className="flex items-center">
+                          <ToggleSwitch
+                            checked={isRichText}
+                            onChange={handleIsRichTextChange}
+                            id="rich-text-toggle"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Country Code</span>
-                        </label>
-
-                        {/* Country Selector Dropdown */}
-                        {phoneSubFields.countryCode?.enabled && (
-                          <div>
-                            <label className="text-xs text-gray-500">Default Country Code</label>
-                            <select
-                              value={phoneSubFields.countryCode?.value || 'US'}
+                          <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
+                        </div>
+                        <div className="mt-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
+                          <input
+                            type="number"
+                            value={longTextMaxChars}
+                            onChange={handleLongTextMaxCharsChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Enter max characters (max 131072)"
+                            min="1"
+                            max="131072"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {isNumber && (
+                      <div className="mb-4">
+                        <div className="flex items-center mb-2">
+                          <ToggleSwitch
+                            checked={numberValueLimits.enabled}
+                            onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
+                            id="value-limits-toggle"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
+                        </div>
+                        {numberValueLimits.enabled && (
+                          <div className="flex gap-2">
+                            <div>
+                              <label className="text-xs text-gray-500">Minimum Value</label>
+                              <input
+                                type="number"
+                                value={numberValueLimits.min}
+                                onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter min value"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">Maximum Value</label>
+                              <input
+                                type="number"
+                                value={numberValueLimits.max}
+                                onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter max value"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* NEW: Phone-specific properties */}
+                    {/* NEW: Phone-specific properties */}
+                    {isPhone && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Settings</label>
+                        <div className="flex flex-col gap-2">
+                          {/* Enable Country Code Checkbox */}
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={phoneSubFields.countryCode?.enabled || false}
                               onChange={(e) => {
                                 const newSubFields = {
                                   ...phoneSubFields,
                                   countryCode: {
                                     ...phoneSubFields.countryCode,
-                                    value: e.target.value,
+                                    enabled: e.target.checked,
+                                    value: e.target.checked ? phoneSubFields.countryCode?.value || 'US' : '',
                                   },
                                   phoneNumber: {
                                     value: phoneSubFields.phoneNumber?.value || '',
                                     placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                    ...(e.target.checked ? {} : { phoneMask: phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999' }),
                                   },
                                 };
                                 setPhoneSubFields(newSubFields);
-                                onUpdateField(selectedField.id, { subFields: newSubFields });
+                                onUpdateField(selectedField.id, {
+                                  subFields: newSubFields,
+                                  placeholder: undefined,
+                                });
                               }}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            >
-                              <option value="">Select a country</option>
-                              {countries.map(({ code, name, dialCode }) => (
-                                <option key={code} value={code}>
-                                  {`${name} (${dialCode})`}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Phone Mask Field — Only Show if Country Code Is Disabled */}
-                        {!phoneSubFields.countryCode?.enabled && (
-                          <div>
-                            <label className="text-xs text-gray-500 flex items-center gap-1">
-                              Phone Number Mask
-                              <FaInfoCircle
-                                className="text-blue-500 cursor-pointer"
-                                title="Use ( ) and - symbols to define a phone input mask. Example: (999) 999-9999"
-                              />
-                            </label>
-                            <input
-                              type="text"
-                              value={phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999'}
-                              onChange={(e) => {
-                                const newSubFields = {
-                                  ...phoneSubFields,
-                                  phoneNumber: {
-                                    value: phoneSubFields.phoneNumber?.value || '',
-                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
-                                    phoneMask: e.target.value,
-                                  },
-                                };
-                                setPhoneSubFields(newSubFields);
-                                onUpdateField(selectedField.id, { subFields: newSubFields });
-                              }}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="(999) 999-9999"
+                              id="country-code-toggle"
                             />
+                            <span className="text-sm font-medium text-gray-700">Enable Country Code</span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
 
-                  {/* NEW: Price-specific properties */}
-                  {isPrice && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Price Settings</label>
-                      <div className="flex flex-col gap-2">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={priceLimits.enabled}
-                            onChange={(e) => handlePriceLimitsChange('enabled', e.target.checked)}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Enable Price Limits</span>
-                        </label>
-                        {priceLimits.enabled && (
-                          <div className="flex gap-2">
+                          {/* Country Selector Dropdown */}
+                          {phoneSubFields.countryCode?.enabled && (
                             <div>
-                              <label className="text-xs text-gray-500">Minimum Price</label>
-                              <input
-                                type="number"
-                                value={priceLimits.min}
-                                onChange={(e) => handlePriceLimitsChange('min', e.target.value)}
+                              <label className="text-xs text-gray-500">Default Country Code</label>
+                              <select
+                                value={phoneSubFields.countryCode?.value || 'US'}
+                                onChange={(e) => {
+                                  const newSubFields = {
+                                    ...phoneSubFields,
+                                    countryCode: {
+                                      ...phoneSubFields.countryCode,
+                                      value: e.target.value,
+                                    },
+                                    phoneNumber: {
+                                      value: phoneSubFields.phoneNumber?.value || '',
+                                      placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                    },
+                                  };
+                                  setPhoneSubFields(newSubFields);
+                                  onUpdateField(selectedField.id, { subFields: newSubFields });
+                                }}
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder="Enter min price"
-                                step="0.01"
+                              >
+                                <option value="">Select a country</option>
+                                {countries.map(({ code, name, dialCode }) => (
+                                  <option key={code} value={code}>
+                                    {`${name} (${dialCode})`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Phone Mask Field — Only Show if Country Code Is Disabled */}
+                          {!phoneSubFields.countryCode?.enabled && (
+                            <div>
+                              <label className="text-xs text-gray-500 flex items-center gap-1">
+                                Phone Number Mask
+                                <FaInfoCircle
+                                  className="text-blue-500 cursor-pointer"
+                                  title="Use ( ) and - symbols to define a phone input mask. Example: (999) 999-9999"
+                                />
+                              </label>
+                              <input
+                                type="text"
+                                value={phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                                onChange={(e) => {
+                                  const newSubFields = {
+                                    ...phoneSubFields,
+                                    phoneNumber: {
+                                      value: phoneSubFields.phoneNumber?.value || '',
+                                      placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                      phoneMask: e.target.value,
+                                    },
+                                  };
+                                  setPhoneSubFields(newSubFields);
+                                  onUpdateField(selectedField.id, { subFields: newSubFields });
+                                }}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="(999) 999-9999"
                               />
                             </div>
-                            <div>
-                              <label className="text-xs text-gray-500">Maximum Price</label>
-                              <input
-                                type="number"
-                                value={priceLimits.max}
-                                onChange={(e) => handlePriceLimitsChange('max', e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder="Enter max price"
-                                step="0.01"
-                              />
-                            </div>
-                          </div>
-                        )}
-                        <div>
-                          <label className="text-xs text-gray-500">Currency Type</label>
-                          <select
-                            value={currencyType}
-                            onChange={handleCurrencyTypeChange}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          >
-                            <option value="USD">$ (USD)</option>
-                            <option value="EUR">€ (EUR)</option>
-                            <option value="GBP">£ (GBP)</option>
-                            <option value="JPY">¥ (JPY)</option>
-                            <option value="AUD">$ (AUD)</option>
-                            <option value="CAD">$ (CAD)</option>
-                          </select>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {/* NEW: Price-specific properties */}
+                    {isPrice && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Price Settings</label>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center">
+                            <ToggleSwitch
+                              checked={priceLimits.enabled}
+                              onChange={(e) => handlePriceLimitsChange('enabled', e.target.checked)}
+                              id="price-limits-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Enable Price Limits</span>
+                          </div>
+                          {priceLimits.enabled && (
+                            <div className="flex gap-2">
+                              <div>
+                                <label className="text-xs text-gray-500">Minimum Price</label>
+                                <input
+                                  type="number"
+                                  value={priceLimits.min}
+                                  onChange={(e) => handlePriceLimitsChange('min', e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder="Enter min price"
+                                  step="0.01"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500">Maximum Price</label>
+                                <input
+                                  type="number"
+                                  value={priceLimits.max}
+                                  onChange={(e) => handlePriceLimitsChange('max', e.target.value)}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder="Enter max price"
+                                  step="0.01"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <label className="text-xs text-gray-500">Currency Type</label>
+                            <select
+                              value={currencyType}
+                              onChange={handleCurrencyTypeChange}
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            >
+                              <option value="USD">$ (USD)</option>
+                              <option value="EUR">€ (EUR)</option>
+                              <option value="GBP">£ (GBP)</option>
+                              <option value="JPY">¥ (JPY)</option>
+                              <option value="AUD">$ (AUD)</option>
+                              <option value="CAD">$ (CAD)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Advanced Properties Section */}
+            <div className="mb-4">
+              <button
+                className="flex justify-between w-full p-2 bg-gray-100 hover:bg-gray-150 rounded-lg items-center transition-colors duration-200 border border-gray-200"
+                onClick={() => toggleSection('advanced')}
+              >
+                <h3 className="text-base font-semibold text-gray-800">Advanced Properties</h3>
+                {expandedSections.includes('advanced') ? <FaChevronUp className="text-gray-600" /> : <FaChevronDown className="text-gray-600" />}
+              </button>
+              {expandedSections.includes('advanced') && (
+                <div className="p-2 mt-1 bg-gray-50 rounded-b-lg">
+                  {/* Unique Name Feature */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unique Name</label>
+                    <input
+                      type="text"
+                      value={uniqueName}
+                      onChange={handleUniqueNameChange}
+                      className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? 'border-red-500' : ''}`}
+                      placeholder="{uniqueName}"
+                      maxLength={50}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      This can be used to pre-populate fields from a URL and pass data to another form automatically. It can't include spaces.
+                    </p>
+                    {uniqueNameError && (
+                      <p className="text-xs text-red-500 mt-1">{uniqueNameError}</p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {/* Advanced Properties Section */}
-          <div className="mb-2">
-            <button
-              className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-              onClick={() => toggleSection('advanced')}
-            >
-              <h3 className="text-lg font-semibold text-gray-800">Advanced Properties</h3>
-              {expandedSection === 'advanced' ? <FaChevronUp /> : <FaChevronDown />}
-            </button>
-            {expandedSection === 'advanced' && (
-              <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                {/* Unique Name Feature */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unique Name</label>
-                  <input
-                    type="text"
-                    value={uniqueName}
-                    onChange={handleUniqueNameChange}
-                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? 'border-red-500' : ''}`}
-                    placeholder="{uniqueName}"
-                    maxLength={50}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    This can be used to pre-populate fields from a URL and pass data to another form automatically. It can't include spaces.
-                  </p>
-                  {uniqueNameError && (
-                    <p className="text-xs text-red-500 mt-1">{uniqueNameError}</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'settings' && selectedFooter && (
-        <div>
-          <div className="mb-2">
-            <button
-              className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-              onClick={() => toggleSection('footer')}
-            >
-              <h3 className="text-lg font-semibold text-gray-800">Footer Button Properties</h3>
-              {expandedSection === 'footer' ? <FaChevronUp /> : <FaChevronDown />}
-            </button>
-            {expandedSection === 'footer' && (
-              <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Button Text</label>
-                  <input
-                    type="text"
-                    value={footerText}
-                    onChange={handleFooterTextChange}
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                    placeholder="Enter button text"
-                  />
+        {activeTab === 'settings' && selectedFooter && (
+          <div className="px-4 pb-4">
+            <div className="mb-4">
+              <button
+                className="flex justify-between w-full p-3 bg-gray-50 hover:bg-gray-100 rounded-lg items-center transition-colors duration-200 border border-gray-200"
+                onClick={() => toggleSection('footer')}
+              >
+                <h3 className="text-lg font-semibold text-gray-800">Footer Button Properties</h3>
+                {expandedSections.includes('footer') ? <FaChevronUp className="text-gray-600" /> : <FaChevronDown className="text-gray-600" />}
+              </button>
+              {expandedSections.includes('footer') && (
+                <div className="p-4 mt-1 bg-gray-50 rounded-b-lg">
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Button Text</label>
+                    <input
+                      type="text"
+                      value={footerText}
+                      onChange={handleFooterTextChange}
+                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                      placeholder="Enter button text"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Background Color</label>
+                    <input
+                      type="color"
+                      value={footerBgColor}
+                      onChange={handleFooterBgColorChange}
+                      className="w-full p-2 border rounded-lg bg-white text-gray-800"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Text Color</label>
+                    <input
+                      type="color"
+                      value={footerTextColor}
+                      onChange={handleFooterTextColorChange}
+                      className="w-full p-2 border rounded-lg bg-white text-gray-800"
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <button
+                      onClick={handleDeleteFooter}
+                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    >
+                      Delete Footer Button
+                    </button>
+                  </div>
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Background Color</label>
-                  <input
-                    type="color"
-                    value={footerBgColor}
-                    onChange={handleFooterBgColorChange}
-                    className="w-full p-2 border rounded-lg bg-white text-gray-800"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Text Color</label>
-                  <input
-                    type="color"
-                    value={footerTextColor}
-                    onChange={handleFooterTextColorChange}
-                    className="w-full p-2 border rounded-lg bg-white text-gray-800"
-                  />
-                </div>
-                <div className="mb-4">
-                  <button
-                    onClick={handleDeleteFooter}
-                    className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                  >
-                    Delete Footer Button
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'widget' && isFormCalculation && (
-        <FormCalculationWidget
-          selectedField={selectedField}
-          onUpdateField={onUpdateField}
-          fields={fields}
-        />
-      )}
+        {activeTab === 'widget' && isFormCalculation && (
+          <FormCalculationWidget
+            selectedField={selectedField}
+            onUpdateField={onUpdateField}
+            fields={fields}
+          />
+        )}
+
+      </div>
     </div>
   );
 }
