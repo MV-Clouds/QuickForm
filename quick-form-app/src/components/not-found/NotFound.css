@@ -1,0 +1,64 @@
+.quickform-404-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #FAFCFF;
+  padding: 2rem;
+}
+
+.quickform-404-left {
+  width: 40vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+}
+
+.quickform-logo {
+  width: 285px;
+  height: 70px;
+  margin-bottom: 60px;
+}
+
+.quickform-404-title {
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-size: 8rem;
+  font-weight: 900;
+  color: #5F6165;
+  line-height: 100px;
+}
+
+.quickform-404-subtitle {
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-size: 4rem;
+  font-weight: 900;
+  color: #5F6165;
+  line-height: 72px;
+}
+
+.quickform-404-desc {
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  color: #5F6165;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 28px;
+}
+
+
+.quickform-404-illustration {
+  width: 60vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quickform-404-illustration img{
+    height: 60vh;
+}
+
+.home-button {
+    padding: 10px 24px;
+}

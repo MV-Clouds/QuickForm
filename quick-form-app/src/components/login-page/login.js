@@ -204,7 +204,7 @@ const Login = () => {
             </div>
           </div>
           <div className="right-container">
-            <div className="quickform-logo"><img src="/images/quickform-logo.svg" alt="QuickForm Logo" className="logo" /></div>
+            <div className="quickform-logo"><img src="/images/quickform-logo.png" alt="QuickForm Logo" className="logo" /></div>
             <div className="login-container">
               <img
                 src="https://login.salesforce.com/img/logo214.svg"
