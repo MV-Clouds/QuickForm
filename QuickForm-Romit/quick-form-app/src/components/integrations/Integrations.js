@@ -288,7 +288,7 @@ const Integrations = ({ token }) => {
                                 <div className="flex items-center mb-6 justify-between">
                                     <input
                                         type="text"
-                                        placeholder="Search for Payment"
+                                        placeholder="Search..."
                                         value={search}
                                         onChange={e => setSearch(e.target.value)}
                                         className="px-4 py-2 border rounded-lg w-full max-w-md focus:outline-none focus:ring-2 focus:ring-blue-200"

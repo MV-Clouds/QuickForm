@@ -10,6 +10,8 @@ export const SalesforceDataProvider = ({ children }) => {
   const [userProfile, setuserProfile] = useState([]); // User Profile Data
   const [Fieldset , setFieldset] = useState([]); // Field Set Data
   const [deletedData , setdeletedData] = useState([]) //Deleted Data for Bin 
+  const [favoriteData , setfavoriteData] = useState([]) //Favorites Data 
+
   const fetchSalesforceData = async (userId, instanceUrl) => {
     if (!userId || !instanceUrl) {
       setError('Missing userId or instanceUrl');
@@ -68,11 +70,14 @@ export const SalesforceDataProvider = ({ children }) => {
       const userProfileData = data?.UserProfile || {};
       const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
       const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
+      const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
+      console.log('Favoriterecords ==>' , favoriteRecords)
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
       setFieldset(parsedFieldset);
-      setdeletedData(parsedDeletedData); 
+      setdeletedData(parsedDeletedData);
+      setfavoriteData(favoriteRecords) 
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,7 +112,8 @@ export const SalesforceDataProvider = ({ children }) => {
         fetchSalesforceData, // Expose fetchSalesforceData
         userProfile,
         Fieldset,
-        deletedData
+        deletedData,
+        favoriteData
       }}
     >
       {children}

@@ -11,7 +11,7 @@ import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
 import MappingFields from '../form-mapping/MappingFields'
 import { useSalesforceData } from '../Context/MetadataContext';
-import ThankYouPageBuilder from '../Thankyou/TY';
+import ThankYouPageBuilder from '../Thankyou/TY2';
 import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js'
 const themes = [
   {

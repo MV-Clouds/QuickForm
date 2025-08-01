@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PlusCircle } from 'lucide-react';
 import FolderView from './FolderView';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const FOLDER_ICON = (
     <svg width="57" height="46" viewBox="0 0 57 46" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -14,6 +15,7 @@ const FOLDER_ICON = (
     </svg>
 );
 
+
 const FOLDERS_PER_PAGE = 16;
 
 const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onViewForm, onEditForm, onDeleteForm, onToggleStatus }) => {
@@ -24,8 +26,8 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
     const [selectedFormIds, setSelectedFormIds] = useState([]);
     const [page, setPage] = useState(0);
     const [selectedFolder, setSelectedFolder] = useState(null);
-    console.log('forms ==>' , recentForms)
-    
+    console.log('forms ==>', recentForms)
+
     // All folders: { name, count }
     const folders = useMemo(() => {
         const folderMap = {};
@@ -52,12 +54,12 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
         filteredFolders.slice(page * FOLDERS_PER_PAGE, (page + 1) * FOLDERS_PER_PAGE),
         [filteredFolders, page]
     );
-    
+
     // All forms for modal
     const allForms = useMemo(() =>
         recentForms.map(f => ({
             id: f.id || f.Id,
-            name: f.FormVersions.filter((version) => version.Stage__c === 'Publish')[0]?.Name  || (f.FormVersions[0]?.Name) || 'Form',
+            name: f.FormVersions.filter((version) => version.Stage__c === 'Publish')[0]?.Name || (f.FormVersions[0]?.Name) || 'Form',
             folder: f.Folder__c,
         })),
         [recentForms]
@@ -65,8 +67,8 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
 
     // Get forms for selected folder
     const getFormsForFolder = (folderName) => {
-        return recentForms.filter(form => 
-            form.Folder__c && 
+        return recentForms.filter(form =>
+            form.Folder__c &&
             form.Folder__c.split('<>').map(name => name.trim()).includes(folderName)
         );
     };
@@ -75,7 +77,7 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
     const handleFormCheckbox = (id) => {
         setSelectedFormIds(prev => prev.includes(id) ? prev.filter(fid => fid !== id) : [...prev, id]);
     };
-    
+
     const handleModalSave = () => {
         if (newFolderName.trim()) {
             handleCreateFolder(newFolderName.trim(), selectedFormIds);
@@ -115,8 +117,25 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
     }
 
     return (
-        <div className="mt-6 px-8">
-            <h2 className="text-3xl font-bold mb-6 text-gray-900">Folders</h2>
+        <div >
+            <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
+                <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="mb-6 flex justify-between"
+                >
+                    <h1 className="text-3xl font-bold text-white mb-1">Folders</h1>
+                    <div>
+                        <button
+                            className="login-button flex items-center gap-2 rounded-lg px-5 py-4 text-white font-semibold shadow-md"
+                            onClick={() => setModalOpen(true)}
+                        >
+                            <PlusCircle className="h-5 w-5" /> Create Folder
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
             <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
                 <input
                     type="text"
@@ -125,34 +144,36 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
                     onChange={e => setSearch(e.target.value)}
                     className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm w-64"
                 />
-                <button
-                    className="flex items-center gap-2 rounded-lg px-5 py-2 text-white font-semibold shadow-md"
-                    style={{ background: 'linear-gradient(to right, #0B295E, #1D6D9E)' }}
-                    onClick={() => setModalOpen(true)}
-                >
-                    <PlusCircle className="h-5 w-5" /> Create Folder
-                </button>
             </div>
             {/* Folders Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                {paginatedFolders.length === 0 && (
-                    <div className="col-span-4 text-gray-400 text-center py-12">No folders found.</div>
-                )}
-                {paginatedFolders.map((folder, idx) => (
-                    <div 
-                        key={folder.name} 
-                        className="flex items-center bg-white rounded-xl shadow p-6 hover:shadow-lg transition-all border border-yellow-100 cursor-pointer hover:scale-105 transform duration-200"
-                        onClick={() => handleFolderClick(folder.name)}
-                    >
-                        <div className="mb-3 ">{FOLDER_ICON}</div>
-                        <div className='ml-2'>
-                            <div className="font-bold text-lg  mb-1 truncate max-w-[150px]">{folder.name}</div>
-                            <div className="text-sm text-gray-500 flex">
-                                <div>{folder.count} item{folder.count > 1 ? 's' : ''}</div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                <AnimatePresence mode='sync'>
+                    {paginatedFolders.length === 0 && (
+                        <div className="col-span-4 text-gray-400 text-center py-12">No folders found.</div>
+                    )}
+                    {paginatedFolders.map((folder, idx) => (
+                        <motion.div
+                            key={folder.Id || idx}
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}>
+                            <motion.div
+                                key={folder.Id || idx}
+                                className="flex items-center bg-white rounded-xl shadow p-6 hover:shadow-lg transition-all border border-yellow-100 cursor-pointer hover:scale-105 transform duration-200"
+                                onClick={() => handleFolderClick(folder.name)}
+                            >
+                                <div className="mb-3 ">{FOLDER_ICON}</div>
+                                <div className='ml-2'>
+                                    <div className="font-bold text-lg  mb-1 truncate max-w-[150px]">{folder.name}</div>
+                                    <div className="text-sm text-gray-500 flex">
+                                        <div>{folder.count} item{folder.count > 1 ? 's' : ''}</div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
             </div>
             {/* Pagination */}
             {totalPages > 1 && (
@@ -201,7 +222,7 @@ const FolderManager = ({ recentForms = [], handleCreateFolder, isCreating, onVie
                             onClick={handleModalSave}
                             disabled={!newFolderName.trim()}
                         >
-                          {isCreating ? 'Saving...' : 'Save Folder'}  
+                            {isCreating ? 'Saving...' : 'Save Folder'}
                         </button>
                     </div>
                 </div>

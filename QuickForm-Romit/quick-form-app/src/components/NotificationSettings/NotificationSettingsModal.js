@@ -3,8 +3,9 @@ import NotificationTab from './Components/NotificationTab.js';
 import { EmailTab } from './Components/EmailTab.js';
 import { DigestEmailTab } from './Components/DigestEmailTab.js';
 import { useParams } from 'react-router-dom';
+import { useSalesforceData } from '../Context/MetadataContext';
 const NotificationSettings = ({ currentFields }) => {
-
+  const { formRecords , refreshData } = useSalesforceData();
   const [activeTab, setActiveTab] = useState(null);
   const [rules, setRules] = useState();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -21,43 +22,44 @@ const NotificationSettings = ({ currentFields }) => {
 
   const [formFieldsData, setFormfieldData] = useState([]);
 
-  useEffect(()=>{
+  useEffect(() => {
     console.log('Current fields ==> ', currentFields);
-    
-  },[currentFields])
+    console.log('FormRecords', formRecords)
+
+  }, [currentFields, formRecords])
   const fetchFormId = async () => {
     setLoading(true);
     try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-        }),
-      });
+      // const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+      // const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({
+      //     userId,
+      //     instanceUrl: cleanedInstanceUrl,
+      //   }),
+      // });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch metadata');
-      }
+      // const data = await response.json();
+      // if (!response.ok) {
+      //   throw new Error(data.error || 'Failed to fetch metadata');
+      // }
 
-      let formRecords = [];
-      if (data.FormRecords) {
-        try {
-          formRecords = JSON.parse(data.FormRecords);
+      // let formRecords = [];
+      // if (data.FormRecords) {
+      //   try {
+      //     formRecords = JSON.parse(data.FormRecords);
 
-        } catch (e) {
-          console.warn('Failed to parse FormRecords:', e);
-        }
-      }
+      //   } catch (e) {
+      //     console.warn('Failed to parse FormRecords:', e);
+      //   }
+      // }
       // console.log('FormversionId ==> ', formVersionId);
       // console.log('Formdata', formRecords);
-      const formRecord = formRecords.find(form => form.FormVersions.some(version => version.Id === formVersionId));
-      // console.log('formrecord', formRecord, formRecord.Id)
+      const formRecord = formRecords.length > 0 ? formRecords.find(form => form.FormVersions.some(version => version.Id === formVersionId)) : null;
+      console.log('formrecord', formRecord, formRecord.Id)
 
       // if (formRecord && formRecord.FormVersions && formRecord.FormVersions.length > 0) {
       //   const version = formRecord.FormVersions.find(v => v.Id === formVersionId) || formRecord.FormVersions[0];
@@ -76,6 +78,8 @@ const NotificationSettings = ({ currentFields }) => {
       setFormId(formRecord.Id);
     } catch (error) {
       console.log("Error on form id fetching ==> ", error)
+    } finally {
+      setLoading(false)
     }
   }
   const fetchAllData = async (forceRefresh = false) => {
@@ -149,6 +153,7 @@ const NotificationSettings = ({ currentFields }) => {
   useEffect(() => {
     // Define an async function to handle data fetching
     const fetchDataAsync = async () => {
+
       try {
         if (!token) {
           // Fetch access token
@@ -156,12 +161,13 @@ const NotificationSettings = ({ currentFields }) => {
 
         }
 
+        await refreshData();
         // If token is available, proceed to fetch form ID and all data
         if (token) {
-          fetchFormId();
+         
         }
         if (formId) {
-          fetchAllData();
+          // fetchAllData();
         }
       } catch (error) {
         // Log any errors encountered during data fetching
@@ -170,8 +176,10 @@ const NotificationSettings = ({ currentFields }) => {
     };
     // Call the async function to start the data fetching process
     fetchDataAsync();
-  }, [userId, instanceUrl, token, formId]);
+    fetchFormId();
+  }, [token]);
   const sendNotificationData = async (payload) => {
+    console.log(payload, 'payload')
     try {
       const response = await fetch('https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify', {
         method: 'POST',
@@ -179,7 +187,7 @@ const NotificationSettings = ({ currentFields }) => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ notificationData: { Form__c: formId, ...payload }, instanceUrl }),
+        body: JSON.stringify({ notificationData: { Form__c: formId, ...payload }, instanceUrl, userId }),
       });
       console.log('response', response);
 
@@ -196,7 +204,7 @@ const NotificationSettings = ({ currentFields }) => {
     } catch (error) {
       console.error('There was a problem with the fetch operation:', error);
     } finally {
-      fetchAllData(true);
+      // fetchAllData(true);
     }
   };
 
@@ -208,7 +216,7 @@ const NotificationSettings = ({ currentFields }) => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ notificationId: payload.Id ? payload.Id : editingRuleId, updatedData: { Form__c: formId, ...(payload.Id ? { ...payload, Id: undefined } : payload) }, instanceUrl }),
+        body: JSON.stringify({ notificationId: payload.Id ? payload.Id : editingRuleId, updatedData: { Form__c: formId, ...(payload.Id ? { ...payload, Id: undefined } : payload) }, instanceUrl, userId }),
       });
       console.log('response', response);
 
@@ -225,7 +233,7 @@ const NotificationSettings = ({ currentFields }) => {
     } catch (error) {
       console.error('There was a problem with the fetch operation:', error);
     } finally {
-      fetchAllData(true);
+      // fetchAllData(true);
     }
   };
 
@@ -276,7 +284,7 @@ const NotificationSettings = ({ currentFields }) => {
       console.error('API error in deleteNotificationData:', error);
       throw error;
     } finally {
-      fetchAllData(true);
+      // fetchAllData(true);
     }
   };
   return (

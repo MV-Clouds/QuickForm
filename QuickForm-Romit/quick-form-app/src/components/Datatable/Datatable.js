@@ -148,21 +148,19 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) =
         <div className="flex items-center gap-4">
           <div className="flex rounded-lg border border-gray-300 p-1 bg-gray-50 shadow-sm">
             <button
-              className={`p-2 ${viewMode === 'table' ? 'text-white' : 'text-gray-700'}  rounded-lg transition-colors`}
+              className={`p-2 ${viewMode === 'table' ? 'text-white login-button' : 'text-gray-700'}   rounded-lg transition-colors`}
               onClick={() => setViewMode('table')}
-              style={{ background: `${viewMode === 'table' ? 'linear-gradient(to right, #0B295E, #1D6D9E)' : ''}` }}
             >
               <List className="h-4 w-4" />
             </button>
             <button
-              className={`p-2 ${viewMode === 'card' ? 'text-white' : 'text-gray-700'}  rounded-lg transition-colors`}
+              className={`p-2 ${viewMode === 'card' ? 'text-white login-button' : 'text-gray-700'}  rounded-lg transition-colors`}
               onClick={() => setViewMode('card')}
-              style={{ background: `${viewMode === 'card' ? 'linear-gradient(to right, #0B295E, #1D6D9E)' : ''}` }}
             >
               <LayoutGrid className="h-4 w-4" />
             </button>
           </div>
-          <button className="flex items-center gap-2 rounded-lg px-4 py-2 text-white hover:shadow-md" style={{ background: 'linear-gradient(to right, #0B295E, #1D6D9E)' }} onClick={() => handleCreateForm()}>
+          <button className="login-button flex items-center gap-2 rounded-lg px-4 py-2 text-white hover:shadow-md"  onClick={() => handleCreateForm()}>
             <PlusCircle className="h-5 w-5" /> New Form
           </button>
         </div>

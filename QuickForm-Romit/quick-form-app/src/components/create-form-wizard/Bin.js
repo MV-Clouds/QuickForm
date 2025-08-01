@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useSalesforceData } from '../Context/MetadataContext';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FaTrashRestore } from 'react-icons/fa';
+const gradientBtn = {
+  background: 'linear-gradient(to right, #1D6D9E, #0B295E)',
+};
 const DeletedFormsPage = () => {
     const {deletedData , isLoading} = useSalesforceData();
   const [search, setSearch] = useState('');
@@ -45,9 +50,28 @@ const DeletedFormsPage = () => {
   );
 
   return (
-    <div className="w-[95%] mt-4 mx-auto px-8 py-6 shadow-lg rounded-lg">
+    <div className="">
+        <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
+                <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="mb-6 flex justify-between"
+                >
+                    <h1 className="text-3xl font-bold text-white mb-1">Bin</h1>
+                    <div>
+                        <button
+                            className="save-btn flex items-center gap-2 rounded-lg px-5 py-4 text-white font-semibold shadow-md"
+                            style={gradientBtn}
+                            // onClick={() => setModalOpen(true)}
+                        >
+                            <FaTrashRestore className="h-5 w-5" /> Empty Bin
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
       <div className="items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Deleted Forms</h1>
+        {/* <h1 className="text-3xl font-bold text-gray-900">Deleted Forms</h1> */}
         <div className="flex items-center gap-4 flex-1 justify-between mt-2">
           <input
             type="text"
@@ -60,6 +84,7 @@ const DeletedFormsPage = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+        <AnimatePresence mode='sync'>
         {isLoading ? (
           Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl shadow p-4 border border-gray-200 animate-pulse h-[260px]">
@@ -84,7 +109,13 @@ const DeletedFormsPage = () => {
               }
 
               return (
-                <div
+                <motion.div 
+                key={form.Id || idx}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}>
+                <motion.div
                   key={form.Id || idx}
                   className="flex flex-col items-center bg-white rounded-xl shadow p-4 hover:shadow-lg transition-all border border-red-100 h-[260px]"
                 >
@@ -97,11 +128,13 @@ const DeletedFormsPage = () => {
                   <div className="text-gray-500 text-center">
                     {form.Description}
                   </div>
-                </div>
+                </motion.div>
+                </motion.div>
               );
             })}
           </>
         )}
+        </AnimatePresence>
       </div>
     </div>
   );

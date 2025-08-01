@@ -2,10 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpDown, Edit, Folder, Heart, Trash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export const Columns = ({ forms, handleEditForm, handleDeleteForm }) => [
+export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavoriteForm }) => [
   {
-    header: 'Index',
-    cell: ({ row }) => <div className="text-center">{row.index + 1}</div>,
+    header: 'Sr. No.',
+    cell: ({ row }) => {
+      const formId = row.original.id;
+      const srNo = forms.findIndex((f) => f.Id === formId) + 1;
+      return <div className="text-center">{srNo}</div>;
+    },
     enableSorting: false,
     enableHiding: false,
   },
@@ -75,15 +79,15 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm }) => [
   },
   {
     accessorKey: 'submissionCount',
-    header: ({ column }) => (
-      <button
+    header: ({ column }) => {
+      return(<button
         className="flex items-center mx-auto  text-gray-700 hover:text-indigo-600"
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       >
         SUBMISSIONS
         <ArrowUpDown className="ml-2 h-4 w-4" />
-      </button>
-    ),
+      </button>)
+    },
     cell: ({ row }) => <div className="text-center font-medium text-gray-600">{row.getValue('submissionCount')}</div>,
   },
   {
@@ -193,7 +197,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm }) => [
                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-700 font-medium transition-colors"
                   onClick={() => {
                     setOpen(false);
-                    // handle favorite logic here
+                    handleFavoriteForm(row.original.id);
                   }}
                 >
                   <Heart className='w-4 h-4' />

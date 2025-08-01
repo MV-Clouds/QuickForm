@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Edit, PlusCircle, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FieldSetBuilder from './FieldSetPageNew'
+import useUndo from 'use-undo';
+
 const gradientBtn = {
   background: 'linear-gradient(to right, #1D6D9E, #0B295E)',
 };
@@ -9,37 +11,38 @@ const gradientBtn = {
 const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isLoading }) => {
   const fieldsets = Fieldset;
 
-  // All available field types with their configurations
-  const allFields = useMemo(() => [
-    { Field_Type__c: 'fullname', Name: 'Full Name', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'email', Name: 'Email', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'address', Name: 'Address', requiresLabel: true, subFields: true },
-    { Field_Type__c: 'file', Name: 'File Upload', requiresLabel: true },
-    { Field_Type__c: 'signature', Name: 'Signature', requiresLabel: true },
-    { Field_Type__c: 'terms', Name: 'Terms of Service', requiresLabel: true },
-    { Field_Type__c: 'link', Name: 'Link', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'date', Name: 'Date', requiresLabel: true },
-    { Field_Type__c: 'datetime', Name: 'Date and Time', requiresLabel: true },
-    { Field_Type__c: 'time', Name: 'Time', requiresLabel: true },
-    { Field_Type__c: 'emoji', Name: 'Emoji and Star Rating', requiresLabel: true },
-    { Field_Type__c: 'scale', Name: 'Scale Rating', requiresLabel: true },
-    { Field_Type__c: 'shorttext', Name: 'Short Text', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'longtext', Name: 'Long Text', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'number', Name: 'Number', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'checkbox', Name: 'Checkbox', requiresLabel: true },
-    { Field_Type__c: 'display', Name: 'Display Text', requiresLabel: true },
-    { Field_Type__c: 'phone', Name: 'Phone', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'price', Name: 'Price', requiresLabel: true, requiresPlaceholder: true },
-    { Field_Type__c: 'radio', Name: 'Radio Button', requiresLabel: true, requiresOptions: true },
-    { Field_Type__c: 'toggle', Name: 'Toggle Button', requiresLabel: true },
-    { Field_Type__c: 'dropdown', Name: 'Dropdown Elements', requiresLabel: true, requiresOptions: true, requiresPlaceholder: true },
-    { Field_Type__c: 'image', Name: 'Image Uploader', requiresLabel: true },
-    { Field_Type__c: 'section', Name: 'Section', requiresLabel: true }
-  ], []);
+  // // All available field types with their configurations
+  // const allFields = useMemo(() => [
+  //   { Field_Type__c: 'fullname', Name: 'Full Name', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'email', Name: 'Email', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'address', Name: 'Address', requiresLabel: true, subFields: true },
+  //   { Field_Type__c: 'file', Name: 'File Upload', requiresLabel: true },
+  //   { Field_Type__c: 'signature', Name: 'Signature', requiresLabel: true },
+  //   { Field_Type__c: 'terms', Name: 'Terms of Service', requiresLabel: true },
+  //   { Field_Type__c: 'link', Name: 'Link', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'date', Name: 'Date', requiresLabel: true },
+  //   { Field_Type__c: 'datetime', Name: 'Date and Time', requiresLabel: true },
+  //   { Field_Type__c: 'time', Name: 'Time', requiresLabel: true },
+  //   { Field_Type__c: 'emoji', Name: 'Emoji and Star Rating', requiresLabel: true },
+  //   { Field_Type__c: 'scale', Name: 'Scale Rating', requiresLabel: true },
+  //   { Field_Type__c: 'shorttext', Name: 'Short Text', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'longtext', Name: 'Long Text', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'number', Name: 'Number', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'checkbox', Name: 'Checkbox', requiresLabel: true },
+  //   { Field_Type__c: 'display', Name: 'Display Text', requiresLabel: true },
+  //   { Field_Type__c: 'phone', Name: 'Phone', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'price', Name: 'Price', requiresLabel: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'radio', Name: 'Radio Button', requiresLabel: true, requiresOptions: true },
+  //   { Field_Type__c: 'toggle', Name: 'Toggle Button', requiresLabel: true },
+  //   { Field_Type__c: 'dropdown', Name: 'Dropdown Elements', requiresLabel: true, requiresOptions: true, requiresPlaceholder: true },
+  //   { Field_Type__c: 'image', Name: 'Image Uploader', requiresLabel: true },
+  //   { Field_Type__c: 'section', Name: 'Section', requiresLabel: true }
+  // ], []);
 
   // UI state
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [showModal, setshowModal] = useState(false);
   const [fieldsetName, setFieldsetName] = useState('');
   const [fieldsetDesc, setFieldsetDesc] = useState('');
   const [selectedFields, setSelectedFields] = useState([]); // array of field objects with config
@@ -87,6 +90,157 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
     }
   };
 
+
+  const [
+    fieldsState,
+    { set: setFields, undo, redo, canUndo, canRedo },
+  ] = useUndo([]);
+  const fields = fieldsState.present;
+
+  const getDefaultSubFields = (fieldType) => {
+    const field = fieldType.toLowerCase().replace(/\s+/g, '');
+    const subFields = {
+      fullname: {
+        salutation: {
+          enabled: false,
+          options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'],
+          value: '',
+          placeholder: 'Select Salutation',
+          label: 'Salutation',
+        },
+        firstName: {
+          value: '',
+          placeholder: 'First Name',
+          label: 'First Name',
+        },
+        lastName: {
+          value: '',
+          placeholder: 'Last Name',
+          label: 'Last Name',
+        },
+      },
+      address: {
+        street: {
+          visiblesubFields: true,
+          label: 'Street Address',
+          value: '',
+          placeholder: 'Enter street',
+        },
+        city: {
+          visible: true,
+          label: 'City',
+          value: '',
+          placeholder: 'Enter city',
+        },
+        state: {
+          visible: true,
+          label: 'State',
+          value: '',
+          placeholder: 'Enter state',
+        },
+        country: {
+          visible: true,
+          label: 'Country',
+          value: '',
+          placeholder: 'Enter country',
+        },
+        postal: {
+          visible: true,
+          label: 'Postal Code',
+          value: '',
+          placeholder: 'Enter postal code',
+        },
+      },
+      section: {
+        leftField: null,
+        rightField: null,
+      },
+      phone: {
+        countryCode: {
+          enabled: true,
+          value: 'US',
+          options: [],
+          label: 'Country Code',
+        },
+        phoneNumber: {
+          value: '',
+          placeholder: 'Enter phone number',
+          phoneMask: '(999) 999-9999',
+          label: 'Phone Number',
+        }
+      },
+      default: {},
+    };
+    return subFields[field] || subFields['default'];
+  };
+  const prepareFormData = (isNewForm = false) => {
+    const pages = [];
+    let currentPage = [];
+    let pageNumber = 1;
+    fields.forEach((field) => {
+      if (field.type === 'pagebreak') {
+        pages.push({ fields: currentPage, pageNumber });
+        pageNumber++;
+        currentPage = [];
+      } else {
+        currentPage.push(field);
+      }
+    });
+    if (currentPage.length > 0 || pages.length === 0) {
+      pages.push({ fields: currentPage, pageNumber });
+    }
+
+
+    const formFields = pages.flatMap((page) =>
+      page.fields.map((field, index) => {
+        if (field.type === 'section') {
+          const sectionProperties = {
+            ...field,
+            subFields: {
+              leftField: field.subFields?.leftField ? {
+                ...field.subFields.leftField,
+                label: field.subFields.leftField.label ||
+                  field.subFields.leftField.type?.charAt(0).toUpperCase() +
+                  field.subFields.leftField.type?.slice(1) || 'Left Field'
+              } : null,
+              rightField: field.subFields?.rightField ? {
+                ...field.subFields.rightField,
+                label: field.subFields.rightField.label ||
+                  field.subFields.rightField.type?.charAt(0).toUpperCase() +
+                  field.subFields.rightField.type?.slice(1) || 'Right Field'
+              } : null
+            }
+          };
+
+          return {
+            Name: field.label || 'Section',
+            Field_Type__c: 'section',
+            Page_Number__c: page.pageNumber,
+            Order_Number__c: index + 1,
+            Properties__c: JSON.stringify(sectionProperties),
+            Unique_Key__c: field.id,
+          };
+        }
+
+        const properties = {
+          ...field,
+          label: field.label || field.type?.charAt(0).toUpperCase() + field.type?.slice(1) || 'Field',
+          subFields: field.subFields || getDefaultSubFields(field.type) || {}
+        };
+
+        return {
+          Name: properties.label,
+          Field_Type__c: field.type,
+          Page_Number__c: page.pageNumber,
+          Order_Number__c: index + 1,
+          Properties__c: JSON.stringify(properties),
+          Unique_Key__c: field.id,
+        };
+      })
+    );
+
+    return { formFields };
+  };
   // Handle field configuration change
   const handleFieldConfigChange = (fieldType, key, value) => {
     setSelectedFields(prev =>
@@ -129,44 +283,115 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
     );
   };
 
-  // Build fieldset data for API
-  const buildFieldsetData = () => {
-    return selectedFields.map(field => {
-      const baseField = {
-        Unique_Key__c: field.Unique_Key__c,
-        Field_Type__c: field.Field_Type__c,
-        Name: field.label || field.Name,
-        Properties__c: JSON.stringify({
-          pattern: ".*",
-          description: "Field description"
-        })
-      };
-
-      if (field.requiresPlaceholder) {
-        baseField.placeholder = field.placeholder;
+  const getDefaultValidation = (fieldType) => {
+    const field = fieldType.toLowerCase().replace(/\s+/g, '');
+    const validations = {
+      fullname: {
+        pattern: "^[a-zA-Z\\s'-]+$",
+        description: "Only letters, spaces, hyphens, and apostrophes allowed."
+      },
+      phonenumber: {
+        pattern: "^\\+?[0-9]{7,15}$",
+        description: "Must be a valid phone number (7-15 digits, optional '+')."
+      },
+      email: {
+        pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+        description: "Must be a valid email (e.g., user@example.com)."
+      },
+      address: {
+        pattern: "^[\\w\\s\\-\\.,#]+$",
+        description: "Alphanumeric, spaces, hyphens, commas, and periods allowed."
+      },
+      fileupload: {
+        pattern: ".*\\.(jpg|jpeg|png|gif|pdf|doc|docx)$",
+        description: "Only JPG, PNG, GIF, PDF, DOC, or DOCX files allowed."
+      },
+      signature: {
+        pattern: "^[\\w\\s\\-\\.,#]+$",
+        description: "Must be a valid signature input."
+      },
+      termsofservice: {
+        pattern: "^true$",
+        description: "Must be accepted (checked)."
+      },
+      link: {
+        pattern: "^(https?:\\/\\/)?[\\w.-]+\\.[a-z]{2,}(\\/\\S*)?$",
+        description: "Must be a valid URL (e.g., https://example.com)."
+      },
+      date: {
+        pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+        description: "Must be in YYYY-MM-DD format."
+      },
+      datetime: {
+        pattern: "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$",
+        description: "Must be in YYYY-MM-DD HH:MM format."
+      },
+      time: {
+        pattern: "^\\d{2}:\\d{2}$",
+        description: "Must be in HH:MM format."
+      },
+      emojirating: {
+        pattern: "^[1-5]$",
+        description: "Rating must be between 1 and 5."
+      },
+      starrating: {
+        pattern: "^[1-5]$",
+        description: "Rating must be between 1 and 5."
+      },
+      scalerating: {
+        pattern: "^[0-5]$",
+        description: "Must be a rating between 0 and 5."
+      },
+      shorttext: {
+        pattern: "^.{1,255}$",
+        description: "Maximum 255 characters allowed."
+      },
+      longtext: {
+        pattern: "^.{1,1000}$",
+        description: "Maximum 1000 characters allowed."
+      },
+      number: {
+        pattern: "^[0-9]+$",
+        description: "Only numbers allowed."
+      },
+      checkbox: {
+        pattern: "^true|false$",
+        description: "Must be checked (true) or unchecked (false)."
+      },
+      displaytext: {
+        pattern: ".*",
+        description: "Display-only text (no validation needed)."
+      },
+      price: {
+        pattern: "^\\d+(\\.\\d{1,2})?$",
+        description: "Must be a valid price (e.g., 10 or 10.99)."
+      },
+      radiobutton: {
+        pattern: ".*",
+        description: "Must select one of the available options."
+      },
+      togglebutton: {
+        pattern: "^true|false$",
+        description: "Must be toggled (true) or untoggled (false)."
+      },
+      dropdownelements: {
+        pattern: ".*",
+        description: "Must select one of the available options."
+      },
+      imageuploader: {
+        pattern: ".*\\.(jpg|jpeg|png|gif|pdf|doc|docx)$",
+        description: "Only images (JPG, PNG, GIF), PDF, or Word documents allowed."
+      },
+      section: {
+        pattern: ".*",
+        description: "Display-only section (no validation needed)."
+      },
+      default: {
+        pattern: ".*",
+        description: "No specific validation rules."
       }
-
-      if (field.subFields) {
-        baseField.subFields = field.subFields;
-      }
-
-      if (field.options) {
-        baseField.options = field.options;
-        if (field.Field_Type__c === 'dropdown') {
-          baseField.dropdownRelatedValues = field.options.reduce((acc, opt) => {
-            acc[opt] = opt.toLowerCase().replace(/\s+/g, '');
-            return acc;
-          }, {});
-        } else if (field.Field_Type__c === 'radio') {
-          baseField.radioRelatedValues = field.options.reduce((acc, opt) => {
-            acc[opt] = opt;
-            return acc;
-          }, {});
-        }
-      }
-
-      return baseField;
-    });
+    };
+    return validations[field] || validations['default'];
   };
   // 2. Modify handleEdit
   const handleEdit = (fieldsetId) => {
@@ -178,11 +403,63 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
     } catch {
       fields = [];
     }
+    console.log('fieldset ==>', fields)
+
+    const headerField = {
+      id: 'default-header',
+      type: 'header',
+      heading: fieldset.Name || 'Fieldset',
+      alignment: 'center',
+    };
+    console.log('header ==> ', headerField)
+    const pages = {};
+    fields.forEach((field) => {
+      const pageNumber = field.Page_Number__c || 1;
+      if (!pages[pageNumber]) {
+        pages[pageNumber] = [];
+      }
+      let properties;
+      try {
+        properties = JSON.parse(field.Properties__c || '{}');
+      } catch (e) {
+        console.warn(`Failed to parse Properties__c for field ${field.Unique_Key__c}:`, e);
+        properties = {};
+      }
+      pages[pageNumber].push({
+        ...properties,
+        id: field.Unique_Key__c,
+        validation: properties.validation || getDefaultValidation(field.Field_Type__c),
+        subFields: properties.subFields || getDefaultSubFields(field.Field_Type__c),
+      });
+    });
+
+    Object.keys(pages).forEach((pageNum) => {
+      pages[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0));
+    });
+
+    const reconstructedFields = [];
+    Object.keys(pages)
+      .sort((a, b) => a - b)
+      .forEach((pageNum, index) => {
+        const fieldsInPage = pages[pageNum];
+        reconstructedFields.push(...fieldsInPage);
+        if (index < Object.keys(pages).length - 1) {
+          reconstructedFields.push({
+            id: `pagebreak-${pageNum}`,
+            type: 'pagebreak',
+          });
+        }
+      });
+
+    setFields([headerField, ...reconstructedFields]);
+    console.log('Reconstructed fields ==>', fields)
     setFieldsetName(fieldset.Name);
     setFieldsetDesc(fieldset.Description__c || '');
     setSelectedFields(fields);
     setEditingFieldset(fieldset);
     setModalOpen(true);
+
+    // setFields(fields)
   };
 
   // 3. Add handleUpdateFieldset
@@ -194,15 +471,13 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
     try {
       if (!fieldsetName.trim()) throw new Error('Fieldset name required');
       if (selectedFields.length === 0) throw new Error('Select at least one field');
-
-      const fieldsData = buildFieldsetData();
       const body = {
         Id: editingFieldset.Id,
         Name: fieldsetName.trim(),
-        Fields__c: JSON.stringify(fieldsData),
+        Fields__c: JSON.stringify([]),
         Description__c: fieldsetDesc,
       };
-      console.log('Body ==> ' , body)
+      console.log('Body ==> ', body)
       const resp = await fetch('https://yhylbmq7uc.execute-api.us-east-1.amazonaws.com/set', {
         method: 'PATCH',
         headers: {
@@ -258,24 +533,25 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       console.warn('Error in deletion : ', error);
     }
   };
-
-  // Handle create fieldset
-  const handleCreateFieldset = async () => {
-    setIsCreating(true);
-    setError('');
-    setSuccess('');
-
+  const saveFieldSet = async () => {
     try {
-      if (!fieldsetName.trim()) throw new Error('Fieldset name required');
-      if (selectedFields.length === 0) throw new Error('Select at least one field');
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      if (!userId || !instanceUrl) throw new Error('Missing userId or instanceUrl.');
+      const { formFields } = prepareFormData();
 
-      const fieldsData = buildFieldsetData();
+      console.log('formfields ==>', formFields);
+      setIsCreating(true);
+      console.log(fieldsetName)
+
+      if (!fieldsetName.trim()) throw new Error('Fieldset name required');
+
       const body = {
         Name: fieldsetName.trim(),
-        Fields__c: JSON.stringify(fieldsData),
+        Fields__c: JSON.stringify(formFields),
         Description__c: fieldsetDesc,
       };
-
+      console.log('body ==>', body);
       // API call
       const resp = await fetch('https://yhylbmq7uc.execute-api.us-east-1.amazonaws.com/set', {
         method: 'POST',
@@ -306,6 +582,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       setIsCreating(false);
     }
   };
+
 
   // Card preview for fields
   const renderFieldPreview = (fields) => (
@@ -348,248 +625,175 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
   );
 
   return (
-    <div className="w-[95%]  mt-4  mx-auto px-8 py-6 shadow-lg rounded-lg">
-      {/* Top Row */}
-      <div className=" items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Fieldset</h1>
-          
-        <div className="flex items-center gap-4 flex-1 justify-between mt-2">
-          <div className="flex gap-4 ">
-            <input
-              type="text"
-              placeholder="Search fieldsets..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm w-64"
-            />
-            {/* <select className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm">
-              <option>All</option>
-            </select> */}
-          </div>
-          <div>
-            <button
-              className="flex items-center gap-2 rounded-lg px-5 py-2 text-white font-semibold shadow-md"
-              style={gradientBtn}
-              onClick={() => setModalOpen(true)}
-            >
-              <PlusCircle className="h-5 w-5" /> Create Fieldset
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className=''>
-        {/* Grid of fieldsets */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-          {isLoading ? (
-            Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl shadow p-4 border border-gray-200 animate-pulse h-[260px]">
-                <div className="h-24 bg-gray-200 rounded mb-4"></div>
-                <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-              </div>
-            ))
-          ) : (
-            <>
-              {filteredFieldsets.length === 0 && (
-                <div className="col-span-4 text-gray-400 text-center py-12">No fieldsets found.</div>
-              )}
-              {filteredFieldsets.map((fs, idx) => {
-                let fields = [];
-                try {
-                  fields = JSON.parse(fs.Fields__c || '[]');
-                } catch {
-                  fields = [];
-                }
-                return (
-                  <div key={fs.Id || idx} className="group relative flex flex-col items-center bg-white rounded-xl shadow p-4 hover:shadow-lg transition-all border border-blue-100 h-[260px]">
-                    <div className="w-full flex-1 flex flex-col justify-center">
-                      {renderFieldPreview(fields)}
-                    </div>
-                    <div className="mt-2 text-center font-bold text-lg truncate max-w-[180px]">{fs.Name}</div>
-                    <div className="text-gray-500 text-center ">{fs.Description__c}</div>
-                    {/* Hover Icons */}
-                    <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      <motion.button
-                        onClick={() => handleEdit(fs.Id)}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="text-blue-500 bg-white-50 rounded-lg hover:text-blue-700"
-                        title="Edit"
-                        initial={{ opacity: 0, x: 10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <Edit className='w-5 h-5' />
-                      </motion.button>
+    <div>
+      {!modalOpen && (
+        <div className="">
+          {/* Top Row */}
+          <div className=" items-center justify-between mb-8">
+            <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="mb-6 flex justify-between"
+              >
+                <h1 className="text-3xl font-bold text-white mb-1">Fieldset</h1>
+                <div>
+                  <button
+                    className="save-btn flex items-center gap-2 rounded-lg px-5 py- text-white font-semibold shadow-md"
+                    style={gradientBtn}
+                    onClick={() => setshowModal(true)}
+                  >
+                    <PlusCircle className="h-5 w-5" /> Create Fieldset
+                  </button>
+                </div>
+              </motion.div>
+            </div>
 
-                      <motion.button
-                        onClick={() => handleDelete(fs.Id)}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className="text-red-500 bg-white-50 rounded-lg hover:text-red-700"
-                        title="Delete"
-                        initial={{ opacity: 0, x: 10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <Trash2 className='w-5 h-5' />
-                      </motion.button>
-                    </div>
-                  </div>
-                );
-              })}
-            </>)}
-        </div>
-
-        {/* Modal for create fieldset */}
-        <AnimatePresence>
-          {modalOpen && (
-            <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-2xl relative max-h-[90vh] overflow-y-auto">
-                <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-700" onClick={() => setModalOpen(false)}>
-                  <X size={24} />
-                </button>
-
-                <h3 className="text-xl font-bold mb-4">{editingFieldset ? 'Update Fieldset' : 'Create Fieldset'}</h3>
-                {error && <div className="text-red-600 mb-2">{error}</div>}
-                {success && <div className="text-green-600 mb-2">{success}</div>}
-
+            <div className="flex items-center gap-4 flex-1 justify-between mt-2">
+              <div className="flex gap-4 ">
                 <input
                   type="text"
-                  placeholder="Fieldset name"
-                  value={fieldsetName}
-                  onChange={e => setFieldsetName(e.target.value)}
-                  className="w-full mb-4 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="Search fieldsets..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm w-64"
                 />
-
-                <textarea
-                  placeholder="Description"
-                  value={fieldsetDesc}
-                  onChange={e => setFieldsetDesc(e.target.value)}
-                  className="w-full mb-4 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                />
-
-                <div className="mb-4">
-                  <div className="font-semibold mb-2 text-gray-700">Available Fields:</div>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    {allFields.map(field => (
-                      <div key={field.Field_Type__c} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedFields.some(f => f.Field_Type__c === field.Field_Type__c)}
-                          onChange={() => handleFieldSelect(field)}
-                          className="accent-blue-600"
-                        />
-                        <span className="truncate text-gray-800">{field.Name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Field configurations */}
-                {selectedFields.length > 0 && (
-                  <div className="mb-4">
-                    <div className="font-semibold mb-2 text-gray-700">Configure Selected Fields:</div>
-                    <div className="space-y-4">
-                      {selectedFields.map((field) => (
-                        <div key={field.Unique_Key__c} className="border border-gray-200 rounded-lg p-4">
-                          <div className="font-medium mb-2">{field.Name} Configuration</div>
-
-                          {/* Common configurations */}
-                          <div className="grid grid-cols-2 gap-4 mb-3">
-                            {field.requiresLabel && (
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
-                                <input
-                                  type="text"
-                                  value={field.label || ''}
-                                  onChange={e => handleFieldConfigChange(field.Field_Type__c, 'label', e.target.value)}
-                                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                                />
-                              </div>
-                            )}
-
-                            {field.requiresPlaceholder && (
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder</label>
-                                <input
-                                  type="text"
-                                  value={field.placeholder?.main || ''}
-                                  onChange={e => handleFieldConfigChange(field.Field_Type__c, 'placeholder', { main: e.target.value })}
-                                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                                />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Options for radio/dropdown */}
-                          {field.requiresOptions && (
-                            <div className="mb-3">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Options (comma separated)</label>
-                              <input
-                                type="text"
-                                value={field.options?.join(', ') || ''}
-                                onChange={e => handleOptionsChange(field.Field_Type__c, e.target.value)}
-                                className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                                placeholder="Option 1, Option 2, Option 3"
-                              />
-                            </div>
-                          )}
-
-                          {/* Sub-fields for address */}
-                          {field.subFields && (
-                            <div className="mb-3">
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Address Sub-fields:</label>
-                              <div className="grid grid-cols-2 gap-3">
-                                {Object.entries(field.subFields).map(([key, subField]) => (
-                                  <div key={key} className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={subField.visible}
-                                        onChange={e => handleSubFieldConfigChange(field.Field_Type__c, key, 'visible', e.target.checked)}
-                                        className="accent-blue-600"
-                                      />
-                                      <span className="text-sm font-medium">{subField.label}</span>
-                                    </div>
-                                    {subField.visible && (
-                                      <input
-                                        type="text"
-                                        value={subField.placeholder || ''}
-                                        onChange={e => handleSubFieldConfigChange(field.Field_Type__c, key, 'placeholder', e.target.value)}
-                                        className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
-                                        placeholder={`${subField.label} placeholder`}
-                                      />
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  className="w-full py-2 rounded-lg font-semibold text-white mt-2"
-                  style={gradientBtn}
-                  onClick={editingFieldset ? handleUpdateFieldset : handleCreateFieldset}
-                  disabled={isCreating || isUpdating}
-                >
-                  {editingFieldset ? (isUpdating ? 'Updating...' : 'Update Fieldset') : (isCreating ? 'Creating...' : 'Create Fieldset')}
-                </button>
+                {/* <select className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm">
+                <option>All</option>
+              </select> */}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+
+            </div>
+          </div>
+          {/* Grid of fieldsets */}
+          <motion.div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+            <AnimatePresence mode='sync'>
+              {isLoading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl shadow p-4 border border-gray-200 animate-pulse h-[260px]">
+                    <div className="h-24 bg-gray-200 rounded mb-4"></div>
+                    <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
+                    <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+                  </div>
+                ))
+              ) : (
+                <>
+                  {filteredFieldsets.length === 0 && (
+                    <div className="col-span-4 text-gray-400 text-center py-12">No fieldsets found.</div>
+                  )}
+                  {filteredFieldsets.map((fs, idx) => {
+                    let fields = [];
+                    try {
+                      console.log('Data filtered =>', fs)
+                      fields = fs.Fieldset_Fields__c || [];
+                      console.log('Fields==> ', fields)
+                    } catch {
+                      fields = [];
+                    }
+                    return (
+                      <motion.div
+                        key={fs.Id || idx}
+                        layout
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}>
+                        <div key={fs.Id || idx} className="group relative flex flex-col items-center bg-white rounded-xl shadow p-4 hover:shadow-lg transition-all border border-blue-100 h-[260px]">
+                          <div className="w-full flex-1 flex flex-col justify-center">
+                            {renderFieldPreview(fields)}
+                          </div>
+                          <div className="mt-2 text-center font-bold text-lg truncate max-w-[180px]">{fs.Name}</div>
+                          <div className="text-gray-500 text-center ">{fs.Description__c}</div>
+                          {/* Hover Icons */}
+                          <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <motion.button
+                              onClick={() => handleEdit(fs.Id)}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              className="text-blue-500 bg-white-50 rounded-lg hover:text-blue-700"
+                              title="Edit"
+                              initial={{ opacity: 0, x: 10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <Edit className='w-5 h-5' />
+                            </motion.button>
+
+                            <motion.button
+                              onClick={() => handleDelete(fs.Id)}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              className="text-red-500 bg-white-50 rounded-lg hover:text-red-700"
+                              title="Delete"
+                              initial={{ opacity: 0, x: 10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <Trash2 className='w-5 h-5' />
+                            </motion.button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </>)}
+            </AnimatePresence>
+          </motion.div>
+
+
+
+        </div>
+      )}
+      {/* Modal for create fieldset */}
+      <AnimatePresence>
+        {modalOpen &&
+          (<div>
+            <FieldSetBuilder prepareFormData={prepareFormData} fields={fields} setFields={setFields}
+              canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} saveFieldSet={saveFieldSet} setModalOpen={setModalOpen} />
+          </div>)
+        }
+      </AnimatePresence>
+      {showModal &&
+        <><motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-2xl relative max-h-[90vh] overflow-y-auto">
+            <button className="absolute top-3 right-3 text-gray-400 hover:text-gray-700" onClick={() => setshowModal(false)}>
+              <X size={24} />
+            </button>
+
+            <h3 className="text-xl font-bold mb-4">{editingFieldset ? 'Update Fieldset' : 'Create Fieldset'}</h3>
+            {error && <div className="text-red-600 mb-2">{error}</div>}
+            {success && <div className="text-green-600 mb-2">{success}</div>}
+
+            <input
+              type="text"
+              placeholder="Fieldset name"
+              value={fieldsetName}
+              onChange={e => setFieldsetName(e.target.value)}
+              className="w-full mb-4 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+
+            <textarea
+              placeholder="Description"
+              value={fieldsetDesc}
+              onChange={e => setFieldsetDesc(e.target.value)}
+              className="w-full mb-4 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              className="w-full py-2 rounded-lg font-semibold text-white mt-2"
+              style={gradientBtn}
+              onClick={() => { setModalOpen(true); setshowModal(false); }}
+              disabled={isCreating || isUpdating}
+            >
+              {editingFieldset ? (isUpdating ? 'Updating...' : 'Update Fieldset') : (isCreating ? 'Creating...' : 'Create Fieldset')}
+            </button>
+          </div>
+        </motion.div>
+        </>}
     </div>
   );
 };

@@ -10,8 +10,9 @@ import { useSalesforceData } from '../Context/MetadataContext';
 import './home.css';
 import RecentFilesSlider from './RecentFilesSlider';
 import FolderManager from './FolderManager';
-import FieldsetPage from './FieldSetPageNew';
+import FieldsetPage from './FieldsetPage';
 import Bin from './Bin'
+import FavoriteTab from './FavoriteTab';
 const Home = () => {
   const {
     metadata,
@@ -114,6 +115,10 @@ const Home = () => {
 
   useEffect(() => {
     initializePage();
+    const tab = localStorage.getItem('tab');
+    if(tab){
+      setSelectedNav(tab);
+    }
   }, []);
 
   const handleCreateForm = () => {
@@ -285,7 +290,38 @@ const Home = () => {
 
     // You would update Folder__c for each selected form in your backend
   };
-
+  // Add to Favorites
+  const handleFavoriteForm = async (formId) => {
+    if (!formId) {
+      console.error('No formId provided to handleFavoriteForm');
+      return;
+    }
+    const updatedFavorite = formRecords.find(form => form.Id === formId).isFavorite;
+    console.log('Favorite data ==>' , updatedFavorite)
+    try {
+      const response = await fetch('https://v78d7u0ljd.execute-api.us-east-1.amazonaws.com/favorite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, 
+        },
+        body: JSON.stringify({ userId: userId, formId , instanceUrl , isFavorite : !updatedFavorite}),
+      });
+  
+      const result = await response.json();
+  
+      if (!response.ok) {
+        console.error('Favorite form toggle failed:', result?.error || 'Unknown error');
+        return;
+      }
+  
+      console.log(`Form ${formId} favorite status toggled successfully`, result);
+      // Optionally, update local state/UI here
+  
+    } catch (err) {
+      console.error('Error toggling favorite form:', err);
+    }
+  };
   // Handler for toggling form status
   const handleToggleStatus = async (formId) => {
     console.log('Toggling status for form:', formId);
@@ -353,7 +389,7 @@ const Home = () => {
         {selectedNav === 'integration' ? (
           <Integrations token={token} />
         ) : selectedNav === 'folders' ? (
-          <div className='w-[95%] h-[90%] mx-auto mt-4 rounded-xl shadow-xl flex flex-col py-5'>
+          <div className=' flex flex-col'>
             {/* <RecentFilesSlider
               recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
               onViewForm={handleEditForm}
@@ -370,7 +406,7 @@ const Home = () => {
           </div>
         ) : selectedNav === 'fieldset' ? (
           <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
-        ) : selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
+        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} /> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div
@@ -426,7 +462,7 @@ const Home = () => {
                 exit={{ opacity: 0, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} />
+                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleFavoriteForm={handleFavoriteForm} />
               </motion.div>
               {/* </AnimatePresence> */}
             </div>
