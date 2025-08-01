@@ -1,0 +1,124 @@
+/* Overlay */
+.formdetails-modal-bg {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 51;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+}
+
+/* Modal Content */
+.formdetails-modal-box {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  min-width: 35vw;
+  min-height: 45vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.formdetails-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 28px;
+  border-bottom: 1px solid #E4E7EC;
+}
+
+.formdetails-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0B0A0A;
+  line-height: 16px;
+  font-family: "Nunito Sans", sans-serif;
+}
+
+.formdetails-modal-close {
+  height: 32px;
+  width: 32px;
+  border: 1px solid #E4E7EC;
+  border-radius: 4px;
+  padding: 4px;
+  gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* Content */
+.formdetails-modal-content {
+  gap: 16px;
+  display: flex; flex-direction: column;
+}
+
+.form-container {
+  padding: 28px;
+}
+
+.formdetails-modal-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0B0A0A;
+  margin-bottom: 8px;
+  line-height: 26px;
+  font-family: "Nunito Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+.formdetails-modal-label .required-star {
+  color: rgba(208, 43, 32, 1);
+}
+
+.formdetails-modal-input,
+.formdetails-modal-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e4e7ec;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #0B0A0A;
+  font-family: "Nunito Sans", sans-serif;
+  background: #fff;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.formdetails-modal-input:focus,
+.formdetails-modal-textarea:focus {
+   border-color: #8fdcf1;
+  box-shadow: 0 0 0 2px rgba(143,220,241,0.25);
+  outline: none;
+}
+
+.formdetails-modal-textarea {
+    height: 15vh;
+}
+
+/* Error Alert */
+.formdetails-modal-error {
+  background: #fff3f4;
+  border-left: 4px solid #e14343;
+  color: #c42525;
+  font-size: 0.99rem;
+  margin: 5px 0 0 0;
+  padding: 10px 15px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/* Footer/Buttons */
+.formdetails-modal-actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: end;
+  align-items: center;
+  gap: 16px;
+  border-top: 1px solid #E4E7EC;
+  padding: 12px 28px;
+}

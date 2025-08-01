@@ -621,17 +621,15 @@ const CreateFormWizard = ({ onClose }) => {
 
               <div className="wizard-steps-nav"> {/* Navigation buttons section */}
                 <div className="cancel-button">
-                  <div className="cancel-button-border">
                   <button
                     onClick={closeWizard}
                     className="wizard-btn wizard-btn-secondary"
                   >
                     Cancel
                   </button>
-                  </div>
                 </div>
                 <div className={` ${selectedObjects.length === 0 ? 'next-button' : 'next-button-enabled'}`}>
-                  <div className="next-button-border">
+                  
                 <button
                   onClick={handleNextStep}
                   disabled={selectedObjects.length === 0}
@@ -640,7 +638,6 @@ const CreateFormWizard = ({ onClose }) => {
                   Next
                   
                 </button>
-                </div>
                 </div>
               </div>
             </div>
@@ -838,7 +835,6 @@ const CreateFormWizard = ({ onClose }) => {
 
               <div className="wizard-steps-nav"> {/* Navigation buttons section */}
                 <div className="cancel-button">
-<div className="cancel-button-border">
                 <button
                   onClick={() => {
                     setError('');
@@ -849,9 +845,7 @@ const CreateFormWizard = ({ onClose }) => {
                   Back
                 </button>
                 </div>
-                </div>
                 <div className="next-button-enabled">
-                <div className="next-button-border">
                 <button
                   onClick={handleSubmit}
                   className="wizard-btn wizard-btn-primary"
@@ -862,7 +856,6 @@ const CreateFormWizard = ({ onClose }) => {
                 </svg>
 
                 </button>
-                </div>
                 </div>
               </div>
             </div>

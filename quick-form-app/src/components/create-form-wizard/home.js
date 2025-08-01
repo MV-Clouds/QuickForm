@@ -36,6 +36,94 @@ const Home = () => {
   const activeForms = formRecords.filter(f => f.Status__c === 'Active').length;
   const totalSubmissions = formRecords.reduce((acc, f) => acc + (f.Total_Submission_Count__c || 500), 0);
   const [isCreating ,setisCreating] = useState(false);
+  const [cloningFormData, setCloningFormData] = useState(null); 
+  const [isCloneFormNameOpen, setIsCloneFormNameOpen] = useState(false);
+  const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
+
+  const handleCloneForm = (form) => {
+  // Find published version or draft version to clone
+    const versionToClone = form.FormVersions.find(v => v.Stage__c === 'Publish') 
+      || form.FormVersions.find(v => v.Stage__c === 'Draft');
+
+    if (!versionToClone) {
+      alert('No version found to clone.');
+      return;
+    }
+
+    setCloningFormData({ form, versionToClone });
+    setCloneFormNameDesc({ name: versionToClone.Name || '', description: versionToClone.Description__c || '' });
+    setIsCloneFormNameOpen(true);
+  };
+
+  const handleCloneFormSubmit = async (fields) => {
+    
+    const newName = fields.name || cloneFormNameDesc.name;
+    const newDesc = fields.description || cloneFormNameDesc.description;
+
+    if (!newName) {
+      alert('Form name is required.');
+      return;
+    }
+
+    setIsCloneFormNameOpen(false);
+    if (!cloningFormData) return;
+
+    const { versionToClone } = cloningFormData;
+console.log(versionToClone);
+
+    const cloneFormData = {
+      formVersion: {
+        Name: newName,
+        Description__c: newDesc,
+        Version__c: "1",
+        Stage__c: 'Draft',
+        // Copy other necessary fields if needed
+      },
+      formFields: (versionToClone.Fields || []).map((field, index) => ({
+        Name: field.Name,
+        Field_Type__c: field.Field_Type__c,
+        Page_Number__c: field.Page_Number__c,
+        Order_Number__c: index + 1,
+        Properties__c: field.Properties__c,
+        Unique_Key__c: field.Unique_Key__c,
+      })),
+      conditions: versionToClone.Conditions || [],
+      Mappings: versionToClone.Mappings,
+    };
+
+    try {
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      const accessToken = token || await fetchAccessToken(userId, instanceUrl);
+
+      const response = await fetch(process.env.REACT_APP_CLONE_FORM, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId,
+          instanceUrl,
+          formData: cloneFormData,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to clone form');
+      }
+
+      navigate(`/form-builder/${data.formVersionId}`);
+    } catch (error) {
+      console.error('Error cloning form:', error);
+      alert('Failed to clone form. Please try again.');
+    } finally {
+      setCloningFormData(null);
+    }
+  };
+
+
   // Fetch access token from Lambda
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
@@ -121,7 +209,6 @@ const Home = () => {
   };
 
   const handleDeleteForm = async (formId) => {
-    console.log('deleting...', formId)
     try {
       
       const response = await fetch('https://kd1xkj8zo2.execute-api.us-east-1.amazonaws.com/delete-user-data', {
@@ -137,7 +224,6 @@ const Home = () => {
         }),
       });
       const data = await response.json();
-      console.log('Response ==>', data)
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete form');
       }
@@ -169,7 +255,6 @@ const Home = () => {
   };
 
   const handleEditForm = async (form) => {
-    console.log('form data edit ', form);
 
     const draftVersion = form.FormVersions.find(
       (version) => version.Stage__c === 'Draft'
@@ -232,6 +317,7 @@ const Home = () => {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create new version');
       }
+console.log('redirecting for ',data.formVersionId);
 
       navigate(`/form-builder/${data.formVersionId}`);
     } catch (error) {
@@ -242,7 +328,6 @@ const Home = () => {
   // Handler for creating a folder (for now, just log)
   const handleCreateFolder = async (folderName, selectedFormIds) => {
     // TODO: Implement backend update logic here
-    console.log('Create folder:', folderName, 'with forms:', selectedFormIds);
     // Make API call to backend to create/update folder
     
       try {
@@ -272,7 +357,6 @@ const Home = () => {
         if (!response.ok) {
           throw new Error(data.error || 'Failed to create/update folder');
         }
-        console.log('Folder created/updated successfully:', data);
         // Optionally, refresh data or show success message here
       } catch (error) {
         console.error('Error creating/updating folder:', error);
@@ -410,7 +494,7 @@ const Home = () => {
                 exit={{ opacity: 0, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} />
+                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleCloneForm={handleCloneForm} />
               </motion.div>
               {/* </AnimatePresence> */}
             </div>
@@ -482,6 +566,28 @@ const Home = () => {
           ]}
         />
       )}
+      {isCloneFormNameOpen && (
+        <FormName
+          onClose={() => setIsCloneFormNameOpen(false)}
+          onSubmit={handleCloneFormSubmit}
+          fields={[
+            {
+              id: 'name',
+              label: 'Form Name',
+              type: 'text',
+              defaultValue: cloneFormNameDesc.name,
+              required: true,
+            },
+            {
+              id: 'description',
+              label: 'Description',
+              type: 'textarea',
+              defaultValue: cloneFormNameDesc.description,
+            },
+          ]}
+        />
+      )}
+
       {showCreateFormWizard && (
         <CreateFormWizard
           onClose={() => {

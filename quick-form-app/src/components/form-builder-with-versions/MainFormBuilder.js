@@ -316,10 +316,6 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
     }
   };
   useEffect(() => {
-    console.log(fieldsState);
-    
-  },[fieldsState]);
-  useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
     if (!userId || !instanceUrl) {

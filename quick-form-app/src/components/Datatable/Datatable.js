@@ -13,7 +13,7 @@ import 'antd/dist/reset.css'; // For Ant Design v5+
 import { Select } from 'antd';
 const { Option } = Select;
 
-const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) => {
+const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, handleCloneForm }) => {
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
   const [columnVisibility, setColumnVisibility] = useState({});
@@ -82,7 +82,6 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) =
   // View form handler
   const handleViewForm = (formId) => {
     // Implement your view form logic here
-    console.log(`Viewing form ${formId}`);
     handleEditForm(forms.filter(val => val.Id == formId)[0]);
 
   };

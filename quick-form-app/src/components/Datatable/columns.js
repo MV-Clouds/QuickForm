@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpDown, Edit, Folder, Heart, Trash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
+export const Columns = ({forms,handleEditForm , handleDeleteForm, handleCloneForm })=> [
   {
     header: 'Index',
     cell: ({ row }) => <div className="text-center">{row.index + 1}</div>,
@@ -50,7 +50,6 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
     header: 'Status',
     cell: ({ row, table }) => {
     const handleStatusChange = (formId)=>{
-      console.log('Status changing for  ' , formId);
       
     }
       return (
@@ -219,6 +218,28 @@ export const Columns = ({forms,handleEditForm , handleDeleteForm})=> [
                   <Folder className='w-4 h-4' />
                   Add to folder
                 </button>
+                <button
+                  className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-700 font-medium transition-colors"
+                  onClick={() => {
+                    setOpen(false);
+                    // Find the full form object for the current row and pass it to clone handler
+                    const formToClone = forms.find(f => f.Id === row.original.id);
+                    handleCloneForm(formToClone);
+                  }}
+                >
+                  {/* You can use an icon if you want, eg. a copy icon */}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16h8M8 12h8m-6-4h6m2 1H6a2 2 0 00-2 2v8a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z" />
+                  </svg>
+                  Clone
+                </button>
+
               </motion.div>
             )}
           </AnimatePresence>
