@@ -1,0 +1,24 @@
+.animated-tooltip-overlay {
+  position: fixed !important;
+  pointer-events: none;
+  background: rgba(50, 50, 50, 0.9);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: "Nunito Sans", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: pre-line;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  z-index: 10000;
+}
+
+.animated-tooltip-overlay.left-side {
+  top: 50%;
+  left: auto;
+  /* right: 100%; */
+  transform: translateY(-50%) translateX(-8px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}

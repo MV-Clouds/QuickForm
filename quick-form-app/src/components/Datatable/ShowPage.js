@@ -7,7 +7,6 @@ const mapApiToTableData = (apiData) => {
     console.log('not an array');
     return [];
   };
-  console.log(apiData);
   return apiData.map((item, idx) => ({
     id: item.Id || item.id || `row-${idx}`,
     srNo: idx + 1,
@@ -20,7 +19,7 @@ const mapApiToTableData = (apiData) => {
   }));
 };
 
-const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleDeleteForm }) => {
+const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleDeleteForm ,handleFavoriteForm, handleCloneForm }) => {
   // const [data, setData] = useState([]);
   // const [loading, setLoading] = useState(true);
 
@@ -61,7 +60,7 @@ const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleD
 
   return (
     <div className="container mx-auto py-10">
-      <DataTable columns={Columns({forms,handleEditForm , handleDeleteForm})} forms = {forms} data={mapApiToTableData(forms)} handleCreateForm={handleCreateForm} handleEditForm={handleEditForm} />
+      <DataTable columns={Columns({forms,handleEditForm , handleDeleteForm , handleFavoriteForm, handleCloneForm})} forms = {forms} data={mapApiToTableData(forms)} handleCreateForm={handleCreateForm} handleEditForm={handleEditForm} handleCloneForm={handleCloneForm} />
     </div>
   );
 };

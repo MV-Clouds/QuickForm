@@ -23,7 +23,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 32px;
+  padding: 16px 20px;
   border-bottom: 1px solid #E4E7EC;
 }
 
@@ -57,7 +57,7 @@
 }
 
 .object-container {
-  padding: 32px;
+  padding: 20px;
 }
 
 .wizard-step-title {
@@ -92,7 +92,7 @@
 }
 
 .wizard-form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 8px;
 }
 
 /* SEARCH, SELECT, DROPDOWN, REFRESH */
@@ -171,7 +171,8 @@
   background: #fff;
   border-radius: 8px;
   flex: 1 1 0;
-  max-height: 16vh;
+  min-height: 30vh;
+  max-height: 30vh;
   overflow-y: auto;
   box-shadow: none;
 }
@@ -189,7 +190,7 @@
   color: #2d2d2e;
   background: #fff;
 }
-.wizard-listbox-entry:last-child { border-bottom: none; }
+/* .wizard-listbox-entry:last-child { border-bottom: none; } */
 .wizard-listbox-entry.selected, .wizard-listbox-entry.active {
   background: #e2f5fe !important;
 }
@@ -207,14 +208,14 @@
   font-size: 1rem;
   line-height: 20px;
   margin-right: 0.5rem;
-  color: #0B0A0A;
+  color: #0b0a0ac4;
 }
 
 .wizard-listbox-entry-label-fields {
   font-weight: 700;
   font-size: 1rem;
   line-height: 20px;
-  color: #0B0A0A;
+  color: #0b0a0ac4;
 }
 
 .wizard-listbox-entry-api {
@@ -268,7 +269,7 @@
   flex-direction: row;
   justify-content: end;
   align-items: center;
-  gap: 1rem;
+  gap: 16px;
   border-top: 1px solid #E4E7EC;
   padding: 12px 20px;
 }
@@ -286,7 +287,7 @@
   font-family: "Nunito Sans", sans-serif;
   font-size: 1rem;
   font-weight: 600;
-  padding: 8px 16px;
+  padding: 8px 12px;
   border-radius: 8px;
   border: none;
   outline: none;
@@ -315,18 +316,13 @@
 
 .cancel-button {
   background: linear-gradient(90deg, rgba(11, 41, 94, 1) , rgba(29, 109, 158, 1));
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 2px;
-}
-
-.cancel-button-border {
-  background-color: #ffffff;
-  border-radius: 6px;
 }
 
 .next-button {
   background: #DADFE3;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 2px;
 }
 
@@ -344,13 +340,9 @@
   padding: 2px;
 }
 
-.next-button-border {
-  background: transparent;
-  border-radius: 6px;
-}
-
 .wizard-btn-secondary {
   color: #0B0A0A;
+  background-color: white;
 }
 
 .wizard-btn-secondary:hover {
@@ -374,7 +366,7 @@
   font-family: "Nunito Sans", sans-serif;
   font-size: 0.875rem;
   line-height: 16px;
-  color: #0B0A0A;
+  color: #0b0a0ac4;
   margin-bottom: 4px;
 }
 
@@ -449,4 +441,33 @@
   display: flex;
   flex-direction: column;
   align-items: end;
+}
+
+.wizard-form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.half-width {
+  width: 50%;
+}
+
+.info-icon {
+  color: #5F6165;
+  font-size: 14px;
+  margin-left: 8px;
+  margin-right: 8px;
+  cursor: default;
+  user-select: none;
+}
+
+.info-icon:hover,
+.info-icon:focus {
+  color: #3182ce; /* blue */
+  outline: none;
+  cursor: pointer;
+}
+
+.fields-search {
+  margin-top: 24px;
 }

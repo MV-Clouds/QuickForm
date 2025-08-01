@@ -39,9 +39,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    sessionStorage.setItem('isLoggedIn', 'true');
-    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    // sessionStorage.setItem('isLoggedIn', 'true');
+    // sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
+    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -59,14 +59,14 @@ const Login = () => {
 
     // Add message event listener
     const handleMessage = (event) => {
-      if (event.origin === 'https://d2gg09yhu3xa1a.cloudfront.net/') {
+      if (event.origin === 'https://d2bri1qui9cr5s.cloudfront.net/') {
         if (event.data.type === 'login_error') {
           if (popup && !popup.closed) {
             popup.close(); // Close popup on error
           }
         }
       }
-      if (event.origin === 'https://ew2pvgsa59.execute-api.us-east-1.amazonaws.com') {
+      if (event.origin === 'https://vm6pandneg.execute-api.us-east-1.amazonaws.com') {
         if (event.data.type === 'login_success') {
           if (popup && !popup.closed) {
             popup.close(); // Close popup on success
@@ -119,7 +119,7 @@ const Login = () => {
     if (org === 'custom') {
       effectiveOrg = customUrl.trim();
     }
-    let base = 'https://d2gg09yhu3xa1a.cloudfront.net/auth/login'; // Base login URL
+    let base = 'https://d2bri1qui9cr5s.cloudfront.net/auth/login'; // Base login URL
     const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true'; // Check login status
 
     if (isLoggedIn) {
@@ -204,7 +204,7 @@ const Login = () => {
             </div>
           </div>
           <div className="right-container">
-            <div className="quickform-logo"><img src="/images/quickform-logo.svg" alt="QuickForm Logo" className="logo" /></div>
+            <div className="quickform-logo"><img src="/images/quickform-logo.png" alt="QuickForm Logo" className="logo" /></div>
             <div className="login-container">
               <img
                 src="https://login.salesforce.com/img/logo214.svg"

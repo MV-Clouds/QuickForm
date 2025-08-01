@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import FormName from './FormName';
 import { Select } from 'antd';
 import './createFormWizard.css';
+import { InfoCircleOutlined } from '@ant-design/icons';
+import AnimatedTooltip from './AnimatedTooltip';
 const { Option } = Select;
 
 const itemVariants = {
@@ -497,7 +499,7 @@ const CreateFormWizard = ({ onClose }) => {
                     </button>
                   </div>
                   <div className="wizard-listbox">
-                    <div className={`${filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                    <div className={`${filteredMetadata.filter(obj => !selectedObjects.includes(obj.name)).length === 0 || filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       <AnimatePresence>
                         {filteredMetadata
                           .filter((obj) => !selectedObjects.includes(obj.name))
@@ -514,8 +516,12 @@ const CreateFormWizard = ({ onClose }) => {
                             >
                               <div className="flex-grow flex items-center">
                                 <div>
-                                  <div className="wizard-listbox-entry-label">{obj.label}</div>
-                                  <div className="wizard-listbox-entry-api">{obj.name}</div>
+                                  <div className="wizard-listbox-entry-label">{obj.label}
+                                    <AnimatedTooltip content={`${obj.name}`}>
+  <InfoCircleOutlined className="info-icon" aria-label={`API Name for ${obj.label}`} />
+</AnimatedTooltip>
+                                  </div>
+                                  
                                 </div>
                               </div>
                               <button
@@ -527,7 +533,7 @@ const CreateFormWizard = ({ onClose }) => {
                             </motion.div>
                           ))}
                       </AnimatePresence>
-                      {filteredMetadata.length === 0 && (
+                      {filteredMetadata.filter(obj => !selectedObjects.includes(obj.name)).length === 0 && (
                         <div className="wizard-listbox-empty">
                           No objects available
                         </div>
@@ -581,8 +587,14 @@ const CreateFormWizard = ({ onClose }) => {
                                   </button>
                                   <div className="flex-grow flex justify-end">
                                     <div>
-                                      <div className="wizard-listbox-entry-label">{obj.label}</div>
-                                      <div className="wizard-listbox-entry-api">{obj.name}</div>
+                                      
+                                      <div className="wizard-listbox-entry-label">
+                                        <AnimatedTooltip content={`${obj.name}`} positionLeft>
+                                          <InfoCircleOutlined className="info-icon" aria-label={`API Name for ${obj.label}`} />
+                                        </AnimatedTooltip>
+                                        {obj.label}
+                                      </div>
+                                      
                                     </div>
                                   </div>
                                 </motion.div>
@@ -609,17 +621,15 @@ const CreateFormWizard = ({ onClose }) => {
 
               <div className="wizard-steps-nav"> {/* Navigation buttons section */}
                 <div className="cancel-button">
-                  <div className="cancel-button-border">
                   <button
                     onClick={closeWizard}
                     className="wizard-btn wizard-btn-secondary"
                   >
                     Cancel
                   </button>
-                  </div>
                 </div>
                 <div className={` ${selectedObjects.length === 0 ? 'next-button' : 'next-button-enabled'}`}>
-                  <div className="next-button-border">
+                  
                 <button
                   onClick={handleNextStep}
                   disabled={selectedObjects.length === 0}
@@ -628,7 +638,6 @@ const CreateFormWizard = ({ onClose }) => {
                   Next
                   
                 </button>
-                </div>
                 </div>
               </div>
             </div>
@@ -647,39 +656,40 @@ const CreateFormWizard = ({ onClose }) => {
 
                 </div>               
               </div>
-              <div className="wizard-form-group"> {/* Object dropdown section */}
-                <label className="object-small">
-                  Select Object:
-                </label>
-                <Select
-                  id="object-select"
-                  value={currentObject}
-                  onChange={(value) => setCurrentObject(value)}
-                  className="dropdown"      // For consistency with your login CSS
-                  style={{ width: '100%' }}
-                  placeholder="Select an object"
-                >
-                  {selectedObjects.map((obj) => (
-                    <Option key={obj} value={obj}>
-                      {obj}
-                    </Option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="wizard-form-group"> {/* Field search section */}
-                <div className="wizard-search-container">
-                  <input
-                    type="text"
-                    placeholder="Search fields..."
-                    value={fieldSearch}
-                    onChange={(e) => setFieldSearch(e.target.value)}
-                    className="wizard-search-input"
-                  />
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="wizard-search-icon">
-                    <path d="M11 16.5C14.0376 16.5 16.5 14.0376 16.5 11C16.5 7.96243 14.0376 5.5 11 5.5C7.96243 5.5 5.5 7.96243 5.5 11C5.5 14.0376 7.96243 16.5 11 16.5Z" stroke="#5F6165" stroke-width="1.5"/>
-                    <path d="M15 15L19 19" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
+              <div className="wizard-form-row">
+                <div className="wizard-form-group half-width"> {/* Object dropdown section */}
+                  <label className="object-small">
+                    Select Object:
+                  </label>
+                  <Select
+                    id="object-select"
+                    value={currentObject}
+                    onChange={(value) => setCurrentObject(value)}
+                    className="dropdown"      // For consistency with your login CSS
+                    style={{ width: '100%' }}
+                    placeholder="Select an object"
+                  >
+                    {selectedObjects.map((obj) => (
+                      <Option key={obj} value={obj}>
+                        {obj}
+                      </Option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="wizard-form-group half-width"> {/* Field search section */}
+                  <div className="wizard-search-container fields-search">
+                    <input
+                      type="text"
+                      placeholder="Search fields..."
+                      value={fieldSearch}
+                      onChange={(e) => setFieldSearch(e.target.value)}
+                      className="wizard-search-input"
+                    />
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="wizard-search-icon">
+                      <path d="M11 16.5C14.0376 16.5 16.5 14.0376 16.5 11C16.5 7.96243 14.0376 5.5 11 5.5C7.96243 5.5 5.5 7.96243 5.5 11C5.5 14.0376 7.96243 16.5 11 16.5Z" stroke="#5F6165" stroke-width="1.5"/>
+                      <path d="M15 15L19 19" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </div>
                 </div>
               </div>
 
@@ -699,8 +709,12 @@ const CreateFormWizard = ({ onClose }) => {
                     </button>
                   </div>
                   <div className="wizard-listbox">
-                    <div className={`${filteredMetadata.length === 0 ? 'wizard-listbox-empty' : ''}`}>
-                      {filteredFields.length > 0 ? (
+                    <div className={`${filteredFields.filter(
+                        field => !(selectedFields[currentObject] || []).includes(field.name)
+                      ).length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                      {filteredFields.filter(
+                        field => !(selectedFields[currentObject] || []).includes(field.name)
+                      ).length > 0 ? (
                         <AnimatePresence>
                           {filteredFields
                             .filter(
@@ -724,13 +738,11 @@ const CreateFormWizard = ({ onClose }) => {
                                       {field.required && (
                                         <span className="wizard-listbox-entry-required">*</span>
                                       )}
+                                     <AnimatedTooltip content={`${field.name}\nType: ${field.type || 'Unknown'}`}>
+  <InfoCircleOutlined className="info-icon" aria-label={`API Name and Type for ${field.label}`} />
+</AnimatedTooltip>
                                     </div>
-                                    <div className="wizard-listbox-entry-api">{field.name}</div>
-                                    {field.type && (
-                                      <div className="wizard-listbox-entry-meta">
-                                        Type: {field.type}
-                                      </div>
-                                    )}
+                                    
                                   </div>
                                 </div>
                                 <button
@@ -766,7 +778,7 @@ const CreateFormWizard = ({ onClose }) => {
                     </button>
                   </div>
                   <div className="wizard-listbox selected">
-                    <div className={`${selectedObjects.length === 0 ? 'wizard-listbox-empty' : ''}`}>
+                    <div className={`${selectedFields[currentObject].length === 0 ? 'wizard-listbox-empty' : ''}`}>
                       {(selectedFields[currentObject] || []).length > 0 ? (
                         <AnimatePresence>
                           {(selectedFields[currentObject] || []).map((fieldName) => {
@@ -795,17 +807,14 @@ const CreateFormWizard = ({ onClose }) => {
                                   <div>
                                     <div className="selected-fields-align">
                                     <div className="wizard-listbox-entry-label-fields">
+                                    <AnimatedTooltip content={`${field.name}\nType: ${field.type || 'Unknown'}`} positionLeft>
+  <InfoCircleOutlined className="info-icon" aria-label={`API Name and Type for ${field.label}`} />
+</AnimatedTooltip>
                                       {field.label}
                                       {field.required && (
                                         <span className="wizard-listbox-entry-required">*</span>
                                       )}
                                     </div>
-                                    <div className="wizard-listbox-entry-api">{field.name}</div>
-                                    {field.type && (
-                                      <div className="wizard-listbox-entry-meta">
-                                        Type: {field.type}
-                                      </div>
-                                    )}
                                     </div>
                                   </div>
                                 </div>
@@ -826,7 +835,6 @@ const CreateFormWizard = ({ onClose }) => {
 
               <div className="wizard-steps-nav"> {/* Navigation buttons section */}
                 <div className="cancel-button">
-<div className="cancel-button-border">
                 <button
                   onClick={() => {
                     setError('');
@@ -837,9 +845,7 @@ const CreateFormWizard = ({ onClose }) => {
                   Back
                 </button>
                 </div>
-                </div>
                 <div className="next-button-enabled">
-                <div className="next-button-border">
                 <button
                   onClick={handleSubmit}
                   className="wizard-btn wizard-btn-primary"
@@ -850,7 +856,6 @@ const CreateFormWizard = ({ onClose }) => {
                 </svg>
 
                 </button>
-                </div>
                 </div>
               </div>
             </div>
