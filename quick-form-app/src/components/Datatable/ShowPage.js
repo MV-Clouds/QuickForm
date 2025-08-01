@@ -19,7 +19,7 @@ const mapApiToTableData = (apiData) => {
   }));
 };
 
-const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleDeleteForm, handleCloneForm }) => {
+const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleDeleteForm ,handleFavoriteForm, handleCloneForm }) => {
   // const [data, setData] = useState([]);
   // const [loading, setLoading] = useState(true);
 
@@ -60,7 +60,7 @@ const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleD
 
   return (
     <div className="container mx-auto py-10">
-      <DataTable columns={Columns({forms,handleEditForm , handleDeleteForm, handleCloneForm })} forms = {forms} data={mapApiToTableData(forms)} handleCreateForm={handleCreateForm} handleEditForm={handleEditForm}   handleCloneForm={handleCloneForm} />
+      <DataTable columns={Columns({forms,handleEditForm , handleDeleteForm , handleFavoriteForm, handleCloneForm})} forms = {forms} data={mapApiToTableData(forms)} handleCreateForm={handleCreateForm} handleEditForm={handleEditForm} handleCloneForm={handleCloneForm} />
     </div>
   );
 };

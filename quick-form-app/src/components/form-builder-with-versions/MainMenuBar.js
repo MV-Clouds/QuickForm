@@ -431,10 +431,10 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
         </motion.button>
       </div>
 
-      <div className="relative h-full flex flex-col overflow-y-auto">
+      <div className="relative h-full flex flex-col overflow-y-auto overflow-x-hidden">
         <div className={`flex border-b border-gray-100 ${isSidebarOpen ? 'px-8 py-4': 'px-1 py-5'}`}>
             <img 
-              src={isSidebarOpen ? '/images/quickform-logo.svg' : '/images/quickform-only-logo.svg'} 
+              src={isSidebarOpen ? '/images/quickform-logo.png' : '/images/quickform-only-logo.png'} 
               className={`${isSidebarOpen ? '' : ''}`}
              alt="Quick Form" />
         </div>

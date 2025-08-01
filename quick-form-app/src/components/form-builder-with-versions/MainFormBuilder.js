@@ -14,7 +14,7 @@ import { encrypt } from './crypto';
 import MappingFields from '../form-mapping/MappingFields';
 import formbuilder from './formbuilder.css';
 import { useSalesforceData } from '../Context/MetadataContext';
-import ThankYouPageBuilder from '../Thankyou/TY';
+import ThankYouPageBuilder from '../Thankyou/TY2';
 import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js';
 import Conditions from '../conditions/Conditions'; // Or your actual path
 

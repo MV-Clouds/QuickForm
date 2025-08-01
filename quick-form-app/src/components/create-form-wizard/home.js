@@ -11,7 +11,9 @@ import './home.css';
 import CreateFormWizard from './createFormWizard';
 import RecentFilesSlider from './RecentFilesSlider';
 import FolderManager from './FolderManager';
-
+import FieldsetPage from './FieldsetPage';
+import Bin from './Bin'
+import FavoriteTab from './FavoriteTab';
 const Home = () => {
   const {
     metadata,
@@ -19,7 +21,8 @@ const Home = () => {
     isLoading: contextLoading,
     error: contextError,
     fetchSalesforceData,
-    userProfile
+    userProfile,
+    Fieldset
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -202,6 +205,10 @@ console.log(versionToClone);
 
   useEffect(() => {
     initializePage();
+    const tab = localStorage.getItem('tab');
+    if(tab){
+      setSelectedNav(tab);
+    }
   }, []);
 
   const handleCreateForm = () => {
@@ -317,7 +324,6 @@ console.log(versionToClone);
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create new version');
       }
-console.log('redirecting for ',data.formVersionId);
 
       navigate(`/form-builder/${data.formVersionId}`);
     } catch (error) {
@@ -328,6 +334,8 @@ console.log('redirecting for ',data.formVersionId);
   // Handler for creating a folder (for now, just log)
   const handleCreateFolder = async (folderName, selectedFormIds) => {
     // TODO: Implement backend update logic here
+    setisCreating(true);
+    console.log('Create folder:', folderName, 'with forms:', selectedFormIds);
     // Make API call to backend to create/update folder
     
       try {
@@ -361,11 +369,50 @@ console.log('redirecting for ',data.formVersionId);
       } catch (error) {
         console.error('Error creating/updating folder:', error);
       }finally{
+        setisCreating(false)
         fetchSalesforceData(userId , instanceUrl);
       }
     
 
     // You would update Folder__c for each selected form in your backend
+  };
+  // Add to Favorites
+  const handleFavoriteForm = async (formId) => {
+    if (!formId) {
+      console.error('No formId provided to handleFavoriteForm');
+      return;
+    }
+    const updatedFavorite = formRecords.find(form => form.Id === formId).isFavorite;
+    console.log('Favorite data ==>' , updatedFavorite)
+    try {
+      const response = await fetch('https://v78d7u0ljd.execute-api.us-east-1.amazonaws.com/favorite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, 
+        },
+        body: JSON.stringify({ userId: userId, formId , instanceUrl , isFavorite : !updatedFavorite}),
+      });
+  
+      const result = await response.json();
+  
+      if (!response.ok) {
+        console.error('Favorite form toggle failed:', result?.error || 'Unknown error');
+        return;
+      }
+  
+      console.log(`Form ${formId} favorite status toggled successfully`, result);
+      // Optionally, update local state/UI here
+  
+    } catch (err) {
+      console.error('Error toggling favorite form:', err);
+    }
+  };
+  // Handler for toggling form status
+  const handleToggleStatus = async (formId) => {
+    console.log('Toggling status for form:', formId);
+    // Implement status toggle logic here
+    // This would typically involve an API call to update the form status
   };
 
   return (
@@ -428,17 +475,24 @@ console.log('redirecting for ',data.formVersionId);
         {selectedNav === 'integration' ? (
           <Integrations token={token} />
         ) : selectedNav === 'folders' ? (
-          <div className='w-[95%] h-[90%] mx-auto mt-4 rounded-xl shadow-xl flex flex-col py-5'>
+          <div className=' flex flex-col'>
             {/* <RecentFilesSlider
               recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
               onViewForm={handleEditForm}
             /> */}
             <FolderManager
               recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
-              handleCreateFolder={handleCreateFolder}
+              handleCreateFolder={handleCreateFolder} 
+              isCreating={isCreating}
+              onViewForm={handleEditForm}
+              onEditForm={handleEditForm}
+              onDeleteForm={handleDeleteForm}
+              onToggleStatus={handleToggleStatus}
             />
           </div>
-        ) : (
+        ) : selectedNav === 'fieldset' ? (
+          <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
+        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} /> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div
@@ -494,7 +548,7 @@ console.log('redirecting for ',data.formVersionId);
                 exit={{ opacity: 0, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleCloneForm={handleCloneForm} />
+                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleFavoriteForm={handleFavoriteForm} handleCloneForm={handleCloneForm} />
               </motion.div>
               {/* </AnimatePresence> */}
             </div>
@@ -502,17 +556,14 @@ console.log('redirecting for ',data.formVersionId);
         )}
       </div>
 
-     {/* Modal for selecting form creation option */}
+      {/* Modal for selecting form creation option */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
               <h2 className="form-title">Create New Form</h2>
               <button className="close-button-container" onClick={() => setIsModalOpen(false)}>
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M10 1.00714L8.99286 0L5 3.99286L1.00714 0L0 1.00714L3.99286 5L0 8.99286L1.00714 10L5 6.00714L8.99286 10L10 8.99286L6.00714 5L10 1.00714Z" fill="#5F6165"/>
-                      </svg>
-
+                <img src="/images/close_icon.svg" alt="Close" />
               </button>
             </div>
             <div className="divider"></div>

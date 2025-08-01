@@ -182,11 +182,11 @@ export const handler = async (event) => {
     };
 
 
-    const [forms, formVersions, formFields, formConditions, Mappings, Fieldset] = await Promise.all([
+    const [forms, formVersions, formFields, formConditions, Mappings, Fieldset, Fieldset_Field, formNotifications] = await Promise.all([
       fetchSalesforceData(
         access_token,
         instance_url,
-        'SELECT Id, Name, Active_Version__c, Publish_Link__c , Status__c, LastModifiedDate , Folder__c , IsDeleted FROM Form__c'
+        'SELECT Id, Name, Active_Version__c, Publish_Link__c , Status__c, LastModifiedDate , Folder__c , IsDeleted , isFavorite__c FROM Form__c'
       ),
       fetchSalesforceData(
         access_token,
@@ -196,7 +196,7 @@ export const handler = async (event) => {
       fetchSalesforceData(
         access_token,
         instance_url,
-        'SELECT Id, Name, Form_Version__c, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c , Fieldset__c , IsDeleted FROM Form_Field__c'
+        'SELECT Id, Name, Form_Version__c, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c , IsDeleted FROM Form_Field__c'
       ),
       fetchSalesforceData(
         access_token,
@@ -211,7 +211,17 @@ export const handler = async (event) => {
       fetchSalesforceData(
         access_token,
         instance_url,
-        'SELECT Id , Name, Description__c ,Fields__c FROM Fieldset__c'
+        'SELECT Id , Name, Description__c , isDeleted  FROM Fieldset__c'
+      ),
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id, Name, Field_Type__c, Page_Number__c, Order_Number__c, Properties__c, Unique_Key__c , IsDeleted , Fieldset__c  FROM Fieldset_Field__c'
+      ),
+      fetchSalesforceData(
+        access_token,
+        instance_url,
+        'SELECT Id,	IsDeleted,	Name,	LastModifiedDate,	Body__c	,Form__c	,Title__c	,Type__c	,Status__c,	Receipe__c,	Condition__c	,Schedule__c  FROM Notification__c'
       ),
     ]);
     const formversionsdel =  formVersions.filter(val => val.IsDeleted === true)
@@ -421,7 +431,23 @@ export const handler = async (event) => {
         LastModifiedDate: form.LastModifiedDate || Date.now(),
         Folder__c : form.Folder__c || null,
         FormVersions: versions,
-        IsDeleted : form.IsDeleted
+        IsDeleted: form.IsDeleted,
+        isFavorite: form.isFavorite__c || false,
+        Notifications : formNotifications
+          .filter(notification => notification.Form__c === form.Id)
+          .map(notification => ({
+            Id: notification.Id,
+            Name: notification.Name,
+            Body__c: notification.Body__c,
+            Title__c: notification.Title__c,
+            Type__c: notification.Type__c,
+            Status__c: notification.Status__c,
+            Schedule__c: notification.Schedule__c,
+            Condition__c: notification.Condition__c,
+            Receipe__c: notification.Receipe__c,
+            IsDeleted : notification.IsDeleted,
+            LastModifiedDate : notification.LastModifiedDate
+          }))
       };
     });
 
@@ -630,7 +656,8 @@ export const handler = async (event) => {
         LastModifiedDate: form.LastModifiedDate || Date.now(),
         Folder__c: form.Folder__c || null,
         FormVersions: versions,
-        IsDeleted : form.IsDeleted
+        IsDeleted: form.IsDeleted,
+        isFavorite: form.isFavorite__c || false
       };
     }).filter(deletedForm => deletedForm.FormVersions.length > 0);
 
@@ -655,7 +682,16 @@ export const handler = async (event) => {
     for(let i = 0; i < deletedformRecordsString.length; i += CHUNK_SIZE) {
       deletedchunks.push(deletedformRecordsString.slice(i, i + CHUNK_SIZE));
     }
-
+    const constructedFieldset = Fieldset.map(val => {
+      const fieldsetFields = Fieldset_Field.filter(field => field.Fieldset__c === val.Id);
+      return {
+        Id: val.Id,
+        Name: val.Name,
+        Description__c: val.Description__c,
+        Fieldset_Fields__c: fieldsetFields,
+        IsDeleted: val.IsDeleted
+      };
+    })
     const writeRequests = [
       {
         PutRequest: {
@@ -664,7 +700,7 @@ export const handler = async (event) => {
             ChunkIndex: { S: 'Metadata' },
             InstanceUrl: { S: cleanedInstanceUrl },
             UserProfile: { S: JSON.stringify(user_profile_data) },
-            Fieldset: { S: JSON.stringify(Fieldset) },
+            Fieldset: { S: JSON.stringify(constructedFieldset.filter(val => val.IsDeleted !== true)) },
             Metadata: { S: JSON.stringify(metadata) },
             CreatedAt: { S: queryResponseData.Items?.find(item => item.ChunkIndex?.S === 'Metadata')?.CreatedAt?.S || currentTime },
             UpdatedAt: { S: currentTime },
@@ -688,6 +724,7 @@ export const handler = async (event) => {
             UserId: { S: userId },
             ChunkIndex: { S: `DeletedFormRecords_${index}` },
             FormRecords: { S: chunk },
+            Fieldset: { S: JSON.stringify(constructedFieldset.filter(val => val.IsDeleted === true)) },
             CreatedAt: { S: currentTime },
             UpdatedAt: { S: currentTime },
           },
