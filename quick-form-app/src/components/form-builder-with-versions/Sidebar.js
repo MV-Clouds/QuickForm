@@ -335,36 +335,53 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
       {/* Sub Tabs for Form */}
       {activeMainTab === 'Form' && (
         <div className="flex border-b border-gray-200 px-4">
-          <button
-            className={`flex-1 py-3 text-sm text-center font-medium transition-colors ${
-              activeSubTab === 'Fields'
-                ? 'text-gray-900 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-            onClick={() => setActiveSubTab('Fields')}
-          >
-            Fields
-          </button>
-          <button
-            className={`flex-1 py-3 text-sm text-center font-medium transition-colors ${
-              activeSubTab === 'Fieldsets'
-                ? 'text-gray-900 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-            onClick={() => setActiveSubTab('Fieldsets')}
-          >
-            Fieldsets
-          </button>
-          <button
-            className={`flex-1 py-3 text-sm text-center font-medium transition-colors ${
-              activeSubTab === 'Payments'
-                ? 'text-gray-900 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-            onClick={() => setActiveSubTab('Payments')}
-          >
-            Payments
-          </button>
+          <div className="relative flex justify-center w-full">
+            <button
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
+                activeSubTab === 'Fields'
+                  ? 'text-gray-900 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+              onClick={() => setActiveSubTab('Fields')}
+            >
+              Fields
+            </button>
+            {activeSubTab === 'Fields' && (
+              <div className="gradient-border"></div>
+            )}
+          </div>
+
+          <div className="relative flex justify-center w-full">
+            <button
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
+                activeSubTab === 'Fieldsets'
+                  ? 'text-gray-900 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+              onClick={() => setActiveSubTab('Fieldsets')}
+            >
+              Fields
+            </button>
+            {activeSubTab === 'Fieldsets' && (
+              <div className="gradient-border"></div>
+            )}
+          </div>
+
+          <div className="relative flex justify-center w-full">
+            <button
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
+                activeSubTab === 'Payments'
+                  ? 'text-gray-900 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+              onClick={() => setActiveSubTab('Payments')}
+            >
+              Payments
+            </button>
+            {activeSubTab === 'Payments' && (
+              <div className="gradient-border"></div>
+            )}
+          </div>
         </div>
       )}
 

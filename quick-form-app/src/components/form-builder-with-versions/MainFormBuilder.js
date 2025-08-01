@@ -698,14 +698,8 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
         page.fields = page.fields.filter(f => f.id !== fieldId);
       });
       targetPage.fields.splice(insertIndex, 0, { ...newField, isCut: false });
-      setSelectedFieldId(newField.id);
-      setSelectedSectionSide(newField.sectionSide || null);
-      setShowSidebar(false);
     } else if (newField && !fieldId) {
       targetPage.fields.splice(insertIndex, 0, newField);
-      setSelectedFieldId(newField.id);
-      setSelectedSectionSide(newField.sectionSide || null);
-      setShowSidebar(false);
     } else if (fieldType) {
       const newFieldId = `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const defaultValidation = getDefaultValidation(fieldType);
@@ -720,9 +714,6 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
-      setSelectedFieldId(newFieldId);
-      setSelectedSectionSide(sectionSide || null);
-      setShowSidebar(false);
     }
 
     const flattenedFields = [];
@@ -1187,7 +1178,7 @@ function MainFormBuilder({ showMapping, showThankYou, showNotification }) {
                     themes={themes}
                   />
                 ) : (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg">
+                  <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
                     {(selectedFieldId || selectedFooter) && (
                       <FieldEditor
                         selectedField={selectedField}

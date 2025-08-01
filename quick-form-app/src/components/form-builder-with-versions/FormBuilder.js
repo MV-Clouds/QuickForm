@@ -157,10 +157,17 @@ function FormBuilder({
   };
 
   const handleFieldClick = (fieldId, sectionSide = null) => {
+    const field = fields.find((field) => field.id === fieldId);
+    
+    // Don't auto-select divider, pagebreak, or section fields
+    if (field && ['divider', 'pagebreak', 'section'].includes(field.type)) {
+      return;
+    }
+    
     setSelectedFieldId(fieldId);
     setSelectedSectionSide(sectionSide);
     setSelectedFooter(null);
-    const isSectionField = fields.find((field) => field.id === fieldId && field.type === 'section');
+    const isSectionField = field && field.type === 'section';
     setShowSidebar(!isSectionField || sectionSide !== null);
   };
 
