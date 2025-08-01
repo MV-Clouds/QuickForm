@@ -9,7 +9,7 @@ const NotFound = () => {
   return (
     <div className="quickform-404-container">
       <div className="quickform-404-left">
-        <div className="quickform-logo"><img src="/images/quickform-logo.png" alt="Quick Form Logo" /></div>
+        <div className="quickform-logo-not-found"><img src="/images/quickform-logo.png" alt="Quick Form Logo" /></div>
         <p className="quickform-404-title">404</p>
         <p className="quickform-404-subtitle">Page not found</p>
         <p className="quickform-404-desc">
