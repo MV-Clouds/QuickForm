@@ -11,33 +11,6 @@ const gradientBtn = {
 const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isLoading }) => {
   const fieldsets = Fieldset;
 
-  // // All available field types with their configurations
-  // const allFields = useMemo(() => [
-  //   { Field_Type__c: 'fullname', Name: 'Full Name', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'email', Name: 'Email', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'address', Name: 'Address', requiresLabel: true, subFields: true },
-  //   { Field_Type__c: 'file', Name: 'File Upload', requiresLabel: true },
-  //   { Field_Type__c: 'signature', Name: 'Signature', requiresLabel: true },
-  //   { Field_Type__c: 'terms', Name: 'Terms of Service', requiresLabel: true },
-  //   { Field_Type__c: 'link', Name: 'Link', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'date', Name: 'Date', requiresLabel: true },
-  //   { Field_Type__c: 'datetime', Name: 'Date and Time', requiresLabel: true },
-  //   { Field_Type__c: 'time', Name: 'Time', requiresLabel: true },
-  //   { Field_Type__c: 'emoji', Name: 'Emoji and Star Rating', requiresLabel: true },
-  //   { Field_Type__c: 'scale', Name: 'Scale Rating', requiresLabel: true },
-  //   { Field_Type__c: 'shorttext', Name: 'Short Text', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'longtext', Name: 'Long Text', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'number', Name: 'Number', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'checkbox', Name: 'Checkbox', requiresLabel: true },
-  //   { Field_Type__c: 'display', Name: 'Display Text', requiresLabel: true },
-  //   { Field_Type__c: 'phone', Name: 'Phone', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'price', Name: 'Price', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'radio', Name: 'Radio Button', requiresLabel: true, requiresOptions: true },
-  //   { Field_Type__c: 'toggle', Name: 'Toggle Button', requiresLabel: true },
-  //   { Field_Type__c: 'dropdown', Name: 'Dropdown Elements', requiresLabel: true, requiresOptions: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'image', Name: 'Image Uploader', requiresLabel: true },
-  //   { Field_Type__c: 'section', Name: 'Section', requiresLabel: true }
-  // ], []);
 
   // UI state
   const [search, setSearch] = useState('');
@@ -458,8 +431,6 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
     setSelectedFields(fields);
     setEditingFieldset(fieldset);
     setModalOpen(true);
-
-    // setFields(fields)
   };
 
   // 3. Add handleUpdateFieldset
@@ -685,9 +656,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
                   {filteredFieldsets.map((fs, idx) => {
                     let fields = [];
                     try {
-                      console.log('Data filtered =>', fs)
                       fields = fs.Fieldset_Fields__c || [];
-                      console.log('Fields==> ', fields)
                     } catch {
                       fields = [];
                     }

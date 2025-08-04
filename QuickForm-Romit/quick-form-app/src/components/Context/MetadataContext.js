@@ -11,7 +11,7 @@ export const SalesforceDataProvider = ({ children }) => {
   const [Fieldset , setFieldset] = useState([]); // Field Set Data
   const [deletedData , setdeletedData] = useState([]) //Deleted Data for Bin 
   const [favoriteData , setfavoriteData] = useState([]) //Favorites Data 
-
+  const [Notifications ,  setNotifications] = useState([]); //Notification Data
   const fetchSalesforceData = async (userId, instanceUrl) => {
     if (!userId || !instanceUrl) {
       setError('Missing userId or instanceUrl');
@@ -22,7 +22,7 @@ export const SalesforceDataProvider = ({ children }) => {
       setIsLoading(true);
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
       const fetchStart = Date.now();
-      console.log('Metadata Context initialize',userId, cleanedInstanceUrl);
+      // console.log('Metadata Context initialize',userId, cleanedInstanceUrl);
       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,14 +64,14 @@ export const SalesforceDataProvider = ({ children }) => {
           }
         }
       };
-      console.log('Data from DB ==>' , data);  
+      // console.log('Data from DB ==>' , data);  
       // Usage:
       const parsedFormRecords = parseFormRecords(data.FormRecords);
       const userProfileData = data?.UserProfile || {};
       const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
       const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
-      console.log('Favoriterecords ==>' , favoriteRecords)
+      // console.log('Favoriterecords ==>' , favoriteRecords)
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));

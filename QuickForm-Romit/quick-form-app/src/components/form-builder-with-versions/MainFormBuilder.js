@@ -489,6 +489,32 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
     }
   };
 
+  const sendNotificationData = async (payload) => {
+    console.log(payload, 'payload')
+    try {
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      if (!userId || !instanceUrl) throw new Error('Missing userId or instanceUrl.');
+      const token = await fetchAccessToken(userId, instanceUrl);
+      if (!token) throw new Error('Failed to obtain access token.');
+      const response = await fetch('https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ notificationData: { Form__c: formId, ...payload }, instanceUrl, userId }),
+      });
+      const res = await response.json()
+      console.log('Response from lambda ==> ', res);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      await refreshData();
+    } catch (error) {
+      console.error('There was a problem with the fetch operation:', error);
+    }
+  };
   const getDefaultValidation = (fieldType) => {
     const field = fieldType.toLowerCase().replace(/\s+/g, '');
     const validations = {
@@ -1269,7 +1295,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
                 ></path>
               </svg>
             </div>
-          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage currentFields = {formVersions[0]?.Fields}/> :  showMapping ? <MappingFields /> : (
+          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage currentFields = {formVersions[0]?.Fields} sendNotificationData ={sendNotificationData}/> :  showMapping ? <MappingFields /> : (
             <div className="flex w-full mt-4 px-4">
               <div className="w-3/4 pr-2">
                 <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
