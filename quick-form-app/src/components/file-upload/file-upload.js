@@ -1,18 +1,23 @@
 import React, { useState } from 'react';
 import JSZip from 'jszip';
 const FileUpload = ({acceptedFileTypes , setDesign }) => {
+    console.log('FileUpload props:', { acceptedFileTypes, setDesign });
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [message, setMessage] = useState('');
     const [responseData, setResponseData] = useState(null);
     const [base64String, setBase64String] = useState('');
+     
     const handleFileChange = (e) => {
-        console.log('event:: ', e.target.files);
-        
-        setFile(e.target.files[0]);
-        setMessage('');
-        setResponseData(null); // Clear previous response
+        console.log('File change event triggered'); // Simple log first
+        if (e.target.files && e.target.files.length > 0) {
+            console.log('Selected file:', e.target.files[0]);
+            setFile(e.target.files[0]);
+            setMessage('');
+            setResponseData(null);
+        }
     };
+
     const handleUpload = async (e) => {
         e.preventDefault();
         if (!file) {

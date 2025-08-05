@@ -10,7 +10,7 @@ import 'react-quill/dist/quill.snow.css';
 import InputMask from 'react-input-mask';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
-import FileUpload  from '../file-upload/file-upload';
+import ImageUploader  from './ImageUploader';
 
 const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', dropdownOptions = [], onChange, onUpdateRows, onUpdateColumns }) => {
   const [selectedValues, setSelectedValues] = useState({});
@@ -290,7 +290,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   const [signatureData, setSignatureData] = useState(null);
   const fileInputRef = useRef(null);
   const [imagePreview, setImagePreview] = useState(null);
-  const [setDesign, setImageDesign] = useState({});
+  const [imageDesign, setImageDesign] = useState({});
   const [selectedRating, setSelectedRating] = useState(null);
   const [localOptions, setLocalOptions] = useState(initialOptions?.length ? initialOptions : ['Option 1', 'Option 2', 'Option 3']);
   const [isHovered, setIsHovered] = useState(false);
@@ -309,11 +309,6 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   // Add this state for displaytext editing
   const [isEditingDisplayText, setIsEditingDisplayText] = useState(false);
   const displayTextRef = useRef(null);
-
-  useEffect(() => {
-    console.log('setdesign: ', setDesign);
-  }
-  , [setDesign]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -547,8 +542,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         }
       }}
       onDoubleClick={isSection ? (e) => e.stopPropagation() : undefined}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      // onMouseEnter={() => setIsHovered(true)}
+      // onMouseLeave={() => setIsHovered(false)}
     >
       {isSelected && type !== 'pagebreak' && (
         <div className="absolute top-0 right-0 flex gap-1 z-20" style={{ transform: 'translate(0, -50%)' }}>
@@ -900,6 +895,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       );
 
     case 'longtext':
+      console.log('render longtext');
+      
       return (
         <SelectionWrapper>
           <FieldWrapper labelContent={
@@ -1283,94 +1280,24 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-    // case 'imageuploader':
-    //   return (
-    //     <SelectionWrapper>
-    //       <FieldWrapper {...wrapperProps}>
-    //         <div
-    //           className="relative inline-block"
-    //           style={{
-    //             width: field.imageWidth ? `${field.imageWidth}px` : '200px',
-    //             textAlign: field.imageAlign || 'center'
-    //           }}
-    //         >
-    //           <input
-    //             type="file"
-    //             accept="image/*"
-    //             ref={fileInputRef}
-    //             className="hidden"
-    //             disabled={isDisabled}
-    //             pattern={field?.validation?.pattern}
-    //             title={field?.validation?.description}
-    //           />
-    //           <div
-    //             className={`relative rounded-lg overflow-hidden border-2 border-dashed ${isDisabled ? 'border-gray-300' : 'border-gray-400 hover:border-blue-500'} transition-all duration-200`}
-    //             onClick={() => !isDisabled && fileInputRef.current?.click()}
-    //           >
-    //             {imagePreview ? (
-    //               <>
-    //                 <img
-    //                   src={imagePreview}
-    //                   alt="Uploaded preview"
-    //                   className={`w-full h-auto object-contain ${isDisabled ? 'opacity-60' : 'hover:opacity-80'} transition-opacity duration-200`}
-    //                   style={{
-    //                     height: field.imageHeight ? `${field.imageHeight}px` : 'auto',
-    //                   }}
-    //                 />
-    //                 {!isDisabled && (
-    //                   <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-20 transition-all duration-200 opacity-0 hover:opacity-100">
-    //                     <div className="bg-white bg-opacity-80 rounded-full p-2 shadow-md">
-    //                       <svg className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    //                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-    //                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-    //                       </svg>
-    //                     </div>
-    //                   </div>
-    //                 )}
-    //               </>
-    //             ) : (
-    //               <div className={`flex flex-col items-center justify-center p-4 ${isDisabled ? 'bg-gray-100' : 'bg-gray-50 hover:bg-gray-100'} transition-colors duration-200`}
-    //                 style={{
-    //                   height: field.imageHeight ? `${field.imageHeight}px` : '150px',
-    //                 }}
-    //               >
-    //                 <svg className="w-10 h-10 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    //                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-    //                 </svg>
-    //                 <p className="text-sm text-gray-500 text-center">
-    //                   {isDisabled ? 'Image uploader' : 'Click to upload image'}
-    //                 </p>
-    //                 {field.imageWidth && field.imageHeight && (
-    //                   <p className="text-xs text-gray-400 mt-1">
-    //                     {field.imageWidth}×{field.imageHeight}px
-    //                   </p>
-    //                 )}
-    //               </div>
-    //             )}
-    //           </div>
-    //         </div>
-    //       </FieldWrapper>
-    //     </SelectionWrapper>
-    //   );
-    
-    case 'imageuploader':
-  return (
-    <SelectionWrapper>
-      <FieldWrapper {...wrapperProps}>
-        <FileUpload 
-          acceptedFileTypes=''
-          setDesign={setImageDesign} 
-        />
-        {setDesign && (
-          <img 
-            src={setDesign} 
-            alt="Uploaded preview" 
-            className="mt-4 max-w-full h-auto" 
-          />
-        )}
-      </FieldWrapper>
-    </SelectionWrapper>
-  );
+   case 'imageuploader':
+    return (
+      <SelectionWrapper>
+          <FieldWrapper {...wrapperProps}>
+            <div>
+              <ImageUploader 
+                  defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"} 
+                  onImageUpload={(newDesign) => {
+                    setImageDesign(newDesign);
+                    if (onUpdateField) {
+                      onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
+                    }
+                  }}
+                />
+            </div>
+          </FieldWrapper>
+      </SelectionWrapper>
+    );
     case 'toggle':
       return (
         <SelectionWrapper>

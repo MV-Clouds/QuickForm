@@ -69,13 +69,13 @@ export const SalesforceDataProvider = ({ children }) => {
       const parsedFormRecords = parseFormRecords(data.FormRecords);
       const userProfileData = data?.UserProfile || {};
       const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
-      const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
+      // const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
       setFieldset(parsedFieldset);
-      setdeletedData(parsedDeletedData);
+      // setdeletedData(parsedDeletedData);
       setfavoriteData(favoriteRecords) 
     } catch (err) {
       setError(err.message);
