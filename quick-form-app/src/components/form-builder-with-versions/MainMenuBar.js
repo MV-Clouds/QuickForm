@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSalesforceData } from '../Context/MetadataContext';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId, publishLink  }) {
   const navigate = useNavigate();
   const [submissionCount, setSubmissionCount] = useState(0);
   const { userProfile } = useSalesforceData();
@@ -319,7 +319,13 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
       name: 'Share',
       path: '/share',
       route: '/share',
-      onClick: () => {/* Handle share functionality */ },
+      onClick: () => {
+        if (publishLink) {
+          navigate(`/share/${selectedVersionId}`, { state: { publishLink } });
+        } else {
+          alert('Publish link not available');
+        }
+      },
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>

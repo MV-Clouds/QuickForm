@@ -16,7 +16,8 @@ import formbuilder from './formbuilder.css';
 import { useSalesforceData } from '../Context/MetadataContext';
 import ThankYouPageBuilder from '../Thankyou/TY2';
 import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js';
-import Conditions from '../conditions/Conditions'; // Or your actual path
+import Conditions from '../conditions/Conditions';
+import SharePage from '../share-page/SharePage.js'
 
 const themes = [
   {
@@ -84,7 +85,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition}) {
+function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition, showShare}) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -110,6 +111,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const [formRecords, setFormRecords] = useState([]);
+  const [publishLink, setPublishLink] = useState('');
 
   const [
     fieldsState,
@@ -239,6 +241,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
           setFormVersions(form.FormVersions);
           setFormId(form.Id);
           setFormName(formVersion.Name);
+          setPublishLink(form.Publish_Link__c);
           break;
         }
       }
@@ -1006,6 +1009,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
         toggleSidebar={toggleSidebar}
         formRecords={formRecords}
         selectedVersionId={selectedVersionId}
+        publishLink={publishLink}
       />
       <div
         className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
@@ -1134,7 +1138,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
             </div>
           ) : showThankYou ? (
             <ThankYouPageBuilder formVersionId={formVersionId} />
-          ) : showCondition ? <Conditions formVersionId={formVersionId} /> : showNotification ? (
+          ) : showCondition ? <Conditions formVersionId={formVersionId} /> : showShare ? <SharePage publishLink={publishLink} /> : showNotification ? (
             <NotificationPage currentFields={formVersions[0]?.Fields} />
           ) : showMapping ? (
             <MappingFields />
