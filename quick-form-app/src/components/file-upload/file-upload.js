@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import JSZip from 'jszip';
-
 const FileUpload = ({acceptedFileTypes , setDesign }) => {
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
@@ -8,36 +7,30 @@ const FileUpload = ({acceptedFileTypes , setDesign }) => {
     const [responseData, setResponseData] = useState(null);
     const [base64String, setBase64String] = useState('');
     const handleFileChange = (e) => {
+        console.log('event:: ', e.target.files);
+        
         setFile(e.target.files[0]);
         setMessage('');
         setResponseData(null); // Clear previous response
     };
-    
     const handleUpload = async (e) => {
         e.preventDefault();
-
         if (!file) {
             setMessage('Please select a file to upload.');
             return;
         }
-
         // FIXED: Set uploading state to true before starting the file reader
         setUploading(true);
         setMessage('Reading file...');
-
         const reader = new FileReader();
         reader.readAsDataURL(file);
-
         reader.onload = async () => {
             const base64String = reader.result.split(',')[1];
-
             setBase64String(base64String); // Store the base64 string for later use
             setMessage('Uploading...');
-
             try {
                 // CHANGED: Construct the URL with query parameters
                 const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
-
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     body: base64String,
@@ -45,7 +38,6 @@ const FileUpload = ({acceptedFileTypes , setDesign }) => {
                         'Content-Type': 'application/octet-stream',
                     },
                 });
-
                 const data = await response.json();
                 setResponseData(data);
                  // Set the design with the file URL
@@ -65,14 +57,12 @@ const FileUpload = ({acceptedFileTypes , setDesign }) => {
                 setUploading(false);
             }
         };
-
         reader.onerror = (error) => {
             console.error('Error reading file:', error);
             setMessage('Error reading file.');
             setUploading(false); // FIXED: Also handle error case here
         };
     };
-
     return (
         <form
             onSubmit={handleUpload}
@@ -147,5 +137,4 @@ const FileUpload = ({acceptedFileTypes , setDesign }) => {
         </form>
     );
 };
-
 export default FileUpload;

@@ -16,7 +16,8 @@ import formbuilder from './formbuilder.css';
 import { useSalesforceData } from '../Context/MetadataContext';
 import ThankYouPageBuilder from '../Thankyou/TY2';
 import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js';
-import Conditions from '../conditions/Conditions'; // Or your actual path
+import Conditions from '../conditions/Conditions';
+import AnimatedTooltip from '../create-form-wizard/AnimatedTooltip';
 
 const themes = [
   {
@@ -84,7 +85,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition}) {
+function MainFormBuilder({ showMapping, showThankYou, showNotification, showCondition }) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -368,7 +369,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
       formVersion.Id = formVersionId;
       formVersion.Version__c = '1';
     }
-    else if (formVersionId && currentFormVersion && hasChanges && !formVersion.Stage__c==='Draft') {
+    else if (formVersionId && currentFormVersion && hasChanges && !formVersion.Stage__c === 'Draft') {
       const currentVersionNum = parseFloat(currentFormVersion.Version__c) || 1;
       formVersion.Version__c = (currentVersionNum + 1).toFixed(0);
     } else if (formVersionId) {
@@ -426,7 +427,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
         };
       })
     );
-    
+
     return { formVersion, formFields };
   };
 
@@ -885,7 +886,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
       let fieldsBeforeNewPage = [];
       let fieldsAfterNewPage = [];
       let pageCount = 0;
-      
+
       for (let i = 0; i < fields.length; i++) {
         if (pageCount <= insertAfterIndex) {
           fieldsBeforeNewPage.push(fields[i]);
@@ -996,8 +997,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
 
   const selectedField = getSelectedField();
 
-  console.log('fields:: ', fields);
-
+  console.log('formrecords:: ', formRecords);
 
   return (
     <div className="flex h-screen">
@@ -1017,7 +1017,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
               <span className="w-10 h-10 flex items-center justify-center cursor-pointer" onClick={() => navigate('/home')}>
                 <IoIosUndo className="text-[#f2f6f7] text-3xl" />
               </span>
-              <Whisper
+              {/* <Whisper
                 placement="bottom"
                 trigger="hover"
                 speaker={<Tooltip>{currentFormVersion?.Description__c || 'Define the form structure'}</Tooltip>}
@@ -1028,7 +1028,15 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
                   </span>
                   <FaRegStar className="text-white text-base" />
                 </span>
-              </Whisper>
+              </Whisper> */}
+              <AnimatedTooltip content={currentFormVersion?.Description__c || 'Define the form structure'}>
+                <span className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-2xl font-semibold text-white">
+                    {currentFormVersion?.Name || 'Contact Form'}
+                  </span>
+                  <FaRegStar className="text-white text-base" />
+                </span>
+              </AnimatedTooltip>
             </div>
             <div className="flex items-center gap-4">
               <button
@@ -1174,10 +1182,10 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
               </div>
               <div className="w-1/4 pl-2">
                 {showSidebar && !selectedFieldId && !selectedFooter ? (
-                  <Sidebar 
-                  selectedTheme={selectedTheme}
-                  onThemeSelect={setSelectedTheme}
-                  themes={themes}
+                  <Sidebar
+                    selectedTheme={selectedTheme}
+                    onThemeSelect={setSelectedTheme}
+                    themes={themes}
                   />
                 ) : (
                   <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
@@ -1203,7 +1211,6 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
           )}
         </div>
       </div>
-     
     </div>
   );
 }

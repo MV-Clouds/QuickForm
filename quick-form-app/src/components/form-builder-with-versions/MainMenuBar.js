@@ -9,7 +9,30 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
   const { userProfile } = useSalesforceData();
 
   useEffect(() => {
-    setSubmissionCount(6);
+    if (!selectedVersionId || !formRecords || formRecords.length === 0) {
+      setSubmissionCount(0);
+      return;
+    }
+
+    // Find the form record that contains the selected version
+    const currentFormRecord = formRecords.find((record) =>
+      record.FormVersions?.some((version) => version.Id === selectedVersionId)
+    );
+
+    if (currentFormRecord) {
+      // Find the specific version and get its submission count
+      const currentVersion = currentFormRecord.FormVersions.find(
+        (version) => version.Id === selectedVersionId
+      );
+      
+      if (currentVersion && currentVersion.Submission_Count__c !== undefined) {
+        setSubmissionCount(currentVersion.Submission_Count__c || 0);
+      } else {
+        setSubmissionCount(0);
+      }
+    } else {
+      setSubmissionCount(0);
+    }
   }, [selectedVersionId, formRecords]);
 
   const handleMappingClick = () => {
