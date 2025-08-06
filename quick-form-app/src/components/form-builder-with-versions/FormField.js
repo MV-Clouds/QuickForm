@@ -1280,24 +1280,32 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-   case 'imageuploader':
-    return (
-      <SelectionWrapper>
-          <FieldWrapper {...wrapperProps}>
-            <div>
-              <ImageUploader 
-                  defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"} 
-                  onImageUpload={(newDesign) => {
-                    setImageDesign(newDesign);
-                    if (onUpdateField) {
-                      onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
-                    }
-                  }}
-                />
-            </div>
-          </FieldWrapper>
-      </SelectionWrapper>
-    );
+  case 'imageuploader':
+  return (
+    <SelectionWrapper>
+      <FieldWrapper {...wrapperProps}>
+        <div style={{
+          display: 'flex',
+          justifyContent: field?.imageAlign || 'center',
+        }}>
+          <ImageUploader 
+            defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"} 
+            onImageUpload={(newDesign) => {
+              setImageDesign(newDesign);
+              if (onUpdateField) {
+                onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
+              }
+            }}
+            style={{
+              width: field?.imageWidth ? `${field.imageWidth}px` : '200px',
+              height: field?.imageHeight ? `${field.imageHeight}px` : '150px',
+            }}
+          />
+        </div>
+      </FieldWrapper>
+    </SelectionWrapper>
+  );
+
     case 'toggle':
       return (
         <SelectionWrapper>

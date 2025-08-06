@@ -118,13 +118,116 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
     }
   };
 
+  // const prepareFormData = () => {
+  //   const headerField = fields.find((f) => f.type === 'header') || {
+  //     id: `field-${Date.now()}-header`,
+  //     type: 'header',
+  //     heading: formName || 'Contact Form',
+  //     alignment: 'center',
+  //   };
+  //   const nonHeaderFields = fields.filter((f) => f.type !== 'header');
+  //   const pages = [];
+  //   let currentPage = [];
+  //   let pageNumber = 1;
+  //   nonHeaderFields.forEach((field) => {
+  //     if (field.type === 'pagebreak') {
+  //       pages.push({ fields: currentPage, pageNumber });
+  //       pageNumber++;
+  //       currentPage = [];
+  //     } else {
+  //       currentPage.push(field);
+  //     }
+  //   });
+  //   if (currentPage.length > 0 || pages.length === 0) {
+  //     pages.push({ fields: currentPage, pageNumber });
+  //   }
+  //   // Generate fields from all objects in objectInfo
+  //   const generatedFields = objectInfo
+  //     .filter((obj) => obj.fields && obj.fields.length > 0)
+  //     .flatMap((obj) =>
+  //       obj.fields.map((objField) => {
+  //         const fieldTypeOptions = typeMapping[objField.type] || ['shorttext'];
+  //         const selectedType = fieldTypeOptions[0];
+
+  //         const newField = {
+  //           id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  //           type: selectedType,
+  //           label: objField.label,
+  //           name: objField.name,
+  //           isRequired: objField.required || false,
+  //           Properties__c: {
+  //             pattern: getDefaultValidation(selectedType).pattern,
+  //             description: getDefaultValidation(selectedType).description,
+  //             required: objField.required || false,
+  //           },
+  //         };
+
+  //         // Handle checkbox for boolean fields
+  //         if (objField.type === 'boolean') {
+  //           newField.options = ['Checked'];
+  //           newField.allowMultipleSelections = false;
+  //           newField.dropdownRelatedValues = { 'Checked': 'Checked' };
+  //         }
+
+  //         // Handle picklist and multipicklist fields
+  //         if (['picklist', 'multipicklist'].includes(objField.type)) {
+  //           newField.options = objField.values && objField.values.length > 0
+  //             ? objField.values
+  //             : ['Option 1', 'Option 2', 'Option 3'];
+  //           newField.allowMultipleSelections = objField.type === 'multipicklist';
+  //           newField.dropdownRelatedValues = newField.options.reduce((acc, val) => {
+  //             acc[val] = val;
+  //             return acc;
+  //           }, {});
+  //         }
+
+  //         // Add phone-specific properties
+  //         if (objField.type === 'phone') {
+  //           newField.phoneInputMask = '(999) 999-9999';
+  //           newField.enableCountryCode = true;
+  //           newField.selectedCountryCode = 'US';
+  //         }
+
+  //         // Add placeholder for text fields
+  //         if (['shorttext', 'longtext', 'email', 'link'].includes(objField.type)) {
+  //           newField.placeholder = { main: `Enter ${objField.label || objField.name}` };
+  //         }
+
+  //         // Add number-specific properties
+  //         if (['number', 'percent'].includes(objField.type)) {
+  //           newField.numberValueLimits = { enabled: false, min: '', max: '' };
+  //         }
+
+  //         return newField;
+  //       })
+  //     );
+
+  //   // Combine header and generated fields
+  //   const allFields = [headerField, ...generatedFields];
+
+  //   // Create formFields for backend
+  //   const formFields = allFields.map((field, index) => ({
+  //     Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
+  //     Field_Type__c: field.type,
+  //     Page_Number__c: 1,
+  //     Order_Number__c: index + 1,
+  //     Properties__c: JSON.stringify(field),
+  //     Unique_Key__c: field.id,
+  //   }));
+
+  //   const formVersion = {
+  //     Name: formName,
+  //     Description__c: formDescription, // Include description
+  //     Stage__c: 'Draft',
+  //     Publish_Link__c: '',
+  //     Version__c: '1',
+  //     Object_Info__c: JSON.stringify(objectInfo),
+  //   };
+    
+  //   return { formVersion, formFields, allFields };
+  // };
+
   const prepareFormData = () => {
-    const headerField = fields.find((f) => f.type === 'header') || {
-      id: `field-${Date.now()}-header`,
-      type: 'header',
-      heading: formName || 'Contact Form',
-      alignment: 'center',
-    };
     const nonHeaderFields = fields.filter((f) => f.type !== 'header');
     const pages = [];
     let currentPage = [];
@@ -202,11 +305,8 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
         })
       );
 
-    // Combine header and generated fields
-    const allFields = [headerField, ...generatedFields];
-
     // Create formFields for backend
-    const formFields = allFields.map((field, index) => ({
+    const formFields = generatedFields.map((field, index) => ({
       Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
       Field_Type__c: field.type,
       Page_Number__c: 1,
@@ -224,9 +324,9 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       Object_Info__c: JSON.stringify(objectInfo),
     };
     
-    return { formVersion, formFields, allFields };
+    return { formVersion, formFields, allFields: generatedFields };
   };
-
+  
   const prepareMappingData = (formVersionId, objectInfo) => {
     // Create nodes for the flow
     const nodes = [];

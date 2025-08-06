@@ -91,6 +91,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     }
   );
 
+  const VALIDATION_OPTIONS = [
+  { value: 'none', label: 'No validation', regex: '' },
+  { value: 'alphabetic', label: 'Alphabetic only', regex: '^[A-Za-z\\s]+$' },
+  { value: 'alphanumeric', label: 'Alphanumeric', regex: '^[A-Za-z0-9\\s]+$' },
+  { value: 'numeric', label: 'Numeric only', regex: '^[0-9]+$' },
+  { value: 'email', label: 'Email', regex: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$' },
+  { value: 'no_special_chars', label: 'No special characters', regex: '^[A-Za-z0-9\\s]+$' }
+];
+
   // State for fileupload-specific properties
   const [maxFileSize, setMaxFileSize] = useState(selectedField?.maxFileSize || '');
   const [allowedFileTypes, setAllowedFileTypes] = useState(selectedField?.allowedFileTypes || '');
@@ -158,6 +167,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [numberValueLimits, setNumberValueLimits] = useState(selectedField?.numberValueLimits || { enabled: false, min: '', max: '' });
   const [relatedValues, setRelatedValues] = useState(selectedField?.[`${selectedField?.type}RelatedValues`] || {});
   const [predefinedOptionSet, setPredefinedOptionSet] = useState('');
+  const [validationType, setValidationType] = useState(selectedField?.validationType || 'none');
 
   // State for price-specific properties
   const [priceLimits, setPriceLimits] = useState(selectedField?.priceLimits || { enabled: false, min: '', max: '' });
@@ -274,6 +284,20 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setFooterText(selectedFooter.text || '');
     }
   }, [selectedField, selectedFooter, fields]);
+
+  const handleValidationTypeChange = (e) => {
+  const value = e.target.value;
+  setValidationType(value);
+  
+  // Find the selected option and get its regex
+  const selectedOption = VALIDATION_OPTIONS.find(opt => opt.value === value);
+  const regex = selectedOption?.regex || '';
+  
+  onUpdateField(selectedField.id, { 
+    validationType: value,
+    validationRegex: regex 
+  });
+};
 
   // Add handlers for multiple rows/columns
   const handleMultiRowSave = () => {
@@ -2109,6 +2133,19 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           min="1"
                           max="255"
                         />
+
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Text Validation</label>
+                          <select
+                            value={validationType}
+                            onChange={handleValidationTypeChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          >
+                            {VALIDATION_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     )}
                     {isLongText && (
@@ -2133,6 +2170,19 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             min="1"
                             max="131072"
                           />
+                        </div>
+
+                         <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Text Validation</label>
+                          <select
+                            value={validationType}
+                            onChange={handleValidationTypeChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          >
+                            {VALIDATION_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     )}
@@ -2426,11 +2476,13 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
         )}
 
         {activeTab === 'widget' && isFormCalculation && (
-          <FormCalculationWidget
-            selectedField={selectedField}
-            onUpdateField={onUpdateField}
-            fields={fields}
-          />
+          <div className="px-4 py-2 bg-gray-50 rounded-b-lg">
+            <FormCalculationWidget
+              selectedField={selectedField}
+              onUpdateField={onUpdateField}
+              fields={fields}
+            />
+          </div>
         )}
 
       </div>
