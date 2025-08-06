@@ -123,7 +123,8 @@
 }
 
 .share-copy:hover:not(.disabled),
-.share-copy-embed:hover:not(.disabled) {
+.share-copy-embed:hover:not(.disabled),
+.qr-buttons:hover:not(.disabled) {
   animation: waveEffect 3s ease infinite;
   background-size: 200% 100%;
 }
@@ -146,6 +147,7 @@
   display: flex;
   align-items: center;
   gap: 24px;
+  height: 3vh;
 }
 
 .share-section-embed {
@@ -206,5 +208,237 @@
   border: none;
   padding: 0;
   cursor: pointer;
+  width: 100%;
+  height: 100%;
 }
 
+/* Overlay */
+.formdetails-modal-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+/* Modal Content */
+.formdetails-modal-box {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  min-width: 30vw;
+  min-height: 45vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  color: #0b0a0a;
+}
+
+/* Header */
+.formdetails-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 28px;
+  border-bottom: 1px solid #e4e7ec;
+}
+
+.formdetails-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.formdetails-modal-close {
+  height: 32px;
+  width: 32px;
+  border: 1px solid #e4e7ec;
+  border-radius: 4px;
+  padding: 4px;
+  gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: none;
+}
+
+/* Divider */
+.formdetails-modal-divider {
+  border-color: #e4e7ec;
+  margin: 0 28px;
+}
+
+/* QR Code Container */
+.form-container.qr-modal-content {
+  padding: 16px;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.qr-canvas {
+  display: block;
+  margin: 0 auto;
+  outline: none;
+}
+
+/* Modal Actions (Buttons container) */
+.formdetails-modal-actions.qr-modal-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #e4e7ec;
+  padding: 12px 28px;
+}
+
+.qr-buttons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: linear-gradient(
+    270deg,
+    rgba(29, 109, 158, 0.9),
+    rgba(20, 65, 126, 0.9),
+    rgba(11, 41, 94, 0.9),
+    rgba(20, 65, 126, 0.9),
+    rgba(29, 109, 158, 0.9)
+  );
+  background-size: 200% auto;
+  color: var(--text-light, #fff);
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  transition: background-position 0.8s ease;
+  border: none;
+  cursor: pointer;
+  width: 150px;
+  height: 40px;
+}
+
+.qr {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.qr:hover {
+  border-radius: 50%;
+  box-shadow: 0px 0px 4px 0px rgba(56, 212, 255, 1);
+}
+
+.twitter {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.twitter:hover {
+  border-radius: 50%;
+  box-shadow: 0px 0px 4px 0px rgba(133, 133, 133, 1);
+}
+
+.fb {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.fb:hover {
+  border-radius: 50%;
+  box-shadow: 0px 0px 4px 0px rgba(8, 121, 233, 1);
+}
+
+.linkedin {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.linkedin:hover {
+  border-radius: 50%;
+  box-shadow: 0px 0px 4px 0px rgba(18, 117, 177, 1);
+}
+
+.wp {
+  height: 36PX;
+  width: 36PX;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.wp:hover {
+  border-radius: 50%;
+  box-shadow: 0px 0px 4px 0px rgba(69, 196, 85, 1);
+}
+
+.reddit {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.reddit:hover {
+  border-radius: 50%;
+  box-shadow: 0px 0px 4px 0px rgba(255, 69, 0, 1);
+}
+
+/* Tabs container */
+.tabs {
+  display: flex;
+  margin-bottom: 8px;
+  z-index: 0;
+}
+
+
+/* Tab buttons */
+.tab-button {
+  background: none;
+  border: none;
+  padding: 8px 24px;
+  cursor: pointer;
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-size: 0.875rem;
+  outline: none;
+  color: #0B0A0A;
+  font-weight: 600;
+  border-bottom: 2px solid #E4E7EC;
+  transition: color 0.3s ease, border-color 0.3s ease, font-weight 0.3s ease;
+  z-index: 1;
+}
+  

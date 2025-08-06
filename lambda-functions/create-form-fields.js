@@ -655,21 +655,36 @@ export const handler = async (event) => {
 
     let updatedFormRecords = [...formRecords];
     const formIndex = updatedFormRecords.findIndex(f => f.Id === formId);
+    let oldFormRecord = formIndex >= 0 ? updatedFormRecords[formIndex] : null;
+    const preservedActiveVersion = oldFormRecord?.Active_Version__c || 'None';
+    const preservedPublishLink = oldFormRecord?.Publish_Link__c || '';
+    const preservedStatus = oldFormRecord?.Status__c || 'Inactive';
+
     if (formIndex >= 0) {
       const otherVersions = updatedFormRecords[formIndex].FormVersions.filter(v => v.Id !== formVersionId);
       if (formData.formVersion.Stage__c === 'Publish') {
         otherVersions.forEach(v => {
           if (v.Stage__c === 'Publish') v.Stage__c = 'Locked';
         });
+        updatedFormRecords[formIndex] = {
+          ...updatedFormRecords[formIndex],
+          LastModifiedDate: currentTime,
+          Active_Version__c: `V${formData.formVersion.Version__c}`,
+          Publish_Link__c: formUpdate?.Publish_Link__c || preservedPublishLink,
+          Status__c: 'Active',
+          FormVersions: [newFormVersionRecord, ...otherVersions],
+        };
+      } else {
+        // Preserve old values for drafts or other stages
+        updatedFormRecords[formIndex] = {
+          ...updatedFormRecords[formIndex],
+          LastModifiedDate: currentTime,
+          Active_Version__c: preservedActiveVersion,
+          Publish_Link__c: preservedPublishLink,
+          Status__c: preservedStatus,
+          FormVersions: [newFormVersionRecord, ...otherVersions],
+        };
       }
-      updatedFormRecords[formIndex] = {
-        ...updatedFormRecords[formIndex],
-        LastModifiedDate: currentTime,
-        Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
-        Publish_Link__c: formUpdate?.Publish_Link__c || '',
-        Status__c: formData.formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
-        FormVersions: [newFormVersionRecord, ...otherVersions],
-      };
     } else {
       updatedFormRecords.push({
         Id: formId,
