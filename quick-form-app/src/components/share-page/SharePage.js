@@ -139,13 +139,13 @@ const SharePage = () => {
   };
 
   const embedHtmlCode = (publishLink) => `<div class="custom-form-wrapper">
-    <iframe
-      src="${publishLink}"
-      class="custom-form-iframe"
-      allowfullscreen
-      title="Shared Form"
-    ></iframe>
-  </div>`;
+  <iframe
+    src="${publishLink}"
+    class="custom-form-iframe"
+    allowfullscreen
+    title="Shared Form"
+  ></iframe>
+</div>`;
 
   const embedCssCode = `/* Embed CSS to add to your stylesheet */
   .custom-form-wrapper {
@@ -437,9 +437,8 @@ const SharePage = () => {
                   animate={selectedTab === tab ? "selected" : "rest"}
                   whileHover="hover"
                   variants={{
-                    rest: { color: '#0B0A0A', fontWeight: 500, borderBottom: '2px solid #E4E7EC' },
-                    hover: { color: '#0B0A0A', fontWeight: 500, borderBottom: '2px solid #38D4FF' },
-                    selected: { color: '#0B0A0A', fontWeight: 700, borderBottom: '2px solid #03B2E3' },
+                    rest: { background: 'transparent' , color: '#0B0A0A', fontWeight: 500, borderBottom: '2px solid #E4E7EC' },
+                    selected: { background: 'linear-gradient(0deg, rgba(0, 138, 176, 0.12) 0%, rgba(143, 220, 241, 0) 100%)' , color: '#0B0A0A', fontWeight: 700, borderBottom: '2px solid #028AB0' },
                   }}
                   transition={{
                     type: "spring",
@@ -469,12 +468,19 @@ const SharePage = () => {
               )}
             </motion.button>
             </div>
-            <textarea
-            className="share-embed-code"
-            rows={4}
-            value={selectedTab === 'html' ? embedHtmlCode(publishLink) : embedCssCode}
-            readOnly
-            />
+            <AnimatePresence mode="wait">
+              <motion.textarea
+                key={selectedTab}
+                className="share-embed-code"
+                rows={4}
+                value={selectedTab === 'html' ? embedHtmlCode(publishLink) : embedCssCode}
+                readOnly
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+              />
+            </AnimatePresence>
             
         </div>
         

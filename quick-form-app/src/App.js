@@ -15,6 +15,7 @@ import GuestPageD from './components/LandingPage/GuestPageD';
 import NotificationPage from './components/NotificationSettings/NotificationSettingsModal';
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
+import Loader from './components/Loader';
 function App() {
   return (
     // Set up the router for navigation
@@ -79,6 +80,7 @@ function App() {
                   }/>
                 }
               />
+              <Route path="/loading" element={<Loader />} />
 
             </Routes>
           </div>

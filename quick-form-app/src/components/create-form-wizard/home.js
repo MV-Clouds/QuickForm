@@ -558,8 +558,21 @@ console.log(versionToClone);
 
       {/* Modal for selecting form creation option */}
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-container">
+        <AnimatePresence>
+        <motion.div 
+          className="modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          >
+          <motion.div 
+            className="modal-container"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            >
             <div className="modal-header">
               <h2 className="form-title">Create New Form</h2>
               <button className="close-button-container" onClick={() => setIsModalOpen(false)}>
@@ -601,8 +614,9 @@ console.log(versionToClone);
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
+        </AnimatePresence>
       )}
       {isFormNameOpen && (
         <FormName

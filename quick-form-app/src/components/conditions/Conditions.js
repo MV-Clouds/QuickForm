@@ -52,6 +52,11 @@ const Conditions = ({ formVersionId }) => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [isCalcModalVisible, setIsCalcModalVisible] = useState(false);
+  const [calcExpression, setCalcExpression] = useState(''); // local modal expression
+  const [calcFields, setCalcFields] = useState([]); // fields list for Add Field dropdown
+  const [calcFieldToAdd, setCalcFieldToAdd] = useState(''); // selected field to add
+  const [fieldPills, setFieldPills] = React.useState([]);
 
   // Animation variants for Framer Motion
   const containerVariants = {
@@ -227,6 +232,13 @@ const Conditions = ({ formVersionId }) => {
     };
     fetchData();
   }, [formVersionId]);
+
+  useEffect(() => {
+    if (isCalcModalVisible) {
+      setCalcExpression(newCondition.formula || '');
+    }
+  }, [isCalcModalVisible, newCondition.formula]);
+
 
   const checkForContradiction = (newCondition, existingConditions) => {
     const oppositeActions = {
@@ -424,6 +436,18 @@ const Conditions = ({ formVersionId }) => {
       setSelectedNode(conditionData.sourcePage);
       setIsModalVisible(true);
     }
+    else if (conditionData.type === 'update_calculate_field') {
+      setNewCondition({
+        ...newCondition,
+        type: 'update_calculate_field',
+        conditions: conditionData.conditions || [{ ifField: '', operator: '', value: '' }],
+        action: conditionData.action || '',
+        sourceFields: conditionData.sourceFields || [],
+        formula: convertFormulaKeysToLabels(conditionData.formula || ''),
+        targetField: conditionData.targetField || '',
+      });
+      setEditingConditionId(conditionData.Id);
+    }
   };
 
   const saveCondition = async (conditionId = null) => {
@@ -464,6 +488,28 @@ const Conditions = ({ formVersionId }) => {
             logicExpression: newCondition.logic === 'Custom' ? newCondition.logicExpression : '',
             thenAction: newCondition.thenAction,
             thenFields: newCondition.thenFields,
+          }),
+        };
+      } else if (newCondition.type === 'update_calculate_field') {
+        if (
+          !newCondition.conditions?.[0]?.ifField ||
+          !newCondition.conditions?.[0]?.operator ||
+          !newCondition.action ||
+          !newCondition.targetField ||
+          (newCondition.action === 'copy_field_values' && !(newCondition.sourceFields && newCondition.sourceFields.length))
+        ) {
+          throw new Error('Missing required fields for update/calculate condition');
+        }
+        conditionData = {
+          Form_Version__c: formVersionId,
+          Condition_Data__c: JSON.stringify({
+            Id: editingConditionId || `local_${Date.now()}`,
+            type: 'update_calculate_field',
+            conditions: newCondition.conditions,
+            action: newCondition.action,
+            sourceFields: newCondition.sourceFields || [],
+            formula: convertFormulaLabelsToKeys(newCondition.formula || ''),
+            targetField: newCondition.targetField,
           }),
         };
       } else if (newCondition.type === 'dependent') {
@@ -992,6 +1038,537 @@ const Conditions = ({ formVersionId }) => {
       );
     },
   };
+  const handleFieldChangeCalc = (key, value, conditionIndex = null) => {
+    setNewCondition(prev => {
+      if (conditionIndex !== null) {
+        // Update inside conditions array
+        const conditions = [...(prev.conditions || [])];
+        conditions[conditionIndex] = {
+          ...conditions[conditionIndex],
+          [key]: value,
+        };
+        return { ...prev, conditions };
+      } else if (key === 'action') {
+        // Reset related fields when action changes
+        return { ...prev, action: value, sourceFields: [], calcItems: [], targetField: '' };
+      } else if (key === 'sourceFields' || key === 'targetField') {
+        return { ...prev, [key]: value };
+      } else if (key === 'value') {
+        // Also set value inside first condition if conditions is used
+        if (prev.conditions && prev.conditions.length > 0) {
+          const conditions = [...prev.conditions];
+          conditions[0] = { ...conditions[0], value };
+          return { ...prev, conditions };
+        }
+        return { ...prev, value };
+      }
+      return { ...prev, [key]: value };
+    });
+  };
+
+  const convertFormulaLabelsToKeys = (formula) => {
+    if (!formula) return formula;
+    // Replace [FieldName] with [Unique_Key__c]
+    return formula.replace(/\[([^\]]+)\]/g, (match, label) => {
+      const field = fields.find(f => f.Name === label.trim());
+      return field ? `[${field.Unique_Key__c}]` : match; // If not found, keep as is
+    });
+  };
+
+
+  const usedFieldsInFormula = React.useMemo(() => {
+    if (!newCondition.formula) return [];
+
+    // Extract all text inside square brackets, e.g. [FieldName]
+    const matches = newCondition.formula.match(/\[([^\]]+)\]/g) || []; // ["[Number]", "[Price]"]
+    if (matches.length === 0) return [];
+
+    // Remove brackets from matches: ["Number", "Price"]
+    const fieldLabelsInFormula = matches.map(m => m.slice(1, -1).trim());
+
+    // Map labels to Unique_Key__c
+    return fieldLabelsInFormula
+      .map(label => fields.find(f => f.Name === label)?.Unique_Key__c)
+      .filter(Boolean); // Remove undefined
+  }, [newCondition.formula, fields]);
+
+  const convertFormulaKeysToLabels = (formula) => {
+    if (!formula) return formula;
+    return formula.replace(/\[([^\]]+)\]/g, (match, key) => {
+      const field = fields.find(f => f.Unique_Key__c === key.trim());
+      return field ? `[${field.Name}]` : match;
+    });
+  };
+
+  const uniqueKeyToName = React.useMemo(() => {
+    const map = {};
+    fields.forEach(f => {
+      map[f.Unique_Key__c] = f.Name;
+    });
+    return map;
+  }, [fields]);
+
+  // Add and remove field pills, and update expression accordingly:
+  const addCalcFieldPill = (fieldKey) => {
+    const label = uniqueKeyToName[fieldKey];
+    if (!label) return;
+    const pillToken = `[${label}]`;
+
+    // Add pill text to expression only if not already present:
+    setCalcExpression(prev => {
+      // Insert pill token at cursor or append
+      return prev ? prev + ' ' + pillToken + ' ' : pillToken + ' ';
+    });
+    setFieldPills(prev => {
+      if (prev.find(p => p.key === fieldKey)) return prev; // avoid duplicates
+      return [...prev, { key: fieldKey, label }];
+    });
+  };
+
+  const removeCalcFieldPill = (fieldKey) => {
+    const label = uniqueKeyToName[fieldKey];
+    if (!label) return;
+    const pillTokenRegex = new RegExp(`\\[${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'g');
+    setCalcExpression(prev => prev.replace(pillTokenRegex, '').replace(/\s+/g, ' ').trim());
+    setFieldPills(prev => prev.filter(p => p.key !== fieldKey));
+  };
+
+  function getDefaultValueForField(field) {
+    if (!field) return null;
+    const ft = (field.Field_Type__c || '').toLowerCase();
+    switch(ft) {
+      case 'number':
+      case 'price':
+        return 1;
+      case 'date':
+      case 'datetime':
+        return new Date();
+      case 'time':
+        return '12:00:00';
+      case 'shorttext':
+      case 'longtext':
+      case 'fullname':
+      case 'address':
+        return 'Sample';
+      case 'rating':
+      case 'scalerating':
+        return 3;
+      case 'checkbox':
+      case 'toggle':
+        return true;
+      case 'radio':
+      case 'dropdown':
+        // Optionally pick first option if you have options list, else generic string
+        return 'Option';
+      default:
+        return null;
+    }
+  }
+  var evaluateCalculation = function(expr, fieldValues) {
+    try {
+      if (!expr || !expr.trim()) return '';
+
+      // Helper Functions Implementation
+
+      // Date & Time utils
+      var addDays = function(date, numDays) {
+        if (!date) return null;
+        var d = new Date(date);
+        if (isNaN(d)) return null;
+        d.setDate(d.getDate() + (Number(numDays) || 0));
+        return d;
+      };
+
+      var addMonths = function(date, numMonths) {
+        if (!date) return null;
+        var d = new Date(date);
+        if (isNaN(d)) return null;
+        d.setMonth(d.getMonth() + (Number(numMonths) || 0));
+        return d;
+      };
+
+      var addYears = function(date, numYears) {
+        if (!date) return null;
+        var d = new Date(date);
+        if (isNaN(d)) return null;
+        d.setFullYear(d.getFullYear() + (Number(numYears) || 0));
+        return d;
+      };
+
+      var subtractDates = function(date1, date2, unit) {
+        unit = unit || 'days'; // ES5 default parameter
+        if (!date1 || !date2) return null;
+        var d1 = new Date(date1);
+        var d2 = new Date(date2);
+        if (isNaN(d1) || isNaN(d2)) return null;
+        var diffMs = d1 - d2;
+        switch (unit) {
+          case 'seconds': return diffMs / 1000;
+          case 'minutes': return diffMs / (1000 * 60);
+          case 'hours': return diffMs / (1000 * 60 * 60);
+          case 'days': default: return diffMs / (1000 * 60 * 60 * 24);
+        }
+      };
+
+      // Time manipulation assumes time in 'HH:mm:ss' or 'HH:mm' format strings
+      var parseTime = function(val) {
+        if (!val) return null;
+        var parts = val.split(':').map(function(n) { return Number(n); });
+        if (parts.length < 2) return null;
+        var h = parts[0];
+        var m = parts[1];
+        var s = parts[2] || 0;
+        if (
+          h < 0 || h > 23 ||
+          m < 0 || m > 59 ||
+          s < 0 || s > 59 ||
+          parts.some(function(n) { return isNaN(n); })
+        )
+          return null;
+        return { h: h, m: m, s: s };
+      };
+
+      var addTimes = function(time1, time2) {
+        var t1 = typeof time1 === 'string' ? parseTime(time1) : time1;
+        var t2 = typeof time2 === 'string' ? parseTime(time2) : time2;
+        if (!t1 || !t2) return null;
+        var totalSeconds = t1.h * 3600 + t1.m * 60 + t1.s + t2.h * 3600 + t2.m * 60 + t2.s;
+        totalSeconds %= 86400; // keep in day range
+        var h = Math.floor(totalSeconds / 3600);
+        var m = Math.floor((totalSeconds % 3600) / 60);
+        var s = totalSeconds % 60;
+        return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      };
+
+      var subtractTimes = function(time1, time2) {
+        var t1 = typeof time1 === 'string' ? parseTime(time1) : time1;
+        var t2 = typeof time2 === 'string' ? parseTime(time2) : time2;
+        if (!t1 || !t2) return null;
+        var totalSeconds = (t1.h * 3600 + t1.m * 60 + t1.s) - (t2.h * 3600 + t2.m * 60 + t2.s);
+        if (totalSeconds < 0) totalSeconds += 86400;
+        var h = Math.floor(totalSeconds / 3600);
+        var m = Math.floor((totalSeconds % 3600) / 60);
+        var s = totalSeconds % 60;
+        return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      };
+
+      var setTime = function(date, time) {
+        if (!date || !time) return null;
+        var d = new Date(date);
+        if (isNaN(d)) return null;
+        var t = parseTime(time);
+        if (!t) return null;
+        d.setHours(t.h, t.m, t.s || 0, 0);
+        return d;
+      };
+
+      var parseDate = function(val) {
+        if (!val) return null;
+        var d = new Date(val);
+        return isNaN(d) ? null : d;
+      };
+
+      var toDate = parseDate;
+
+      var toTime = function(val) {
+        if (typeof val === 'string') {
+          var t = parseTime(val);
+          if (!t) return null;
+          return (t.h < 10 ? '0' : '') + t.h + ':' + (t.m < 10 ? '0' : '') + t.m + ':' + (t.s < 10 ? '0' : '') + t.s;
+        }
+        return null;
+      };
+
+      // Number functions
+      var parseNumber = function(val) {
+        var n = Number(val);
+        return isNaN(n) ? 0 : n;
+      };
+
+      var round = function(val, decimals) {
+        decimals = decimals || 0; // ES5 default parameter
+        var n = parseNumber(val);
+        return Number(n.toFixed(decimals));
+      };
+      
+      var floor = function(val) { return Math.floor(parseNumber(val)); };
+      var ceil = function(val) { return Math.ceil(parseNumber(val)); };
+      var clamp = function(val, min, max) {
+        var n = parseNumber(val);
+        return Math.min(Math.max(n, min), max);
+      };
+
+      // String / Text
+      var concatStrings = function() {
+        var args = Array.prototype.slice.call(arguments);
+        return args.map(function(v) { return v == null ? '' : String(v); }).join('');
+      };
+      
+      
+      var toString = function(val) { return val == null ? '' : String(val); };
+      var stringLength = function(str) { return (typeof str === 'string' ? str.length : 0); };
+      var substring = function(str, start, end) {
+        if (typeof str !== 'string') return '';
+        return str.substring(start, end);
+      };
+      var toUpperCase = function(str) { return typeof str === 'string' ? str.toUpperCase() : ''; };
+      var toLowerCase = function(str) { return typeof str === 'string' ? str.toLowerCase() : ''; };
+
+      // List/Array functions
+      var count = function(list) { return Array.isArray(list) ? list.length : 0; };
+      
+      var sum = function() {
+        var args = Array.prototype.slice.call(arguments);
+        if (args.length === 1 && Array.isArray(args[0])) args = args[0];
+        return args.reduce(function(acc, v) { return acc + (parseNumber(v) || 0); }, 0);
+      };
+      
+      var mean = function() {
+        var args = Array.prototype.slice.call(arguments);
+        if (args.length === 1 && Array.isArray(args[0])) args = args[0];
+        if (args.length === 0) return 0;
+        return sum.apply(null, args) / args.length;
+      };
+      
+      var min = function() {
+        var args = Array.prototype.slice.call(arguments);
+        if (args.length === 1 && Array.isArray(args[0])) args = args[0];
+        return Math.min.apply(null, args.map(function(v) { return parseNumber(v); }));
+      };
+      
+      var max = function() {
+        var args = Array.prototype.slice.call(arguments);
+        if (args.length === 1 && Array.isArray(args[0])) args = args[0];
+        return Math.max.apply(null, args.map(function(v) { return parseNumber(v); }));
+      };
+      
+      // Boolean/Selection functions
+      var toBoolean = function(val) {
+        if (typeof val === 'boolean') return val;
+        if (typeof val === 'string') {
+          var v = val.toLowerCase().trim();
+          if (['true', 'yes', '1'].indexOf(v) !== -1) return true;
+          if (['false', 'no', '0'].indexOf(v) !== -1) return false;
+        }
+        if (typeof val === 'number') return val !== 0;
+        return Boolean(val);
+      };
+      
+      var coerceToType = function(val, type) {
+        switch(type) {
+          case 'string': return toString(val);
+          case 'number': return parseNumber(val);
+          case 'boolean': return toBoolean(val);
+          case 'date': return toDate(val);
+          case 'array': return Array.isArray(val) ? val : [val];
+          default: return val;
+        }
+      };
+      
+      // Conversion
+      var numberToDate = function(num) {
+        var n = parseNumber(num);
+        if (n <= 0) return null;
+        return new Date(n);
+      };
+      
+      var dateToNumber = function(date) {
+        var d = toDate(date);
+        return d ? d.valueOf() : NaN;
+      };
+      
+      var toNumber = parseNumber;
+      
+      // Advanced Math
+      var pow = function(base, exponent) {
+        return Math.pow(parseNumber(base), parseNumber(exponent));
+      };
+      
+      var mod = function(a, b) {
+        return parseNumber(a) % parseNumber(b);
+      };
+      
+      var log = function(value, base) {
+        base = base || Math.E; // ES5 default parameter
+        var v = parseNumber(value);
+        var b = parseNumber(base);
+        if (v <= 0 || b <= 0 || b === 1) return NaN;
+        return Math.log(v) / Math.log(b);
+      };
+      
+      var exp = function(value) {
+        return Math.exp(parseNumber(value));
+      };
+      
+      // Prepare function dictionary
+      var funcs = {
+        addDays: addDays,
+        addMonths: addMonths,
+        addYears: addYears,
+        subtractDates: subtractDates,
+        addTimes: addTimes,
+        subtractTimes: subtractTimes,
+        setTime: setTime,
+        parseDate: parseDate,
+        parseTime: parseTime,
+        toDate: toDate,
+        toTime: toTime,
+        parseNumber: parseNumber,
+        abs: function(val) { return Math.abs(val); },
+        sqrt: function(val) { return Math.sqrt(val); },
+        min: min,
+        max: max,
+        sum: sum,
+        mean: mean,
+        round: round,
+        floor: floor,
+        ceil: ceil,
+        concatStrings: concatStrings,
+        toString: toString,
+        stringLength: stringLength,
+        toUpperCase: toUpperCase,
+        toLowerCase: toLowerCase,
+        coerceToType: coerceToType,
+        numberToDate: numberToDate,
+        dateToNumber: dateToNumber,
+        toNumber: toNumber,
+        pow: pow,
+        mod: mod,
+        log: log,
+        exp: exp
+      };
+
+      // Replace [FieldName] tokens with unique JS variable names and map their values
+      var safeFieldValues = {};
+      for (var key in fieldValues) {
+        if (fieldValues.hasOwnProperty(key)) {
+          safeFieldValues[key] = fieldValues[key];
+        }
+      }
+      
+      fields.forEach(function(f) {
+        if (!(f.Unique_Key__c in safeFieldValues)) {
+          safeFieldValues[f.Unique_Key__c] = getDefaultValueForField(f);
+        }
+      });
+      
+      var tokensMap = {};
+      var tokenIndex = 0;
+      var processedExpr = expr;
+      
+      var fieldRegex = /\[([^\]]+)\]/g;
+      var match;
+      while ((match = fieldRegex.exec(expr)) !== null) {
+        var label = match[1].trim();
+        var field = fields.find(function(f) { return f.Name === label; });
+        if (!field) {
+          return 'Error: Unknown field "' + label + '"';
+        }
+        var key = field.Unique_Key__c;
+        var tokenName = '__field_' + tokenIndex++;
+        tokensMap[tokenName] = safeFieldValues[key];
+        
+        var pillRegex = new RegExp('\\[' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]', 'g');
+        processedExpr = processedExpr.replace(pillRegex, tokenName);
+      }
+      
+      var funcDefs = Object.keys(funcs).map(function(fnName) {
+        var fn = funcs[fnName];
+        var fnStr = fn.toString();
+        // Ensure we don't have any arrow functions
+        if (fnStr.indexOf('=>') !== -1) {
+          throw new Error('Function ' + fnName + ' contains arrow function syntax');
+        }
+        return 'var ' + fnName + ' = ' + fnStr + ';';
+      }).join('\n');
+
+      var varDefs = Object.keys(tokensMap).map(function(token) {
+        var val = tokensMap[token];
+        if (val == null) return 'var ' + token + ' = null;';
+        if (typeof val === 'string') return 'var ' + token + " = '" + val.replace(/'/g, "\\'") + "';";
+        if (typeof val === 'number' || typeof val === 'boolean') return 'var ' + token + ' = ' + val + ';';
+        if (val instanceof Date) return 'var ' + token + ' = new Date(' + val.valueOf() + ');';
+        return 'var ' + token + " = '" + String(val).replace(/'/g, "\\'") + "';";
+      }).join('\n');
+        
+      var fullEvalCode = '(function() {\n' +
+        '  "use strict";\n' +
+        funcDefs + '\n' +
+        varDefs + '\n' +
+        '  return (' + processedExpr + ');\n' +
+        '})();';
+        
+        
+      var evaluator = new Function('return ' + fullEvalCode);
+      var result = evaluator();
+      
+      if (typeof result === 'number' && isNaN(result)) return 'Error: Result is NaN';
+      if (result === undefined) return '';
+
+      return result;
+
+    } catch (e) {
+      return 'Error: ' + e.message;
+    }
+  };
+  const calculatorFunctions = [
+    'addDays', 'addMonths', 'addYears', 'subtractDates',
+    'addTimes', 'subtractTimes', 'setTime', 'parseDate', 'parseTime', 'toDate', 'toTime',
+    'parseNumber', 'abs', 'sqrt', 'min', 'max', 'sum', 'mean', 'round', 'floor', 'ceil',
+    'concatStrings', 'toString', 'stringLength', 'toUpperCase', 'toLowerCase', 'coerceToType', 'isNullOrEmpty',
+    'numberToDate', 'dateToNumber', 'toNumber',
+    'pow', 'mod', 'log', 'exp'
+  ];
+
+
+
+  const calcResult = React.useMemo(() => {
+    // Prepare default dummy values for all fields
+    const defaultFieldValues = {};
+    fields.forEach(field => {
+      const key = field.Unique_Key__c;
+      if (!key) return;
+
+      switch ((field.Field_Type__c || '').toLowerCase()) {
+        case 'number':
+        case 'price':
+          defaultFieldValues[key] = 1;
+          break;
+        case 'date':
+        case 'datetime':
+          defaultFieldValues[key] = new Date();
+          break;
+        case 'time':
+          defaultFieldValues[key] = '12:00:00';
+          break;
+        case 'shorttext':
+        case 'longtext':
+        case 'fullname':
+        case 'address':
+        case 'link':
+          defaultFieldValues[key] = 'Sample';
+          break;
+        case 'rating':
+        case 'scalerating':
+          defaultFieldValues[key] = 3;
+          break;
+        case 'checkbox':
+        case 'toggle':
+          defaultFieldValues[key] = true;
+          break;
+        case 'radio':
+        case 'dropdown':
+          defaultFieldValues[key] = 'Option';
+          break;
+        default:
+          defaultFieldValues[key] = null;
+      }
+    });
+
+    // Use defaultFieldValues for evaluation
+    return evaluateCalculation(calcExpression, defaultFieldValues);
+  }, [calcExpression, fields]); // no dependency on formRecords since no real input yet
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* {showSidebar && (
@@ -1034,6 +1611,7 @@ const Conditions = ({ formVersionId }) => {
               onChange={(key) => {
                 setNewCondition((prev) => ({
                   ...prev,
+                  conditions: [{ ifField: '', operator: '', value: '' }],
                   type: key,
                   ifField: '',
                   operator: '',
@@ -2352,10 +2930,330 @@ const Conditions = ({ formVersionId }) => {
                   </Modal>
                 </motion.div>
               </TabPane>
+              <TabPane tab="Update/Calculate Field" key="update_calculate_field">
+                <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
+                  <h2 className="text-xl font-semibold mb-3">Add Update/Calculate Condition</h2>
+
+                  {/* If Field */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700">If Field</label>
+                    <Select
+                      value={newCondition.conditions?.[0]?.ifField || ''}
+                      onChange={value => handleFieldChangeCalc('ifField', value, 0)}
+                      placeholder="Select field"
+                      style={{ width: '100%' }}
+                    >
+                      {validIfFields.map(field => (
+                        <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>{field.Name}</Option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  {/* Operator */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700">Operator</label>
+                    <Select
+                      value={newCondition.conditions?.[0]?.operator || ''}
+                      onChange={value => handleFieldChangeCalc('operator', value, 0)}
+                      placeholder="Select operator"
+                      style={{ width: '100%' }}
+                    >
+                      {getOperators(fields.find(f => f.Unique_Key__c === newCondition.conditions?.[0]?.ifField)?.Field_Type__c).map(op => (
+                        <Option key={op} value={op}>{op}</Option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  {/* Value */}
+                  {!['is null', 'is not null'].includes(newCondition.conditions?.[0]?.operator) && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700">Value</label>
+                      <Input
+                        value={newCondition.conditions?.[0]?.value || ''}
+                        onChange={e => handleFieldChangeCalc('value', e.target.value, 0)}
+                        placeholder="Enter target value"
+                      />
+                    </div>
+                  )}
+
+                  {/* Action */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700">Action</label>
+                    <Select
+                      value={newCondition.action || ''}
+                      onChange={val => handleFieldChangeCalc('action', val)}
+                      placeholder="Select action"
+                      style={{ width: '100%' }}
+                    >
+                      <Option value="copy_field_values">Copy Field Value(s)</Option>
+                      <Option value="calculate_field">Calculate Field</Option>
+                    </Select>
+                  </div>
+
+                  {/* Copy Field Values UI */}
+                  {newCondition.action === 'copy_field_values' && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700">Source Fields to Copy</label>
+                      <Select
+                        mode="multiple"
+                        value={newCondition.sourceFields || []}
+                        onChange={vals => handleFieldChangeCalc('sourceFields', vals)}
+                        placeholder="Select fields to copy"
+                        style={{ width: '100%' }}
+                      >
+                        {validIfFields
+                          .filter(f =>
+                            f.Unique_Key__c !== newCondition.conditions?.[0]?.ifField &&
+                            f.Unique_Key__c !== newCondition.targetField
+                          )
+                          .map(f => (
+                            <Option key={f.Unique_Key__c} value={f.Unique_Key__c}>{f.Name}</Option>
+                          ))}
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Calculate Field UI */}
+                  {newCondition.action === 'calculate_field' && (
+                    <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Calculation Expression</label>
+                    <Input
+                      readOnly
+                      value={newCondition.formula || ''}
+                      placeholder="Click 'Open Calculator' to build expression"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setIsCalcModalVisible(true)}
+                    />
+                    <Button onClick={() => setIsCalcModalVisible(true)} style={{ marginTop: 8 }}>
+                      Open Calculator
+                    </Button>
+                  </div>
+                  )}
+
+                  {/* Target Field */}
+                  <div className="mb-3">
+                    <label className="block text-sm font-medium text-gray-700">Target Field</label>
+                    <Select
+                      value={newCondition.targetField || ''}
+                      onChange={val => handleFieldChangeCalc('targetField', val)}
+                      placeholder="Select target field"
+                      style={{ width: '100%' }}
+                    >
+                      {validIfFields
+                        .filter(f =>
+                          f.Unique_Key__c !== newCondition.conditions?.[0]?.ifField &&
+                          (newCondition.action !== 'copy_field_values' || !(newCondition.sourceFields || []).includes(f.Unique_Key__c)) &&
+                          (newCondition.action !== 'calculate_field' || (
+                            !usedFieldsInFormula.includes(f.Unique_Key__c)
+                          ))
+                        )
+                        .map(f => (
+                          <Option key={f.Unique_Key__c} value={f.Unique_Key__c}>{f.Name}</Option>
+                        ))}
+
+                    </Select>
+                  </div>
+
+                  {/* Save Button */}
+                  <div>
+                    <Button
+                      type="primary"
+                      onClick={() => saveCondition(editingConditionId)}
+                      disabled={
+                        !newCondition.conditions?.[0]?.ifField ||
+                        !newCondition.conditions?.[0]?.operator ||
+                        !newCondition.action ||
+                        !newCondition.targetField ||
+                        (newCondition.action === 'copy_field_values' && !(newCondition.sourceFields && newCondition.sourceFields.length))
+                      }
+                    >
+                      <FaSave style={{ marginRight: 4 }} />
+                      {editingConditionId ? 'Update Condition' : 'Save Condition'}
+                    </Button>
+                  </div>
+                </motion.div>
+
+                {/* Existing Conditions Display */}
+                <motion.div variants={containerVariants} className="mt-4">
+                  <h2 className="text-xl font-semibold mb-3">Existing Update/Calculate Conditions</h2>
+                  <AnimatePresence>
+                    {conditions
+                      .filter(c => c.type === 'update_calculate_field')
+                      .map(condition => (
+                        <motion.div
+                          key={condition.Id}
+                          variants={itemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="exit"
+                          className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
+                        >
+                          <div>
+                            <p>
+                              <strong>If:</strong> {fields.find(f => f.Unique_Key__c === condition.conditions?.[0]?.ifField)?.Name || 'Unknown'} {condition.conditions?.[0]?.operator} {condition.conditions?.[0]?.value}
+                            </p>
+                            <p><strong>Action:</strong> {condition.action === 'copy_field_values' ? 'Copy Field Value(s)' : 'Calculate Field'}</p>
+                            {condition.action === 'copy_field_values' && (
+                              <p>
+                                <strong>Source Fields:</strong>{' '}
+                                {(condition.sourceFields || []).map(sf => fields.find(f => f.Unique_Key__c === sf)?.Name || 'Unknown').join(', ')}
+                              </p>
+                            )}
+                            {condition.action === 'calculate_field' && (
+                              <p>
+                                <strong>Calculation:</strong>{' '}
+                                {convertFormulaKeysToLabels(condition.formula || '')}
+                              </p>
+                            )}
+                            <p><strong>Target Field:</strong> {fields.find(f => f.Unique_Key__c === condition.targetField)?.Name || 'Unknown'}</p>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button size="small" onClick={() => editCondition(condition)}><FaEdit /></Button>
+                            <Button size="small" onClick={() => deleteCondition(condition.Id)}><FaTrash /></Button>
+                          </div>
+                        </motion.div>
+                      ))}
+                  </AnimatePresence>
+                </motion.div>
+              </TabPane>
+
             </Tabs>
           )}
         </div>
-      </motion.div>
+        <Modal
+          visible={isCalcModalVisible}
+          title="Calculator"
+          onCancel={() => setIsCalcModalVisible(false)}
+          footer={null}
+          width={450}
+        >
+          <div>
+            {/* Editable textarea allowing free typing */}
+            <textarea
+              value={calcExpression}
+              onChange={e => setCalcExpression(e.target.value)}
+              style={{ width: '100%', height: '100px', fontSize: '1rem', padding: '8px', boxSizing: 'border-box' }}
+              placeholder={`Type expression here.\nUse fields as [FieldName].\nExamples:\nsum([Price], 10) + max([Rating], 5)\nconcatenate('Hello ', [Fullname])\nmin([NumberField1], [NumberField2]) * 2`}
+            />
+            <Select
+              showSearch
+              placeholder="Insert function"
+              style={{ width: '100%', marginBottom: 8 }}
+              onSelect={funcName => {
+                // Insert funcName + "(" into calcExpression at cursor or append
+                setCalcExpression(prev => prev + funcName + '(');
+              }}
+              optionFilterProp="children"
+            >
+              {calculatorFunctions.map(fn => (
+                <Option key={fn} value={fn}>
+                  {fn}
+                </Option>
+              ))}
+            </Select>
+
+          </div>
+
+          {/* Field Pills UI */}
+          <div style={{ marginTop: 8, marginBottom: 20, minHeight: 30 }}>
+            {fieldPills.map(pill => (
+              <span
+                key={pill.key}
+                style={{
+                  display: 'inline-block',
+                  backgroundColor: '#1890ff',
+                  color: 'white',
+                  borderRadius: '16px',
+                  padding: '4px 12px',
+                  marginRight: '6px',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+                title="Click to remove"
+                onClick={() => removeCalcFieldPill(pill.key)}
+              >
+                {pill.label} &times;
+              </span>
+            ))}
+          </div>
+
+          {/* Buttons for digits, operators, and parentheses */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {['7','8','9','(',')','4','5','6','*','/','1','2','3','+','-','0','.'].map(ch => (
+              <Button
+                key={ch}
+                onClick={() => setCalcExpression(expr => expr + ch)}
+                style={{ flex: '1 0 16%', fontSize: '1.1rem', userSelect: 'none' }}
+              >
+                {ch}
+              </Button>
+            ))}
+            <Button
+              danger
+              onClick={() => {
+                setCalcExpression('');
+                setFieldPills([]);
+              }}
+              style={{ flex: '1 0 34%', fontSize: '1.1rem' }}
+            >
+              Clear All
+            </Button>
+            <Button
+              onClick={() => setCalcExpression(expr => expr.slice(0, -1))}
+              style={{ flex: '1 0 34%', fontSize: '1.1rem' }}
+            >
+              Backspace
+            </Button>
+          </div>
+
+          {/* Insert Field Dropdown */}
+          <div style={{ marginBottom: 12 }}>
+            <Select
+              showSearch
+              placeholder="Select field to add"
+              optionFilterProp="children"
+              style={{ width: '100%' }}
+              onSelect={key => {
+                addCalcFieldPill(key);
+              }}
+              filterOption={(input, option) =>
+                option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+              }
+            >
+              {fields
+                .filter(f => f.Field_Type__c && (
+                  ['number', 'price', 'shorttext', 'longtext', 'fullname', 'date', 'datetime', 'time', 'rating', 'scalerating'].includes(f.Field_Type__c.toLowerCase())
+                  )
+                )
+                .map(f => (
+                  <Select.Option key={f.Unique_Key__c} value={f.Unique_Key__c}>
+                    {f.Name} ({f.Field_Type__c})
+                  </Select.Option>
+                ))
+              }
+            </Select>
+          </div>
+
+          {/* Show calculated result */}
+          <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: 12 }}>
+            Result: <span>{String(calcResult)}</span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => setIsCalcModalVisible(false)}>Cancel</Button>
+            <Button
+              type="primary"
+              onClick={() => {
+                setNewCondition(prev => ({ ...prev, formula: calcExpression.trim() }));
+                setIsCalcModalVisible(false);
+              }}
+              disabled={!calcExpression.trim()}
+            >
+              Save
+            </Button>
+          </div>
+        </Modal>
+          </motion.div>
     </div>
   );
 };

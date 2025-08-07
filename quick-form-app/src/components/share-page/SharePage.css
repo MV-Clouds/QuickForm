@@ -31,7 +31,7 @@
   margin-bottom: 32px;
   background: #F9FAFB;
   border-radius: 8px;
-  padding: 24px;
+  padding: 16px;
   gap: 16px;
   border: #E4E7EC;
 }
@@ -186,13 +186,13 @@
   width: 100%;
   padding: 10px 22px;
   font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
-  font-size: 15px;
+  font-size: 0.875rem;
   background: #fff;
   border: 1px solid #E4E7EC;
   border-radius: 8px;
-  margin-bottom: 24px;
   outline: none;
   resize: none;
+  height: 22vh;
 }
 
 .share-select .ant-select-selection-item {

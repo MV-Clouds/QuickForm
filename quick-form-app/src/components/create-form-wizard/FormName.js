@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
 import './FormName.css'
+import { motion, AnimatePresence } from 'framer-motion';
 
 const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
   const initialName = fields.find(f => f.id === 'name')?.defaultValue || '';
@@ -498,8 +499,21 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
   };
 
   return (
-  <div className="formdetails-modal-bg">
-    <div className="formdetails-modal-box">
+  <AnimatePresence>
+  <motion.div 
+    className="formdetails-modal-bg"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.3 }}
+  >
+    <motion.div 
+      className="formdetails-modal-box"
+      initial={{ scale: 0.85, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.85, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      >
       <div className="formdetails-modal-header">
         <div className="formdetails-modal-title">Enter Form Details</div>
         <button
@@ -519,7 +533,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
           <label htmlFor="formName" className="formdetails-modal-label">
             Form Name <span className="required-star">*</span>
           </label>
-          <input
+          <motion.input
             id="formName"
             type="text"
             value={formName}
@@ -527,13 +541,16 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
             placeholder="Enter form name"
             className="formdetails-modal-input"
             autoFocus
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
           />
         </div>
         <div>
           <label htmlFor="formDescription" className="formdetails-modal-label">
             Form Description
           </label>
-          <textarea
+          <motion.textarea
             id="formDescription"
             value={formDescription}
             onChange={(e) => setFormDescription(e.target.value)}
@@ -541,13 +558,24 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
             className="formdetails-modal-textarea"
             rows={3}
             style={{ resize: 'vertical' }}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
           />
         </div>
-        {formNameError && (
-          <div className="formdetails-modal-error">
-            {formNameError}
-          </div>
-        )}
+        <AnimatePresence>
+          {formNameError && (
+            <motion.div
+              className="formdetails-modal-error"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              {formNameError}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       </div>
       <div className="formdetails-modal-actions">
@@ -570,8 +598,9 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
           </button>
         </div>
       </div>
-    </div>
-  </div>
+    </motion.div>
+  </motion.div>
+  </AnimatePresence>
 );
 
 };
