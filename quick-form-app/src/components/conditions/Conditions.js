@@ -445,6 +445,8 @@ const Conditions = ({ formVersionId }) => {
         sourceFields: conditionData.sourceFields || [],
         formula: convertFormulaKeysToLabels(conditionData.formula || ''),
         targetField: conditionData.targetField || '',
+         logic: conditionData.type !== 'dependent' ? conditionData.logic || 'AND' : 'AND',
+        logicExpression: conditionData.logic === 'Custom' ? conditionData.logicExpression || '' : '',
       });
       setEditingConditionId(conditionData.Id);
     }
@@ -510,6 +512,8 @@ const Conditions = ({ formVersionId }) => {
             sourceFields: newCondition.sourceFields || [],
             formula: convertFormulaLabelsToKeys(newCondition.formula || ''),
             targetField: newCondition.targetField,
+            logic: newCondition.logic,
+            logicExpression: newCondition.logic === 'Custom' ? newCondition.logicExpression : '',
           }),
         };
       } else if (newCondition.type === 'dependent') {
@@ -2934,45 +2938,99 @@ const Conditions = ({ formVersionId }) => {
                 <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
                   <h2 className="text-xl font-semibold mb-3">Add Update/Calculate Condition</h2>
 
-                  {/* If Field */}
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium text-gray-700">If Field</label>
-                    <Select
-                      value={newCondition.conditions?.[0]?.ifField || ''}
-                      onChange={value => handleFieldChangeCalc('ifField', value, 0)}
-                      placeholder="Select field"
-                      style={{ width: '100%' }}
-                    >
-                      {validIfFields.map(field => (
-                        <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>{field.Name}</Option>
-                      ))}
-                    </Select>
-                  </div>
+                  {/* Map over multiple conditions */}
+                  {newCondition.conditions?.map((condition, index) => (
+                    <motion.div key={index} className="mb-4 p-3 border rounded">
+                      {/* If Field */}
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700">If Field</label>
+                        <Select
+                          value={condition.ifField}
+                          onChange={value => handleFieldChangeCalc('ifField', value, index)}
+                          placeholder="Select field"
+                          style={{ width: '100%' }}
+                        >
+                          {validIfFields
+                          .filter(f => !newCondition.conditions.some((c, i) => c.ifField === f.Unique_Key__c && i !== index))
+                          .map(field => (
+                            <Option key={field.Unique_Key__c} value={field.Unique_Key__c}>{field.Name}</Option>
+                          ))}
+                        </Select>
+                      </div>
 
-                  {/* Operator */}
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium text-gray-700">Operator</label>
-                    <Select
-                      value={newCondition.conditions?.[0]?.operator || ''}
-                      onChange={value => handleFieldChangeCalc('operator', value, 0)}
-                      placeholder="Select operator"
-                      style={{ width: '100%' }}
-                    >
-                      {getOperators(fields.find(f => f.Unique_Key__c === newCondition.conditions?.[0]?.ifField)?.Field_Type__c).map(op => (
-                        <Option key={op} value={op}>{op}</Option>
-                      ))}
-                    </Select>
-                  </div>
+                      {/* Operator */}
+                      <div className="mb-3">
+                        <label className="block text-sm font-medium text-gray-700">Operator</label>
+                        <Select
+                          value={condition.operator}
+                          onChange={value => handleFieldChangeCalc('operator', value, index)}
+                          placeholder="Select operator"
+                          style={{ width: '100%' }}
+                        >
+                          {getOperators(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map(op => (
+                            <Option key={op} value={op}>{op}</Option>
+                          ))}
+                        </Select>
+                      </div>
 
-                  {/* Value */}
-                  {!['is null', 'is not null'].includes(newCondition.conditions?.[0]?.operator) && (
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700">Value</label>
-                      <Input
-                        value={newCondition.conditions?.[0]?.value || ''}
-                        onChange={e => handleFieldChangeCalc('value', e.target.value, 0)}
-                        placeholder="Enter target value"
-                      />
+                      {/* Value */}
+                      {!['is null', 'is not null'].includes(condition.operator) && (
+                        <div className="mb-3">
+                          <label className="block text-sm font-medium text-gray-700">Value</label>
+                          <Input
+                            value={condition.value}
+                            onChange={e => handleFieldChangeCalc('value', e.target.value, index)}
+                            placeholder="Enter target value"
+                          />
+                        </div>
+                      )}
+                      {index > 0 && (
+                        <Button
+                          type="danger"
+                          size="small"
+                          onClick={() => removeCondition(index)}
+                          style={{ marginTop: '8px' }}
+                        >
+                          <FaTrash /> Remove Condition
+                        </Button>
+                      )}
+                    </motion.div>
+                  ))}
+
+                  {/* Add Condition Button */}
+                  <Button type="primary" onClick={addCondition} style={{ marginBottom: '16px' }}>
+                    <FaPlus style={{ marginRight: '4px' }} /> Add Condition
+                  </Button>
+
+                  {/* Logic Selection for multiple conditions */}
+                  {newCondition.conditions.length > 1 && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700">Logic</label>
+                      <Select
+                        value={newCondition.logic}
+                        onChange={value => handleFieldChange('logic', value)}
+                        style={{ width: '100%' }}
+                      >
+                        <Option value="AND">AND</Option>
+                        <Option value="OR">OR</Option>
+                        <Option value="Custom">Custom</Option>
+                      </Select>
+                      {newCondition.logic === 'Custom' && (
+                        <div className="mt-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Custom Logic Expression{' '}
+                            <span className="text-gray-500 text-xs">
+                              (e.g., "1 OR (2 AND 3)" for {newCondition.conditions.length} conditions)
+                            </span>
+                          </label>
+                          <Input
+                            value={newCondition.logicExpression}
+                            onChange={e => handleFieldChange('logicExpression', e.target.value)}
+                            placeholder={`e.g., 1 OR (2 AND 3)`}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -3003,7 +3061,7 @@ const Conditions = ({ formVersionId }) => {
                       >
                         {validIfFields
                           .filter(f =>
-                            f.Unique_Key__c !== newCondition.conditions?.[0]?.ifField &&
+                            !newCondition.conditions.some(c => c.ifField === f.Unique_Key__c) &&
                             f.Unique_Key__c !== newCondition.targetField
                           )
                           .map(f => (
@@ -3041,16 +3099,13 @@ const Conditions = ({ formVersionId }) => {
                     >
                       {validIfFields
                         .filter(f =>
-                          f.Unique_Key__c !== newCondition.conditions?.[0]?.ifField &&
+                          !newCondition.conditions.some(c => c.ifField === f.Unique_Key__c) &&
                           (newCondition.action !== 'copy_field_values' || !(newCondition.sourceFields || []).includes(f.Unique_Key__c)) &&
-                          (newCondition.action !== 'calculate_field' || (
-                            !usedFieldsInFormula.includes(f.Unique_Key__c)
-                          ))
+                          (newCondition.action !== 'calculate_field' || !usedFieldsInFormula.includes(f.Unique_Key__c))
                         )
                         .map(f => (
                           <Option key={f.Unique_Key__c} value={f.Unique_Key__c}>{f.Name}</Option>
                         ))}
-
                     </Select>
                   </div>
 
@@ -3060,8 +3115,7 @@ const Conditions = ({ formVersionId }) => {
                       type="primary"
                       onClick={() => saveCondition(editingConditionId)}
                       disabled={
-                        !newCondition.conditions?.[0]?.ifField ||
-                        !newCondition.conditions?.[0]?.operator ||
+                        !newCondition.conditions.every(c => c.ifField && c.operator) ||
                         !newCondition.action ||
                         !newCondition.targetField ||
                         (newCondition.action === 'copy_field_values' && !(newCondition.sourceFields && newCondition.sourceFields.length))
@@ -3089,9 +3143,28 @@ const Conditions = ({ formVersionId }) => {
                           className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
                         >
                           <div>
+                            {condition.logic === 'Custom' ? (
+                            <>
+                              <p><strong>If:</strong></p>
+                              {condition.conditions?.map((cond, index) => (
+                                <p key={index}>
+                                  <strong>Condition {index + 1}:</strong> {fields.find(f => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator} {cond.value || 'N/A'}
+                                </p>
+                              ))}
+                              <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
+                            </>
+                          ) : (
                             <p>
-                              <strong>If:</strong> {fields.find(f => f.Unique_Key__c === condition.conditions?.[0]?.ifField)?.Name || 'Unknown'} {condition.conditions?.[0]?.operator} {condition.conditions?.[0]?.value}
+                              <strong>If:</strong>{' '}
+                              {condition.conditions?.map((cond, index) => (
+                                <span key={index}>
+                                  {fields.find(f => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator} {cond.value || 'N/A'}
+                                  {index < condition.conditions.length - 1 && ` ${condition.logic} `}
+                                </span>
+                              ))}
                             </p>
+                          )}
+
                             <p><strong>Action:</strong> {condition.action === 'copy_field_values' ? 'Copy Field Value(s)' : 'Calculate Field'}</p>
                             {condition.action === 'copy_field_values' && (
                               <p>
@@ -3116,7 +3189,6 @@ const Conditions = ({ formVersionId }) => {
                   </AnimatePresence>
                 </motion.div>
               </TabPane>
-
             </Tabs>
           )}
         </div>

@@ -71,8 +71,8 @@ const Home = () => {
     setIsCloneFormNameOpen(false);
     if (!cloningFormData) return;
 
-    const { versionToClone } = cloningFormData;
-console.log(versionToClone);
+    const { form, versionToClone } = cloningFormData;
+console.log('Cloning ',cloningFormData);
 
     const cloneFormData = {
       formVersion: {
@@ -92,6 +92,8 @@ console.log(versionToClone);
       })),
       conditions: versionToClone.Conditions || [],
       Mappings: versionToClone.Mappings,
+      ThankYou: versionToClone.ThankYou,
+      Notifications: form.Notifications,
     };
 
     try {
