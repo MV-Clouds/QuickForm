@@ -3,13 +3,36 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSalesforceData } from '../Context/MetadataContext';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId, publishLink  }) {
   const navigate = useNavigate();
   const [submissionCount, setSubmissionCount] = useState(0);
   const { userProfile } = useSalesforceData();
 
   useEffect(() => {
-    setSubmissionCount(6);
+    if (!selectedVersionId || !formRecords || formRecords.length === 0) {
+      setSubmissionCount(0);
+      return;
+    }
+
+    // Find the form record that contains the selected version
+    const currentFormRecord = formRecords.find((record) =>
+      record.FormVersions?.some((version) => version.Id === selectedVersionId)
+    );
+
+    if (currentFormRecord) {
+      // Find the specific version and get its submission count
+      const currentVersion = currentFormRecord.FormVersions.find(
+        (version) => version.Id === selectedVersionId
+      );
+      
+      if (currentVersion && currentVersion.Submission_Count__c !== undefined) {
+        setSubmissionCount(currentVersion.Submission_Count__c || 0);
+      } else {
+        setSubmissionCount(0);
+      }
+    } else {
+      setSubmissionCount(0);
+    }
   }, [selectedVersionId, formRecords]);
 
   const handleMappingClick = () => {
@@ -319,7 +342,13 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
       name: 'Share',
       path: '/share',
       route: '/share',
-      onClick: () => {/* Handle share functionality */ },
+      onClick: () => {
+        if (publishLink) {
+          navigate(`/share/${selectedVersionId}`, { state: { publishLink } });
+        } else {
+          alert('Publish link not available');
+        }
+      },
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>

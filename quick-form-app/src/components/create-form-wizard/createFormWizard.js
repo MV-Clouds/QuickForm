@@ -414,15 +414,40 @@ const CreateFormWizard = ({ onClose }) => {
     );
   }
   return (
-    <div className="wizard-overlay"> {/* Overlay for modal */}
-      {isLoading && ( // Loading overlay section
-        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50">
+    <AnimatePresence>
+    <motion.div 
+      className="wizard-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+    > {/* Overlay for modal */}
+      {isLoading && (
+        <motion.div
+          key="loading-overlay"
+          className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
+        </motion.div>
       )}
 
-      <div className="wizard-container"> {/* Wizard container */}
-        <div className="wizard-header"> {/* Header section */}
+
+      <motion.div 
+        className="wizard-container"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.3, type: 'spring', stiffness: 200, damping: 20 }}
+      > {/* Wizard container */}
+        <motion.div
+         className="wizard-header"
+         initial={{ opacity: 0, y: -20 }}
+         animate={{ opacity: 1, y: 0 }}
+         transition={{ duration: 0.3 }}
+         > {/* Header section */}
           <h2 className="wizard-title">Create Form Wizard</h2>
           <button
             onClick={closeWizard}
@@ -435,10 +460,16 @@ const CreateFormWizard = ({ onClose }) => {
 
 
           </button>
-        </div>
-
+        </motion.div>
+        <AnimatePresence>
         {error && ( // Error message section
-          <div className="wizard-error-alert">
+          <motion.div 
+            className="wizard-error-alert"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            >
             <div className="flex items-center">
               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -449,12 +480,20 @@ const CreateFormWizard = ({ onClose }) => {
               </svg>
               <span>{error}</span>
             </div>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
         <div className="wizard-content"> {/* Main content area */}
+          <AnimatePresence mode="wait">
           {step === 1 && ( // Step 1: Select Objects
-          <div>
+          <motion.div
+            key="step-1-content"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+          >
             <div className="object-container">
               <div className="title-group">
               <h3 className="wizard-step-title">Step 1: Select Objects</h3>
@@ -468,7 +507,12 @@ const CreateFormWizard = ({ onClose }) => {
               </div>
 
               <div className="wizard-form-group"> {/* Object search section */}
-                <div className="wizard-search-container">
+                <motion.div 
+                  className="wizard-search-container"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3 }}
+                  >
                   <input
                     type="text"
                     placeholder="Search objects..."
@@ -480,7 +524,7 @@ const CreateFormWizard = ({ onClose }) => {
                     <path d="M11 16.5C14.0376 16.5 16.5 14.0376 16.5 11C16.5 7.96243 14.0376 5.5 11 5.5C7.96243 5.5 5.5 7.96243 5.5 11C5.5 14.0376 7.96243 16.5 11 16.5Z" stroke="#5F6165" stroke-width="1.5"/>
                     <path d="M15 15L19 19" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                </div>
+                </motion.div>
               </div>
 
               <div className="wizard-dual-list-row"> {/* Object selection layout */}
@@ -518,8 +562,8 @@ const CreateFormWizard = ({ onClose }) => {
                                 <div>
                                   <div className="wizard-listbox-entry-label">{obj.label}
                                     <AnimatedTooltip content={`${obj.name}`}>
-  <InfoCircleOutlined className="info-icon" aria-label={`API Name for ${obj.label}`} />
-</AnimatedTooltip>
+                                      <InfoCircleOutlined className="info-icon" aria-label={`API Name for ${obj.label}`} />
+                                    </AnimatedTooltip>
                                   </div>
                                   
                                 </div>
@@ -640,11 +684,17 @@ const CreateFormWizard = ({ onClose }) => {
                 </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
 
           {step === 2 && ( // Step 2: Select Fields
-            <div>
+            <motion.div
+              key="step-2-content"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
               <div className="object-container">
               <div className="title-group">
                 <h3 className="wizard-step-title">Step 2: Select Fields</h3>
@@ -677,7 +727,12 @@ const CreateFormWizard = ({ onClose }) => {
                   </Select>
                 </div>
                 <div className="wizard-form-group half-width"> {/* Field search section */}
-                  <div className="wizard-search-container fields-search">
+                  <motion.div 
+                   className="wizard-search-container fields-search"
+                   initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                   >
                     <input
                       type="text"
                       placeholder="Search fields..."
@@ -689,7 +744,7 @@ const CreateFormWizard = ({ onClose }) => {
                       <path d="M11 16.5C14.0376 16.5 16.5 14.0376 16.5 11C16.5 7.96243 14.0376 5.5 11 5.5C7.96243 5.5 5.5 7.96243 5.5 11C5.5 14.0376 7.96243 16.5 11 16.5Z" stroke="#5F6165" stroke-width="1.5"/>
                       <path d="M15 15L19 19" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
 
@@ -739,8 +794,8 @@ const CreateFormWizard = ({ onClose }) => {
                                         <span className="wizard-listbox-entry-required">*</span>
                                       )}
                                      <AnimatedTooltip content={`${field.name}\nType: ${field.type || 'Unknown'}`}>
-  <InfoCircleOutlined className="info-icon" aria-label={`API Name and Type for ${field.label}`} />
-</AnimatedTooltip>
+                                        <InfoCircleOutlined className="info-icon" aria-label={`API Name and Type for ${field.label}`} />
+                                      </AnimatedTooltip>
                                     </div>
                                     
                                   </div>
@@ -808,8 +863,8 @@ const CreateFormWizard = ({ onClose }) => {
                                     <div className="selected-fields-align">
                                     <div className="wizard-listbox-entry-label-fields">
                                     <AnimatedTooltip content={`${field.name}\nType: ${field.type || 'Unknown'}`} positionLeft>
-  <InfoCircleOutlined className="info-icon" aria-label={`API Name and Type for ${field.label}`} />
-</AnimatedTooltip>
+                                      <InfoCircleOutlined className="info-icon" aria-label={`API Name and Type for ${field.label}`} />
+                                    </AnimatedTooltip>
                                       {field.label}
                                       {field.required && (
                                         <span className="wizard-listbox-entry-required">*</span>
@@ -858,13 +913,15 @@ const CreateFormWizard = ({ onClose }) => {
                 </button>
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
+        </AnimatePresence>
         </div>
 
         
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+    </AnimatePresence>
   );
 };
 

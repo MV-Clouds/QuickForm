@@ -5,6 +5,7 @@ import {
     Move, Maximize2, ImagePlus, AlignLeft, AlignCenter, AlignRight
 } from "lucide-react";
 import { v4 as uuidv4 } from 'uuid';
+import FileUpload from '../file-upload/file-upload';
 // import axios from 'axios';
 
 // Mock API for backend storage simulation
@@ -20,6 +21,11 @@ const mockApi = {
 
 export default function ThankYouPageEditor() {
     // State management
+    const [url,setUrl]= useState({})
+    useEffect(()=>{
+        console.log('url',url);
+        
+    },[url])
     const [activeTab, setActiveTab] = useState('layout');
     const [theme, setTheme] = useState({
         backgroundColor: '#ffffff',

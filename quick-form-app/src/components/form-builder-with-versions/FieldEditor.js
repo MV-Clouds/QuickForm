@@ -38,22 +38,42 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   // State for address-specific properties (integrated into subFields)
   const [subFields, setSubFields] = useState(
     selectedField?.subFields || {
-      street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street' },
-      city: { visible: true, label: 'City', value: '', placeholder: 'Enter city' },
-      state: { visible: true, label: 'State', value: '', placeholder: 'Enter state' },
-      country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country' },
-      postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code' },
+      street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street', isRequired: false },
+      street2: { visible: true, label: 'Street Address 2', value: '', placeholder: 'Enter street address 2', isRequired: false },
+      city: { visible: true, label: 'City', value: '', placeholder: 'Enter city', isRequired: false },
+      state: { visible: true, label: 'State', value: '', placeholder: 'Enter state', isRequired: false },
+      country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country', isRequired: false },
+      postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code', isRequired: false },
     }
   );
 
   // State for fullname-specific properties (integrated into subFields)
-  const [fullnameSubFields, setFullnameSubFields] = useState(
-    selectedField?.subFields || {
-      salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
-      firstName: { value: '', placeholder: 'First Name' },
-      lastName: { value: '', placeholder: 'Last Name' },
-    }
-  );
+  const defaultFullnameSubFields = {
+    salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
+    firstName: { value: '', placeholder: 'First Name' },
+    lastName: { value: '', placeholder: 'Last Name' },
+  };
+  
+  const [fullnameSubFields, setFullnameSubFields] = useState(() => {
+    if (!selectedField?.subFields) return defaultFullnameSubFields;
+    
+    return {
+      ...defaultFullnameSubFields,
+      ...selectedField.subFields,
+      salutation: {
+        ...defaultFullnameSubFields.salutation,
+        ...selectedField.subFields?.salutation,
+      },
+      firstName: {
+        ...defaultFullnameSubFields.firstName,
+        ...selectedField.subFields?.firstName,
+      },
+      lastName: {
+        ...defaultFullnameSubFields.lastName,
+        ...selectedField.subFields?.lastName,
+      },
+    };
+  });
 
   const [phoneSubFields, setPhoneSubFields] = useState(
     selectedField?.subFields || {
@@ -70,6 +90,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       },
     }
   );
+
+  const VALIDATION_OPTIONS = [
+  { value: 'none', label: 'No validation', regex: '' },
+  { value: 'alphabetic', label: 'Alphabetic only', regex: '^[A-Za-z\\s]+$' },
+  { value: 'alphanumeric', label: 'Alphanumeric', regex: '^[A-Za-z0-9\\s]+$' },
+  { value: 'numeric', label: 'Numeric only', regex: '^[0-9]+$' },
+  { value: 'email', label: 'Email', regex: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$' },
+  { value: 'no_special_chars', label: 'No special characters', regex: '^[A-Za-z0-9\\s]+$' }
+];
 
   // State for fileupload-specific properties
   const [maxFileSize, setMaxFileSize] = useState(selectedField?.maxFileSize || '');
@@ -138,6 +167,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [numberValueLimits, setNumberValueLimits] = useState(selectedField?.numberValueLimits || { enabled: false, min: '', max: '' });
   const [relatedValues, setRelatedValues] = useState(selectedField?.[`${selectedField?.type}RelatedValues`] || {});
   const [predefinedOptionSet, setPredefinedOptionSet] = useState('');
+  const [validationType, setValidationType] = useState(selectedField?.validationType || 'none');
 
   // State for price-specific properties
   const [priceLimits, setPriceLimits] = useState(selectedField?.priceLimits || { enabled: false, min: '', max: '' });
@@ -156,6 +186,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const [uniqueNameError, setUniqueNameError] = useState('');
   const [headingText, setHeadingText] = useState(selectedField?.heading || 'Form Head');
   const [headingAlignment, setHeadingAlignment] = useState(selectedField?.alignment || 'center');
+  
+  // NEW: Column count for checkbox and radio fields
+  const [columnCount, setColumnCount] = useState(selectedField?.columnCount || 1);
 
   useEffect(() => {
     if (selectedField) {
@@ -184,21 +217,37 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       // Initialize address subFields
       setSubFields(
         selectedField.subFields || {
-          street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street' },
-          city: { visible: true, label: 'City', value: '', placeholder: 'Enter city' },
-          state: { visible: true, label: 'State', value: '', placeholder: 'Enter state' },
-          country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country' },
-          postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code' },
+          street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street', isRequired: false },
+          street2: { visible: true, label: 'Street Address 2', value: '', placeholder: 'Enter street address 2', isRequired: false },
+          city: { visible: true, label: 'City', value: '', placeholder: 'Enter city', isRequired: false },
+          state: { visible: true, label: 'State', value: '', placeholder: 'Enter state', isRequired: false },
+          country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country', isRequired: false },
+          postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code', isRequired: false },
         }
       );
       // Initialize fullname subFields
-      setFullnameSubFields(
-        selectedField.subFields || {
-          salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
-          firstName: { value: '', placeholder: 'First Name' },
-          lastName: { value: '', placeholder: 'Last Name' },
-        }
-      );
+      const defaultFullnameSubFields = {
+        salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
+        firstName: { value: '', placeholder: 'First Name' },
+        lastName: { value: '', placeholder: 'Last Name' },
+      };
+      
+      setFullnameSubFields({
+        ...defaultFullnameSubFields,
+        ...selectedField.subFields,
+        salutation: {
+          ...defaultFullnameSubFields.salutation,
+          ...selectedField.subFields?.salutation,
+        },
+        firstName: {
+          ...defaultFullnameSubFields.firstName,
+          ...selectedField.subFields?.firstName,
+        },
+        lastName: {
+          ...defaultFullnameSubFields.lastName,
+          ...selectedField.subFields?.lastName,
+        },
+      });
 
       setInputType(selectedField.inputType || 'radio');
       setDropdownOptionsInput((selectedField.dropdownOptions || []).join('\n'));
@@ -218,6 +267,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setIsHidden(selectedField.isHidden || false);
       setUniqueName(selectedField.uniqueName || '');
       setUniqueNameError('');
+      setColumnCount(selectedField.columnCount || 1);
 
       // Set default predefined option set based on options
       if (selectedField.options?.join(',') === 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday') {
@@ -234,6 +284,20 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       setFooterText(selectedFooter.text || '');
     }
   }, [selectedField, selectedFooter, fields]);
+
+  const handleValidationTypeChange = (e) => {
+  const value = e.target.value;
+  setValidationType(value);
+  
+  // Find the selected option and get its regex
+  const selectedOption = VALIDATION_OPTIONS.find(opt => opt.value === value);
+  const regex = selectedOption?.regex || '';
+  
+  onUpdateField(selectedField.id, { 
+    validationType: value,
+    validationRegex: regex 
+  });
+};
 
   // Add handlers for multiple rows/columns
   const handleMultiRowSave = () => {
@@ -404,18 +468,57 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   };
 
   const handleAddressVisibilityChange = (key) => {
+    // Ensure the field exists with default values
+    const defaultField = {
+      visible: false,
+      label: key === 'street2' ? 'Street Address 2' : key.charAt(0).toUpperCase() + key.slice(1),
+      value: '',
+      placeholder: key === 'street2' ? 'Enter street address 2' : `Enter ${key}`,
+      isRequired: false
+    };
+    
+    const currentField = subFields[key] || defaultField;
     const newSubFields = {
       ...subFields,
-      [key]: { ...subFields[key], visible: !subFields[key].visible }
+      [key]: { ...currentField, visible: !currentField.visible }
+    };
+    setSubFields(newSubFields);
+    onUpdateField(selectedField.id, { subFields: newSubFields });
+  };
+
+  const handleAddressRequiredChange = (key) => {
+    // Ensure the field exists with default values
+    const defaultField = {
+      visible: true,
+      label: key === 'street2' ? 'Street Address 2' : key.charAt(0).toUpperCase() + key.slice(1),
+      value: '',
+      placeholder: key === 'street2' ? 'Enter street address 2' : `Enter ${key}`,
+      isRequired: false
+    };
+    
+    const currentField = subFields[key] || defaultField;
+    const newSubFields = {
+      ...subFields,
+      [key]: { ...currentField, isRequired: !currentField.isRequired }
     };
     setSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
   const handleAddressPlaceholderChange = (key, value) => {
+    // Ensure the field exists with default values
+    const defaultField = {
+      visible: true,
+      label: key === 'street2' ? 'Street Address 2' : key.charAt(0).toUpperCase() + key.slice(1),
+      value: '',
+      placeholder: value,
+      isRequired: false
+    };
+    
+    const currentField = subFields[key] || defaultField;
     const newSubFields = {
       ...subFields,
-      [key]: { ...subFields[key], placeholder: value },
+      [key]: { ...currentField, placeholder: value },
     };
     setSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
@@ -645,6 +748,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     if (!selectedField) return false;
     
     const isScaleRating = selectedField.type === 'scalerating';
+    // const isImageUploader = selectedField.type === 'imageuploader';
     const hasOptions = isOptionsSupported && ['checkbox', 'radio'].includes(selectedField.type);
     const hasDropdownOptions = isDropdownSupported && selectedField.type === 'dropdown';
     const hasAddress = isAddress;
@@ -896,6 +1000,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const isAlignmentSupported = selectedField?.type !== 'pagebreak';
   const isOptionsSupported = selectedField && ['checkbox', 'radio', 'dropdown'].includes(selectedField.type);
   const isScaleRating = selectedField?.type === 'scalerating';
+  // const isImageUploader = selectedField?.type === 'imageuploader';
   const isFormCalculation = selectedField?.type === 'formcalculation';
   const isRating = selectedField?.type === 'rating';
   const isAddress = selectedField?.type === 'address';
@@ -994,8 +1099,8 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                 {expandedSections.includes('common') ? <FaChevronUp className="text-gray-600" /> : <FaChevronDown className="text-gray-600" />}
               </button>
               {expandedSections.includes('common') && (
-                <div className="p-2 mt-1 rounded-b-lg">
-                  {isHeading ?
+                <div className="p-2 mt-1 bg-gray-50 rounded-b-lg">
+                  {isHeading  ? (
                     <>
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
@@ -1019,7 +1124,39 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           <option value="right">Right</option>
                         </select>
                       </div>
-                    </> : (
+                    </> 
+                    ) : selectedField?.type === 'imageuploader' ? (  
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedField.imageWidth || ''}
+                          onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="e.g. 200"
+                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={selectedField.imageHeight || ''}
+                          onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          placeholder="e.g. 100"
+                        />
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
+                        <select
+                          value={selectedField.imageAlign || 'center'}
+                          onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
+                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                    ) : (
                       <>
                         <div className="mb-4">
                           <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
@@ -1036,7 +1173,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
                             {isAddress ? (
                               <div className="flex flex-col gap-2">
-                                {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                                {['street', 'street2', 'city', 'state', 'country', 'postal'].map((key) => (
                                   <div key={key}>
                                     <label className="text-xs text-gray-500 capitalize">{key}</label>
                                     <input
@@ -1131,14 +1268,16 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             placeholder="Enter default value"
                           />
                         </div>
-                        <div className="mb-4 flex items-center">
-                          <ToggleSwitch
-                            checked={isRequired}
-                            onChange={handleRequiredChange}
-                            id="required-toggle"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Required</span>
-                        </div>
+                        {!isAddress && (
+                          <div className="mb-4 flex items-center">
+                            <ToggleSwitch
+                              checked={isRequired}
+                              onChange={handleRequiredChange}
+                              id="required-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Required</span>
+                          </div>
+                        )}
                         <div className="mb-4 flex items-center">
                           <ToggleSwitch
                             checked={isDisabled}
@@ -1178,6 +1317,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           )}
                         </div>
                       </>
+            
                     )}
                 </div>
               )}
@@ -1238,40 +1378,28 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         >
                           + Add Item
                         </button>
+                        
+                        {/* Column Layout Selector */}
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Number of Columns</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={columnCount}
+                            onChange={(e) => {
+                              const value = Math.min(Math.max(parseInt(e.target.value) || 1, 1), 10);
+                              setColumnCount(value);
+                              onUpdateField(selectedField.id, { columnCount: value });
+                            }}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Enter number of columns (1-10)"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Enter a number between 1 and 10</p>
+                        </div>
                       </div>
                     )}
-                    {selectedField?.type === 'imageuploader' && (
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={selectedField.imageWidth || ''}
-                          onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="e.g. 200"
-                        />
-                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={selectedField.imageHeight || ''}
-                          onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="e.g. 100"
-                        />
-                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
-                        <select
-                          value={selectedField.imageAlign || 'center'}
-                          onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
-                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="left">Left</option>
-                          <option value="center">Center</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    )}
+                    
                     {isOptionsSupported && selectedField.type === 'dropdown' && (
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
@@ -1632,7 +1760,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         <div className="flex flex-col gap-2">
                           <div>
                             <label className="text-xs text-gray-500">Sub-labels</label>
-                            {['street', 'city', 'state', 'country', 'postal'].map((key) => (
+                            {['street', 'street2', 'city', 'state', 'country', 'postal'].map((key) => (
                               <div key={key} className="mb-2">
                                 <label className="text-xs text-gray-500 capitalize">{key}</label>
                                 <input
@@ -1647,15 +1775,29 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-3">Visible Sub-fields</label>
-                            <div className="space-y-2">
-                              {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                                <div key={key} className="flex items-center justify-between">
-                                  <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
-                                  <ToggleSwitch
-                                    checked={subFields[key]?.visible || false}
-                                    onChange={() => handleAddressVisibilityChange(key)}
-                                    id={`address-${key}-toggle`}
-                                  />
+                            <div className="space-y-3">
+                              {['street', 'street2', 'city', 'state', 'country', 'postal'].map((key) => (
+                                <div key={key} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
+                                    <ToggleSwitch
+                                      checked={subFields[key]?.visible || false}
+                                      onChange={() => handleAddressVisibilityChange(key)}
+                                      id={`address-${key}-toggle`}
+                                    />
+                                  </div>
+                                  <div className="flex items-center">
+                                    <label htmlFor={`address-${key}-required-toggle`} className="text-xs text-gray-600 mr-2">
+                                      Required
+                                    </label>
+                                    <input
+                                      type="checkbox"
+                                      id={`address-${key}-required-toggle`}
+                                      checked={subFields[key]?.isRequired || false}
+                                      onChange={() => handleAddressRequiredChange(key)}
+                                      className="w-3 h-3 accent-[#028ab0] border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -1991,6 +2133,19 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           min="1"
                           max="255"
                         />
+
+                        <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Text Validation</label>
+                          <select
+                            value={validationType}
+                            onChange={handleValidationTypeChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          >
+                            {VALIDATION_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     )}
                     {isLongText && (
@@ -2015,6 +2170,19 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             min="1"
                             max="131072"
                           />
+                        </div>
+
+                         <div className="mt-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Text Validation</label>
+                          <select
+                            value={validationType}
+                            onChange={handleValidationTypeChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                          >
+                            {VALIDATION_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     )}
@@ -2308,11 +2476,13 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
         )}
 
         {activeTab === 'widget' && isFormCalculation && (
-          <FormCalculationWidget
-            selectedField={selectedField}
-            onUpdateField={onUpdateField}
-            fields={fields}
-          />
+          <div className="px-4 py-2 bg-gray-50 rounded-b-lg">
+            <FormCalculationWidget
+              selectedField={selectedField}
+              onUpdateField={onUpdateField}
+              fields={fields}
+            />
+          </div>
         )}
 
       </div>

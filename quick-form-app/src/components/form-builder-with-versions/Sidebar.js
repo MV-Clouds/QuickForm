@@ -305,7 +305,7 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
     <div className="custom-builder-card">
       {/* Header */}
       <div className="p-4 pb-2">
-        <h1 className="text-lg font-semibold text-gray-900">Builder</h1>
+        <h1 className="text-lg font-semibold text-gray-900">Form Builder</h1>
       </div>
 
       {/* Main Tabs */}
@@ -354,22 +354,6 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
           <div className="relative flex justify-center w-full">
             <button
               className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
-                activeSubTab === 'Fieldsets'
-                  ? 'text-gray-900 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-              onClick={() => setActiveSubTab('Fieldsets')}
-            >
-              Fields
-            </button>
-            {activeSubTab === 'Fieldsets' && (
-              <div className="gradient-border"></div>
-            )}
-          </div>
-
-          <div className="relative flex justify-center w-full">
-            <button
-              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
                 activeSubTab === 'Payments'
                   ? 'text-gray-900 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:bg-gray-50'
@@ -379,6 +363,22 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
               Payments
             </button>
             {activeSubTab === 'Payments' && (
+              <div className="gradient-border"></div>
+            )}
+          </div>
+
+          <div className="relative flex justify-center w-full">
+            <button
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
+                activeSubTab === 'Fieldsets'
+                  ? 'text-gray-900 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+              onClick={() => setActiveSubTab('Fieldsets')}
+            >
+              Fieldsets
+            </button>
+            {activeSubTab === 'Fieldsets' && (
               <div className="gradient-border"></div>
             )}
           </div>

@@ -3,8 +3,9 @@ import NotificationTab from './Components/NotificationTab.js';
 import { EmailTab } from './Components/EmailTab.js';
 import { DigestEmailTab } from './Components/DigestEmailTab.js';
 import { useParams } from 'react-router-dom';
-const NotificationSettings = ({ currentFields }) => {
-
+import { useSalesforceData } from '../Context/MetadataContext';
+const NotificationSettings = ({ currentFields , sendNotificationData}) => {
+  const { formRecords, refreshData } = useSalesforceData();
   const [activeTab, setActiveTab] = useState(null);
   const [rules, setRules] = useState();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -20,102 +21,45 @@ const NotificationSettings = ({ currentFields }) => {
   const [showAddOptions, setShowAddOptions] = useState(false);
 
   const [formFieldsData, setFormfieldData] = useState([]);
-
-  useEffect(()=>{
-    console.log('Current fields ==> ', currentFields);
-    
-  },[currentFields])
-  const fetchFormId = async () => {
+  const fetchFormId = () => {
     setLoading(true);
     try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch metadata');
-      }
-
-      let formRecords = [];
-      if (data.FormRecords) {
-        try {
-          formRecords = JSON.parse(data.FormRecords);
-
-        } catch (e) {
-          console.warn('Failed to parse FormRecords:', e);
-        }
-      }
-      // console.log('FormversionId ==> ', formVersionId);
-      // console.log('Formdata', formRecords);
-      const formRecord = formRecords.find(form => form.FormVersions.some(version => version.Id === formVersionId));
-      // console.log('formrecord', formRecord, formRecord.Id)
-
-      // if (formRecord && formRecord.FormVersions && formRecord.FormVersions.length > 0) {
-      //   const version = formRecord.FormVersions.find(v => v.Id === formVersionId) || formRecord.FormVersions[0];
-      //   // console.log('Version ==>', version);
-
-      //   setFormfieldData(version.Fields || []);
-      //   console.log(formFieldsData, 'Data');
-
-      // } else {
-      //   setFormfieldData([]);
-      // }
-
+      const formRecord = formRecords.length > 0 ? formRecords.find(form => form.FormVersions.some(version => version.Id === formVersionId)) : null;
+      console.log('formrecord', formRecord, formRecord.Id)
       if (!formRecord) {
         throw new Error(`Form record with version Id ${formVersionId} not found`);
       }
       setFormId(formRecord.Id);
     } catch (error) {
       console.log("Error on form id fetching ==> ", error)
+    } finally {
+      setLoading(false)
     }
   }
-  const fetchAllData = async (forceRefresh = false) => {
+  const fetchAllData = async () => {
     setLoading(true);
+    if(formRecords.length === 0) {
+      await refreshData();
+    }
     try {
-      const response = await fetch(`https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify?instanceUrl=${encodeURIComponent(instanceUrl)}&formId=${encodeURIComponent(formId)}&forceRefresh=${forceRefresh}&userId=${userId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch rules');
+      let cleanData;
+      if (formRecords.length > 0) {
+        console.log('notifydata', formRecords.filter(form => form.Id === formId))
+        const rec = formRecords.filter(form => form.Id === formId)[0]?.Notifications
+        console.log('rec', rec)
+        cleanData = rec?.map((field) => {
+          return {
+            id: field.Id,
+            title: field.Title__c,
+            type: field.Type__c,
+            status: field.Status__c,
+            createdDate: new Date(field.LastModifiedDate).toLocaleDateString('en-GB'),
+            body: field.Body__c,
+            receipents: field.Receipe__c
+          }
+        });
       }
-
-      const data = await response.json();
-      console.log('Fetched Rules:', data);
-
-      const cleanData = typeof data.records === 'string' ? JSON.parse(data?.records).map((field) => {
-        return {
-          id: field.Id,
-          title: field.Title__c,
-          type: field.Type__c,
-          status: field.Status__c,
-          createdDate: new Date(field.CreatedDate).toLocaleDateString('en-GB'),
-          body: field.Body__c,
-          receipents: field.Receipe__c
-        }
-      }) : data?.records.map((field) => {
-        return {
-          id: field.Id,
-          title: field.Title__c,
-          type: field.Type__c,
-          status: field.Status__c,
-          createdDate: new Date(field.CreatedDate).toLocaleDateString('en-GB'),
-          body: field.Body__c,
-          receipents: field.Receipe__c
-        }
-      })
+      console.log('cleanData', cleanData)
       setRules(cleanData); // Assuming setRules is a function to update the state with the fetched rules
     } catch (error) {
       console.error('Error fetching rules:', error);
@@ -123,7 +67,7 @@ const NotificationSettings = ({ currentFields }) => {
       setLoading(false);
     }
   };
-  async function fetchData() {
+  async function fetchAccessToken() {
     try {
       const response = await fetch('https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/getAccessToken/', {
         method: 'POST',
@@ -152,53 +96,18 @@ const NotificationSettings = ({ currentFields }) => {
       try {
         if (!token) {
           // Fetch access token
-          await fetchData();
-
-        }
-
-        // If token is available, proceed to fetch form ID and all data
-        if (token) {
-          fetchFormId();
-        }
-        if (formId) {
-          fetchAllData();
+          await fetchAccessToken();
         }
       } catch (error) {
-        // Log any errors encountered during data fetching
         console.log('Error in Fetching data : ', error)
       }
     };
     // Call the async function to start the data fetching process
     fetchDataAsync();
-  }, [userId, instanceUrl, token, formId]);
-  const sendNotificationData = async (payload) => {
-    try {
-      const response = await fetch('https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ notificationData: { Form__c: formId, ...payload }, instanceUrl }),
-      });
-      console.log('response', response);
-
-      const res = await response.json()
-      console.log('Response from lambda ==> ', res);
-
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const data = await response.json();
-      console.log('Response Data ====> ', data);
-      return res.message || 'Saved successfully';
-    } catch (error) {
-      console.error('There was a problem with the fetch operation:', error);
-    } finally {
-      fetchAllData(true);
-    }
-  };
+    fetchFormId();
+    fetchAllData()
+  }, [token, formId , formRecords]);
+  
 
   const updateNotificationData = async (payload) => {
     try {
@@ -208,7 +117,7 @@ const NotificationSettings = ({ currentFields }) => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ notificationId: payload.Id ? payload.Id : editingRuleId, updatedData: { Form__c: formId, ...(payload.Id ? { ...payload, Id: undefined } : payload) }, instanceUrl }),
+        body: JSON.stringify({ notificationId: payload.Id ? payload.Id : editingRuleId, updatedData:  payload.Id ? { ...payload, Id: undefined } : payload , instanceUrl, userId }),
       });
       console.log('response', response);
 
@@ -219,13 +128,12 @@ const NotificationSettings = ({ currentFields }) => {
         throw new Error('Network response was not ok');
       }
 
-      const data = await response.json();
-      console.log('Response Data ====> ', data);
       return res.message || 'Saved successfully';
     } catch (error) {
       console.error('There was a problem with the fetch operation:', error);
     } finally {
-      fetchAllData(true);
+      // fetchAllData(true);
+      refreshData();
     }
   };
 
@@ -276,7 +184,7 @@ const NotificationSettings = ({ currentFields }) => {
       console.error('API error in deleteNotificationData:', error);
       throw error;
     } finally {
-      fetchAllData(true);
+      // fetchAllData(true);
     }
   };
   return (
