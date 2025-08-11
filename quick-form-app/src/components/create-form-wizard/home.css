@@ -14,7 +14,7 @@
   .modal-container {
     background: white;
     border-radius: 8px;
-    width: 40vw;
+    width: 45vw;
     height: auto;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
     overflow-y: auto;
@@ -88,9 +88,7 @@
   }
   
   .option-card:hover {
-    border-color: #2563eb;
-    background: #f0f4ff;
-    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.1);
+    border-color: #028AB0;
   }
   
   .preview-image {
@@ -125,7 +123,7 @@
     right: 2.5%;
     display: flex;
     gap: 24px;
-    z-index: 100;
+    z-index: 44;
     /* Responsive wrap */
     flex-wrap: wrap;
   }

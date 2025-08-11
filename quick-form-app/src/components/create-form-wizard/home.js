@@ -11,7 +11,9 @@ import './home.css';
 import CreateFormWizard from './createFormWizard';
 import RecentFilesSlider from './RecentFilesSlider';
 import FolderManager from './FolderManager';
-
+import FieldsetPage from './FieldsetPage';
+import Bin from './Bin'
+import FavoriteTab from './FavoriteTab';
 const Home = () => {
   const {
     metadata,
@@ -19,7 +21,8 @@ const Home = () => {
     isLoading: contextLoading,
     error: contextError,
     fetchSalesforceData,
-    userProfile
+    userProfile,
+    Fieldset
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -36,6 +39,94 @@ const Home = () => {
   const activeForms = formRecords.filter(f => f.Status__c === 'Active').length;
   const totalSubmissions = formRecords.reduce((acc, f) => acc + (f.Total_Submission_Count__c || 500), 0);
   const [isCreating ,setisCreating] = useState(false);
+  const [cloningFormData, setCloningFormData] = useState(null); 
+  const [isCloneFormNameOpen, setIsCloneFormNameOpen] = useState(false);
+  const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
+
+  const handleCloneForm = (form) => {
+  // Find published version or draft version to clone
+    const versionToClone = form.FormVersions.find(v => v.Stage__c === 'Publish') 
+      || form.FormVersions.find(v => v.Stage__c === 'Draft');
+
+    if (!versionToClone) {
+      alert('No version found to clone.');
+      return;
+    }
+
+    setCloningFormData({ form, versionToClone });
+    setCloneFormNameDesc({ name: versionToClone.Name || '', description: versionToClone.Description__c || '' });
+    setIsCloneFormNameOpen(true);
+  };
+
+  const handleCloneFormSubmit = async (fields) => {
+    
+    const newName = fields.name || cloneFormNameDesc.name;
+    const newDesc = fields.description || cloneFormNameDesc.description;
+
+    if (!newName) {
+      alert('Form name is required.');
+      return;
+    }
+
+    setIsCloneFormNameOpen(false);
+    if (!cloningFormData) return;
+
+    const { versionToClone } = cloningFormData;
+console.log(versionToClone);
+
+    const cloneFormData = {
+      formVersion: {
+        Name: newName,
+        Description__c: newDesc,
+        Version__c: "1",
+        Stage__c: 'Draft',
+        // Copy other necessary fields if needed
+      },
+      formFields: (versionToClone.Fields || []).map((field, index) => ({
+        Name: field.Name,
+        Field_Type__c: field.Field_Type__c,
+        Page_Number__c: field.Page_Number__c,
+        Order_Number__c: index + 1,
+        Properties__c: field.Properties__c,
+        Unique_Key__c: field.Unique_Key__c,
+      })),
+      conditions: versionToClone.Conditions || [],
+      Mappings: versionToClone.Mappings,
+    };
+
+    try {
+      const userId = sessionStorage.getItem('userId');
+      const instanceUrl = sessionStorage.getItem('instanceUrl');
+      const accessToken = token || await fetchAccessToken(userId, instanceUrl);
+
+      const response = await fetch(process.env.REACT_APP_CLONE_FORM, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId,
+          instanceUrl,
+          formData: cloneFormData,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to clone form');
+      }
+
+      navigate(`/form-builder/${data.formVersionId}`);
+    } catch (error) {
+      console.error('Error cloning form:', error);
+      alert('Failed to clone form. Please try again.');
+    } finally {
+      setCloningFormData(null);
+    }
+  };
+
+
   // Fetch access token from Lambda
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
@@ -114,6 +205,10 @@ const Home = () => {
 
   useEffect(() => {
     initializePage();
+    const tab = localStorage.getItem('tab');
+    if(tab){
+      setSelectedNav(tab);
+    }
   }, []);
 
   const handleCreateForm = () => {
@@ -121,7 +216,6 @@ const Home = () => {
   };
 
   const handleDeleteForm = async (formId) => {
-    console.log('deleting...', formId)
     try {
       
       const response = await fetch('https://kd1xkj8zo2.execute-api.us-east-1.amazonaws.com/delete-user-data', {
@@ -137,7 +231,6 @@ const Home = () => {
         }),
       });
       const data = await response.json();
-      console.log('Response ==>', data)
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete form');
       }
@@ -160,7 +253,7 @@ const Home = () => {
     }
 
     if (option === 'salesforce') {
-      navigate('/wizard');
+       setShowCreateFormWizard(true);  // Open the wizard modal right here
     } else if (option === 'scratch') {
       setIsFormNameOpen(true);
     } else if (option === 'templates') {
@@ -169,7 +262,6 @@ const Home = () => {
   };
 
   const handleEditForm = async (form) => {
-    console.log('form data edit ', form);
 
     const draftVersion = form.FormVersions.find(
       (version) => version.Stage__c === 'Draft'
@@ -242,6 +334,7 @@ const Home = () => {
   // Handler for creating a folder (for now, just log)
   const handleCreateFolder = async (folderName, selectedFormIds) => {
     // TODO: Implement backend update logic here
+    setisCreating(true);
     console.log('Create folder:', folderName, 'with forms:', selectedFormIds);
     // Make API call to backend to create/update folder
     
@@ -272,16 +365,54 @@ const Home = () => {
         if (!response.ok) {
           throw new Error(data.error || 'Failed to create/update folder');
         }
-        console.log('Folder created/updated successfully:', data);
         // Optionally, refresh data or show success message here
       } catch (error) {
         console.error('Error creating/updating folder:', error);
       }finally{
+        setisCreating(false)
         fetchSalesforceData(userId , instanceUrl);
       }
     
 
     // You would update Folder__c for each selected form in your backend
+  };
+  // Add to Favorites
+  const handleFavoriteForm = async (formId) => {
+    if (!formId) {
+      console.error('No formId provided to handleFavoriteForm');
+      return;
+    }
+    const updatedFavorite = formRecords.find(form => form.Id === formId).isFavorite;
+    console.log('Favorite data ==>' , updatedFavorite)
+    try {
+      const response = await fetch('https://v78d7u0ljd.execute-api.us-east-1.amazonaws.com/favorite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`, 
+        },
+        body: JSON.stringify({ userId: userId, formId , instanceUrl , isFavorite : !updatedFavorite}),
+      });
+  
+      const result = await response.json();
+  
+      if (!response.ok) {
+        console.error('Favorite form toggle failed:', result?.error || 'Unknown error');
+        return;
+      }
+  
+      console.log(`Form ${formId} favorite status toggled successfully`, result);
+      // Optionally, update local state/UI here
+  
+    } catch (err) {
+      console.error('Error toggling favorite form:', err);
+    }
+  };
+  // Handler for toggling form status
+  const handleToggleStatus = async (formId) => {
+    console.log('Toggling status for form:', formId);
+    // Implement status toggle logic here
+    // This would typically involve an API call to update the form status
   };
 
   return (
@@ -344,17 +475,24 @@ const Home = () => {
         {selectedNav === 'integration' ? (
           <Integrations token={token} />
         ) : selectedNav === 'folders' ? (
-          <div className='w-[95%] h-[90%] mx-auto mt-4 rounded-xl shadow-xl flex flex-col py-5'>
+          <div className=' flex flex-col'>
             {/* <RecentFilesSlider
               recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
               onViewForm={handleEditForm}
             /> */}
             <FolderManager
               recentForms={[...formRecords].sort((a, b) => new Date(b.LastModifiedDate) - new Date(a.LastModifiedDate))}
-              handleCreateFolder={handleCreateFolder}
+              handleCreateFolder={handleCreateFolder} 
+              isCreating={isCreating}
+              onViewForm={handleEditForm}
+              onEditForm={handleEditForm}
+              onDeleteForm={handleDeleteForm}
+              onToggleStatus={handleToggleStatus}
             />
           </div>
-        ) : (
+        ) : selectedNav === 'fieldset' ? (
+          <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
+        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} /> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div
@@ -410,7 +548,7 @@ const Home = () => {
                 exit={{ opacity: 0, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} />
+                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleFavoriteForm={handleFavoriteForm} handleCloneForm={handleCloneForm} />
               </motion.div>
               {/* </AnimatePresence> */}
             </div>
@@ -418,17 +556,14 @@ const Home = () => {
         )}
       </div>
 
-     {/* Modal for selecting form creation option */}
+      {/* Modal for selecting form creation option */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
               <h2 className="form-title">Create New Form</h2>
               <button className="close-button-container" onClick={() => setIsModalOpen(false)}>
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M10 1.00714L8.99286 0L5 3.99286L1.00714 0L0 1.00714L3.99286 5L0 8.99286L1.00714 10L5 6.00714L8.99286 10L10 8.99286L6.00714 5L10 1.00714Z" fill="#5F6165"/>
-                      </svg>
-
+                <img src="/images/close_icon.svg" alt="Close" />
               </button>
             </div>
             <div className="divider"></div>
@@ -482,6 +617,28 @@ const Home = () => {
           ]}
         />
       )}
+      {isCloneFormNameOpen && (
+        <FormName
+          onClose={() => setIsCloneFormNameOpen(false)}
+          onSubmit={handleCloneFormSubmit}
+          fields={[
+            {
+              id: 'name',
+              label: 'Form Name',
+              type: 'text',
+              defaultValue: cloneFormNameDesc.name,
+              required: true,
+            },
+            {
+              id: 'description',
+              label: 'Description',
+              type: 'textarea',
+              defaultValue: cloneFormNameDesc.description,
+            },
+          ]}
+        />
+      )}
+
       {showCreateFormWizard && (
         <CreateFormWizard
           onClose={() => {

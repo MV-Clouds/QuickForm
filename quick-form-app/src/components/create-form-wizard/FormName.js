@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
+import './FormName.css'
 
-const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
+const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
+  const initialName = fields.find(f => f.id === 'name')?.defaultValue || '';
+  const initialDescription = fields.find(f => f.id === 'description')?.defaultValue || '';
   const { refreshData } = useSalesforceData();
-  const [formName, setFormName] = useState('');
-  const [formDescription, setFormDescription] = useState(''); // New state for description
+  const [formName, setFormName] = useState(initialName);
+  const [formDescription, setFormDescription] = useState(initialDescription); // New state for description
   const [formNameError, setFormNameError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
+  useEffect(() => {
+    setFormName(initialName);
+    setFormDescription(initialDescription);
+  }, [initialName, initialDescription]);
 
   const typeMapping = {
     string: ['shorttext'],
@@ -377,7 +384,12 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
       return;
     }
     setIsSaving(true);
-    setFormNameError(null);
+    setFormNameError(null)
+    
+    if (onSubmit) {
+      onSubmit({ name: formName, description: formDescription });
+      return;
+    }
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -414,7 +426,6 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
       if (hasValidObjectInfo) {
         // Create the mapping records
         const { nodes, mappings, edges } = prepareMappingData(newFormVersionId, objectInfo);
-        console.log('allFields :: ',allFields);
         
         // Update field mappings with actual form field IDs
         mappings.forEach((node) => {
@@ -487,21 +498,26 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Enter Form Details</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-        <div className="mb-4">
-          <label htmlFor="formName" className="block text-sm font-medium text-gray-700 mb-1">
-            Form Name <span className="text-red-500">*</span>
+  <div className="formdetails-modal-bg">
+    <div className="formdetails-modal-box">
+      <div className="formdetails-modal-header">
+        <div className="formdetails-modal-title">Enter Form Details</div>
+        <button
+          onClick={onClose}
+          className="formdetails-modal-close"
+          aria-label="Close"
+        >
+           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 1.00714L8.99286 0L5 3.99286L1.00714 0L0 1.00714L3.99286 5L0 8.99286L1.00714 10L5 6.00714L8.99286 10L10 8.99286L6.00714 5L10 1.00714Z" fill="#5F6165"/>
+                </svg>
+
+        </button>
+      </div>
+      <div className="form-container">
+      <div className="formdetails-modal-content">
+        <div>
+          <label htmlFor="formName" className="formdetails-modal-label">
+            Form Name <span className="required-star">*</span>
           </label>
           <input
             id="formName"
@@ -509,11 +525,12 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
             value={formName}
             onChange={(e) => setFormName(e.target.value)}
             placeholder="Enter form name"
-            className="w-full p-2 border rounded-md"
+            className="formdetails-modal-input"
+            autoFocus
           />
         </div>
-        <div className="mb-4">
-          <label htmlFor="formDescription" className="block text-sm font-medium text-gray-700 mb-1">
+        <div>
+          <label htmlFor="formDescription" className="formdetails-modal-label">
             Form Description
           </label>
           <textarea
@@ -521,23 +538,42 @@ const FormName = ({ onClose, fields = [], objectInfo = [] }) => {
             value={formDescription}
             onChange={(e) => setFormDescription(e.target.value)}
             placeholder="Enter form description"
-            className="w-full p-2 border rounded-md"
-            rows="4"
+            className="formdetails-modal-textarea"
+            rows={3}
+            style={{ resize: 'vertical' }}
           />
         </div>
-        {formNameError && <p className="text-red-500 text-sm mb-4">{formNameError}</p>}
-        <button
-          onClick={handleFormNameSubmit}
-          disabled={isSaving}
-          className={`w-full p-2 bg-blue-600 text-white rounded-md ${
-            isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
-          }`}
-        >
-          {isSaving ? 'Creating...' : 'Create Form'}
-        </button>
+        {formNameError && (
+          <div className="formdetails-modal-error">
+            {formNameError}
+          </div>
+        )}
+      </div>
+      </div>
+      <div className="formdetails-modal-actions">
+        <div className="cancel-button">
+          <button
+            onClick={onClose}
+            className="wizard-btn wizard-btn-secondary"
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+        <div className={` ${!formName.trim() ? 'next-button' : 'next-button-enabled'}`}>
+          <button
+            onClick={handleFormNameSubmit}
+            disabled={isSaving}
+            className="wizard-btn wizard-btn-primary"
+          >
+            {isSaving ? "Creating..." : "Create Form"}
+          </button>
+        </div>
       </div>
     </div>
-  );
+  </div>
+);
+
 };
 
 export default FormName;

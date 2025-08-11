@@ -7,13 +7,13 @@ import {
   getFilteredRowModel,
   flexRender,
 } from '@tanstack/react-table';
-import { List, Grid, Plus, PlusCircle, Filter, Search } from 'lucide-react';
+import { List, Grid, Plus, PlusCircle, Filter, Search, LayoutGrid } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import 'antd/dist/reset.css'; // For Ant Design v5+
 import { Select } from 'antd';
 const { Option } = Select;
 
-const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) => {
+const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, handleCloneForm }) => {
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
   const [columnVisibility, setColumnVisibility] = useState({});
@@ -82,7 +82,6 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) =
   // View form handler
   const handleViewForm = (formId) => {
     // Implement your view form logic here
-    console.log(`Viewing form ${formId}`);
     handleEditForm(forms.filter(val => val.Id == formId)[0]);
 
   };
@@ -148,21 +147,19 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) =
         <div className="flex items-center gap-4">
           <div className="flex rounded-lg border border-gray-300 p-1 bg-gray-50 shadow-sm">
             <button
-              className={`p-2 ${viewMode === 'table' ? 'text-white' : 'text-gray-700'}  rounded-lg transition-colors`}
+              className={`p-2 ${viewMode === 'table' ? 'text-white login-button' : 'text-gray-700'}   rounded-lg transition-colors`}
               onClick={() => setViewMode('table')}
-              style={{ background: `${viewMode === 'table' ? 'linear-gradient(to right, #0B295E, #1D6D9E)' : ''}` }}
             >
               <List className="h-4 w-4" />
             </button>
             <button
-              className={`p-2 ${viewMode === 'card' ? 'text-white' : 'text-gray-700'}  rounded-lg transition-colors`}
+              className={`p-2 ${viewMode === 'card' ? 'text-white login-button' : 'text-gray-700'}  rounded-lg transition-colors`}
               onClick={() => setViewMode('card')}
-              style={{ background: `${viewMode === 'card' ? 'linear-gradient(to right, #0B295E, #1D6D9E)' : ''}` }}
             >
-              <Grid className="h-4 w-4" />
+              <LayoutGrid className="h-4 w-4" />
             </button>
           </div>
-          <button className="flex items-center gap-2 rounded-lg px-4 py-2 text-white hover:shadow-md" style={{ background: 'linear-gradient(to right, #0B295E, #1D6D9E)' }} onClick={() => handleCreateForm()}>
+          <button className="login-button flex items-center gap-2 rounded-lg px-4 py-2 text-white hover:shadow-md"  onClick={() => handleCreateForm()}>
             <PlusCircle className="h-5 w-5" /> New Form
           </button>
         </div>
@@ -196,7 +193,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm }) =
                   </div>
 
                   {/* Form Preview Section - Left Side */}
-                  <div className="w-full sm:w-1/2 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 flex items-center justify-center" style={{ filter: 'brightness(0.7)' }}
+                  <div className="w-full sm:w-1/2 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 flex items-center justify-center" style={{ filter: 'brightness(0.75)' }}
                   >
                     <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm w-full transform group-hover:scale-[1.02] transition-transform duration-300">
                       <div className="text-center font-bold text-lg mb-3 text-gray-800 truncate">

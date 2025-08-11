@@ -17,8 +17,7 @@ import './Conditions.css';
 const { TabPane } = Tabs;
 const { Option } = Select;
 
-const Conditions = () => {
-  const { formVersionId } = useParams();
+const Conditions = ({ formVersionId }) => {
   const navigate = useNavigate();
   const [conditions, setConditions] = useState([]);
   const [fields, setFields] = useState([]);
@@ -995,16 +994,13 @@ const Conditions = () => {
   };
   return (
     <div className="flex h-screen bg-gray-100">
-      {showSidebar && (
+      {/* {showSidebar && (
         <motion.div
-          initial={{ x: -300 }}
-          animate={{ x: 0 }}
-          transition={{ duration: 0.5 }}
           className="w-64 bg-white shadow-lg"
         >
           <MainMenuBar formVersionId={formVersionId} />
         </motion.div>
-      )}
+      )} */}
       <motion.div
         variants={containerVariants}
         initial="hidden"

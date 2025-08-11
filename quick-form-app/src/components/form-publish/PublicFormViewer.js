@@ -36,6 +36,10 @@ function PublicFormViewer() {
   const signatureRefs = useRef({});
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState([]);
+  const [formConditions, setFormConditions] = useState([]);
+  const [loopCounters, setLoopCounters] = useState({});
+  const [loopInput, setLoopInput] = useState('');
+  const [localIdToSFId, setLocalIdToSFId] = useState({});
 
   useEffect(() => {
   const fetchFormData = async () => {
@@ -80,6 +84,22 @@ function PublicFormViewer() {
       }
       const formVersion = data.formVersion;
       setFormData(formVersion);
+      const localIdToSFId = {};
+      formVersion.Fields.forEach(field => {
+        const props = JSON.parse(field.Properties__c || '{}');
+        if (props.id && field.Id) {
+          localIdToSFId[props.id] = field.Id;
+        }
+      });
+      setLocalIdToSFId(localIdToSFId);
+      const parsedConditions = (formVersion.Conditions || []).map(c =>
+        c.Condition_Data__c ? (
+          typeof c.Condition_Data__c === 'string'
+            ? JSON.parse(c.Condition_Data__c)
+            : c.Condition_Data__c
+        ) : c
+      );
+      setFormConditions(parsedConditions);
 
       const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
         method: 'POST',
@@ -157,6 +177,7 @@ function PublicFormViewer() {
         .sort((a, b) => Number(a) - Number(b))
         .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
       setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
+      setLoopCounters({});
     } catch (error) {
       console.error('Error fetching form:', error);
       setFetchError(error.message || 'Failed to load form');
@@ -246,13 +267,15 @@ function PublicFormViewer() {
 
     formData.Fields.forEach((field) => {
       // For section fields, recursively validate their subfields
+      const fieldId = (typeof field.Properties__c === 'string' ? JSON.parse(field.Properties__c || '{}').id : field.Properties__c?.id) || field.Id;
+      const currentState = getFieldUiState(fieldId, formValues);
       const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
       if (field.Field_Type__c === "section" && properties.subFields) {
         if (properties.subFields.leftField) {
           const leftError = validateSingleField(
             properties.subFields.leftField,
             formValues[properties.subFields.leftField.id],
-            formValues, {signaturesObj: signatures}
+            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
           );
           if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
@@ -260,12 +283,12 @@ function PublicFormViewer() {
           const rightError = validateSingleField(
             properties.subFields.rightField,
             formValues[properties.subFields.rightField.id],
-            formValues, {signaturesObj: signatures}
+            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
           );
           if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
         }
       } else {
-        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures});
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }});
         if (error) newErrors[field.Id || properties.id] = error;
       }
     });
@@ -436,7 +459,7 @@ function PublicFormViewer() {
   // };
 
   // Utility: Validation for a single field (returns an error message string if invalid, or null if valid)
-  const validateSingleField = (field, value, allValues, {signaturesObj} = {}) => {
+  const validateSingleField = (field, value, allValues, {signaturesObj, uiState} = {}) => {
     let properties = {};
     if (field.Properties__c) {
       properties = typeof field.Properties__c === "string"
@@ -459,8 +482,7 @@ function PublicFormViewer() {
     });
     const fieldType = field.Field_Type__c || field.type;
     const fieldLabel = properties.label || field.Name || field.id || properties.id;
-    const isRequired = properties.isRequired;
-
+    const isRequired = properties.isRequired || uiState?.[properties.id || field.Id || field.id]?.required || false;
     // Required logic (handles most types including special cases)
     if (
       isRequired && 
@@ -483,7 +505,7 @@ function PublicFormViewer() {
     // Specialized validation cases
     switch (fieldType) {
       case "number":
-        if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
+        // if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
         if (properties.numberValueLimits?.enabled) {
           const numValue = parseFloat(value);
           const { min, max } = properties.numberValueLimits;
@@ -492,7 +514,7 @@ function PublicFormViewer() {
         }
         break;
       case "price":
-        if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
+        // if (value !== "" && isNaN(parseFloat(value))) return `${fieldLabel} must be a valid number`;
         if (properties.priceLimits?.enabled) {
           const numValue = parseFloat(value);
           const { min, max } = properties.priceLimits;
@@ -641,17 +663,89 @@ function PublicFormViewer() {
 
   setIsSubmitting(true);
   try {
+    const visiblePageIds = new Set(getVisiblePages(formValues).map(arr => `page_${arr[0].Page_Number__c}`));
+
+    // Filter out fields that belong to hidden pages
+    const filteredFormValues = {};
+    Object.keys(formValues).forEach(key => {
+      // Find field's page number from formData.Fields
+      const field = formData.Fields.find(f => (f.Id === key || (JSON.parse(f.Properties__c || '{}').id === key)));
+      if (!field) {
+        filteredFormValues[key] = formValues[key]; // Keep if field metadata not found (safer fallback)
+      } else {
+        const fieldPageId = `page_${field.Page_Number__c || 1}`;
+        if (visiblePageIds.has(fieldPageId)) {
+          filteredFormValues[key] = formValues[key];
+        }
+      }
+    });
     const submissionData = {};
     const filesToUpload = {};
 
-    for (const key of Object.keys(formValues)) {
+    const loopPageKeys = pages
+    .map(arr => {
+      const pageArr = arr;
+      const pageId = `page_${pageArr[0]?.Page_Number__c}`;
+      const loopCond = getLoopConditionForPage(pageArr, filteredFormValues);
+      return loopCond ? pageId : null;
+    })
+    .filter(Boolean);
+
+    const loopFieldsByPage = {};
+    loopPageKeys.forEach(pageId => {
+      // Get all fields on this page (including section subfields etc)
+      loopFieldsByPage[pageId] = pages.find(arr => `page_${arr[0]?.Page_Number__c}` === pageId)
+        .map(f => {
+          const properties = typeof f.Properties__c === "string" ? JSON.parse(f.Properties__c || "{}") : (f.Properties__c || {});
+          // Collect main field and subfields (e.g. for fullname, address)
+          let fieldIds = [f.Id || properties.id];
+          if (f.Field_Type__c === "phone" && properties.subFields?.countryCode?.enabled) {
+            fieldIds.push(`${f.Id || properties.id}_countryCode`);
+          }
+          if (f.Field_Type__c === "fullname" && properties.subFields) {
+            fieldIds = fieldIds.concat(
+              ["salutation", "first", "last"].map(sub => `${f.Id || properties.id}_${sub}`)
+            );
+          }
+          if (f.Field_Type__c === "address" && properties.subFields) {
+            fieldIds = fieldIds.concat(
+              ["street", "city", "state", "country", "postal"].map(sub => `${f.Id || properties.id}_${sub}`)
+            );
+          }
+          return fieldIds;
+        })
+        .flat();
+    });
+
+    // Move answers of loop pages from root to loop array
+    loopPageKeys.forEach(loopKey => {
+      const loopArray = filteredFormValues[`${loopKey}_loop`];
+      if (!Array.isArray(loopArray)) return;
+      // Each element of the loop is a set of values for this page's fields
+      submissionData[`${loopKey}_loop`] = loopArray.map(ansSet => {
+        // Each ansSet is a map of (fieldId: value) only for that loop round.
+        // For consistency, also copy any subfields for e.g. phone, fullname, address.
+        const obj = {};
+        loopFieldsByPage[loopKey].forEach(fid => {
+          if (ansSet[fid] !== undefined) obj[fid] = ansSet[fid];
+        });
+        return obj;
+      });
+      // Remove these fields from root: do not store latest loop round separately
+      loopFieldsByPage[loopKey].forEach(fid => {
+        if (submissionData[fid] !== undefined) delete submissionData[fid];
+        if (submissionData[`${fid}_countryCode`] !== undefined) delete submissionData[`${fid}_countryCode`];
+      });
+    });
+
+    for (const key of Object.keys(filteredFormValues)) {
       const field = formData.Fields.find((f) => f.Id === key);
       const fieldType = field?.Field_Type__c;
       const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
-      if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-        filesToUpload[key] = formValues[key];
-        submissionData[key] = formValues[key].name;
+      if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
+        filesToUpload[key] = filteredFormValues[key];
+        submissionData[key] = filteredFormValues[key].name;
       } else if (fieldType === 'signature' && signatures[key]) {
         const signatureBlob = await (await fetch(signatures[key])).blob();
         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
@@ -660,8 +754,8 @@ function PublicFormViewer() {
       } else if (fieldType === 'phone' && !key.endsWith('_countryCode')) {
         // Handle phone fields
         if (properties.subFields?.countryCode?.enabled) {
-          const countryCode = formValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
-          const phoneNumber = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+          const countryCode = filteredFormValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
+          const phoneNumber = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
           try {
             const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
             if (phoneObj && phoneObj.isValid()) {
@@ -681,13 +775,13 @@ function PublicFormViewer() {
           }
         } else {
           // For phone fields without country code subfield, clean to digits
-          submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
+          submissionData[key] = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
         }
       } else if (key.endsWith('_countryCode')) {
         // Country code is already handled above
         continue;
       } else {
-        submissionData[key] = formValues[key];
+        submissionData[key] = filteredFormValues[key];
       }
     }
 
@@ -855,6 +949,232 @@ function PublicFormViewer() {
   }
 };
 
+  const evaluateCondition = (condition, values, loopArrayKey = null) => {
+    if (!condition) return false;
+    
+    // Helper for getting a field value, including from loop arrays
+    function getValueForField(fieldId) {
+      // Try direct value
+      const plainValue = values[localIdToSFId[fieldId] || fieldId];
+      if (plainValue !== undefined) return plainValue;
+
+      // Search all page_x_loop keys for this field in any iteration if not found
+      const loopVals = Object.keys(values)
+        .filter(key => key.endsWith('_loop') && Array.isArray(values[key]))
+        .flatMap(loopKey =>
+          values[loopKey]
+            .map(iteration => iteration[localIdToSFId[fieldId] || fieldId])
+            .filter(v => v !== undefined)
+        );
+      // If found in any loop, return the array (for some/any logic)
+      if (loopVals.length) return loopVals;
+      return undefined;
+    }
+
+    // Evaluate each subcondition
+    const condBools = (condition.conditions || []).map((cond) => {
+      let val = getValueForField(cond.ifField);
+      // If val is an array (loop), match any iteration meeting the condition
+      if (Array.isArray(val)) {
+        return val.some(itVal => {
+          switch (cond.operator) {
+            case 'equals': return itVal === cond.value;
+            case 'not equals': return itVal !== cond.value;
+            case 'contains': return (itVal || '').toLowerCase().includes((cond.value || '').toLowerCase());
+            case 'does not contain': return !(itVal || '').toLowerCase().includes((cond.value || '').toLowerCase());
+            case 'greater than': return Number(itVal) > Number(cond.value);
+            case 'greater than or equal to': return Number(itVal) >= Number(cond.value);
+            case 'smaller than': return Number(itVal) < Number(cond.value);
+            case 'smaller than or equal to': return Number(itVal) <= Number(cond.value);
+            case 'is null': return itVal == null || itVal === '';
+            case 'is not null': return itVal != null && itVal !== '';
+            default: return false;
+          }
+        });
+      } else {
+        // Not a loop field
+        switch (cond.operator) {
+          case 'equals': return val === cond.value;
+          case 'not equals': return val !== cond.value;
+          case 'contains': return (val || '').toLowerCase().includes((cond.value || '').toLowerCase());
+          case 'does not contain': return !(val || '').toLowerCase().includes((cond.value || '').toLowerCase());
+          case 'greater than': return Number(val) > Number(cond.value);
+          case 'greater than or equal to': return Number(val) >= Number(cond.value);
+          case 'smaller than': return Number(val) < Number(cond.value);
+          case 'smaller than or equal to': return Number(val) <= Number(cond.value);
+          case 'is null': return val == null || val === '';
+          case 'is not null': return val != null && val !== '';
+          default: return false;
+        }
+      }
+    });
+
+    // Logic handling (unchanged)
+    if (condition.logic === 'Custom' && condition.logicExpression) {
+      let expr = condition.logicExpression;
+      condBools.forEach((v, idx) => {
+        expr = expr.replace(new RegExp(`\\b${idx + 1}\\b`, 'g'), v ? 'true' : 'false');
+      });
+      try {
+        expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||').replace(/[^truefals()&|! ]/gi, '');
+        // eslint-disable-next-line no-eval
+        return eval(expr);
+      } catch { return false; }
+    }
+    if (condition.logic === 'OR') return condBools.some(Boolean);
+    return condBools.every(Boolean);
+  };
+
+
+
+  const getVisiblePages = (formValues) => {
+    let visiblePages = [...pages];
+    // Hide logic
+    formConditions.filter(c => c.type === 'skip_hide_page' && c.thenAction === 'hide').forEach(condition => {
+      if (evaluateCondition(condition, formValues)) {
+        (condition.targetPage || []).forEach(pid => {
+          visiblePages = visiblePages.filter(pageArr =>
+            pageArr[0]?.Page_Number__c
+              ? `page_${pageArr[0].Page_Number__c}` !== pid
+              : true
+          );
+        });
+      }
+    });
+    // "Loop" handled in navigation logic below
+    return visiblePages;
+  };
+  
+  const getFieldAllowedOptions = (fieldId, formValues) => {
+    let allowed = null;
+    formConditions.filter(c => c.type === 'dependent' && (localIdToSFId[c.dependentField] || c.dependentField) === fieldId).forEach(cond => {
+      const sourceFieldId = localIdToSFId[cond.ifField] || cond.ifField;
+      const sourceValue = formValues[sourceFieldId];
+      if (sourceValue === cond.value || (Array.isArray(cond.value) && cond.value.includes(sourceValue))) {
+        allowed = Array.isArray(cond.dependentValues) ? cond.dependentValues : [];
+      }
+    });
+    return allowed;
+  };
+
+
+  const getFieldUiState = (fieldId, formValues) => {
+    let state = { hidden: false, required: false, mask: null, disabled: false };
+    formConditions.forEach(c => {
+      if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
+        if (evaluateCondition(c, formValues)) {
+          if (c.thenAction === 'show') state.hidden = false;
+          if (c.thenAction === 'hide') state.hidden = true;
+        }
+      }
+      if (c.type === 'enable_require_mask' && c.thenFields?.includes(fieldId)) {
+        if (evaluateCondition(c, formValues)) {
+          if (c.thenAction === 'require') state.required = true;
+          if (c.thenAction === "don't require") state.required = false;
+          if (c.thenAction === 'set mask') state.mask = c.maskPattern;
+          if (c.thenAction === 'unmask') state.mask = null;
+          if (c.thenAction === 'enable') state.disabled = false;
+          if (c.thenAction === 'disable') state.disabled = true;
+        }
+      }
+    });
+    return state;
+  };
+  const getNextPageIndex = (currentIdx, formValues) => {
+  // Evaluate for "skip to"
+  let idx = currentIdx;
+  // NOTE: skip conditions ONLY apply on current page
+  const skipConditions = formConditions
+    .filter(c => c.type === 'skip_hide_page' && c.sourcePage === `page_${pages[currentIdx][0].Page_Number__c}` && c.thenAction === 'skip to');
+  for (const cond of skipConditions) {
+    if (evaluateCondition(cond, formValues)) {
+      // Find index of the targetPage
+      const targetIdx = pages.findIndex(
+        arr => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
+      );
+      if (targetIdx !== -1) return targetIdx;
+    }
+  }
+  // Normal next, just +1 for visible pages
+  const visible = getVisiblePages(formValues);
+    const myId = `page_${pages[currentIdx][0].Page_Number__c}`;
+    const idxInVisible = visible.findIndex(arr => `page_${arr[0].Page_Number__c}` === myId);
+    if (idxInVisible !== -1 && idxInVisible < visible.length - 1) {
+      const nextPageId = `page_${visible[idxInVisible + 1][0].Page_Number__c}`;
+      return pages.findIndex(arr => `page_${arr[0].Page_Number__c}` === nextPageId);
+    }
+    return currentIdx; // stay if at end
+  };
+  const getPrevPageIndex = (currentIdx, formValues) => {
+    // Always allow "back" unless already on first page
+    const visible = getVisiblePages(formValues);
+    const myId = `page_${pages[currentIdx][0].Page_Number__c}`;
+    const idxInVisible = visible.findIndex(arr => `page_${arr[0].Page_Number__c}` === myId);
+    if (idxInVisible > 0) {
+      const prevPageId = `page_${visible[idxInVisible - 1][0].Page_Number__c}`;
+      return pages.findIndex(arr => `page_${arr[0].Page_Number__c}` === prevPageId);
+    }
+    return currentIdx;
+  };
+
+  useEffect(() => {
+    const currentPageArr = pages[currentPage];
+    const currentPageId = `page_${currentPageArr?.[0]?.Page_Number__c}`;
+    const loopCond = getLoopConditionForPage(currentPageArr, formValues);
+    const isLoopPage = !!loopCond;
+
+    if (isLoopPage) {
+      let n = 1;
+      if (loopCond.loopType === 'field' && loopCond.loopField && formValues[localIdToSFId[loopCond.loopField]]) {
+        n = Number(formValues[localIdToSFId[loopCond.loopField]]) || 1;
+        n = Math.max(1, n);
+      } else if (loopCond.loopType === 'static' && loopCond.loopValue) {
+        n = Number(loopCond.loopValue) || 1;
+        n = Math.max(1, n);
+      }
+      // Only update if count changed or never set (so unintentionally navigating doesn't reset progress)
+      if (
+        !loopCounters[currentPageId] ||
+        loopCounters[currentPageId].count !== n ||
+        !loopCounters[currentPageId].set
+      ) {
+        setLoopCounters(lc => ({
+          ...lc,
+          [currentPageId]: { count: n, index: 0, answers: [], set: true }
+        }));
+      }
+    }
+  // eslint-disable-next-line
+  }, [currentPage, pages, formValues]);
+
+
+  // Remove formValues for hidden pages/fields
+  useEffect(() => {
+    // When currentPage/formValues changes
+    const visible = getVisiblePages(formValues);
+    const visiblePageIds = new Set(visible.map(arr => `page_${arr[0].Page_Number__c}`));
+    // Remove answers to hidden pages
+    const toRemove = [];
+    pages.forEach(pageArr => {
+      const pid = `page_${pageArr[0].Page_Number__c}`;
+      if (!visiblePageIds.has(pid)) {
+        pageArr.forEach(field => toRemove.push(field.Id || field.id));
+      }
+    });
+    
+  }, [currentPage, formConditions]);
+
+  const getLoopConditionForPage = (pageArr, values) => {
+    if(!pageArr) return null;
+    const pageId = `page_${pageArr[0]?.Page_Number__c}`;
+    const cond = formConditions.find(
+      c => c.type === 'skip_hide_page' && c.thenAction === 'loop'
+        && (Array.isArray(c.targetPage) ? c.targetPage.includes(pageId) : c.targetPage === pageId)
+    );
+    if (cond && evaluateCondition(cond, values)) return cond;
+    return null;
+  };
+
   const handleNextPage = (e) => {
     e.preventDefault();
     if (!formData) return;
@@ -862,14 +1182,17 @@ function PublicFormViewer() {
     const currentFields = pages[currentPage] || [];
     const newErrors = {};
 
+    // Validate current iteration or page fields
     currentFields.forEach((field) => {
+      const fieldId = (typeof field.Properties__c === 'string' ? JSON.parse(field.Properties__c || '{}').id : field.Properties__c?.id) || field.Id;
+      const currentState = getFieldUiState(fieldId, formValues);
       const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
       if (field.Field_Type__c === "section" && properties.subFields) {
         if (properties.subFields.leftField) {
           const leftError = validateSingleField(
             properties.subFields.leftField,
             formValues[properties.subFields.leftField.id],
-            formValues, {signaturesObj: signatures}
+            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
           );
           if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
@@ -877,12 +1200,12 @@ function PublicFormViewer() {
           const rightError = validateSingleField(
             properties.subFields.rightField,
             formValues[properties.subFields.rightField.id],
-            formValues, {signaturesObj: signatures}
+            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
           );
           if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
         }
       } else {
-        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures});
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }});
         if (error) newErrors[field.Id || properties.id] = error;
       }
     });
@@ -891,6 +1214,7 @@ function PublicFormViewer() {
       setErrors((prev) => ({ ...prev, ...newErrors }));
       return newErrors;
     } else {
+      // Clear errors for current fields
       setErrors((prev) => {
         const updatedErrors = { ...prev };
         currentFields.forEach((field) => {
@@ -899,15 +1223,186 @@ function PublicFormViewer() {
         });
         return updatedErrors;
       });
-      if (currentPage < pages.length - 1) {
+
+      if (isLoopPage) {
+        // Save answers for this loop instance
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        // Save current iteration answers including subfields
+        const loopValues = {};
+        pageFields.forEach(f => {
+          loopValues[f] = formValues[f];
+          Object.keys(formValues).forEach(key => {
+            if (key.startsWith(`${f}_`)) {
+              loopValues[key] = formValues[key];
+            }
+          });
+        });
+
+        // Update answers array with current iteration
+        const newAnswers = [...currentLoopState.answers];
+        newAnswers[currentLoopState.index] = { ...loopValues };
+
+        // If not last iteration, move to next iteration
+        if (currentLoopState.index < currentLoopState.count - 1) {
+          // Move to next round of this page
+          setLoopCounters(lc => ({
+            ...lc,
+            [currentPageId]: {
+              ...currentLoopState,
+              index: currentLoopState.index + 1,
+              answers: newAnswers
+            }
+          }));
+          // Load next iteration answers into formValues or clear if none saved
+          setFormValues(prevFormValues => {
+            
+            const nextIterationVals = newAnswers[currentLoopState.index + 1] || {};
+            const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+            const updatedFormValues = { ...prevFormValues };
+            
+            // Clear the loop page fields and their subfields in formValues
+            pageFields.forEach(f => {
+              delete updatedFormValues[f];
+              Object.keys(updatedFormValues).forEach(key => {
+                if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
+              });
+            });
+            
+            // Overwrite with next iteration values
+            Object.assign(updatedFormValues, nextIterationVals);
+            
+            return updatedFormValues;
+          });
+
+          return;
+        } else {
+          // On last iteration, update answers
+          setLoopCounters(lc => ({
+            ...lc,
+            [currentPageId]: { ...currentLoopState, answers: newAnswers }
+          }));
+
+          // Save loop answers array in formValues with cleanup of individual loop fields
+          setFormValues(vals => {
+            const cleanedVals = { ...vals };
+            pageFields.forEach(f => {
+              delete cleanedVals[f];
+              Object.keys(cleanedVals).forEach(key => {
+                if (key.startsWith(`${f}_`)) delete cleanedVals[key];
+              });
+            });
+            cleanedVals[`${currentPageId}_loop`] = newAnswers;
+            return cleanedVals;
+          });
+
+          // Proceed to next page below
+        }
+      }
+
+      const nextIdx = getNextPageIndex(currentPage, formValues);
+      if (nextIdx !== currentPage) {
+        setCurrentPage(nextIdx);
+      } else if (currentPage < pages.length - 1) {
         setCurrentPage(currentPage + 1);
       }
     }
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
+    if (isLoopPage && currentLoopState.index > 0) {
+      // Save current iteration answers before going back
+      const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+      const loopValues = {};
+      pageFields.forEach(f => {
+        loopValues[f] = formValues[f];
+        Object.keys(formValues).forEach(key => {
+          if (key.startsWith(`${f}_`)) {
+            loopValues[key] = formValues[key];
+          }
+        });
+      });
+      const newAnswers = [...currentLoopState.answers];
+      newAnswers[currentLoopState.index] = { ...loopValues };
+
+      // Move to previous iteration and load
+      setLoopCounters(lc => ({
+        ...lc,
+        [currentPageId]: {
+          ...currentLoopState,
+          index: currentLoopState.index - 1,
+          answers: newAnswers
+        }
+      }));
+
+      // Load previous iteration answers (or empty)
+      setFormValues(prevFormValues => {
+        const prevIterationVals = newAnswers[currentLoopState.index - 1] || {};
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const updatedFormValues = { ...prevFormValues };
+        
+        // Clear the loop page fields and their subfields in formValues
+        pageFields.forEach(f => {
+          delete updatedFormValues[f];
+          Object.keys(updatedFormValues).forEach(key => {
+            if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
+          });
+        });
+        
+        // Overwrite with previous iteration values
+        Object.assign(updatedFormValues, prevIterationVals);
+        
+        return updatedFormValues;
+      });
+
+    } else {
+      // Normal page back, save current iteration first if loop page
+      if (isLoopPage) {
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const loopValues = {};
+        pageFields.forEach(f => {
+          loopValues[f] = formValues[f];
+          Object.keys(formValues).forEach(key => {
+            if (key.startsWith(`${f}_`)) {
+              loopValues[key] = formValues[key];
+            }
+          });
+        });
+        const newAnswers = [...currentLoopState.answers];
+        newAnswers[currentLoopState.index] = { ...loopValues };
+        setLoopCounters(lc => ({
+          ...lc,
+          [currentPageId]: { ...currentLoopState, answers: newAnswers }
+        }));
+      }
+
+      const prevIdx = getPrevPageIndex(currentPage, formValues);
+      if (prevIdx !== currentPage) {
+        setCurrentPage(prevIdx);
+        // Load first iteration answers of that new page if loop page
+        const newPageId = `page_${pages[prevIdx]?.[0]?.Page_Number__c}`;
+        const newLoopState = loopCounters[newPageId];
+        if (newLoopState && newLoopState.count > 0) {
+          setFormValues(prevFormValues => {
+            const iterationVals = newLoopState.answers[newLoopState.index] || {};
+            const pageFields = (pages[prevIdx] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+            const updatedFormValues = { ...prevFormValues };
+
+            // Clear the loop page fields and their subfields in formValues
+            pageFields.forEach(f => {
+              delete updatedFormValues[f];
+              Object.keys(updatedFormValues).forEach(key => {
+                if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
+              });
+            });
+
+            // Merge in the iteration's answers
+            Object.assign(updatedFormValues, iterationVals);
+
+            return updatedFormValues;
+          });
+
+        }
+      }
     }
   };
 
@@ -919,16 +1414,35 @@ function PublicFormViewer() {
     return <div className="text-center p-4">Loading form...</div>;
   }
 
+  const currentPageId = `page_${pages[currentPage]?.[0]?.Page_Number__c}`;
+  const loopCond = getLoopConditionForPage(pages[currentPage], formValues);
+  const isLoopPage = !!loopCond;
+
+  let currentLoopState = loopCounters[currentPageId] || { count: 1, index: 0, answers: [] };
+  const inLoop = isLoopPage && currentLoopState.count > 0;
+  function convertUserMaskToInputMask(mask) {
+    if (!mask) return '';
+    return mask
+      .replace(/@/g, 'a')
+      .replace(/#/g, '9')
+      // '*' stays the same
+      ;
+  }
   const renderField = (field) => {
     const properties = JSON.parse(field.Properties__c || '{}');
+    const state = getFieldUiState(properties.id || field.Id || field.id, formValues);
+    const isHidden = state.hidden || properties.isHidden;
+    if (isHidden) return null;
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
-    const isDisabled = properties.isDisabled || false;
-    const isRequired = properties.isRequired;
+    const isDisabled = properties.isDisabled || state.disabled || false;
+    const isRequired = properties.isRequired || state.required;
     const hasError = !!errors[fieldId];
     const helpText = properties.showHelpText ? properties.helpText : null;
     const labelAlignment = properties.labelAlignment || 'top';
+    const inputMask = state.mask || properties.maskPattern || null;
+    const mask = convertUserMaskToInputMask(inputMask);
 
     const commonProps = {
       id: fieldId,
@@ -969,7 +1483,7 @@ function PublicFormViewer() {
 
     switch (fieldType) {
       case 'shorttext':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -978,20 +1492,46 @@ function PublicFormViewer() {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            <input
-              type="text"
-              {...commonProps}
-              value={formValues[fieldId] || ''}
-              onChange={(e) => handleChange(fieldId, e.target.value)}
-              placeholder={properties.placeholder?.main || ''}
-              maxLength={properties.shortTextMaxChars}
-            />
+            {mask ? (
+              <>
+                <InputMask
+                  mask={mask}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  disabled={isDisabled}
+                  maskPlaceholder=" "
+                >
+                  {(inputProps) => (
+                    <input
+                      type="text"
+                      {...commonProps}
+                      {...inputProps}
+                      maxLength={properties.shortTextMaxChars}
+                      disabled={isDisabled}
+                    />
+                  )}
+                </InputMask>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+              </>
+            ) : (
+              <input
+                type="text"
+                {...commonProps}
+                value={formValues[fieldId] || ''}
+                onChange={(e) => handleChange(fieldId, e.target.value)}
+                placeholder={properties.placeholder?.main || ''}
+                maxLength={properties.shortTextMaxChars}
+                disabled={isDisabled}
+              />
+            )}
             {renderError()}
           </div>
         );
 
+
       case 'longtext':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1000,7 +1540,30 @@ function PublicFormViewer() {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            {properties.isRichText ? (
+            {mask ? (
+              <>
+                <InputMask
+                  mask={mask}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  disabled={isDisabled}
+                  maskPlaceholder=" "
+                >
+                  {(inputProps) => (
+                    <input
+                      type="text"  // use text input for masked longtext
+                      {...commonProps}
+                      {...inputProps}
+                      disabled={isDisabled}
+                      maxLength={properties.longTextMaxChars}
+                      style={{ minHeight: '4rem' }} // optional, keeps textarea height similar
+                    />
+                  )}
+                </InputMask>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+              </>
+            ) : properties.isRichText ? (
               <ReactQuill
                 theme="snow"
                 value={formValues[fieldId] || ''}
@@ -1008,21 +1571,23 @@ function PublicFormViewer() {
                 readOnly={isDisabled}
                 placeholder={properties.placeholder?.main || ''}
                 modules={{
-                  toolbar: isDisabled ? false : [
-                    ['bold', 'italic', 'underline', 'strike'],
-                    ['blockquote', 'code-block'],
-                    [{ 'header': 1 }, { 'header': 2 }],
-                    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                    [{ 'script': 'sub'}, { 'script': 'super' }],
-                    [{ 'indent': '-1'}, { 'indent': '+1' }],
-                    [{ 'direction': 'rtl' }],
-                    [{ 'size': ['small', false, 'large', 'huge'] }],
-                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                    [{ 'color': [] }, { 'background': [] }],
-                    [{ 'font': [] }],
-                    [{ 'align': [] }],
-                    ['clean']
-                  ]
+                  toolbar: isDisabled
+                    ? false
+                    : [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        ['blockquote', 'code-block'],
+                        [{ header: 1 }, { header: 2 }],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        [{ script: 'sub' }, { script: 'super' }],
+                        [{ indent: '-1' }, { indent: '+1' }],
+                        [{ direction: 'rtl' }],
+                        [{ size: ['small', false, 'large', 'huge'] }],
+                        [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                        [{ color: [] }, { background: [] }],
+                        [{ font: [] }],
+                        [{ align: [] }],
+                        ['clean'],
+                      ],
                 }}
               />
             ) : (
@@ -1033,14 +1598,16 @@ function PublicFormViewer() {
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.longTextMaxChars}
+                disabled={isDisabled}
               />
             )}
+
             {renderError()}
           </div>
         );
 
       case 'number':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         const containerClass =
         labelAlignment === 'center'
           ? 'text-center'
@@ -1055,21 +1622,48 @@ function PublicFormViewer() {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            <input
-              type="number"
-              {...commonProps}
-              value={formValues[fieldId] || ''}
-              onChange={(e) => handleChange(fieldId, e.target.value)}
-              placeholder={properties.placeholder?.main || ''}
-              min={properties.numberValueLimits?.min}
-              max={properties.numberValueLimits?.max}
-            />
+            {mask ? (
+              <>
+                <InputMask
+                  mask={mask}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  disabled={isDisabled}
+                  maskPlaceholder=" "
+                >
+                  {(inputProps) => (
+                    <input
+                      type="text" // force text input for masked number field
+                      {...commonProps}
+                      {...inputProps}
+                      min={properties.numberValueLimits?.min}
+                      max={properties.numberValueLimits?.max}
+                      disabled={isDisabled}
+                    />
+                  )}
+                </InputMask>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+              </>
+            ) : (
+              <input
+                type="number"
+                {...commonProps}
+                value={formValues[fieldId] || ''}
+                onChange={(e) => handleChange(fieldId, e.target.value)}
+                placeholder={properties.placeholder?.main || ''}
+                min={properties.numberValueLimits?.min}
+                max={properties.numberValueLimits?.max}
+                disabled={isDisabled}
+              />
+            )}
+
             {renderError()}
           </div>
         );
 
       case 'price':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1080,23 +1674,51 @@ function PublicFormViewer() {
             )}
             <div className="flex items-center gap-2">
               <span className="text-gray-700">{properties.currencyType || 'USD'}</span>
-              <input
-                type="number"
-                {...commonProps}
-                step="0.01"
-                value={formValues[fieldId] || ''}
-                onChange={(e) => handleChange(fieldId, e.target.value)}
-                placeholder={properties.placeholder?.main || ''}
-                min={properties.priceLimits?.min}
-                max={properties.priceLimits?.max}
-              />
+              {mask ? (
+                <>
+                  <InputMask
+                    mask={mask}
+                    value={formValues[fieldId] || ''}
+                    onChange={(e) => handleChange(fieldId, e.target.value)}
+                    placeholder={properties.placeholder?.main || ''}
+                    disabled={isDisabled}
+                    maskPlaceholder=" "
+                  >
+                    {(inputProps) => (
+                      <input
+                        type="text" // force text input for masked field
+                        {...commonProps}
+                        {...inputProps}
+                        step="0.01"
+                        min={properties.priceLimits?.min}
+                        max={properties.priceLimits?.max}
+                        disabled={isDisabled}
+                      />
+                    )}
+                  </InputMask>
+                  <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
+                </>
+              ) : (
+                <input
+                  type="number"
+                  {...commonProps}
+                  step="0.01"
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ''}
+                  min={properties.priceLimits?.min}
+                  max={properties.priceLimits?.max}
+                  disabled={isDisabled}
+                />
+              )}
+
             </div>
             {renderError()}
           </div>
         );
 
       case 'email':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1112,6 +1734,7 @@ function PublicFormViewer() {
               onChange={(e) => handleChange(fieldId, e.target.value)}
               placeholder={properties.placeholder?.main || 'example@domain.com'}
               maxLength={properties.maxChars}
+              disabled={isDisabled}
             />
             {properties.enableConfirmation && (
               <div className="mt-2">
@@ -1139,7 +1762,7 @@ function PublicFormViewer() {
         );
 
       case 'phone':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
         let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
         try {
@@ -1195,7 +1818,7 @@ function PublicFormViewer() {
                   />
                 </div>
               </div>
-            ) : (
+            ) : mask ? (
               <InputMask
                 mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
                 value={formValues[fieldId] || ''}
@@ -1204,13 +1827,23 @@ function PublicFormViewer() {
                 placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
               />
-            )}
+            ): (
+                <input
+                  type="text"
+                  {...commonProps}
+                  value={formValues[fieldId] || ''}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+                  disabled={isDisabled}
+                />
+              )
+            }
             {renderError()}
           </div>
         );
 
       case 'date':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1266,7 +1899,7 @@ function PublicFormViewer() {
         );
 
       case 'datetime':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1311,7 +1944,7 @@ function PublicFormViewer() {
         );
 
       case 'time':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1350,7 +1983,7 @@ function PublicFormViewer() {
         );
 
       case 'checkbox':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             <label className={labelClass}>
@@ -1384,7 +2017,7 @@ function PublicFormViewer() {
         );
 
       case 'radio':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             <label className={labelClass}>
@@ -1415,7 +2048,9 @@ function PublicFormViewer() {
         );
 
       case 'dropdown':
-        if (properties.isHidden) return null;
+        const allowedOptions = getFieldAllowedOptions(fieldId, formValues);
+        const fieldOptions = allowedOptions || (properties.options || []);
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1433,10 +2068,8 @@ function PublicFormViewer() {
               disabled={isDisabled}
               className={`w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
             >
-              {(properties.options || []).map((option, idx) => (
-                <Option key={option} value={option}>
-                  {option}
-                </Option>
+              {fieldOptions.map((option, idx) => (
+                <Option key={option} value={option}>{option}</Option>
               ))}
             </Select>
             {renderError()}
@@ -1444,7 +2077,7 @@ function PublicFormViewer() {
         );
 
       case 'fileupload':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1476,7 +2109,7 @@ function PublicFormViewer() {
         );
 
       case 'imageuploader':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1510,7 +2143,7 @@ function PublicFormViewer() {
         );
 
       case 'toggle':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             <div className="flex items-center">
@@ -1536,7 +2169,7 @@ function PublicFormViewer() {
         );
 
       case 'fullname':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1582,7 +2215,7 @@ function PublicFormViewer() {
         );
 
       case 'address':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1667,7 +2300,7 @@ function PublicFormViewer() {
         );
 
       case 'signature':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4 flex flex-col items-start">
             {renderLabel()}
@@ -1711,7 +2344,7 @@ function PublicFormViewer() {
         );
 
       case 'terms':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             <div className="flex items-start">
@@ -1749,7 +2382,7 @@ function PublicFormViewer() {
         );
 
       case 'displaytext':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             <div
@@ -1762,7 +2395,7 @@ function PublicFormViewer() {
         );
 
       case 'header':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-6">
             <h2 className={`text-2xl font-bold text-gray-800 ${
@@ -1776,7 +2409,7 @@ function PublicFormViewer() {
         );
 
       case 'rating':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         const ratingRange = properties.ratingRange || 5;
         const ratingOptions = {
           emoji: Array.from({ length: ratingRange }, (_, i) => ({
@@ -1815,7 +2448,7 @@ function PublicFormViewer() {
             )}
             <div className="flex flex-col gap-4">
               <div className="flex gap-2">
-                {ratingOptions[properties.ratingType || 'star'].map((option, idx) => (
+                {ratingOptions[properties.ratingType || 'emoji'].map((option, idx) => (
                   <button
                     key={option.value}
                     type="button"
@@ -1839,7 +2472,7 @@ function PublicFormViewer() {
               </div>
               {selectedRatings[fieldId] && (
                 <p className="text-sm text-gray-600">
-                  Selected: {ratingOptions[properties.ratingType || 'star'].find(o => o.value === selectedRatings[fieldId])?.label}
+                  Selected: {ratingOptions[properties.ratingType || 'emoji'].find(o => o.value === selectedRatings[fieldId])?.label}
                 </p>
               )}
             </div>
@@ -1848,7 +2481,7 @@ function PublicFormViewer() {
         );
 
       case 'scalerating':
-      if (properties.isHidden) return null;
+      if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1894,11 +2527,11 @@ function PublicFormViewer() {
         );
 
       case 'divider':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return <hr className="border-gray-300 my-4" />;
 
       case 'formcalculation':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1919,7 +2552,7 @@ function PublicFormViewer() {
         );
 
       case 'link':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -1940,7 +2573,7 @@ function PublicFormViewer() {
         );
 
       case 'section':
-        if (properties.isHidden) return null;
+        if (isHidden) return null;
         
         // Parse the subFields from properties
         const leftFieldProps = properties.subFields?.leftField;
@@ -1993,7 +2626,7 @@ function PublicFormViewer() {
         return null;
     }
   };
-
+  const visiblePages = getVisiblePages(formValues);
   return (
   <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
     <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
@@ -2023,7 +2656,7 @@ function PublicFormViewer() {
         ) : ''}
 
         <span className="text-gray-600">
-          Page {currentPage + 1} of {pages.length}
+          Page {visiblePages.findIndex(arr => arr === pages[currentPage]) + 1} of {visiblePages.length}
         </span>
 
         {/* Show Next or Submit button */}

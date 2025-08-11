@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { MdUndo, MdRedo } from 'react-icons/md';
-import { FaEye } from 'react-icons/fa';
+import { FaRegStar } from 'react-icons/fa';
+import { BsStack } from "react-icons/bs";
+import { IoIosUndo } from "react-icons/io";
+import { Tooltip, Whisper } from 'rsuite';
 import useUndo from 'use-undo';
 import FormBuilder from './FormBuilder';
 import Sidebar from './Sidebar';
@@ -9,10 +11,13 @@ import MainMenuBar from './MainMenuBar';
 import FieldEditor from './FieldEditor';
 import 'rsuite/dist/rsuite.min.css';
 import { encrypt } from './crypto';
-import MappingFields from '../form-mapping/MappingFields'
+import MappingFields from '../form-mapping/MappingFields';
+import formbuilder from './formbuilder.css';
 import { useSalesforceData } from '../Context/MetadataContext';
-import ThankYouPageBuilder from '../Thankyou/TY';
-import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js'
+import ThankYouPageBuilder from '../Thankyou/TY2';
+import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js';
+import Conditions from '../conditions/Conditions'; // Or your actual path
+
 const themes = [
   {
     name: 'Remove Theme'
@@ -79,7 +84,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
+function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition}) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -96,24 +101,21 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
   const [currentFormVersion, setCurrentFormVersion] = useState(null);
   const navigate = useNavigate();
   const [showFormNamePopup, setShowFormNamePopup] = useState(!formVersionId);
-  const [formName, setFormName] = useState('');
+  // const [formName, setFormName] = useState('');
+  const [formName, setFormName] = useState(currentFormVersion?.Name || '');
   const [formNameError, setFormNameError] = useState(null);
+  const [showVersionDropdown, setShowVersionDropdown] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState(themes[0]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const [formRecords, setFormRecords] = useState([]);
 
   const [
     fieldsState,
     { set: setFields, undo, redo, canUndo, canRedo },
-  ] = useUndo([
-    {
-      id: 'default-header',
-      type: 'header',
-      heading: 'Contact Form',
-      alignment: 'center',
-    },
-  ]);
+  ] = useUndo([]);
+
   const [showSidebar, setShowSidebar] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedFieldId, setSelectedFieldId] = useState(null);
@@ -157,7 +159,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       const token = (await fetchAccessToken(userId, instanceUrl));
       const rawString = `${userId}$${formId}`;
       const encryptedLinkId = encrypt(rawString);
-      const publishLink = `https://d2gg09yhu3xa1a.cloudfront.net/public-form/${encryptedLinkId}`;
+      const publishLink = `https://d2bri1qui9cr5s.cloudfront.net/public-form/${encryptedLinkId}`;
 
       const { formVersion, formFields } = prepareFormData(false);
       formVersion.Stage__c = 'Publish';
@@ -236,6 +238,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
           formVersion.Form__c = form.Id;
           setFormVersions(form.FormVersions);
           setFormId(form.Id);
+          setFormName(formVersion.Name);
           break;
         }
       }
@@ -247,13 +250,6 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       setIsEditable(formVersion.Stage__c === 'Draft');
       setCurrentFormVersion(formVersion);
       const formFields = formVersion.Fields || [];
-
-      const headerField = {
-        id: 'default-header',
-        type: 'header',
-        heading: formVersion.Name || 'Contact Form',
-        alignment: 'center',
-      };
 
       const pages = {};
       formFields.forEach((field) => {
@@ -294,7 +290,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
           }
         });
 
-      setFields([headerField, ...reconstructedFields]);
+      setFields(reconstructedFields);
     } catch (error) {
       console.error('Error fetching form data:', error);
       setFetchFormError(error.message || 'Failed to load form data');
@@ -314,10 +310,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       navigate(`/form-builder/${newVersionId}`);
     }
   };
-  useEffect(() => {
-    console.log(fieldsState);
-    
-  },[fieldsState]);
+
   useEffect(() => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -329,9 +322,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       setSelectedVersionId(formVersionId);
       fetchFormData(userId, instanceUrl, formVersionId);
     } else {
-      setFields([
-        { id: 'default-header', type: 'header', heading: 'Contact Form', alignment: 'center' },
-      ]);
+      setFields([]);
     }
   }, [formVersionId]);
 
@@ -344,14 +335,11 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
     }
   }, [fields]);
 
-  
   const prepareFormData = (isNewForm = false) => {
-    const headerField = fields.find((f) => f.type === 'header');
-    const nonHeaderFields = fields.filter((f) => f.type !== 'header');
     const pages = [];
     let currentPage = [];
     let pageNumber = 1;
-    nonHeaderFields.forEach((field) => {
+    fields.forEach((field) => {
       if (field.type === 'pagebreak') {
         pages.push({ fields: currentPage, pageNumber });
         pageNumber++;
@@ -363,13 +351,14 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
     if (currentPage.length > 0 || pages.length === 0) {
       pages.push({ fields: currentPage, pageNumber });
     }
+
     const formVersion = {
-      Name: isNewForm ? formName : headerField?.heading || 'Contact Form',
+      Name: currentFormVersion?.Name || formName || 'Contact Form',
       Description__c: '',
       Stage__c: 'Draft',
       Publish_Link__c: '',
     };
-    
+
     if (!isNewForm && currentFormVersion?.Form__c) {
       formVersion.Form__c = currentFormVersion.Form__c;
     }
@@ -452,7 +441,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error('Failed to obtain access token.');
       const { formVersion, formFields } = prepareFormData();
-      
+
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -714,14 +703,8 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
         page.fields = page.fields.filter(f => f.id !== fieldId);
       });
       targetPage.fields.splice(insertIndex, 0, { ...newField, isCut: false });
-      setSelectedFieldId(newField.id);
-      setSelectedSectionSide(newField.sectionSide || null);
-      setShowSidebar(false);
     } else if (newField && !fieldId) {
       targetPage.fields.splice(insertIndex, 0, newField);
-      setSelectedFieldId(newField.id);
-      setSelectedSectionSide(newField.sectionSide || null);
-      setShowSidebar(false);
     } else if (fieldType) {
       const newFieldId = `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const defaultValidation = getDefaultValidation(fieldType);
@@ -736,9 +719,6 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
-      setSelectedFieldId(newFieldId);
-      setSelectedSectionSide(sectionSide || null);
-      setShowSidebar(false);
     }
 
     const flattenedFields = [];
@@ -749,18 +729,14 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       }
     });
 
-    const headerField = fields.find((f) => f.type === 'header');
-    const finalFields = headerField ? [headerField, ...flattenedFields.filter((f) => f.type !== 'header')] : flattenedFields;
-
-    setFields(finalFields);
+    setFields(flattenedFields);
   };
 
   const handleReorder = (fromIndex, toIndex, pageIndex) => {
     setHasChanges(true);
     const pages = [];
     let currentPage = [];
-    const nonHeaderFields = fields.filter((f) => f.type !== 'header');
-    nonHeaderFields.forEach((field) => {
+    fields.forEach((field) => {
       if (field.type === 'pagebreak') {
         pages.push({ fields: currentPage });
         currentPage = [];
@@ -782,8 +758,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
     ]);
 
-    const headerField = fields.find((f) => f.type === 'header');
-    setFields(headerField ? [headerField, ...flattenedFields] : flattenedFields);
+    setFields(flattenedFields);
   };
 
   const handleUpdateField = (fieldId, updates) => {
@@ -849,9 +824,38 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
     setHasChanges(true);
     const pages = [];
     let currentPage = [];
-    const nonHeaderFields = fields.filter((f) => f.type !== 'header');
-    nonHeaderFields.forEach((field) => {
+
+    fields.forEach((field) => {
       if (field.type === 'pagebreak') {
+        pages.push({ fields: currentPage });
+        currentPage = [];
+      } else {
+        currentPage.push(field);
+      }
+    });
+    // Push last page (even if empty)
+    pages.push({ fields: currentPage });
+
+    if (pages.length <= 1) return;
+
+    pages.splice(pageIndex, 1);
+    const flattenedFields = pages.flatMap((page, idx) => [
+      ...page.fields,
+      ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
+    ]);
+
+    // Step 5: Set updated fields
+    setFields(flattenedFields);
+  };
+
+  const handleAddPage = (afterPageIndex = null) => {
+    setHasChanges(true);
+
+    // Break existing fields into pages
+    const pages = [];
+    let currentPage = [];
+    fields.forEach((field) => {
+      if (field?.type === 'pagebreak') {
         pages.push({ fields: currentPage });
         currentPage = [];
       } else {
@@ -862,33 +866,104 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
       pages.push({ fields: currentPage });
     }
 
-    if (pages.length <= 1) return;
+    // Determine where to insert the new page
+    const insertAfterIndex = afterPageIndex !== null ? afterPageIndex : pages.length - 1;
+    const newPageIndex = insertAfterIndex + 1;
 
-    pages.splice(pageIndex, 1);
+    // Create the new pagebreak field
+    const newField = { id: `pagebreak-${Date.now()}`, type: 'pagebreak' };
+
+    // If adding after the last page, just append
+    if (insertAfterIndex >= pages.length - 1) {
+      const updatedFields = [...fields, newField];
+      setFields(updatedFields);
+      // Just highlight the new page without scrolling
+      setCurrentPageIndex(pages.length);
+    } else {
+      // Insert pagebreak at the correct position
+      // Find the position in fields array where we need to insert
+      let fieldsBeforeNewPage = [];
+      let fieldsAfterNewPage = [];
+      let pageCount = 0;
+      
+      for (let i = 0; i < fields.length; i++) {
+        if (pageCount <= insertAfterIndex) {
+          fieldsBeforeNewPage.push(fields[i]);
+          if (fields[i].type === 'pagebreak') {
+            pageCount++;
+          }
+        } else {
+          fieldsAfterNewPage.push(fields[i]);
+        }
+      }
+
+      const updatedFields = [...fieldsBeforeNewPage, newField, ...fieldsAfterNewPage];
+      setFields(updatedFields);
+      // Just highlight the new page without scrolling
+      setCurrentPageIndex(newPageIndex);
+    }
+  };
+
+  const handleMovePageUp = (pageIndex) => {
+    if (pageIndex <= 0) return;
+    setHasChanges(true);
+
+    // Split fields into pages, preserving empty pages
+    const pages = [];
+    let currentPage = [];
+    fields.forEach((field) => {
+      if (field?.type === 'pagebreak') {
+        pages.push({ fields: currentPage });
+        currentPage = [];
+      } else {
+        currentPage.push(field);
+      }
+    });
+    // Always push the last page (even if empty)
+    pages.push({ fields: currentPage });
+
+    // Swap pages
+    [pages[pageIndex - 1], pages[pageIndex]] = [pages[pageIndex], pages[pageIndex - 1]];
+
+    // Flatten back to fields with pagebreaks
     const flattenedFields = pages.flatMap((page, idx) => [
       ...page.fields,
       ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
     ]);
 
-    const headerField = fields.find((f) => f.type === 'header');
-    setFields(headerField ? [headerField, ...flattenedFields] : flattenedFields);
+    setFields(flattenedFields);
   };
 
- const handleAddPage = () => {
-  setHasChanges(true);
-  setFields(prevFields => {
-    const nonHeaderFields = prevFields.filter((f) => f.type !== 'header');
-    const headerField = prevFields.find((f) => f.type === 'header');
-    const updatedFields = [
-      ...prevFields,
-      { id: `pagebreak-${nonHeaderFields.length}`, type: 'pagebreak' },
-    ];
-    return headerField
-      ? [headerField, ...updatedFields.filter((f) => f.type !== 'header')]
-      : updatedFields;
-  });
-};
+  const handleMovePageDown = (pageIndex) => {
+    setHasChanges(true);
 
+    // Split fields into pages, preserving empty pages
+    const pages = [];
+    let currentPage = [];
+    fields.forEach((field) => {
+      if (field?.type === 'pagebreak') {
+        pages.push({ fields: currentPage });
+        currentPage = [];
+      } else {
+        currentPage.push(field);
+      }
+    });
+    // Always push the last page (even if empty)
+    pages.push({ fields: currentPage });
+
+    if (pageIndex >= pages.length - 1) return;
+
+    // Swap pages
+    [pages[pageIndex], pages[pageIndex + 1]] = [pages[pageIndex + 1], pages[pageIndex]];
+
+    // Flatten back to fields with pagebreaks
+    const flattenedFields = pages.flatMap((page, idx) => [
+      ...page.fields,
+      ...(idx < pages.length - 1 ? [{ id: `pagebreak-${idx}`, type: 'pagebreak' }] : []),
+    ]);
+
+    setFields(flattenedFields);
+  };
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -921,317 +996,107 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
 
   const selectedField = getSelectedField();
 
-  return (
-    // <div className="flex h-screen">
-    //   <MainMenuBar isSidebarOpen={isSidebarOpen} 
-    //     toggleSidebar={toggleSidebar} 
-    //     formRecords={formRecords}
-    //     selectedVersionId={selectedVersionId} />
-    //   <div
-    //     className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
-    //       isSidebarOpen ? 'ml-64' : 'ml-16'
-    //     }`}
-    //   >
-    //     <div className="bg-[#6A9AB0] text-white h-1/3"></div>
-    //     <div className="bg-white h-2/3"></div>
-    //     <div className="absolute top-0 inset-x-1 flex flex-col px-4">
-    //       <div className="text-white p-4 w-full flex justify-between items-center">
-    //         <div className="flex items-center gap-4">
-    //           <div className="text-left">
-    //             <h1 className="text-2xl font-semibold text-white">
-    //               {fields.find((f) => f.type === 'header')?.heading || 'Contact Form'}
-    //             </h1>
-    //             <p className="text-sm text-blue-100">{currentFormVersion?.Description__c || 'Define the form structure'}</p>
-    //             <select
-    //               value={selectedVersionId || ''}
-    //               onChange={handleVersionChange}
-    //               className="p-2 bg-white text-black rounded-md"
-    //             >
-    //               <option value="" disabled>Select Version</option>
-    //               {formVersions.map((version) => (
-    //                 <option key={version.Id} value={version.Id}>
-    //                   Version {version.Version__c} ({version.Stage__c})
-    //                 </option>
-    //               ))}
-    //             </select>
-    //           </div>
-    //         </div>
-    //         <div className="flex items-center gap-3">
-    //           <button
-    //             onClick={undo}
-    //             disabled={!canUndo}
-    //             className={`p-2 rounded ${!canUndo ? 'text-gray-300 cursor-not-allowed' : 'text-white hover:bg-blue-700'}`}
-    //             title="Undo"
-    //           >
-    //             <MdUndo size={18} />
-    //           </button>
-    //           <button
-    //             onClick={redo}
-    //             disabled={!canRedo}
-    //             className={`p-2 rounded ${!canRedo ? 'text-gray-300 cursor-not-allowed' : 'text-white hover:bg-blue-700'}`}
-    //             title="Redo"
-    //           >
-    //             <MdRedo size={18} />
-    //           </button>
-    //           <button
-    //             className="p-2 rounded text-white hover:bg-blue-700"
-    //             title="Preview"
-    //           >
-    //             <FaEye size={18} />
-    //           </button>
-    //           <button
-    //             onClick={handleAddPage}
-    //             className="p-2 bg-blue-900 text-white rounded hover:bg-blue-100 font-medium"
-    //             title="Add Page"
-    //           >
-    //             Add Page
-    //           </button>
-    //           {(currentFormVersion?.Stage__c === 'Draft' || currentFormVersion?.Stage__c === 'Locked') && (
-    //             <button
-    //               onClick={handlePublish}
-    //               disabled={isLoadingForm || currentFormVersion?.Stage__c === 'Publish'}
-    //               className="p-2 bg-green-500 text-white rounded-md disabled:bg-gray-400"
-    //             >
-    //               Publish
-    //             </button>
-    //           )}
-    //           <button
-    //             onClick={saveFormToSalesforce}
-    //             disabled={isSaving || currentFormVersion?.Stage__c !== 'Draft'}
-    //             className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${
-    //               isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
-    //             }`}
-    //             title="Save Form"
-    //           >
-    //             {isSaving ? (
-    //               <>
-    //                 <svg
-    //                   className="animate-spin h-5 w-5 text-white"
-    //                   xmlns="http://www.w3.org/2000/svg"
-    //                   fill="none"
-    //                   viewBox="0 0 24 24"
-    //                 >
-    //                   <circle
-    //                     className="opacity-25"
-    //                     cx="12"
-    //                     cy="12"
-    //                     r="10"
-    //                     stroke="currentColor"
-    //                     strokeWidth="4"
-    //                   ></circle>
-    //                   <path
-    //                     className="opacity-75"
-    //                     fill="currentColor"
-    //                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-    //                   ></path>
-    //                 </svg>
-    //                 Saving...
-    //               </>
-    //             ) : (
-    //               'Save Form'
-    //             )}
-    //           </button>
-    //         </div>
-    //       </div>
-    //       {saveError && (
-    //         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mt-2">
-    //           {saveError}
-    //         </div>
-    //       )}
-    //       {fetchFormError && (
-    //         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mt-2">
-    //           {fetchFormError}
-    //         </div>
-    //       )}
-    //       {isLoadingForm ? (
-    //         <div className="flex justify-center items-center h-64">
-    //           <svg
-    //             className="animate-spin h-8 w-8 text-blue-600"
-    //             xmlns="http://www.w3.org/2000/svg"
-    //             fill="none"
-    //             viewBox="0 0 24 24"
-    //           >
-    //             <circle
-    //               className="opacity-25"
-    //               cx="12"
-    //               cy="12"
-    //               r="10"
-    //               stroke="currentColor"
-    //               strokeWidth="4"
-    //             ></circle>
-    //             <path
-    //               className="opacity-75"
-    //               fill="currentColor"
-    //               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-    //             ></path>
-    //           </svg>
-    //         </div>
-    //       ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> :  showMapping ? <MappingFields /> : (
-    //         <div className="flex w-full mt-4">
-    //           <div className="w-3/4 pr-2">
-    //             <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
-    //               <FormBuilder
-    //                 fields={fields}
-    //                 onDrop={handleDrop}
-    //                 onReorder={handleReorder}
-    //                 onUpdateField={handleUpdateField}
-    //                 onDeleteField={handleDeleteField}
-    //                 onDeletePage={handleDeletePage}
-    //                 showSidebar={showSidebar}
-    //                 setShowSidebar={setShowSidebar}
-    //                 setSelectedFieldId={setSelectedFieldId}
-    //                 setSelectedSectionSide={setSelectedSectionSide}
-    //                 setSelectedFooter={setSelectedFooter}
-    //                 selectedFieldId={selectedFieldId}
-    //                 selectedSectionSide={selectedSectionSide}
-    //                 setClipboard={setClipboard}
-    //                 clipboard={clipboard}
-    //                 selectedTheme={selectedTheme}
-    //               />
-    //             </div>
-    //           </div>
-    //           <div className="w-1/4 pl-2">
-    //             {showSidebar && !selectedFieldId && !selectedFooter ? (
-    //               <Sidebar 
-    //               selectedTheme={selectedTheme}
-    //               onThemeSelect={setSelectedTheme}
-    //               themes={themes}
-    //               />
-    //             ) : (
-    //               <div className="bg-white dark:bg-gray-800 rounded-lg">
-    //                 {(selectedFieldId || selectedFooter) && (
-    //                   <FieldEditor
-    //                     selectedField={selectedField}
-    //                     selectedFooter={selectedFooter}
-    //                     onUpdateField={handleUpdateField}
-    //                     onDeleteField={handleDeleteField}
-    //                     onClose={() => {
-    //                       setSelectedFieldId(null);
-    //                       setSelectedSectionSide(null);
-    //                       setSelectedFooter(null);
-    //                       setShowSidebar(true);
-    //                     }}
-    //                     fields={fields}
-    //                   />
-    //                 )}
-    //               </div>
-    //             )}
-    //           </div>
-    //         </div>
-    //       )}
-    //     </div>
-    //   </div>
-    
-    // </div>
-    
-    <div className="flex h-screen">
-      <MainMenuBar isSidebarOpen={isSidebarOpen} 
-        toggleSidebar={toggleSidebar} 
-        formRecords={formRecords}
-        selectedVersionId={selectedVersionId} />
-      <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
-          isSidebarOpen ? 'ml-64' : 'ml-16'
-        }`}
-      >
+  console.log('fields:: ', fields);
 
-        <div className="inset-x-1 flex flex-col">
-          <div className="bg-gradient-to-r from-[rgba(48,140,165,1)] to-[rgba(139,213,233,1)] text-white p-4 w-full flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <div className="text-left">
-                <h1 className="text-2xl font-semibold text-white">
-                  {fields.find((f) => f.type === 'header')?.heading || 'Contact Form'}
-                </h1>
-                <p className="text-sm text-blue-100">{currentFormVersion?.Description__c || 'Define the form structure'}</p>
-                <select
-                  value={selectedVersionId || ''}
-                  onChange={handleVersionChange}
-                  className="p-2 bg-white text-black rounded-md"
-                >
-                  <option value="" disabled>Select Version</option>
-                  {formVersions.map((version) => (
-                    <option key={version.Id} value={version.Id}>
-                      Version {version.Version__c} ({version.Stage__c})
-                    </option>
-                  ))}
-                </select>
-              </div>
+
+  return (
+    <div className="flex h-screen">
+      <MainMenuBar
+        isSidebarOpen={isSidebarOpen}
+        toggleSidebar={toggleSidebar}
+        formRecords={formRecords}
+        selectedVersionId={selectedVersionId}
+      />
+      <div
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'
+          }`}
+      >
+        <div className="inset-x-1 h-screen flex flex-col">
+          <div className="text-white p-5 w-full flex justify-between items-center header-main">
+            <div className="flex items-center">
+              <span className="w-10 h-10 flex items-center justify-center cursor-pointer" onClick={() => navigate('/home')}>
+                <IoIosUndo className="text-[#f2f6f7] text-3xl" />
+              </span>
+              <Whisper
+                placement="bottom"
+                trigger="hover"
+                speaker={<Tooltip>{currentFormVersion?.Description__c || 'Define the form structure'}</Tooltip>}
+              >
+                <span className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-2xl font-semibold text-white">
+                    {currentFormVersion?.Name || 'Contact Form'}
+                  </span>
+                  <FaRegStar className="text-white text-base" />
+                </span>
+              </Whisper>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <button
-                onClick={undo}
-                disabled={!canUndo}
-                className={`p-2 rounded ${!canUndo ? 'text-gray-300 cursor-not-allowed' : 'text-white hover:bg-blue-700'}`}
-                title="Undo"
+                className="flex items-center justify-center my-version-btn"
+                onClick={() => setShowVersionDropdown((v) => !v)}
+                title="Change Version"
               >
-                <MdUndo size={18} />
+                <BsStack className="text-white text-xl" />
               </button>
+              {showVersionDropdown && (
+                <div className="stack-modal">
+                  <select
+                    value={selectedVersionId || ''}
+                    onChange={handleVersionChange}
+                    className="p-2 bg-white text-black rounded-md"
+                  >
+                    <option value="" disabled>Select Version</option>
+                    {formVersions.map((version) => (
+                      <option key={version.Id} value={version.Id}>
+                        Version {version.Version__c} ({version.Stage__c})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <button
-                onClick={redo}
-                disabled={!canRedo}
-                className={`p-2 rounded ${!canRedo ? 'text-gray-300 cursor-not-allowed' : 'text-white hover:bg-blue-700'}`}
-                title="Redo"
-              >
-                <MdRedo size={18} />
-              </button>
-              <button
-                className="p-2 rounded text-white hover:bg-blue-700"
+                className="preview-btn flex items-center gap-2"
                 title="Preview"
+                disabled
               >
-                <FaEye size={18} />
+                <span className="flex items-center">
+                  <svg width="18" height="14" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="8.8202" cy="6.99891" r="2.80556" stroke="white" strokeWidth="1.5" />
+                    <path d="M16.0986 6.05205C16.4436 6.47096 16.6161 6.68041 16.6161 6.99935C16.6161 7.31829 16.4436 7.52774 16.0986 7.94665C14.8363 9.47923 12.0521 12.3327 8.82031 12.3327C5.58855 12.3327 2.80437 9.47923 1.54206 7.94665C1.19703 7.52774 1.02451 7.31829 1.02451 6.99935C1.02451 6.68041 1.19703 6.47096 1.54206 6.05205C2.80437 4.51947 5.58855 1.66602 8.82031 1.66602C12.0521 1.66602 14.8363 4.51947 16.0986 6.05205Z" stroke="white" strokeWidth="1.5" />
+                  </svg>
+                </span>
+                Preview
               </button>
               <button
-                onClick={handleAddPage}
-                className="p-2 bg-blue-900 text-white rounded hover:bg-blue-100 font-medium"
-                title="Add Page"
+                onClick={saveFormToSalesforce}
+                disabled={isSaving || currentFormVersion?.Stage__c !== 'Draft'}
+                className={`save-btn flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
+                title="Save Form"
               >
-                Add Page
+                <span className="flex items-center">
+                  <svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4.82031 7.2C4.82031 5.43269 6.253 4 8.02031 4H12.8203H15.0262C15.6627 4 16.2732 4.25286 16.7233 4.70294L20.1174 8.09706C20.5675 8.54714 20.8203 9.15759 20.8203 9.79411V12V16.8C20.8203 18.5673 19.3876 20 17.6203 20H8.02031C6.253 20 4.82031 18.5673 4.82031 16.8V7.2Z" stroke="white" strokeWidth="1.5" />
+                    <path d="M8.02026 14.4008C8.02026 13.5171 8.73661 12.8008 9.62026 12.8008H16.0203C16.9039 12.8008 17.6203 13.5171 17.6203 14.4008V20.0008H8.02026V14.4008Z" stroke="white" strokeWidth="1.5" />
+                    <path d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4" stroke="white" strokeWidth="1.5" />
+                  </svg>
+                </span>
+                Save
               </button>
               {(currentFormVersion?.Stage__c === 'Draft' || currentFormVersion?.Stage__c === 'Locked') && (
                 <button
                   onClick={handlePublish}
                   disabled={isLoadingForm || currentFormVersion?.Stage__c === 'Publish'}
-                  className="p-2 bg-green-500 text-white rounded-md disabled:bg-gray-400"
+                  className="publish-btn flex items-center gap-2"
                 >
+                  <span className="flex items-center">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4.35031 7.64885L5.76031 8.11885C6.69231 8.42885 7.15731 8.58485 7.49131 8.91885C7.82531 9.25285 7.98131 9.71885 8.29131 10.6489L8.76131 12.0589C9.54531 14.4129 9.93731 15.5889 10.6583 15.5889C11.3783 15.5889 11.7713 14.4129 12.5553 12.0589L15.3933 3.54685C15.9453 1.89085 16.2213 1.06285 15.7843 0.625853C15.3473 0.188853 14.5193 0.464853 12.8643 1.01585L4.34931 3.85585C1.99831 4.63885 0.820312 5.03085 0.820312 5.75185C0.820312 6.47285 1.99731 6.86485 4.35031 7.64885Z" fill="white" />
+                      <path d="M6.1841 9.59379L4.1221 8.90679C3.97781 8.85869 3.82445 8.84414 3.67369 8.86424C3.52293 8.88434 3.37874 8.93857 3.2521 9.02279L2.1621 9.74879C2.03307 9.83476 1.9318 9.95636 1.87061 10.0988C1.80941 10.2413 1.79094 10.3985 1.81742 10.5512C1.84391 10.704 1.91421 10.8458 2.01979 10.9593C2.12537 11.0729 2.26166 11.1533 2.4121 11.1908L4.3671 11.6788C4.45508 11.7008 4.53542 11.7462 4.59954 11.8103C4.66366 11.8745 4.70914 11.9548 4.7311 12.0428L5.2191 13.9978C5.25661 14.1482 5.33703 14.2845 5.45058 14.3901C5.56413 14.4957 5.7059 14.566 5.85867 14.5925C6.01144 14.619 6.16861 14.6005 6.31107 14.5393C6.45353 14.4781 6.57513 14.3768 6.6611 14.2478L7.3871 13.1578C7.47132 13.0311 7.52555 12.887 7.54565 12.7362C7.56575 12.5854 7.5512 12.4321 7.5031 12.2878L6.8161 10.2258C6.76699 10.0786 6.68433 9.94494 6.57464 9.83525C6.46495 9.72556 6.33124 9.6429 6.1841 9.59379Z" fill="white" />
+                    </svg>
+                  </span>
                   Publish
                 </button>
               )}
-              <button
-                onClick={saveFormToSalesforce}
-                disabled={isSaving || currentFormVersion?.Stage__c !== 'Draft'}
-                className={`p-2 bg-blue-900 text-white rounded font-medium flex items-center gap-2 ${
-                  isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-100'
-                }`}
-                title="Save Form"
-              >
-                {isSaving ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Saving...
-                  </>
-                ) : (
-                  'Save Form'
-                )}
-              </button>
             </div>
           </div>
           {saveError && (
@@ -1267,10 +1132,16 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
                 ></path>
               </svg>
             </div>
-          ) :  showThankYou ? <ThankYouPageBuilder formVersionId={formVersionId} /> : showNotification ? <NotificationPage currentFields = {formVersions[0]?.Fields}/> :  showMapping ? <MappingFields /> : (
-            <div className="flex w-full mt-4 px-4">
-              <div className="w-3/4 pr-2">
-                <div className="bg-transparent rounded-lg h-full overflow-y-auto pt-4">
+          ) : showThankYou ? (
+            <ThankYouPageBuilder formVersionId={formVersionId} />
+          ) : showCondition ? <Conditions formVersionId={formVersionId} /> : showNotification ? (
+            <NotificationPage currentFields={formVersions[0]?.Fields} />
+          ) : showMapping ? (
+            <MappingFields />
+          ) : (
+            <div className="flex w-full h-screen builder-start">
+              <div className="w-3/4 inner-builder-container">
+                <div className="bg-transparent rounded-lg h-full form-builder-container">
                   <FormBuilder
                     fields={fields}
                     onDrop={handleDrop}
@@ -1288,6 +1159,16 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
                     setClipboard={setClipboard}
                     clipboard={clipboard}
                     selectedTheme={selectedTheme}
+                    currentPageIndex={currentPageIndex}
+                    setCurrentPageIndex={setCurrentPageIndex}
+                    onAddPage={handleAddPage}
+                    onMovePageUp={handleMovePageUp}
+                    onMovePageDown={handleMovePageDown}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    onUndo={undo}
+                    onRedo={redo}
+                    isSidebarOpen={isSidebarOpen}
                   />
                 </div>
               </div>
@@ -1299,7 +1180,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification}) {
                   themes={themes}
                   />
                 ) : (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg">
+                  <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
                     {(selectedFieldId || selectedFooter) && (
                       <FieldEditor
                         selectedField={selectedField}
