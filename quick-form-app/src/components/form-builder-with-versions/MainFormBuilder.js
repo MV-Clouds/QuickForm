@@ -17,7 +17,8 @@ import { useSalesforceData } from '../Context/MetadataContext';
 import ThankYouPageBuilder from '../Thankyou/TY2';
 import NotificationPage from '../NotificationSettings/NotificationSettingsModal.js';
 import Conditions from '../conditions/Conditions';
-import SharePage from '../share-page/SharePage.js'
+import SharePage from '../share-page/SharePage.js';
+import Prefill from '../form-prefill/Prefill.js';
 
 const themes = [
   {
@@ -85,7 +86,7 @@ const themes = [
   },
 ];
 
-function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition, showShare}) {
+function MainFormBuilder({showMapping , showThankYou  , showNotification, showCondition, showShare, showPrefill}) {
   // const { formVersionId } = useParams();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
@@ -1138,7 +1139,7 @@ function MainFormBuilder({showMapping , showThankYou  , showNotification, showCo
             </div>
           ) : showThankYou ? (
             <ThankYouPageBuilder formVersionId={formVersionId} />
-          ) : showCondition ? <Conditions formVersionId={formVersionId} /> : showShare ? <SharePage publishLink={publishLink} /> : showNotification ? (
+          ) : showCondition ? <Conditions formVersionId={formVersionId} /> : showShare ? <SharePage publishLink={publishLink} /> : showPrefill ? <Prefill /> : showNotification ? (
             <NotificationPage currentFields={formVersions[0]?.Fields} />
           ) : showMapping ? (
             <MappingFields />

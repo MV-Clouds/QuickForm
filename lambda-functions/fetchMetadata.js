@@ -20,7 +20,7 @@ export const handler = async (event) => {
     };
   }
 
-  const { userId, instanceUrl, formId, accessToken  } = body;
+  const { userId, instanceUrl, formId, accessToken, requestType, formVersionId  } = body;
   if (!userId) {
     return {
       statusCode: 400,
@@ -144,7 +144,7 @@ export const handler = async (event) => {
             Metadata: { S: JSON.stringify(metadata) },
             CreatedAt: { S: metadataItem?.CreatedAt?.S || now },
             UpdatedAt: { S: now },
-            UserProfile : { S: JSON.stringify(metadataItem?.UserProfile?.S) }
+            UserProfile : { S: metadataItem?.UserProfile?.S }
           }
         }));
 
@@ -156,6 +156,7 @@ export const handler = async (event) => {
 
     }
     const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
+    const deletedFormRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('DeletedFormRecords_'));
 
     let formRecords = null;
     if (formRecordItems.length > 0) {
@@ -176,6 +177,70 @@ export const handler = async (event) => {
       }
     }
 
+    if (requestType === 'prefill' && formVersionId) {
+
+      // Find the form record containing the specified formVersionId
+      let formVersion = null;
+      const formRecordsParsed = JSON.parse(formRecords);
+      for (const form of formRecordsParsed) {
+        const matchVersion = form.FormVersions.find(v => v.Id === formVersionId);
+        if (matchVersion) {
+          formVersion = matchVersion;
+          break;
+        }
+      }
+
+      if (!metadataItem?.Metadata?.S) {
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: 'Metadata not found' }),
+        };
+      }
+
+      if (!formVersion) {
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: `Form version ${formVersionId} not found` }),
+        };
+      }
+
+      // Extract metadata, form fields, and prefill data stored in formVersion (assuming 'Prefill' field or similar)
+      const metadata = JSON.parse(metadataItem.Metadata.S);
+      const formFields = formVersion.Fields || [];
+      const prefillData = formVersion.Prefills || null; // Update this if you store prefill differently
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          success: true,
+          metadata,
+          formFields,
+          prefillData,
+        }),
+      };
+    }
+
+    let deletedFormRecords = null;
+    if (deletedFormRecordItems.length > 0) {
+      try {
+        // Sort chunks by ChunkIndex and combine
+        const sortedChunks = deletedFormRecordItems
+        .sort((a, b) => {
+          const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+          const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+          return aNum - bNum;
+        })
+        .map(item => item.FormRecords.S);
+        const combinedFormRecords = sortedChunks.join('');
+        deletedFormRecords = combinedFormRecords;
+      } catch (e) {
+        console.warn('Failed to process DeletedFormRecords chunks:', e.message, '\nStack trace:', e.stack);
+        deletedFormRecords = null; // Return null if chunk processing fails, matching original behavior
+      }
+    }
     
     if (formId) {
       const formRecordsParsed = JSON.parse(formRecords);
@@ -187,7 +252,7 @@ export const handler = async (event) => {
           body: JSON.stringify({ error: `Form not found for ID: ${formId}` }),
         };
       }
-      console.log(matchedForm.FormVersions);
+      console.log(matchedForm);
       const publishedVersion = matchedForm.FormVersions.find(v => v.Stage__c === 'Publish');
       if (!publishedVersion) {
         return {
@@ -209,6 +274,7 @@ export const handler = async (event) => {
             Fields: publishedVersion.Fields,
             Conditions: publishedVersion.Conditions,
             Stage__c: publishedVersion.Stage__c,
+            ThankYou : publishedVersion.ThankYou
           },
         }),
       };
@@ -224,6 +290,7 @@ export const handler = async (event) => {
         body: JSON.stringify({ error: 'Metadata not found for this user and instance' }),
       };
     }
+
     return {
       statusCode: 200,
       headers: {
@@ -233,8 +300,11 @@ export const handler = async (event) => {
       body: JSON.stringify({
         metadata: metadataItem.Metadata.S,
         FormRecords: formRecords,
-        UserProfile : metadataItem.UserProfile?.S
-      }),
+        DeletedFormRecords: deletedFormRecords,
+        UserProfile : metadataItem.UserProfile?.S,
+        Fieldset : metadataItem.Fieldset?.S || [],
+        Folders : metadataItem.Folders?.S || [],
+      }), 
     };
   } catch (error) {
     console.error('Error fetching metadata:', error);

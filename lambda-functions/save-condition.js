@@ -44,7 +44,24 @@ export const handler = async (event) => {
     const newCondition = {
       Id: conditionId || `local_${Date.now()}`,
       type: conditionData.type,
-      ...(conditionData.type === 'dependent'
+    
+      // === New/Changed: Cleanly handle update_calculate_field type ===
+      ...(conditionData.type === 'update_calculate_field'
+        ? {
+            conditions: (conditionData.conditions || []).map(cond => ({
+              ifField: cond.ifField,
+              operator: cond.operator || 'equals',
+              value: cond.value || null,
+            })),
+            action: conditionData.action, // 'copy_field_values' or 'calculate_field'
+            sourceFields: conditionData.sourceFields || [],
+            // Always use `formula` (string), not calcItems
+            formula: conditionData.formula || '',
+            targetField: conditionData.targetField,
+            logic: conditionData.logic || 'AND',
+            logicExpression: conditionData.logic === 'Custom' ? (conditionData.logicExpression || '') : '',
+          }
+        : conditionData.type === 'dependent'
         ? {
             ifField: conditionData.ifField,
             value: conditionData.value || null,
@@ -52,7 +69,7 @@ export const handler = async (event) => {
             dependentValues: conditionData.dependentValues,
           }
         : {
-            conditions: conditionData.conditions.map((cond) => ({
+            conditions: (conditionData.conditions || []).map((cond) => ({
               ifField: cond.ifField,
               operator: cond.operator || 'equals',
               value: cond.value || null,
@@ -68,21 +85,28 @@ export const handler = async (event) => {
               ? {
                   thenAction: conditionData.thenAction,
                   sourcePage: conditionData.sourcePage,
-                  targetPage: Array.isArray(conditionData.targetPage) ? conditionData.targetPage : [conditionData.targetPage].filter(Boolean),
-                  ...(conditionData.thenAction === 'loop' ? {
-                    loopField: conditionData.loopField || '',
-                    loopValue: conditionData.loopValue || '',
-                    loopType: conditionData.loopType || 'static',
-                  } : {}),
+                  targetPage: Array.isArray(conditionData.targetPage)
+                    ? conditionData.targetPage
+                    : [conditionData.targetPage].filter(Boolean),
+                  ...(conditionData.thenAction === 'loop'
+                    ? {
+                        loopField: conditionData.loopField || '',
+                        loopValue: conditionData.loopValue || '',
+                        loopType: conditionData.loopType || 'static',
+                      }
+                    : {}),
                 }
               : {
                   thenAction: conditionData.thenAction,
                   thenFields: conditionData.thenFields,
-                  ...(conditionData.thenAction === 'set mask' ? { maskPattern: conditionData.maskPattern } : {}),
+                  ...(conditionData.thenAction === 'set mask'
+                    ? { maskPattern: conditionData.maskPattern }
+                    : {}),
                   ...(conditionData.thenAction === 'unmask' ? { maskPattern: null } : {}),
                 }),
           }),
     };
+    
     
     const updatedConditions = conditionId
       ? existingConditions.map((c) => {
@@ -221,18 +245,20 @@ export const handler = async (event) => {
     }
 
     let writeRequests = [
-      {
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: 'Metadata' },
-            InstanceUrl: { S: cleanedInstanceUrl },
-            Metadata: { S: JSON.stringify(existingMetadata) },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: new Date().toISOString() },
-          },
-        },
-      },
+      // {
+      //   PutRequest: {
+      //     Item: {
+      //       UserId: { S: userId },
+      //       ChunkIndex: { S: 'Metadata' },
+      //       InstanceUrl: { S: cleanedInstanceUrl },
+      //       Metadata: { S: JSON.stringify(existingMetadata) },
+      //       UserProfile  : { S: metadataItem.UserProfile?.S || "{}" },
+      //       Fieldset : { S: metadataItem.Fieldset?.S || "{}" },
+      //       CreatedAt: { S: createdAt },
+      //       UpdatedAt: { S: new Date().toISOString() },
+      //     },
+      //   },
+      // },
       ...chunks.map((chunk, index) => ({
         PutRequest: {
           Item: {

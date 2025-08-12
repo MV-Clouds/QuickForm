@@ -93,6 +93,7 @@ console.log('Cloning ',cloningFormData);
       conditions: versionToClone.Conditions || [],
       Mappings: versionToClone.Mappings,
       ThankYou: versionToClone.ThankYou,
+      Prefills: versionToClone.Prefills,
       Notifications: form.Notifications,
     };
 
