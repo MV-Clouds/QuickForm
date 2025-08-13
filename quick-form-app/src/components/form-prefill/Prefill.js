@@ -142,7 +142,7 @@ const Prefill = () => {
               try {
                 parsedData = p.Prefill_Data__c ? JSON.parse(p.Prefill_Data__c) : {};
               } catch (e) {
-                console.warn(`Invalid Prefill_Data__c JSON for ${p.Id}:`, e);
+                console.warn(`Invalid Prefill_Data__c  JSON for ${p.Id}:`, e);
               }
               return {
                 Id: p.Id || null,
@@ -200,7 +200,7 @@ const Prefill = () => {
       if (!response.ok) throw new Error('Failed to fetch object fields');
 
       const data = await response.json();
-      console.log(data.fields);
+      console.log('Fields: ',data.fields);
       
       setObjectFieldsCache((prev) => ({
         ...prev,
@@ -369,26 +369,27 @@ const Prefill = () => {
 
 
   const isFieldTypeCompatible = (formFieldType, sfFieldType) => {
-    const textTypes = ['shorttext', 'longtext', 'fullname', 'address'];
-    const sfTextTypes = ['string', 'textarea', 'email', 'phone', 'url'];
-
-    if (textTypes.includes(formFieldType) && sfTextTypes.includes(sfFieldType)) {
-        return true;
-    }
-    if (formFieldType === 'number' && ['number', 'currency', 'percent'].includes(sfFieldType)) {
-        return true;
-    }
-    if (formFieldType === 'price' && ['currency'].includes(sfFieldType)) {
-        return true;
-    }
-    if (formFieldType === 'dropdown' && ['picklist', 'multipicklist'].includes(sfFieldType)) {
-        return true;
-    }
-    if (formFieldType === 'checkbox' && sfFieldType === 'boolean') {
-        return true;
-    }
-    return false;
+    // Type groups from your mapping code
+    const typeMapping = {
+      string: ["shorttext", "fullname", "section", "address", "longtext", "email", "dropdown", "checkbox", "picklist"],
+      double: ["number", "price"],
+      currency: ["price", "number"],
+      boolean: ["checkbox"],
+      date: ["date"],
+      datetime: ["datetime"],
+      email: ["email"],
+      phone: ["phone"],
+      picklist: ["dropdown", "checkbox", "radio", "picklist"],
+      multipicklist: ["dropdown", "checkbox", "radio", "picklist"],
+      textarea: ["shorttext", "longtext", "fullname", "section", "address"],
+      url: ["shorttext"],
+      percent: ["number"],
+      time: ["time"],
     };
+
+    if (!typeMapping[sfFieldType]) return false;
+    return typeMapping[sfFieldType].includes(formFieldType);
+  };
 
 
   const updateFilterCondition = (prefillIndex, condId, key, value) => {
@@ -547,7 +548,7 @@ const Prefill = () => {
     if (editingIndex === null) return;
     const prefill = prefillList[editingIndex];
     if (!validatePrefill(prefill)) return;
-
+    prefill.objectFields = objectFieldsCache[prefill.selectedObject]; 
     setIsLoading(true);
     try {
       const resp = await fetch(process.env.REACT_APP_SAVE_PREFILL, {
@@ -670,7 +671,10 @@ const Prefill = () => {
             </Select>
 
             <div style={{ marginTop: 24 }}>
-              <Button onClick={() => setActiveStep(1)} disabled={isLoading}>
+              <Button onClick={() => {
+                setActiveStep(1)
+                fetchMetadataAndPrefills(formVersionId)
+              }} disabled={isLoading}>
                 Back to Prefills
               </Button>
             </div>
@@ -692,7 +696,10 @@ const Prefill = () => {
                     {prefillList[editingIndex].selectedObject}
                   </h4>
                   <div className="header-actions">
-                    <Button onClick={() => setActiveStep(1)} disabled={isLoading}>
+                    <Button onClick={() => {
+                      fetchMetadataAndPrefills(formVersionId)
+                      setActiveStep(1)
+                    }} disabled={isLoading}>
                       Back to Prefills
                     </Button>
                   </div>
@@ -777,11 +784,19 @@ const Prefill = () => {
                               option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
                             }
                           >
-                            {objectFieldsCache[prefillList[editingIndex].selectedObject]?.map((f) => (
-                              <Option key={f.name} value={f.name}>
-                                {f.label || f.name}
-                              </Option>
-                            ))}
+                            {objectFieldsCache[prefillList[editingIndex].selectedObject]
+                              // If formField is selected in this condition, filter for compatible SF objectFields only
+                              ?.filter((sfField) => {
+                                if (!cond.formField) return true; // show all if formField not selected yet
+                                const formField = formFields.find(f => f.properties?.id === cond.formField);
+                                if (!formField) return true;
+                                return isFieldTypeCompatible(formField.Field_Type__c, sfField.type);
+                              })
+                              .map((f) => (
+                                <Option key={f.name} value={f.name}>
+                                  {f.label || f.name}
+                                </Option>
+                              ))}
                           </Select>
 
                           <Select
@@ -810,11 +825,20 @@ const Prefill = () => {
                               option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
                             }
                           >
-                            {formFields.map((ff) => (
-                              <Option key={ff.properties?.id} value={ff.properties?.id}>
-                                {ff.Name}
-                              </Option>
-                            ))}
+                            {formFields
+                              // If objectField is selected in this condition, filter for compatible formFields only
+                              .filter((ff) => {
+                                if (!cond.objectField) return true; // show all if SF field not selected yet
+                                const sfField = objectFieldsCache[prefillList[editingIndex].selectedObject]
+                                  ?.find(f => f.name === cond.objectField);
+                                if (!sfField) return true;
+                                return isFieldTypeCompatible(ff.Field_Type__c, sfField.type);
+                              })
+                              .map((ff) => (
+                                <Option key={ff.properties?.id} value={ff.properties?.id}>
+                                  {ff.Name}
+                                </Option>
+                              ))}
                           </Select>
 
                           <Button

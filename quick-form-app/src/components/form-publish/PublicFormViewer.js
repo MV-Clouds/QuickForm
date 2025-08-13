@@ -24,6 +24,7 @@ function PublicFormViewer() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fetchError, setFetchError] = useState(null);
+  const [userId , setUserId ] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [instanceUrl, setInstanceUrl] = useState(null);
   const [linkData, setLinkData] = useState(null);
@@ -40,6 +41,8 @@ function PublicFormViewer() {
   const [loopCounters, setLoopCounters] = useState({});
   const [loopInput, setLoopInput] = useState('');
   const [localIdToSFId, setLocalIdToSFId] = useState({});
+  const [prefills, setPrefills] = useState([]);
+  const [dependentFields, setDependentFields] = useState(new Set());
 
   useEffect(() => {
   const fetchFormData = async () => {
@@ -69,6 +72,7 @@ function PublicFormViewer() {
       }
       const token = tokenData.access_token;
       const instanceUrl = tokenData.instanceUrl;
+      setUserId(userId);
       setAccessToken(token);
       setInstanceUrl(instanceUrl);
 
@@ -91,6 +95,37 @@ function PublicFormViewer() {
           localIdToSFId[props.id] = field.Id;
         }
       });
+       // Parse Prefill array from formVersion.Prefills if available
+      if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
+        const parsedPrefills = formVersion.Prefills.map(p => {
+          let parsedData = {};
+          try {
+            parsedData = typeof p.Prefill_Data__c === 'string'
+              ? JSON.parse(p.Prefill_Data__c)
+              : p.Prefill_Data__c || {};
+          } catch (e) {
+            console.warn('Invalid Prefill_Data__c JSON', e);
+          }
+          return {
+            Id: p.Id,
+            Order__c: p.Order__c || 0,
+            ...parsedData
+          };
+        });
+        setPrefills(parsedPrefills);
+
+        // Build set of Salesforce field names that should trigger prefill
+        const deps = new Set();
+        parsedPrefills.forEach(prefill => {
+          (prefill.lookupFilters?.conditions || []).forEach(cond => {
+            if (cond.formField && localIdToSFId[cond.formField]) {
+              deps.add(localIdToSFId[cond.formField]); // store as SF id for runtime
+            }
+          });
+        });
+        setDependentFields(deps);
+      }
+
       setLocalIdToSFId(localIdToSFId);
       const parsedConditions = (formVersion.Conditions || []).map(c =>
         c.Condition_Data__c ? (
@@ -188,6 +223,170 @@ function PublicFormViewer() {
     fetchFormData();
   }
 }, [linkId]);
+
+
+      const runPrefillForField = async (sfFieldId) => {
+        // Step 1: Find prefills directly triggered by this blurred field (condition field)
+        const directlyTriggered = prefills.filter(p =>
+          (p.lookupFilters?.conditions || []).some(c => localIdToSFId[c.formField] === sfFieldId)
+        );
+
+        // If none triggered, stop early
+        if (directlyTriggered.length === 0) return;
+
+        // Find the set of target runtime fields from the directly triggered prefills
+        const triggeredTargetFields = new Set();
+        directlyTriggered.forEach(p => {
+          Object.keys(p.fieldMappings || {}).forEach(localId => {
+            const runtimeId = localIdToSFId[localId];
+            if (runtimeId) triggeredTargetFields.add(runtimeId);
+          });
+        });
+
+        // Step 1b: Now include any prefill whose target field overlaps with the triggered target fields
+        const triggeredPrefills = prefills.filter(p =>
+          Object.keys(p.fieldMappings || {}).some(localId => {
+            const runtimeId = localIdToSFId[localId];
+            return runtimeId && triggeredTargetFields.has(runtimeId);
+          })
+        ).sort((a, b) => (a.Order__c || 0) - (b.Order__c || 0));
+
+
+        // Step 3: Filter prefills into groups based on target overlap
+        // Here we just reuse triggeredPrefills sorted by priority Order__c
+        const updatedFields = new Set();
+        for (const prefill of triggeredPrefills) {
+          // Skip if ALL its target fields are already updated in this run
+          const prefillTargets = Object.keys(prefill.fieldMappings || {})
+            .map(localId => localIdToSFId[localId])
+            .filter(Boolean);
+          const allUpdated = prefillTargets.every(fId => updatedFields.has(fId));
+          if (allUpdated) continue;
+
+          const where = buildWhereFromPrefill(prefill.lookupFilters, prefill.objectFields || []);
+          const soql = `SELECT ${Object.values(prefill.fieldMappings).join(', ')}
+                        FROM ${prefill.selectedObject}
+                        ${where ? 'WHERE ' + where : ''}
+                        ${prefill.sortBy?.field ? `ORDER BY ${prefill.sortBy.field} ${prefill.sortBy.order || 'ASC'}` : ''}
+                        LIMIT 1`;
+
+          try {
+            const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId,
+                accessToken,
+                soql,
+                requestType: 'salesforceQuery',
+                multipleRecordAction: prefill.multipleRecordAction
+              })
+            });
+            const data = await resp.json();
+
+            if (data.record) {
+              const updates = {};
+              Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
+                const runtimeFieldId = localIdToSFId[localId];
+                if (runtimeFieldId && !updatedFields.has(runtimeFieldId) && data.record[sfName] !== undefined) {
+                  updates[runtimeFieldId] = data.record[sfName];
+                  updatedFields.add(runtimeFieldId); // mark as final for this trigger round
+                }
+              });
+
+              if (Object.keys(updates).length > 0) {
+                setFormValues(prev => ({ ...prev, ...updates }));
+              }
+            }
+          } catch (err) {
+            console.error('Prefill failed:', err);
+          }
+        }
+      };
+
+
+
+      const formatValForSOQL = (val, sfType) => {
+        if (val === null || val === undefined || val === '') {
+          return 'null';
+        }
+
+        const numericTypes = ['int', 'double', 'currency', 'percent', 'integer', 'long'];
+        const dateTypes = ['date', 'datetime', 'time'];
+
+        // If type is numeric or similar, return as-is without quotes
+        if (numericTypes.includes(sfType)) {
+          return val;
+        }
+        // If date/datetime, return as-is without quotes (Salesforce accepts date strings unquoted)
+        if (dateTypes.includes(sfType)) {
+          return val;
+        }
+        // Otherwise treat as string - escape single quotes and quote value
+        const escaped = String(val).replace(/'/g, "\\'");
+        return `'${escaped}'`;
+      };
+
+      const buildWhereFromPrefill = (lookupFilters, objectFields) => {
+        if (!lookupFilters?.conditions?.length) return '';
+        const condMap = {};
+
+        lookupFilters.conditions.forEach((cond, idx) => {
+          const sfId = localIdToSFId[cond.formField];
+          let val = formValues[sfId];
+          const sfFieldType = objectFields.find(f => f.name === cond.objectField)?.type;
+
+          let clause = '';
+
+          switch (cond.operator) {
+            case 'equals':
+              clause = `${cond.objectField} = ${formatValForSOQL(val, sfFieldType)}`;
+              break;
+            case '!=':
+              clause = `${cond.objectField} != ${formatValForSOQL(val, sfFieldType)}`;
+              break;
+            case 'greater than':
+              clause = `${cond.objectField} > ${formatValForSOQL(val, sfFieldType)}`;
+              break;
+            case 'greater than or equal to':
+              clause = `${cond.objectField} >= ${formatValForSOQL(val, sfFieldType)}`;
+              break;
+            case 'less than':
+              clause = `${cond.objectField} < ${formatValForSOQL(val, sfFieldType)}`;
+              break;
+            case 'less than or equal to':
+              clause = `${cond.objectField} <= ${formatValForSOQL(val, sfFieldType)}`;
+              break;
+            case 'contains':
+              clause = `${cond.objectField} LIKE '%${val ?? ''}%'`;
+              break;
+            case 'startsWith':
+              clause = `${cond.objectField} LIKE '${val ?? ''}%'`;
+              break;
+            case 'endsWith':
+              clause = `${cond.objectField} LIKE '%${val ?? ''}'`;
+              break;
+            case 'is null':
+              clause = `${cond.objectField} = null`;
+              break;
+            case 'is not null':
+              clause = `${cond.objectField} != null`;
+              break;
+            default:
+              clause = 'TRUE';
+              break;
+          }
+
+          condMap[(idx + 1).toString()] = clause;
+        });
+
+        if (lookupFilters.logicType === 'Custom' && lookupFilters.logicExpression) {
+          return lookupFilters.logicExpression.replace(/\d+/g, n => condMap[n] || 'TRUE');
+        }
+        const glue = lookupFilters.logicType || 'AND';
+        return Object.values(condMap).filter(Boolean).join(` ${glue} `);
+      };
+
 
   const handleChange = (fieldId, value, isFile = false) => {
     setFormValues((prev) => ({ ...prev, [fieldId]: isFile ? value : value }));
@@ -1498,6 +1697,7 @@ function PublicFormViewer() {
                   mask={mask}
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
@@ -1520,6 +1720,7 @@ function PublicFormViewer() {
                 {...commonProps}
                 value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.shortTextMaxChars}
                 disabled={isDisabled}
@@ -1546,6 +1747,7 @@ function PublicFormViewer() {
                   mask={mask}
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
@@ -1568,6 +1770,7 @@ function PublicFormViewer() {
                 theme="snow"
                 value={formValues[fieldId] || ''}
                 onChange={(value) => handleChange(fieldId, value)}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 readOnly={isDisabled}
                 placeholder={properties.placeholder?.main || ''}
                 modules={{
@@ -1596,6 +1799,7 @@ function PublicFormViewer() {
                 rows="4"
                 value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.longTextMaxChars}
                 disabled={isDisabled}
@@ -1628,6 +1832,7 @@ function PublicFormViewer() {
                   mask={mask}
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
@@ -1651,6 +1856,7 @@ function PublicFormViewer() {
                 {...commonProps}
                 value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 placeholder={properties.placeholder?.main || ''}
                 min={properties.numberValueLimits?.min}
                 max={properties.numberValueLimits?.max}
@@ -1680,6 +1886,7 @@ function PublicFormViewer() {
                     mask={mask}
                     value={formValues[fieldId] || ''}
                     onChange={(e) => handleChange(fieldId, e.target.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                     placeholder={properties.placeholder?.main || ''}
                     disabled={isDisabled}
                     maskPlaceholder=" "
@@ -1705,6 +1912,7 @@ function PublicFormViewer() {
                   step="0.01"
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   placeholder={properties.placeholder?.main || ''}
                   min={properties.priceLimits?.min}
                   max={properties.priceLimits?.max}
@@ -1732,6 +1940,7 @@ function PublicFormViewer() {
               {...commonProps}
               value={formValues[fieldId] || ''}
               onChange={(e) => handleChange(fieldId, e.target.value)}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               placeholder={properties.placeholder?.main || 'example@domain.com'}
               maxLength={properties.maxChars}
               disabled={isDisabled}
@@ -1748,6 +1957,7 @@ function PublicFormViewer() {
                   id={`${fieldId}_confirmation`}
                   value={formValues[`${fieldId}_confirmation`] || ''}
                   onChange={(e) => handleChange(`${fieldId}_confirmation`, e.target.value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_confirmation`) && runPrefillForField(`${fieldId}_confirmation`)}
                   placeholder="Confirm email"
                 />
                 {errors[`${fieldId}_confirmation`] && (
@@ -1793,6 +2003,7 @@ function PublicFormViewer() {
                       handleChange(`${fieldId}_countryCode`, newCountryCode);
                       handleChange(fieldId, ''); // Reset phone number
                     }}
+                    onBlur={() => dependentFields.has(`${fieldId}_countryCode`) && runPrefillForField(`${fieldId}_countryCode`)}
                     inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                     buttonClass="border rounded p-1 bg-white"
                     dropdownClass="border rounded max-h-64 overflow-y-auto"
@@ -1812,6 +2023,7 @@ function PublicFormViewer() {
                     {...commonProps}
                     value={formValues[fieldId] || ''}
                     onChange={(e) => handleChange(fieldId, e.target.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                     placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                     disabled={isDisabled}
                     aria-label="Phone number"
@@ -1823,6 +2035,7 @@ function PublicFormViewer() {
                 mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
                 value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
@@ -1833,6 +2046,7 @@ function PublicFormViewer() {
                   {...commonProps}
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                   disabled={isDisabled}
                 />
@@ -1866,6 +2080,7 @@ function PublicFormViewer() {
                   handleChange(fieldId, null);
                 }
               }}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               placeholder={properties.placeholder?.main || 'Select date'}
               className="w-full"
               disabled={isDisabled}
@@ -1915,6 +2130,7 @@ function PublicFormViewer() {
                   : 'yyyy-MM-dd HH:mm'
               }
               value={formValues[fieldId] ? new Date(formValues[fieldId]) : null}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               onChange={(date) => {
                 if (date) {
                   const year = date.getFullYear();
@@ -1956,6 +2172,7 @@ function PublicFormViewer() {
             <DatePicker
               format={properties.timeFormat || 'HH:mm'}
               value={formValues[fieldId] ? new Date(`1970-01-01T${formValues[fieldId]}`) : null}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               onChange={(date) => {
                 if (date) {
                   const hours = String(date.getHours()).padStart(2, '0');
@@ -2003,6 +2220,7 @@ function PublicFormViewer() {
                         : (formValues[fieldId] || []).filter((opt) => opt !== option);
                       handleChange(fieldId, newValue);
                     }}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     disabled={isDisabled}
                   />
@@ -2034,6 +2252,7 @@ function PublicFormViewer() {
                     value={option}
                     checked={formValues[fieldId] === option}
                     onChange={(e) => handleChange(fieldId, e.target.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                     disabled={isDisabled}
                   />
@@ -2063,6 +2282,7 @@ function PublicFormViewer() {
               style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
               onChange={val => handleChange(fieldId, val)}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               mode={properties.allowMultipleSelections ? 'multiple' : undefined}
               placeholder={properties.placeholder?.main || 'Select an option'}
               disabled={isDisabled}
@@ -2156,6 +2376,7 @@ function PublicFormViewer() {
                   type="checkbox"
                   checked={toggles[fieldId] || false}
                   onChange={(e) => handleToggleChange(fieldId, e.target.checked)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   className="sr-only peer"
                   disabled={isDisabled}
                 />
@@ -2184,6 +2405,7 @@ function PublicFormViewer() {
                   style={{ width: '33%' }}
                   value={formValues[`${fieldId}_salutation`] || properties.subFields.salutation.placeholder}
                   onChange={(value) => handleChange(`${fieldId}_salutation`, value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_salutation`) && runPrefillForField(`${fieldId}_salutation`)}
                   disabled={isDisabled}
                   className="w-1/5"
                   placeholder={properties.subFields.salutation.placeholder || 'Select'}
@@ -2198,6 +2420,7 @@ function PublicFormViewer() {
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                 value={formValues[`${fieldId}_first`] || ''}
                 onChange={(e) => handleChange(`${fieldId}_first`, e.target.value)}
+                onBlur={() => dependentFields.has(`${fieldId}_first`) && runPrefillForField(`${fieldId}_first`)}
                 placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
                 disabled={isDisabled}
               />
@@ -2206,6 +2429,7 @@ function PublicFormViewer() {
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                 value={formValues[`${fieldId}_last`] || ''}
                 onChange={(e) => handleChange(`${fieldId}_last`, e.target.value)}
+                onBlur={() => dependentFields.has(`${fieldId}_last`) && runPrefillForField(`${fieldId}_last`)}
                 placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
                 disabled={isDisabled}
               />
@@ -2233,6 +2457,7 @@ function PublicFormViewer() {
                     className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                     value={formValues[`${fieldId}_street`] || ''}
                     onChange={(e) => handleChange(`${fieldId}_street`, e.target.value)}
+                    onBlur={() => dependentFields.has(`${fieldId}_street`) && runPrefillForField(`${fieldId}_street`)}
                     placeholder={properties.placeholder?.street || 'Street Address'}
                     disabled={isDisabled}
                   />
@@ -2247,6 +2472,7 @@ function PublicFormViewer() {
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_city`] || ''}
                       onChange={(e) => handleChange(`${fieldId}_city`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_city`) && runPrefillForField(`${fieldId}_city`)}
                       placeholder={properties.placeholder?.city || 'City'}
                       disabled={isDisabled}
                     />
@@ -2260,6 +2486,7 @@ function PublicFormViewer() {
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_state`] || ''}
                       onChange={(e) => handleChange(`${fieldId}_state`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_state`) && runPrefillForField(`${fieldId}_state`)}
                       placeholder={properties.placeholder?.state || 'State'}
                       disabled={isDisabled}
                     />
@@ -2275,6 +2502,7 @@ function PublicFormViewer() {
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_country`] || ''}
                       onChange={(e) => handleChange(`${fieldId}_country`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_country`) && runPrefillForField(`${fieldId}_country`)}
                       placeholder={properties.placeholder?.country || 'Country'}
                       disabled={isDisabled}
                     />
@@ -2288,6 +2516,7 @@ function PublicFormViewer() {
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_postal`] || ''}
                       onChange={(e) => handleChange(`${fieldId}_postal`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_postal`) && runPrefillForField(`${fieldId}_postal`)}
                       placeholder={properties.placeholder?.postal || 'Postal Code'}
                       disabled={isDisabled}
                     />
@@ -2354,6 +2583,7 @@ function PublicFormViewer() {
                   id={fieldId}
                   checked={formValues[fieldId] || false}
                   onChange={(e) => handleChange(fieldId, e.target.checked)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   disabled={isDisabled}
                   aria-required={isRequired}
@@ -2453,6 +2683,7 @@ function PublicFormViewer() {
                     key={option.value}
                     type="button"
                     onClick={() => handleRatingChange(fieldId, option.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                     disabled={isDisabled}
                     className={`text-2xl ${selectedRatings[fieldId] === option.value ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 focus:outline-none`}
                   >
@@ -2514,6 +2745,7 @@ function PublicFormViewer() {
                             const newValue = { ...formValues[fieldId], [row]: col };
                             handleChange(fieldId, newValue);
                           }}
+                          onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                           disabled={isDisabled}
                         />
                       </td>
@@ -2566,6 +2798,7 @@ function PublicFormViewer() {
               {...commonProps}
               value={formValues[fieldId] || ''}
               onChange={(e) => handleChange(fieldId, e.target.value)}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               placeholder={properties.placeholder?.main || 'https://example.com'}
             />
             {renderError()}
