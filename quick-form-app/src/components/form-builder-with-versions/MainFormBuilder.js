@@ -20,6 +20,9 @@ import Conditions from "../conditions/Conditions"; // Or your actual path
 import { v4 as uuidv4 } from "uuid";
 import AnimatedTooltip from '../create-form-wizard/AnimatedTooltip';
 import SharePage from '../share-page/SharePage.js'
+import Prefill from '../form-prefill/Prefill.js';
+import { enhancedFormPaymentProcessor } from "./payment-fields/EnhancedFormPaymentProcessor";
+import { setUserContext } from "./payment-fields/paypal/api/paypalApi";
 
 const themes = [
   {
@@ -92,7 +95,8 @@ function MainFormBuilder({
   showThankYou,
   showNotification,
   showCondition,
-  showShare
+  showShare,
+  showPrefill
 }) {
   // const { formVersionId } = useParams();
   const location = useLocation();
@@ -593,6 +597,9 @@ function MainFormBuilder({
             properties.validation || getDefaultValidation(field.Field_Type__c),
           subFields:
             properties.subFields || getDefaultSubFields(field.Field_Type__c),
+          isHidden : field?.isHidden__c || false,
+          defaultValue : field?.Default_Value__c || null,
+          sectionSide : properties?.sectionSide || null
         });
       });
 
@@ -745,6 +752,8 @@ function MainFormBuilder({
             Order_Number__c: index + 1,
             Properties__c: JSON.stringify(sectionProperties),
             Unique_Key__c: field.id,
+            isHidden__c : field.isHidden,
+            Default_Value__c : field.defaultValue
           };
         }
 
@@ -756,6 +765,8 @@ function MainFormBuilder({
             field.type?.charAt(0).toUpperCase() + field.type?.slice(1) ||
             "Field",
           subFields: field.subFields || getDefaultSubFields(field.type) || {},
+          isHidden: field.isHidden || false, //  isHidden
+          defaultValue: field.defaultValue || null, //  defaultValue
         };
 
         return {
@@ -765,6 +776,7 @@ function MainFormBuilder({
           Order_Number__c: index + 1,
           Properties__c: JSON.stringify(properties),
           Unique_Key__c: field.id,
+          isHidden__c : field.isHidden          
         };
       })
     );
@@ -800,6 +812,80 @@ function MainFormBuilder({
       const instanceUrl = sessionStorage.getItem("instanceUrl");
       if (!userId || !instanceUrl)
         throw new Error("Missing userId or instanceUrl.");
+
+       // Step 1: Mock validation (set to true by default for now)
+      const mockValidation = true;
+      if (!mockValidation) {
+        throw new Error("Form validation failed");
+      }
+
+      // Step 2: Validate payment fields using enhanced processor
+      console.log("🔍 Validating payment fields with enhanced processor...");
+      const paymentValidation =
+        await enhancedFormPaymentProcessor.validateFormPayments(fields, formId);
+
+      if (!paymentValidation.isValid) {
+        const errorMessage = `Payment validation failed:\n${paymentValidation.errors.join(
+          "\n"
+        )}`;
+        throw new Error(errorMessage);
+      }
+
+      if (paymentValidation.warnings.length > 0) {
+        const warningMessage = `Payment warnings:\n${paymentValidation.warnings.join(
+          "\n"
+        )}\n\nDo you want to continue?`;
+        if (!window.confirm(warningMessage)) {
+          return;
+        }
+      }
+
+       // Step 3: Process payment fields (create/update subscriptions) using enhanced processor
+      console.log("💳 Processing payment fields with enhanced processor...");
+      const paymentProcessing =
+        await enhancedFormPaymentProcessor.processFormPayments(
+          fields,
+          formId,
+          selectedVersionId
+        );
+
+      if (!paymentProcessing.success) {
+        const errorMessage = `Payment processing failed:\n${paymentProcessing.errors
+          .map((e) => `Field ${e.fieldId}: ${e.error}`)
+          .join("\n")}`;
+        throw new Error(errorMessage);
+      }
+
+      // Log payment processing results
+      if (paymentProcessing.processedFields.length > 0) {
+        console.log(
+          "✅ Enhanced payment processing results:",
+          paymentProcessing.processedFields
+        );
+      }
+
+        // Clear previousMerchantId from fields after successful processing
+      const updatedFields = fields.map((field) => {
+        if (
+          field.type === "paypal_payment" &&
+          field.subFields?.previousMerchantId
+        ) {
+          return {
+            ...field,
+            subFields: {
+              ...field.subFields,
+              previousMerchantId: undefined,
+            },
+          };
+        }
+        return field;
+      });
+
+      if (JSON.stringify(updatedFields) !== JSON.stringify(fields)) {
+        console.log("🧹 Clearing previousMerchantId from processed fields");
+        setFields(updatedFields);
+      }
+
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error("Failed to obtain access token.");
       const { formVersion, formFields } = prepareFormData();
@@ -820,7 +906,17 @@ function MainFormBuilder({
       if (!response.ok) {
         throw new Error(JSON.stringify(data) || "Failed to save form.");
       }
-      alert("Form saved successfully!");
+       // Success message with payment processing info
+      let successMessage = "Form saved successfully!";
+      if (paymentProcessing.processedFields.length > 0) {
+        const processedCount = paymentProcessing.processedFields.length;
+        successMessage += `\n\n${processedCount} payment field(s) processed:`;
+        paymentProcessing.processedFields.forEach((field) => {
+          successMessage += `\n- ${field.action} for field ${field.fieldId}`;
+        });
+      }
+      alert(successMessage);
+      
       await refreshData();
       if (hasChanges || !formVersion.Id) {
         const newFormVersionId = data.formVersionId;
@@ -1087,6 +1183,11 @@ function MainFormBuilder({
         .substr(2, 9)}`;
       const defaultValidation = getDefaultValidation(fieldType);
       const defaultSubFields = getDefaultSubFields(fieldType);
+       // Add default options for dropdown
+      const defaultOptions =
+      fieldType === "dropdown"
+        ? ["Option 1", "Option 2", "Option 3"]
+        : undefined;
       const newFieldObj = {
         id: newFieldId,
         type: fieldType,
@@ -1094,6 +1195,7 @@ function MainFormBuilder({
         sectionSide: sectionSide || null,
         validation: defaultValidation,
         subFields: defaultSubFields,
+        options: defaultOptions, // Add default options for dropdown
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
@@ -1108,6 +1210,8 @@ function MainFormBuilder({
     });
 
     setFields(flattenedFields);
+    setSelectedFieldId(null)
+    setSelectedSectionSide(null);
   };
 
   const handleReorder = (fromIndex, toIndex, pageIndex) => {
@@ -1181,11 +1285,14 @@ function MainFormBuilder({
     const updatedFields = fields
       .map((field) => {
         if (field.type === "section") {
-          if (field.leftField?.id === fieldId) {
-            return { ...field, leftField: null };
+        const updatedSubFields = { ...field.subFields };
+        if (updatedSubFields.leftField?.id === fieldId) {
+          updatedSubFields.leftField = null;
+          return { ...field, subFields: updatedSubFields };
           }
-          if (field.rightField?.id === fieldId) {
-            return { ...field, rightField: null };
+        if (updatedSubFields.rightField?.id === fieldId) {
+          updatedSubFields.rightField = null;
+          return { ...field, subFields: updatedSubFields };
           }
         }
         return field;
@@ -1621,7 +1728,7 @@ function MainFormBuilder({
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
             <SharePage publishLink={publishLink} />
-          ) : showNotification ? (
+          ) : showPrefill ? <Prefill /> : showNotification ? (
             <NotificationPage
               currentFields={formVersions[0]?.Fields}
               sendNotificationData={sendNotificationData}

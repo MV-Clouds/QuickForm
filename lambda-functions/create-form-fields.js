@@ -62,22 +62,6 @@ export const handler = async (event) => {
       createdAt = metadataItem.CreatedAt?.S || createdAt;
     }
 
-    // if (formRecordItems.length > 0) {
-    //   try {
-    //     const sortedChunks = formRecordItems
-    //       .sort((a, b) => {
-    //         const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-    //         const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-    //         return aNum - bNum;
-    //       })
-    //       .map(item => item.FormRecords.S);
-    //     const combinedFormRecords = sortedChunks.join('');
-    //     formRecords = JSON.parse(combinedFormRecords);
-    //   } catch (e) {
-    //     console.warn('Failed to parse FormRecords chunks:', e);
-    //   }
-    // }
-
     if (formRecordItems.length > 0) {
       try {
         const sortedChunks = formRecordItems
@@ -627,15 +611,36 @@ export const handler = async (event) => {
 
     // Step 5: Update DynamoDB SalesforceMetadata table
     const currentTime = new Date().toISOString();
-
+    if (!Array.isArray(formRecords)) {
+      formRecords = [];
+    }
+    
     let existingConditions = [];
     if (Id) {
       const existingFormVersion = formRecords
-        .flatMap(form => form.FormVersions)
-        .find(version => version.Id === Id);
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version && version.Id === Id);
       if (existingFormVersion && existingFormVersion.Conditions) {
-        existingConditions = existingFormVersion.Conditions;
+        existingConditions = existingFormVersion.Conditions || [];
       }
+    }
+    let existingThankYou = [];
+    if (Id) {
+      const existingFormVersion = formRecords
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version && version.Id === Id);
+      if (existingFormVersion && existingFormVersion.ThankYou) {
+        existingThankYou = existingFormVersion.ThankYou || [];
+      } 
+    }
+    let existingPrefill = [];
+    if (Id) {
+      const existingFormVersion = formRecords
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version && version.Id === Id);
+      if (existingFormVersion && existingFormVersion.Prefills) {
+        existingPrefill = existingFormVersion.Prefills || [];
+      } 
     }
 
     // Construct new or updated form version record
@@ -650,26 +655,43 @@ export const handler = async (event) => {
       Object_Info__c: formData.formVersion.Object_Info__c || [],
       Fields: allFields, // Use the combined fields with IDs
       Conditions: existingConditions,
+      ThankYou : existingThankYou,
+      Prefills : existingPrefill,
       Source: 'Form_Version__c',
     };
 
     let updatedFormRecords = [...formRecords];
     const formIndex = updatedFormRecords.findIndex(f => f.Id === formId);
+    let oldFormRecord = formIndex >= 0 ? updatedFormRecords[formIndex] : null;
+    const preservedActiveVersion = oldFormRecord?.Active_Version__c || 'None';
+    const preservedPublishLink = oldFormRecord?.Publish_Link__c || '';
+    const preservedStatus = oldFormRecord?.Status__c || 'Inactive';
+
     if (formIndex >= 0) {
       const otherVersions = updatedFormRecords[formIndex].FormVersions.filter(v => v.Id !== formVersionId);
       if (formData.formVersion.Stage__c === 'Publish') {
         otherVersions.forEach(v => {
           if (v.Stage__c === 'Publish') v.Stage__c = 'Locked';
         });
+        updatedFormRecords[formIndex] = {
+          ...updatedFormRecords[formIndex],
+          LastModifiedDate: currentTime,
+          Active_Version__c: `V${formData.formVersion.Version__c}`,
+          Publish_Link__c: formUpdate?.Publish_Link__c || preservedPublishLink,
+          Status__c: 'Active',
+          FormVersions: [newFormVersionRecord, ...otherVersions],
+        };
+      } else {
+        // Preserve old values for drafts or other stages
+        updatedFormRecords[formIndex] = {
+          ...updatedFormRecords[formIndex],
+          LastModifiedDate: currentTime,
+          Active_Version__c: preservedActiveVersion,
+          Publish_Link__c: preservedPublishLink,
+          Status__c: preservedStatus,
+          FormVersions: [newFormVersionRecord, ...otherVersions],
+        };
       }
-      updatedFormRecords[formIndex] = {
-        ...updatedFormRecords[formIndex],
-        LastModifiedDate: currentTime,
-        Active_Version__c: formData.formVersion.Stage__c === 'Publish' ? `V${formData.formVersion.Version__c}` : 'None',
-        Publish_Link__c: formUpdate?.Publish_Link__c || '',
-        Status__c: formData.formVersion.Stage__c === 'Publish' ? 'Active' : 'Inactive',
-        FormVersions: [newFormVersionRecord, ...otherVersions],
-      };
     } else {
       updatedFormRecords.push({
         Id: formId,
@@ -698,11 +720,12 @@ export const handler = async (event) => {
             InstanceUrl: { S: cleanedInstanceUrl },
             Metadata: { S: JSON.stringify(existingMetadata) },
             UserProfile: { S: metadataItem.UserProfile?.S },
-            Fieldset : { S: metadataItem.Fieldset?.S || {} },
+            Folders : { S: metadataItem.Folders?.S || "{}" },
+            Fieldset : { S: metadataItem.Fieldset?.S || "{}" },
             CreatedAt: { S: createdAt },
             UpdatedAt: { S: currentTime },
           },
-        },
+        },  
       },
       ...chunks.map((chunk, index) => ({
         PutRequest: {
@@ -716,7 +739,7 @@ export const handler = async (event) => {
         },
       })),
     ];
-
+    
     await dynamoClient.send(
       new BatchWriteItemCommand({
         RequestItems: {
@@ -724,6 +747,7 @@ export const handler = async (event) => {
         },
       })
     );
+    
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },

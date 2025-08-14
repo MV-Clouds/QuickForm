@@ -20,7 +20,9 @@ export const handler = async (event) => {
     };
   }
 
-  const { userId, instanceUrl, formId, accessToken  } = body;
+  let { userId, instanceUrl, formId, accessToken, requestType, formVersionId  } = body;
+  console.log('Request type',requestType);
+  
   if (!userId) {
     return {
       statusCode: 400,
@@ -68,6 +70,78 @@ export const handler = async (event) => {
     }
 
     const metadataItem = allItems.find(item => item.ChunkIndex?.S === 'Metadata');
+    if(!instanceUrl){
+      instanceUrl = metadataItem.InstanceUrl.S;
+    }
+    if (requestType === 'salesforceQuery') {
+      if (!accessToken || !instanceUrl) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: 'Missing accessToken or instanceUrl for Salesforce query' }),
+        };
+      }
+      // Parse soql query string from body (expect it in body.sobject or body.soql)
+      const { soql } = body;
+      console.log('SOQL :', soql);
+      if (!soql) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: 'Missing SOQL query string' }),
+        };
+      }
+    
+      try {
+        const cleanedInstanceUrl = instanceUrl.replace(/^https?:\/\//, '');
+        const queryUrl = `https://${cleanedInstanceUrl}/services/data/v60.0/query?q=${encodeURIComponent(soql)}`;
+    
+        const sfResponse = await fetch(queryUrl, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+    
+        if (!sfResponse.ok) {
+          const errData = await sfResponse.json();
+          return {
+            statusCode: sfResponse.status,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            body: JSON.stringify({ error: errData.message || 'Salesforce query failed' }),
+          };
+        }
+    
+        const data = await sfResponse.json();
+        const { multipleRecordAction } = body;
+        console.log('Data :', data);
+        
+        // Only assign if there are results
+        let firstRecord = null;
+        if (data.records && data.records.length > 0) {
+          // If skip_prefill & more than 1 record → do NOT prefill
+          if (multipleRecordAction === 'skip_prefill' && data.records.length > 1) {
+            
+          } else {
+            // Otherwise take first record
+            firstRecord = data.records[0];
+          }
+        }
+        return {
+          statusCode: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ record: firstRecord }),
+        };
+      } catch (err) {
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: 'Error executing Salesforce query: ' + err.message }),
+        };
+      }
+    }
+    
     if(accessToken){
       const cleanedInstanceUrl = instanceUrl.replace(/^https?:\/\//, '');
       const objectsRes = await fetch(`${instanceUrl}/services/data/v60.0/sobjects/`, {
@@ -144,7 +218,7 @@ export const handler = async (event) => {
             Metadata: { S: JSON.stringify(metadata) },
             CreatedAt: { S: metadataItem?.CreatedAt?.S || now },
             UpdatedAt: { S: now },
-            UserProfile : { S: JSON.stringify(metadataItem?.UserProfile?.S) }
+            UserProfile : { S: metadataItem?.UserProfile?.S }
           }
         }));
 
@@ -156,6 +230,7 @@ export const handler = async (event) => {
 
     }
     const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
+    const deletedFormRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('DeletedFormRecords_'));
 
     let formRecords = null;
     if (formRecordItems.length > 0) {
@@ -176,6 +251,70 @@ export const handler = async (event) => {
       }
     }
 
+    if (requestType === 'prefill' && formVersionId) {
+
+      // Find the form record containing the specified formVersionId
+      let formVersion = null;
+      const formRecordsParsed = JSON.parse(formRecords);
+      for (const form of formRecordsParsed) {
+        const matchVersion = form.FormVersions.find(v => v.Id === formVersionId);
+        if (matchVersion) {
+          formVersion = matchVersion;
+          break;
+        }
+      }
+
+      if (!metadataItem?.Metadata?.S) {
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: 'Metadata not found' }),
+        };
+      }
+
+      if (!formVersion) {
+        return {
+          statusCode: 404,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          body: JSON.stringify({ error: `Form version ${formVersionId} not found` }),
+        };
+      }
+
+      // Extract metadata, form fields, and prefill data stored in formVersion (assuming 'Prefill' field or similar)
+      const metadata = JSON.parse(metadataItem.Metadata.S);
+      const formFields = formVersion.Fields || [];
+      const prefillData = formVersion.Prefills || null; // Update this if you store prefill differently
+
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          success: true,
+          metadata,
+          formFields,
+          prefillData,
+        }),
+      };
+    }
+
+    let deletedFormRecords = null;
+    if (deletedFormRecordItems.length > 0) {
+      try {
+        // Sort chunks by ChunkIndex and combine
+        const sortedChunks = deletedFormRecordItems
+        .sort((a, b) => {
+          const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+          const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+          return aNum - bNum;
+        })
+        .map(item => item.FormRecords.S);
+        const combinedFormRecords = sortedChunks.join('');
+        deletedFormRecords = combinedFormRecords;
+      } catch (e) {
+        console.warn('Failed to process DeletedFormRecords chunks:', e.message, '\nStack trace:', e.stack);
+        deletedFormRecords = null; // Return null if chunk processing fails, matching original behavior
+      }
+    }
     
     if (formId) {
       const formRecordsParsed = JSON.parse(formRecords);
@@ -187,7 +326,6 @@ export const handler = async (event) => {
           body: JSON.stringify({ error: `Form not found for ID: ${formId}` }),
         };
       }
-      console.log(matchedForm.FormVersions);
       const publishedVersion = matchedForm.FormVersions.find(v => v.Stage__c === 'Publish');
       if (!publishedVersion) {
         return {
@@ -209,6 +347,8 @@ export const handler = async (event) => {
             Fields: publishedVersion.Fields,
             Conditions: publishedVersion.Conditions,
             Stage__c: publishedVersion.Stage__c,
+            ThankYou : publishedVersion.ThankYou,
+            Prefills: publishedVersion.Prefills,
           },
         }),
       };
@@ -224,6 +364,7 @@ export const handler = async (event) => {
         body: JSON.stringify({ error: 'Metadata not found for this user and instance' }),
       };
     }
+
     return {
       statusCode: 200,
       headers: {
@@ -233,8 +374,11 @@ export const handler = async (event) => {
       body: JSON.stringify({
         metadata: metadataItem.Metadata.S,
         FormRecords: formRecords,
-        UserProfile : metadataItem.UserProfile?.S
-      }),
+        DeletedFormRecords: deletedFormRecords,
+        UserProfile : metadataItem.UserProfile?.S,
+        Fieldset : metadataItem.Fieldset?.S || [],
+        Folders : metadataItem.Folders?.S || [],
+      }), 
     };
   } catch (error) {
     console.error('Error fetching metadata:', error);

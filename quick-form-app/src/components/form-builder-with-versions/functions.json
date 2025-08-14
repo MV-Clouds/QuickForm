@@ -1,0 +1,479 @@
+{
+  "functions": {
+    "addDays": {
+      "name": "addDays",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "date", "description": "The date to add days to"},
+        {"type": "number", "description": "Number of days to add"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Adds a given number of days to a date.",
+      "returnType": "date"
+    },
+    "addMonths": {
+      "name": "addMonths",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "date", "description": "The date to add months to"},
+        {"type": "number", "description": "Number of months to add"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Adds a given number of months to a date.",
+      "returnType": "date"
+    },
+    "addYears": {
+      "name": "addYears",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "date", "description": "The date to add years to"},
+        {"type": "number", "description": "Number of years to add"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Adds a given number of years to a date.",
+      "returnType": "date"
+    },
+    "subtractDates": {
+      "name": "subtractDates",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "date", "description": "First date"},
+        {"type": "date", "description": "Second date"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Returns the number of days between two dates.",
+      "returnType": "number"
+    },
+    "addTimes": {
+      "name": "addTimes",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "time", "description": "First time value"},
+        {"type": "time", "description": "Second time value"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Adds two time values together.",
+      "returnType": "time"
+    },
+    "subtractTimes": {
+      "name": "subtractTimes",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "time", "description": "First time value"},
+        {"type": "time", "description": "Second time value"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Returns the time difference between two time values.",
+      "returnType": "time"
+    },
+    "setTime": {
+      "name": "setTime",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "date", "description": "The date"},
+        {"type": "time", "description": "The time to set"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Combines a date and a time into a single datetime value.",
+      "returnType": "datetime"
+    },
+    "parseDate": {
+      "name": "parseDate",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "string", "description": "String to parse as date"},
+        {"type": "string", "description": "Optional format string", "optional": true}
+      ],
+      "minArgs": 1,
+      "maxArgs": 2,
+      "description": "Converts a string into a date using an optional format.",
+      "returnType": "date"
+    },
+    "parseTime": {
+      "name": "parseTime",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "string", "description": "String to parse as time"},
+        {"type": "string", "description": "Optional format string", "optional": true}
+      ],
+      "minArgs": 1,
+      "maxArgs": 2,
+      "description": "Converts a string into a time using an optional format.",
+      "returnType": "time"
+    },
+    "toDate": {
+      "name": "toDate",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "any", "description": "Value to convert to date"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a value to a date type.",
+      "returnType": "date"
+    },
+    "toTime": {
+      "name": "toTime",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "any", "description": "Value to convert to time"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a value to a time type.",
+      "returnType": "time"
+    },
+    "numberToDate": {
+      "name": "numberToDate",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "number", "description": "Numeric timestamp"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a numeric timestamp into a date.",
+      "returnType": "date"
+    },
+    "dateToNumber": {
+      "name": "dateToNumber",
+      "category": "Date & Time",
+      "arguments": [
+        {"type": "date", "description": "Date to convert"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a date into a numeric timestamp.",
+      "returnType": "number"
+    },
+    "parseNumber": {
+      "name": "parseNumber",
+      "category": "Number",
+      "arguments": [
+        {"type": "string", "description": "String to parse as number"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a string into a numeric value.",
+      "returnType": "number"
+    },
+    "abs": {
+      "name": "abs",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Input number"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Returns the absolute value.",
+      "returnType": "number"
+    },
+    "sqrt": {
+      "name": "sqrt",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Input number"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Returns the square root.",
+      "returnType": "number"
+    },
+    "min": {
+      "name": "min",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "First number"},
+        {"type": "number", "description": "Additional numbers", "variadic": true}
+      ],
+      "minArgs": 2,
+      "maxArgs": null,
+      "description": "Returns the smallest value.",
+      "returnType": "number"
+    },
+    "max": {
+      "name": "max",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "First number"},
+        {"type": "number", "description": "Additional numbers", "variadic": true}
+      ],
+      "minArgs": 2,
+      "maxArgs": null,
+      "description": "Returns the largest value.",
+      "returnType": "number"
+    },
+    "sum": {
+      "name": "sum",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "First number"},
+        {"type": "number", "description": "Additional numbers", "variadic": true}
+      ],
+      "minArgs": 2,
+      "maxArgs": null,
+      "description": "Returns the sum of all numbers.",
+      "returnType": "number"
+    },
+    "mean": {
+      "name": "mean",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "First number"},
+        {"type": "number", "description": "Additional numbers", "variadic": true}
+      ],
+      "minArgs": 2,
+      "maxArgs": null,
+      "description": "Returns the average value.",
+      "returnType": "number"
+    },
+    "round": {
+      "name": "round",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Number to round"},
+        {"type": "number", "description": "Number of decimal places", "optional": true}
+      ],
+      "minArgs": 1,
+      "maxArgs": 2,
+      "description": "Rounds a number to a specified decimal place.",
+      "returnType": "number"
+    },
+    "floor": {
+      "name": "floor",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Number to round down"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Rounds a number down to the nearest integer.",
+      "returnType": "number"
+    },
+    "ceil": {
+      "name": "ceil",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Number to round up"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Rounds a number up to the nearest integer.",
+      "returnType": "number"
+    },
+    "toNumber": {
+      "name": "toNumber",
+      "category": "Number",
+      "arguments": [
+        {"type": "any", "description": "Value to convert to number"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a value to a number.",
+      "returnType": "number"
+    },
+    "pow": {
+      "name": "pow",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Base number"},
+        {"type": "number", "description": "Exponent"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Raises a number to a power.",
+      "returnType": "number"
+    },
+    "mod": {
+      "name": "mod",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Dividend"},
+        {"type": "number", "description": "Divisor"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Returns the remainder after division.",
+      "returnType": "number"
+    },
+    "log": {
+      "name": "log",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Input number"},
+        {"type": "number", "description": "Logarithm base", "optional": true}
+      ],
+      "minArgs": 1,
+      "maxArgs": 2,
+      "description": "Returns the logarithm of a number with an optional base.",
+      "returnType": "number"
+    },
+    "exp": {
+      "name":"exp",
+      "category": "Number",
+      "arguments": [
+        {"type": "number", "description": "Exponent"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Returns e raised to the given number.",
+      "returnType": "number"
+    },
+    "concatStrings": {
+      "name": "concatStrings",
+      "category": "Text",
+      "arguments": [
+        {"type": "string", "description": "First string"},
+        {"type": "string", "description": "Additional strings", "variadic": true}
+      ],
+      "minArgs": 2,
+      "maxArgs": null,
+      "description": "Concatenates multiple strings.",
+      "returnType": "string"
+    },
+    "toString": {
+      "name": "toString",
+      "category": "Text",
+      "arguments": [
+        {"type": "any", "description": "Value to convert to string"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a value to a string.",
+      "returnType": "string"
+    },
+    "stringLength": {
+      "name": "stringLength",
+      "category": "Text",
+      "arguments": [
+        {"type": "string", "description": "Input string"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Returns the number of characters in a string.",
+      "returnType": "number"
+    },
+    "toUpperCase": {
+      "name": "toUpperCase",
+      "category": "Text",
+      "arguments": [
+        {"type": "string", "description": "Input string"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a string to uppercase.",
+      "returnType": "string"
+    },
+    "toLowerCase": {
+      "name": "toLowerCase",
+      "category": "Text",
+      "arguments": [
+        {"type": "string", "description": "Input string"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Converts a string to lowercase.",
+      "returnType": "string"
+    },
+    "trim": {
+      "name": "trim",
+      "category": "Text",
+      "arguments": [
+        {"type": "string", "description": "Input string"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Removes leading and trailing whitespace from a string.",
+      "returnType": "string"
+    },
+    "replace": {
+      "name": "replace",
+      "category": "Text",
+      "arguments": [
+        {"type": "string", "description": "Input string"},
+        {"type": "string", "description": "Text to search for"},
+        {"type": "string", "description": "Replacement text"}
+      ],
+      "minArgs": 3,
+      "maxArgs": 3,
+      "description": "Returns a new string where all occurrences of search are replaced with replacement.",
+      "returnType": "string"
+    },
+    "coerceToType": {
+      "name": "coerceToType",
+      "category": "Type & Null Handling",
+      "arguments": [
+        {"type": "any", "description": "Value to convert"},
+        {"type": "string", "description": "Target type (number, string, date, etc.)"}
+      ],
+      "minArgs": 2,
+      "maxArgs": 2,
+      "description": "Converts a value to a given type.",
+      "returnType": "any"
+    },
+    "isNullOrEmpty": {
+      "name": "isNullOrEmpty",
+      "category": "Type & Null Handling",
+      "arguments": [
+        {"type": "any", "description": "Value to check"}
+      ],
+      "minArgs": 1,
+      "maxArgs": 1,
+      "description": "Checks if the value is null, empty, or undefined.",
+      "returnType": "boolean"
+    }
+  },
+  "functionCategories": {
+    "Date & Time": [
+      "addDays",
+      "addMonths",
+      "addYears",
+      "subtractDates",
+      "addTimes",
+      "subtractTimes",
+      "setTime",
+      "parseDate",
+      "parseTime",
+      "toDate",
+      "toTime",
+      "numberToDate",
+      "dateToNumber"
+    ],
+    "Number": [
+      "parseNumber",
+      "abs",
+      "sqrt",
+      "min",
+      "max",
+      "sum",
+      "mean",
+      "round",
+      "floor",
+      "ceil",
+      "toNumber",
+      "pow",
+      "mod",
+      "log",
+      "exp"
+    ],
+    "Text": [
+      "concatStrings",
+      "toString",
+      "stringLength",
+      "toUpperCase",
+      "toLowerCase",
+      "trim",
+      "replace"
+    ],
+    "Type & Null Handling": [
+      "coerceToType",
+      "isNullOrEmpty"
+    ]
+  }
+}

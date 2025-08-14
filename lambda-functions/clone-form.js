@@ -6,7 +6,8 @@ const METADATA_TABLE_NAME = 'SalesforceChunkData';
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}');
-    const { userId, instanceUrl, formData } = body;
+    const { userId, instanceUrl, formData } = body;4
+    const oldThankYouData = formData.ThankYou || null;
 
     const token = event.headers.Authorization?.split(' ')[1];
 
@@ -123,6 +124,60 @@ export const handler = async (event) => {
       });
     }
 
+    const createdPrefills = [];
+    const formPrefills = formData.Prefills || [];
+    console.log('Form prefills',formPrefills);
+    
+    for (let i = 0; i < formPrefills.length; i += batchSize) {
+      const batch = formPrefills.slice(i, i + batchSize);
+
+      const compositeCreateRequest = {
+        allOrNone: true,
+        records: batch.map(f => {
+          let prefillData;
+          try {
+            prefillData = JSON.parse(f.Prefill_Data__c);
+          } catch {
+            prefillData = {};
+          }
+          const { Id, ...rest } = f;
+          return {
+            attributes: { type: 'Prefill__c' },
+            ...rest,
+            Form_Version__c: formVersionId,
+            Order__c: f.Order__c,
+            Prefill_Data__c: JSON.stringify({ prefillData }),
+          };
+        }),
+      };
+
+      const createResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(compositeCreateRequest),
+      });
+
+      if (!createResponse.ok) {
+        const err = await createResponse.json();
+        throw new Error(err[0]?.message || 'Failed to batch create prefill');
+      }
+
+      const createResponseData = await createResponse.json();
+      createResponseData.forEach((result, index) => {
+        if (result.success) {
+          createdPrefills.push({
+            ...batch[index],
+            Id: result.id,
+          });
+        } else {
+          throw new Error(result.errors[0]?.message || 'Failed to create prefill');
+        }
+      });
+    }
+
     const conditions = formData.conditions || [];
 
     const conditionBatchSize = 200;
@@ -133,11 +188,11 @@ export const handler = async (event) => {
 
       const compositeConditionRequest = {
         allOrNone: true,
-        records: batch.map((cond) => ({
+        records: [{
           attributes: { type: 'Form_Condition__c' },
           Form_Version__c: formVersionId,
-          Condition_Data__c: JSON.stringify(cond),
-        })),
+          Condition_Data__c: JSON.stringify(formData.conditions),
+        }],
       };
 
       const conditionResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
@@ -158,10 +213,8 @@ export const handler = async (event) => {
 
       conditionResponseData.forEach((result, index) => {
         if (result.success) {
-          createdConditions.push({
-            ...batch[index],
-            Id: result.id,
-          });
+          createdConditions.push(
+            ...formData.conditions);
         } else {
           throw new Error(result.errors[0]?.message || 'Failed to create a condition');
         }
@@ -169,7 +222,6 @@ export const handler = async (event) => {
     }
 
     const mappingsArray = Object.values(formData.Mappings?.Mappings || []);
-    console.log("mappings ",formData.Mappings);
     
     const nodes = Array.isArray(formData.Mappings?.Nodes) ? formData.Mappings.Nodes : [];
     const edges = Array.isArray(formData.Mappings?.Edges) ? formData.Mappings.Edges : [];
@@ -266,7 +318,6 @@ export const handler = async (event) => {
         allOrNone: true,
         records,
       };
-      console.log('compositeRequest', JSON.stringify(compositeRequest, null, 2));
       
 
       const response = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
@@ -285,9 +336,9 @@ export const handler = async (event) => {
 
       const responseData = await response.json();
       responseData.forEach((result, idx) => {
-        if (!result.success) {
-          throw new Error(result.errors[0]?.message || 'Error creating a mapping node');
-        }
+        // if (!result.success) {
+        //   throw new Error(result.errors[0]?.message || 'Error creating a mapping node');
+        // }
         createdMappings.set(records[idx].Node_Id__c, result.id);
       });
     }
@@ -310,6 +361,86 @@ export const handler = async (event) => {
       Edges: edges,
     };
 
+    let newThankYouData = null;
+    if (oldThankYouData) {
+      // Prepare payload for new ThankYou record linked to the new Form Version
+      const thankYouPayload = {
+        ...oldThankYouData,
+        // Ensure the new FormVersionId is set
+        Form_Version__c: formVersionId,
+      };
+
+      // Salesforce expects no Id or attributes field for creation
+      delete thankYouPayload.Id;
+      delete thankYouPayload.attributes;
+
+      const thankYouResponse = await fetch(`${salesforceBaseUrl}/sobjects/Thank_You__c`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(thankYouPayload),
+      });
+
+      if (!thankYouResponse.ok) {
+        const err = await thankYouResponse.json();
+        throw new Error(err[0]?.message || 'Failed to create cloned ThankYou record');
+      }
+
+      const thankYouCreateData = await thankYouResponse.json();
+
+      newThankYouData = {
+        Id: thankYouCreateData.id,
+        Form_Version__c: formVersionId,
+        Body__c: oldThankYouData.Body__c,
+        Actions__c: oldThankYouData.Actions__c,
+        Name: oldThankYouData.Name,
+        Heading__c: oldThankYouData.Heading__c,
+        Sub_Heading__c: oldThankYouData.Sub_Heading__c,
+        Image_Url__c: oldThankYouData.Image_Url__c,
+        Description__c: oldThankYouData.Description__c,
+      };
+    }
+
+    const oldNotifications = formData.Notifications || [];
+
+    // Prepare array to collect newly created notification records
+    const newNotifications = [];
+
+    for (const oldNotif of oldNotifications) {
+      // Prepare payload for new Notification record, link to new formId
+      const notifPayload = {
+        ...oldNotif,
+        Form__c: formId, 
+      };
+
+      // Salesforce expects no Id or attributes for new record creations
+      delete notifPayload.Id;
+      delete notifPayload.attributes;
+
+      const notifResponse = await fetch(`${salesforceBaseUrl}/sobjects/Notification__c`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(notifPayload),
+      });
+
+      if (!notifResponse.ok) {
+        const err = await notifResponse.json();
+        throw new Error(err[0]?.message || 'Failed to clone Notification record');
+      }
+
+      const notifCreateData = await notifResponse.json();
+
+      newNotifications.push({
+        ...oldNotif,
+        Id: notifCreateData.id,
+        Form__c: formId, // confirm new form linkage
+      });
+    }
 
 
     // Step 4: Fetch existing form records from DynamoDB (if any)
@@ -333,20 +464,9 @@ export const handler = async (event) => {
     } while (ExclusiveStartKey);
 
     // Extract existing metadata and form records
-    let existingMetadata = {};
     let createdAt = currentTime;
 
-    const metadataItem = allItems.find(item => item.ChunkIndex?.S === 'Metadata');
     const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
-
-    if (metadataItem?.Metadata?.S) {
-      try {
-        existingMetadata = JSON.parse(metadataItem.Metadata.S);
-      } catch (e) {
-        console.warn('Failed to parse Metadata:', e);
-      }
-      createdAt = metadataItem.CreatedAt?.S || createdAt;
-    }
 
     let formRecords = [];
     if (formRecordItems.length > 0) {
@@ -381,15 +501,18 @@ export const handler = async (event) => {
       Object_Info__c: formData.formVersion.Object_Info__c || [],
       Fields: createdFields,
       Conditions: createdConditions,
+      Prefills: createdPrefills,
       Mappings: finalMappings,
+      ThankYou: newThankYouData,
       Source: 'Form_Version__c',
     };
-
+    
     const newFormRecord = {
       Id: formId,
       Name: `FORM-${formId.slice(-4)}`,
       LastModifiedDate: currentTime,
       Active_Version__c: 'None',
+      Notifications: newNotifications,
       FormVersions: [newFormVersionRecord],
       Status__c: 'Inactive',
       Source: 'Form__c',
