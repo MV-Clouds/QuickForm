@@ -14,6 +14,8 @@ import ChatBot from './components/chat-bot/chat-bot-new';
 import GuestPageD from './components/LandingPage/GuestPageD';
 import NotificationPage from './components/NotificationSettings/NotificationSettingsModal';
 import NotFound from './components/not-found/NotFound';
+import SharePage from './components/share-page/SharePage'; // adjust path as necessary
+
 function App() {
   return (
     // Set up the router for navigation
@@ -70,6 +72,14 @@ function App() {
               <Route path='/thankyou/:formVersionId' element={<ProtectedRoute element = {<MainFormBuilder showThankYou />}/>} />
               <Route path='/template' element={<ProtectedRoute element={<FormTemplate />}/>} />
               <Route path="*" element={<ProtectedRoute element={<NotFound />} />} />
+               <Route 
+                path="/share/:formVersionId"
+                element={
+                  <ProtectedRoute element={
+                    <MainFormBuilder showShare />
+                  }/>
+                }
+              />
             </Routes>
           </div>
         </Router>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Edit, PlusCircle, Trash2, X } from 'lucide-react';
+import { Edit, PlusCircle, Search, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FieldSetBuilder from './FieldSetPageNew'
 import useUndo from 'use-undo';
@@ -626,32 +626,33 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
 
   return (
     <div>
+      <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-6 flex justify-between"
+        >
+          <h1 className="text-3xl font-bold text-white mb-1">Fieldset</h1>
+          <div>
+            <button
+              className="save-btn flex items-center gap-2 rounded-lg px-5 py- text-white font-semibold shadow-md"
+              style={gradientBtn}
+              onClick={() => setshowModal(true)}
+            >
+              <PlusCircle className="h-5 w-5" /> Create Fieldset
+            </button>
+          </div>
+        </motion.div>
+      </div>
       {!modalOpen && (
-        <div className="">
+        <div className="ml-10 mr-10 shadow-lg rounded-lg p-6 bg-white">
           {/* Top Row */}
           <div className=" items-center justify-between mb-8">
-            <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="mb-6 flex justify-between"
-              >
-                <h1 className="text-3xl font-bold text-white mb-1">Fieldset</h1>
-                <div>
-                  <button
-                    className="save-btn flex items-center gap-2 rounded-lg px-5 py- text-white font-semibold shadow-md"
-                    style={gradientBtn}
-                    onClick={() => setshowModal(true)}
-                  >
-                    <PlusCircle className="h-5 w-5" /> Create Fieldset
-                  </button>
-                </div>
-              </motion.div>
-            </div>
 
             <div className="flex items-center gap-4 flex-1 justify-between mt-2">
               <div className="flex gap-4 ">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
                 <input
                   type="text"
                   placeholder="Search fieldsets..."
@@ -739,10 +740,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
                 </>)}
             </AnimatePresence>
           </motion.div>
-
-
-
         </div>
+
+
       )}
       {/* Modal for create fieldset */}
       <AnimatePresence>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpDown, Edit, Folder, Heart, Trash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavoriteForm, handleCloneForm }) => [
   {

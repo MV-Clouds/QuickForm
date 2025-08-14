@@ -46,7 +46,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, han
 
   // Table instance should use filteredData
   const table = useReactTable({
-    data: paginatedData,
+    data: filteredData,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -63,7 +63,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, han
       rowSelection,
       pagination: { pageIndex, pageSize },
     },
-    manualPagination: true,
+    manualPagination: false,
     pageCount: Math.ceil(filteredData.length / pageSize),
   });
   // Date formatting helper

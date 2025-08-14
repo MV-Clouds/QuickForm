@@ -11,7 +11,10 @@ export const SalesforceDataProvider = ({ children }) => {
   const [Fieldset , setFieldset] = useState([]); // Field Set Data
   const [deletedData , setdeletedData] = useState([]) //Deleted Data for Bin 
   const [favoriteData , setfavoriteData] = useState([]) //Favorites Data 
+ const [Notifications ,  setNotifications] = useState([]); //Notification Data
+ const [folders , setFolders] = useState([]); //Folders Data
 
+  // Function to fetch Salesforce data
   const fetchSalesforceData = async (userId, instanceUrl) => {
     if (!userId || !instanceUrl) {
       setError('Missing userId or instanceUrl');
@@ -67,7 +70,9 @@ export const SalesforceDataProvider = ({ children }) => {
 
       // Usage:
       const parsedFormRecords = parseFormRecords(data.FormRecords);
+      // console.log('Parsed Form Records:', JSON.stringify(parsedFormRecords, null, 2));
       const userProfileData = data?.UserProfile || {};
+      const folderData = typeof data?.Folders === 'string' ? JSON.parse(data?.Folders) : data?.Folders || [];
       const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
       const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
@@ -76,19 +81,21 @@ export const SalesforceDataProvider = ({ children }) => {
       setuserProfile(JSON.parse(userProfileData));
       setFieldset(parsedFieldset);
       setdeletedData(parsedDeletedData);
-      setfavoriteData(favoriteRecords) 
+      setfavoriteData(favoriteRecords);
+      setFolders(folderData);
+      console.log('Metadata fetched successfully:', data);
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
    const refreshData = async () => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
     if (userId && instanceUrl) {
-      fetchSalesforceData(userId, instanceUrl);
+      await fetchSalesforceData(userId, instanceUrl);
     }
   };
 
@@ -112,7 +119,8 @@ export const SalesforceDataProvider = ({ children }) => {
         userProfile,
         Fieldset,
         deletedData,
-        favoriteData
+        favoriteData,
+        Folders : folders
       }}
     >
       {children}

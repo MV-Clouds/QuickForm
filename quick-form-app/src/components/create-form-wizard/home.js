@@ -22,8 +22,13 @@ const Home = () => {
     error: contextError,
     fetchSalesforceData,
     userProfile,
-    Fieldset
+    Fieldset,
+    Folders
   } = useSalesforceData();
+  useEffect(()=>{
+    console.log('Formrecords',formRecords);
+    console.log('folders ',Folders);
+  },[formRecords])
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
   const [isFormNameOpen, setIsFormNameOpen] = useState(false);
@@ -332,50 +337,73 @@ console.log(versionToClone);
   };
 
   // Handler for creating a folder (for now, just log)
-  const handleCreateFolder = async (folderName, selectedFormIds) => {
-    // TODO: Implement backend update logic here
-    setisCreating(true);
-    console.log('Create folder:', folderName, 'with forms:', selectedFormIds);
-    // Make API call to backend to create/update folder
-    
-      try {
-        // Get userId and instanceUrl from userProfile/context
-        
-        if (!userId || !instanceUrl) {
-          console.error('Missing userId or instanceUrl for folder creation');
-          return;
-        }
-        // Call the folder API
-        const response = await fetch('https://8rq1el4sv2.execute-api.us-east-1.amazonaws.com/folder', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            folderName,
-            formIds: selectedFormIds,
-            instanceUrl,
-            token,
-            userId,
-          }),
-        });
+ const handleCreateFolder = async (
+  folderName,
+  selectedFormIds,
+  description = "",
+  folderId = null
+) => {
+  setisCreating(true);
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to create/update folder');
-        }
-        // Optionally, refresh data or show success message here
-      } catch (error) {
-        console.error('Error creating/updating folder:', error);
-      }finally{
-        setisCreating(false)
-        fetchSalesforceData(userId , instanceUrl);
-      }
-    
+  // Log the request payload for debugging
+  console.log("Request payload:", JSON.stringify({
+    folderName,
+    description,
+    formIds: selectedFormIds,
+    instanceUrl,
+    token,
+    userId,
+    folderId, // used to determine create (POST) or update (PATCH)
+  }));
 
-    // You would update Folder__c for each selected form in your backend
-  };
+  try {
+    // Determine HTTP method based on presence of folderId
+    const method = folderId ? 'PATCH' : 'POST';
+    console.log(method);
+    // Prepare API endpoint and request options
+    const apiUrl = 'https://8rq1el4sv2.execute-api.us-east-1.amazonaws.com/folder';
+
+    const response = await fetch(apiUrl, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      // Include folderId in body only for PATCH (update)
+      body: JSON.stringify({
+        folderName,
+        description,
+        formIds: selectedFormIds,
+        instanceUrl,
+        token,
+        userId,
+        ...(folderId ? { folderId } : {}), // add folderId only if updating
+      }),
+    });
+
+    // Parse JSON response
+    const data = await response.json();
+    console.log(`${method} response from server:`, data);
+
+    // Handle HTTP error responses
+    if (!response.ok) {
+      // Log detailed error and throw
+      console.error(`${method} folder failed with error:`, data.error || data);
+      throw new Error(data.error || `Failed to ${folderId ? 'update' : 'create'} folder`);
+    }
+
+    // Success: optionally refresh folder list or perform other UI state updates here
+     fetchSalesforceData(userId, instanceUrl);
+
+  } catch (error) {
+    // Catch network or other errors and log explicitly
+    console.error(`Error during folder ${folderId ? 'update' : 'creation'}:`, error);
+  } finally {
+    // Always reset loading state
+    setisCreating(false);
+  }
+};
+
   // Add to Favorites
   const handleFavoriteForm = async (formId) => {
     if (!formId) {
@@ -488,11 +516,15 @@ console.log(versionToClone);
               onEditForm={handleEditForm}
               onDeleteForm={handleDeleteForm}
               onToggleStatus={handleToggleStatus}
+              SFfolders={Folders}
+              token={token}
+              fetchSalesforceData={fetchSalesforceData}
+              isLoading ={contextLoading} 
             />
           </div>
         ) : selectedNav === 'fieldset' ? (
           <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
-        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} /> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
+        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} /> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} token={token}/> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div
@@ -558,8 +590,21 @@ console.log(versionToClone);
 
       {/* Modal for selecting form creation option */}
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-container">
+        <AnimatePresence>
+        <motion.div 
+          className="modal-overlay"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          >
+          <motion.div 
+            className="modal-container"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            >
             <div className="modal-header">
               <h2 className="form-title">Create New Form</h2>
               <button className="close-button-container" onClick={() => setIsModalOpen(false)}>
@@ -601,8 +646,9 @@ console.log(versionToClone);
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
+        </AnimatePresence>
       )}
       {isFormNameOpen && (
         <FormName

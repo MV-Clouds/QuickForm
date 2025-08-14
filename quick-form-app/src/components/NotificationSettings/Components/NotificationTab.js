@@ -785,7 +785,7 @@ const NotificationTab = ({
                               </label>
                             </div>
                           </td>
-                          <td className="p-4 text-gray-700">{rule.createdDate}</td>
+                          <td className="p-4 text-gray-700">{rule.createdDate || new Date().toLocaleString()}</td>
                           <td className="p-4 flex gap-2">
                           <motion.button whileHover={{ scale: 1.02, boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)' }} onClick={() => { handlePreview(rule.id) }}
                               whileTap={{ scale: 0.98 }} className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-all duration-200 ease-in-out">
