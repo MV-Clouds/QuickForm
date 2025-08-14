@@ -24,6 +24,8 @@ import { Select, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
 import { evaluateFormula } from './FormulaEvaluator';
+// import PaymentFieldRenderer from "./PaymentFieldRenderer";
+import PaymentFieldRenderer from "./payment/PaymentFieldRenderer";
 
 const { Option } = Select;
 
@@ -58,6 +60,12 @@ function PublicFormViewer() {
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+   // Payment-related state
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
+  const [hasPaymentField, setHasPaymentField] = useState(false);
+
   useEffect(() => {
   const fetchFormData = async () => {
     try {
@@ -639,6 +647,19 @@ function PublicFormViewer() {
     }
   };
 
+   // Handle payment completion - UPDATED FLOW
+  const handlePaymentComplete = (paymentData) => {
+  };
+
+  // Handle payment errors
+  const handlePaymentError = (error) => {
+    console.error("❌ Payment error:", error);
+    setErrors((prev) => ({
+      ...prev,
+      payment: error.message || "Payment processing failed",
+    }));
+  };
+
   const validateForm = () => {
     if (!formData) return false;
     const newErrors = {};
@@ -1032,7 +1053,6 @@ function PublicFormViewer() {
   };
 
   // In handleSubmit function
-
   const handleSubmit = async (e) => {
   e.preventDefault();
   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
@@ -1115,6 +1135,26 @@ function PublicFormViewer() {
         if (submissionData[`${fid}_countryCode`] !== undefined) delete submissionData[`${fid}_countryCode`];
       });
     });
+
+     // Add payment data to submission if payment was completed
+      if (paymentCompleted && paymentData) {
+        console.log(
+          "💳 Including payment data in form submission:",
+          paymentData
+        );
+        submissionData.paymentData = {
+          status: "completed",
+          transactionId: paymentData.transactionId,
+          orderId: paymentData.orderId,
+          amount: paymentData.amount,
+          currency: paymentData.currency,
+          paymentMethod: paymentData.paymentMethod,
+          paymentType: paymentData.paymentType,
+          merchantId: paymentData.merchantId,
+          completedAt: new Date().toISOString(),
+          fieldId: paymentData.fieldId,
+        };
+      }
 
     for (const key of Object.keys(filteredFormValues)) {
       const field = formData.Fields.find((f) => f.Id === key);
@@ -1228,6 +1268,15 @@ function PublicFormViewer() {
 
     const updatedSubmissionData = { ...submissionData };
 
+    // Show success message based on whether payment was involved
+      if (paymentCompleted && paymentData) {
+        alert(
+          `🎉 Thank you! Your payment of ${paymentData.currency} ${paymentData.amount} has been processed successfully and your form has been submitted!`
+        );
+      } else {
+        alert("Form submitted successfully!");
+      }
+
     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
       method: 'POST',
       headers: {
@@ -1277,9 +1326,17 @@ function PublicFormViewer() {
       setIsSubmitted(true);
 
     const initialValues = {};
+    let hasPayment = false;
+
     formData.Fields.forEach((field) => {
       const properties = JSON.parse(field.Properties__c || '{}');
       const fieldType = field.Field_Type__c;
+
+       // Check for payment fields
+        if (fieldType === "paypal_payment") {
+          hasPayment = true;
+        }
+
       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
         initialValues[`${field.Id || properties.id}_countryCode`] = properties.subFields.countryCode.value || 'US';
         initialValues[field.Id || properties.id] = '';
@@ -1289,10 +1346,15 @@ function PublicFormViewer() {
         initialValues[field.Id || properties.id] = null;
       } else if (fieldType === 'scalerating') {
         initialValues[field.Id || properties.id] = {};
-      } else {
+      } else if (fieldType === "paypal_payment") {
+          // Payment fields don't need initial values
+          initialValues[field.Id || properties.id] = null;
+        } else {
         initialValues[field.Id || properties.id] = '';
       }
     });
+
+    setHasPaymentField(hasPayment);
     setFormValues(initialValues);
     setErrors({});
     setSignatures({});
@@ -3133,6 +3195,25 @@ function PublicFormViewer() {
           </div>
         );
 
+      case "paypal_payment":
+        if (properties.isHidden) return null;
+
+        return (
+          <div className="mb-4">
+            <PaymentFieldRenderer
+              field={field}
+              formValues={formValues}
+              onPaymentComplete={handlePaymentComplete}
+              onPaymentError={handlePaymentError}
+              isLastPage={currentPage === pages.length - 1}
+              validateForm={validateForm}
+              formId={formData.Id}
+              linkData={linkData}
+            />
+            {renderError()}
+          </div>
+        );
+
       default:
         return null;
     }
@@ -3180,25 +3261,34 @@ function PublicFormViewer() {
           >
             Next
           </button>
-        ) : (
-          <button
-            type="submit"
-            disabled={isSubmitting || !accessToken}
-            className={`py-2 px-4 rounded-md font-medium transition ${
-              isSubmitting || !accessToken
-                ? 'opacity-50 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
-            aria-label="Submit Form"
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit'}
-          </button>
-        )}
-      </div>
-    </form>
-  </div>
-);
-
+        ) : // On last page: show Submit button only if no payment field OR payment is completed
+          !hasPaymentField || paymentCompleted ? (
+            <button
+              type="submit"
+              disabled={isSubmitting || !accessToken}
+              className={`py-2 px-4 rounded-md font-medium transition ${
+                isSubmitting || !accessToken
+                  ? "opacity-50 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700 text-white"
+              }`}
+              aria-label="Submit Form"
+            >
+              {isSubmitting
+                ? "Submitting..."
+                : paymentCompleted
+                ? "Complete Submission"
+                : "Submit"}
+            </button>
+          ) : (
+            // If has payment field and payment not completed, show instruction
+            <div className="text-center py-2 px-4 text-gray-600 text-sm">
+              Complete payment above to submit the form
+            </div>
+          )}
+        </div>
+      </form>
+    </div>
+  );
 }
 
 export default PublicFormViewer;
