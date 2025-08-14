@@ -43,6 +43,9 @@ function PublicFormViewer() {
   const [localIdToSFId, setLocalIdToSFId] = useState({});
   const [prefills, setPrefills] = useState([]);
   const [dependentFields, setDependentFields] = useState(new Set());
+  const searchParams = new URLSearchParams(window.location.search);
+  const manualPrefills = {};
+  const [manualPrefillsState, setManualPrefillsState] = useState({});
 
   useEffect(() => {
   const fetchFormData = async () => {
@@ -89,12 +92,27 @@ function PublicFormViewer() {
       const formVersion = data.formVersion;
       setFormData(formVersion);
       const localIdToSFId = {};
+
       formVersion.Fields.forEach(field => {
         const props = JSON.parse(field.Properties__c || '{}');
+
         if (props.id && field.Id) {
+          // Base mapping
           localIdToSFId[props.id] = field.Id;
+          // Add subfield mappings if present in metadata
+          if (props.subFields && typeof props.subFields === 'object' && !Array.isArray(props.subFields)) {
+            Object.keys(props.subFields).forEach(subName => {
+              if(props.type === 'section'){
+                localIdToSFId[props.subFields[subName].id] = `${field.Id}_${subName}`;
+              }
+              else
+              localIdToSFId[`${props.id}_${subName}`] = `${field.Id}_${subName}`;
+            });
+          }
         }
       });
+      console.log('Local id ',localIdToSFId);
+      
        // Parse Prefill array from formVersion.Prefills if available
       if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
         const parsedPrefills = formVersion.Prefills.map(p => {
@@ -193,6 +211,116 @@ function PublicFormViewer() {
       });
 
       setFormValues(initialValues);
+      for (const [key, value] of searchParams.entries()) {
+        
+        if (key.startsWith('field-')) {
+          const fieldIdParam = key;
+          const sfId = localIdToSFId[fieldIdParam];
+          let fieldMeta;
+          let subFieldKey;
+          if (sfId?.includes('_')) {
+            // Split into parent Id and subfield key
+            const [parentId, key] = sfId.split('_');
+            subFieldKey = key;
+
+            // Find parent field
+            const parentField = formVersion.Fields.find(f => f.Id === parentId);
+
+            if (parentField) {
+              const props = JSON.parse(parentField.Properties__c || '{}');
+
+              const subFieldMeta = props.subFields ? props.subFields[subFieldKey] : null;
+
+              if (subFieldMeta) {
+                fieldMeta = subFieldMeta;
+              } else {
+                fieldMeta = parentField;
+              }
+            }
+
+          } else {
+            // Simple case: direct match
+            fieldMeta = formVersion.Fields.find(f => f.Id === sfId);
+          }
+          
+          
+          if (fieldMeta) {
+            const props = JSON.parse(fieldMeta.Properties__c || '{}');
+            const fType = fieldMeta.Field_Type__c;
+
+            try {
+              let parsedValue = value;
+
+              switch (fType) {
+                case 'date':
+                  // if (!isNaN(Date.parse(value))) {
+                  //   // store in YYYY-MM-DD
+                  //   const d = new Date(value);
+                  //   parsedValue = d.toISOString().split('T')[0];
+                  // } else { throw new Error('Invalid date'); }
+                  const parts = value.split(/[-/]/);
+                    if (parts.length === 3) {
+                      let day, month, year;
+                      if (parts[0].length === 4) {
+                        [year, month, day] = parts.map(p => parseInt(p, 10));
+                      } else if (parts[2].length === 4) {
+                        [day, month, year] = parts.map(p => parseInt(p, 10));
+                      }
+                      if (year && month && day) {
+                        const d = `${year.toString().padStart(4, '0')}-${month
+                          .toString()
+                          .padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                        const transformDate = new Date(d);
+                        parsedValue = transformDate.toISOString().split('T')[0];
+                      }
+                    }
+                  break;
+                case 'datetime':
+                  if (!isNaN(Date.parse(value))) {
+                    const d = new Date(value);
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const hh = String(d.getHours()).padStart(2, '0');
+                    const mi = String(d.getMinutes()).padStart(2, '0');
+                    parsedValue = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+                  } else { throw new Error('Invalid datetime'); }
+                  break;
+                case 'number':
+                case 'price':
+                  if (!isNaN(parseFloat(value))) {
+                    parsedValue = parseFloat(value);
+                  } else { throw new Error('Invalid number'); }
+                  break;
+                case 'checkbox':
+                  parsedValue = value.split(',').map(v => v.trim());
+                  break;
+                default:
+                  // leave as string for all other types
+                  parsedValue = value;
+              }
+
+              manualPrefills[sfId] = parsedValue;
+              
+            } catch (err) {
+              console.warn(`Invalid manual prefill for ${fieldIdParam}:`, err.message);
+            }
+          }
+        }
+      }
+
+      if (Object.keys(manualPrefills).length) {
+        
+        // Step 1: Set manual prefills
+        setFormValues(prev => ({ ...prev, ...manualPrefills }));
+        
+        // Step 2: Run dependent prefill AFTER state is updated
+        Object.keys(manualPrefills).forEach(sfId => {
+          setManualPrefillsState(manualPrefills);
+        });
+      }
+
+
       setSignatures(initialSignatures);
       setFilePreviews(initialFilePreviews);
       setSelectedRatings(initialRatings);
@@ -223,6 +351,17 @@ function PublicFormViewer() {
     fetchFormData();
   }
 }, [linkId]);
+
+        useEffect(() => {
+        if (
+          prefills.length > 0 &&                      // prefills are loaded
+          Object.keys(manualPrefillsState).length > 0 // we have manual prefill keys
+        ) {
+          Object.keys(manualPrefillsState).forEach(sfId => {
+            runPrefillForField(sfId);
+          });
+        }
+      }, [prefills, manualPrefillsState]);
 
 
       const runPrefillForField = async (sfFieldId) => {
@@ -2418,18 +2557,18 @@ function PublicFormViewer() {
               <input
                 type="text"
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                value={formValues[`${fieldId}_first`] || ''}
-                onChange={(e) => handleChange(`${fieldId}_first`, e.target.value)}
-                onBlur={() => dependentFields.has(`${fieldId}_first`) && runPrefillForField(`${fieldId}_first`)}
+                value={formValues[`${fieldId}_firstName`] || ''}
+                onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
+                onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
                 placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
                 disabled={isDisabled}
               />
               <input
                 type="text"
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                value={formValues[`${fieldId}_last`] || ''}
-                onChange={(e) => handleChange(`${fieldId}_last`, e.target.value)}
-                onBlur={() => dependentFields.has(`${fieldId}_last`) && runPrefillForField(`${fieldId}_last`)}
+                value={formValues[`${fieldId}_lastName`] || ''}
+                onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
+                onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
                 placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
                 disabled={isDisabled}
               />
@@ -2809,22 +2948,22 @@ function PublicFormViewer() {
         if (isHidden) return null;
         
         // Parse the subFields from properties
-        const leftFieldProps = properties.subFields?.leftField;
-        const rightFieldProps = properties.subFields?.rightField;
+          const leftFieldProps = properties.subFields?.leftField;
+          const rightFieldProps = properties.subFields?.rightField;
 
-        // Find the actual field objects from formData.Fields
-        const leftField = formData.Fields.find(f => f.Id === leftFieldProps?.id);
-        const rightField = formData.Fields.find(f => f.Id === rightFieldProps?.id);
+          // Find the actual field objects from formData.Fields
+          const leftField = formData.Fields.find(f => f.Id === leftFieldProps?.id);
+          const rightField = formData.Fields.find(f => f.Id === rightFieldProps?.id);
 
-        const normalizedLeftField = leftField ? { 
-          ...leftField, 
-          Id: leftField.Id || leftField.id 
-        } : null;
+          const normalizedLeftField = leftField ? { 
+            ...leftField, 
+            Id: leftField.Id || leftField.id 
+          } : null;
 
-        const normalizedRightField = rightField ? { 
-          ...rightField, 
-          Id: rightField.Id || rightField.id 
-        } : null;
+          const normalizedRightField = rightField ? { 
+            ...rightField, 
+            Id: rightField.Id || rightField.id 
+          } : null;
 
         // If fields aren't found in formData.Fields, create mock field objects
         const createFieldFromProps = (fieldProps) => {
@@ -2841,8 +2980,19 @@ function PublicFormViewer() {
           };
         };
 
-        const leftFieldToRender = normalizedLeftField || createFieldFromProps(leftFieldProps);
-        const rightFieldToRender = normalizedRightField || createFieldFromProps(rightFieldProps);
+        // Force composite IDs for section children so mapping/prefill stays consistent
+        const leftFieldToRender = normalizedLeftField
+          ? { ...normalizedLeftField, Id: `${field.Id}_leftField` }
+          : leftFieldProps
+            ? { ...createFieldFromProps(leftFieldProps), Id: `${field.Id}_leftField` }
+            : null;
+
+        const rightFieldToRender = normalizedRightField
+          ? { ...normalizedRightField, Id: `${field.Id}_rightField` }
+          : rightFieldProps
+            ? { ...createFieldFromProps(rightFieldProps), Id: `${field.Id}_rightField` }
+            : null;
+
 
         return (
           <div className="mb-4 border p-4 rounded">
