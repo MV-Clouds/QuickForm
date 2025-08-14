@@ -9,30 +9,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
   const { userProfile } = useSalesforceData();
 
   useEffect(() => {
-    if (!selectedVersionId || !formRecords || formRecords.length === 0) {
-      setSubmissionCount(0);
-      return;
-    }
-
-    // Find the form record that contains the selected version
-    const currentFormRecord = formRecords.find((record) =>
-      record.FormVersions?.some((version) => version.Id === selectedVersionId)
-    );
-
-    if (currentFormRecord) {
-      // Find the specific version and get its submission count
-      const currentVersion = currentFormRecord.FormVersions.find(
-        (version) => version.Id === selectedVersionId
-      );
-      
-      if (currentVersion && currentVersion.Submission_Count__c !== undefined) {
-        setSubmissionCount(currentVersion.Submission_Count__c || 0);
-      } else {
-        setSubmissionCount(0);
-      }
-    } else {
-      setSubmissionCount(0);
-    }
+    setSubmissionCount(6);
   }, [selectedVersionId, formRecords]);
 
   const handleMappingClick = () => {
@@ -348,6 +325,83 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
         } else {
           alert('Publish link not available');
         }
+      },
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="shareIconGradient" x1="100%" y1="0%" x2="0%" y2="0%">
+              <stop offset="0%" stopColor="rgba(11, 41, 94, 1)" />
+              <stop offset="100%" stopColor="rgba(29, 109, 158, 1)" />
+            </linearGradient>
+
+            {/* Mask for active state background */}
+            <mask id="shareMask">
+              <rect width="24" height="24" fill="white" />
+              <path d="M5.909 15.363a2.909 2.909 0 1 0 0-5.818 2.909 2.909 0 0 0 0 5.818z" stroke="black" strokeWidth="1.5" />
+              <path d="M16.091 21.91a2.909 2.909 0 1 0 0-5.818 2.909 2.909 0 0 0 0 5.818z" stroke="black" strokeWidth="1.5" />
+              <path d="M16.091 8.818a2.909 2.909 0 1 0 0-5.818 2.909 2.909 0 0 0 0 5.818z" stroke="black" strokeWidth="1.5" />
+              <path d="M13.645 7.482l-5.291 3.4" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M8.354 14.027l5.291 3.4" stroke="black" strokeWidth="1.5" strokeLinecap="round" />
+            </mask>
+          </defs>
+
+          {/* Gradient background (visible only when active) */}
+          {window.location.pathname.includes('/share') && (
+            <rect
+              x="1" y="1"
+              width="22" height="22"
+              rx="3"
+              fill="url(#shareIconGradient)"
+              mask="url(#shareMask)"
+            />
+          )}
+
+          {/* Icon paths */}
+          <path
+            d="M5.909 15.363a2.909 2.909 0 1 0 0-5.818 2.909 2.909 0 0 0 0 5.818z"
+            stroke={window.location.pathname.includes('/share') ? "white" : "#0B0A0A"}
+            strokeWidth="1.5"
+            fill="none"
+          />
+
+          <path
+            d="M16.091 21.91a2.909 2.909 0 1 0 0-5.818 2.909 2.909 0 0 0 0 5.818z"
+            stroke={window.location.pathname.includes('/share') ? "white" : "#0B0A0A"}
+            strokeWidth="1.5"
+            fill="none"
+          />
+
+          <path
+            d="M16.091 8.818a2.909 2.909 0 1 0 0-5.818 2.909 2.909 0 0 0 0 5.818z"
+            stroke={window.location.pathname.includes('/share') ? "white" : "#0B0A0A"}
+            strokeWidth="1.5"
+            fill="none"
+          />
+
+          <path
+            d="M13.645 7.482l-5.291 3.4"
+            stroke={window.location.pathname.includes('/share') ? "white" : "#0B0A0A"}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+
+          <path
+            d="M8.354 14.027l5.291 3.4"
+            stroke={window.location.pathname.includes('/share') ? "white" : "#0B0A0A"}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      ),
+    },
+    {
+      name: 'Prefill',
+      path: '/prefill',
+      route: '/prefill',
+      onClick: () => {
+        
+          navigate(`/prefill/${selectedVersionId}`);
+        
       },
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

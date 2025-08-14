@@ -20,6 +20,7 @@ import Conditions from "../conditions/Conditions"; // Or your actual path
 import { v4 as uuidv4 } from "uuid";
 import AnimatedTooltip from '../create-form-wizard/AnimatedTooltip';
 import SharePage from '../share-page/SharePage.js'
+import Prefill from '../form-prefill/Prefill.js';
 
 const themes = [
   {
@@ -92,7 +93,8 @@ function MainFormBuilder({
   showThankYou,
   showNotification,
   showCondition,
-  showShare
+  showShare,
+  showPrefill
 }) {
   // const { formVersionId } = useParams();
   const location = useLocation();
@@ -1621,7 +1623,7 @@ function MainFormBuilder({
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
             <SharePage publishLink={publishLink} />
-          ) : showNotification ? (
+          ) : showPrefill ? <Prefill /> : showNotification ? (
             <NotificationPage
               currentFields={formVersions[0]?.Fields}
               sendNotificationData={sendNotificationData}
