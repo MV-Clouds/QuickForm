@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import PaymentSidebar from "./payment-fields/PaymentSidebar";
+
 
 const fieldTypes = [
   // Recommended
@@ -227,7 +229,7 @@ const getFieldIcon = (type) => {
   }
 };
 
-function Sidebar({ selectedTheme, onThemeSelect, themes }) {
+function Sidebar({ selectedTheme, onThemeSelect, themes, fields=[] }) {
   const [activeMainTab, setActiveMainTab] = useState('Form');
   const [activeSubTab, setActiveSubTab] = useState('Fields');
   const [searchTerm, setSearchTerm] = useState('');
@@ -442,12 +444,12 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
           </div>
         )}
 
-        {activeMainTab === 'Form' && activeSubTab === 'Payments' && (
-          <div className="p-4 flex items-center justify-center h-64">
-            <div className="text-center text-gray-500">
-              <p className="text-sm">Payments controls coming soon</p>
-            </div>
-          </div>
+        {activeMainTab === "Form" && activeSubTab === "Payments" && (
+          <PaymentSidebar
+            fields={fields}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
         )}
 
         {activeMainTab === 'Theme' && (
