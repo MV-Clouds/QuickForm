@@ -277,7 +277,6 @@ function FormBuilder({
       setTimeout(() => setIsScrolling(false), 300); // Debounce to prevent rapid changes
     }
   };
-
   return (
     <div className="builder-container">
       {/* Main content container with all pages */}

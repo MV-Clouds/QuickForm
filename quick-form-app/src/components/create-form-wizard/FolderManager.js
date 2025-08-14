@@ -1,8 +1,21 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, PlusCircle } from "lucide-react"; // or your icon library
+import { Search, PlusCircle, FolderOpen, PlusCircleIcon } from "lucide-react"; // or your icon library
 import FolderCard from "./FolderCard";
 import FormCard from "./FormCard";
+import { Dropdown, Button, Space } from "antd";
+import { AppstoreOutlined, BarsOutlined } from "@ant-design/icons";
+import FolderList from "./FolderList";
+import FolderDetail from "./FolderDetail";
+
+const viewModes = {
+  LARGE: "large",
+  MEDIUM: "medium",
+  SMALL: "small",
+  LIST: "list",
+  DETAIL: "detail", // new detail list view
+  DETAILS: "details", // keep table style if you want
+};
 const FolderManager = ({
   recentForms,
   handleCreateFolder,
@@ -16,7 +29,7 @@ const FolderManager = ({
   userId,
   instanceUrl,
   fetchSalesforceData,
-  isLoading
+  isLoading,
 }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentFolder, setCurrentFolder] = useState(null);
@@ -26,6 +39,17 @@ const FolderManager = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [folderPath, setFolderPath] = useState([]); // Array of folder objects
   const [selectedFolderForms, setSelectedFolderForms] = useState([]); // Forms in the selected folder
+  const [viewMode, setViewMode] = useState(viewModes.LARGE);
+  const [selectedFolderIds, setSelectedFolderIds] = useState([]);
+const viewOptions = [
+  { key: viewModes.LARGE, label: "Large Icons" },
+  { key: viewModes.MEDIUM, label: "Medium Icons" },
+  // { key: viewModes.SMALL, label: "Small Icons" },
+  { key: viewModes.LIST, label: "List View" },
+  { key: viewModes.DETAIL, label: "Detail View" }, // new
+  // { key: viewModes.DETAILS, label: "Table View" },
+];
+
   // Filter folders by search
   const filteredFolders = SFfolders.filter((folder) =>
     folder.Name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -34,6 +58,7 @@ const FolderManager = ({
     setFolderPath((prev) => [...prev, folder]);
     // Get form objects from recentForms using folder.FormIds__c
     const formIds = folder.FormIds__c ? folder.FormIds__c.split(",") : [];
+    console.log('forms' , recentForms)
     const forms = recentForms.filter((form) => formIds.includes(form.Id));
     console.log("Forms", forms);
     setSelectedFolderForms(forms);
@@ -76,7 +101,42 @@ const FolderManager = ({
         !folder.Parent_Folder__c || folder.Parent_Folder__c.trim() === ""
     );
   }
+  const handleCopy = async (folder , selectedFolderId) => {
+   if(!selectedFolderId) return;
+    try {
+        const userId = sessionStorage.getItem('userId');
+        const instanceUrl = sessionStorage.getItem('instanceUrl');
+        const payload = {
+             folderId: folder.Id,
+          folderName: folder.Name,
+          description: folder.Description__c || '',
+          parentFolderId: folder.Parent_Folder__c ? folder.Parent_Folder__c + ',' + selectedFolderId : selectedFolderId,
+          formIds: folder.FormIds__c ,
+          instanceUrl,
+          userId
+        }
+        console.log(folder ,'Moving...');
+      const response = await fetch('https://8rq1el4sv2.execute-api.us-east-1.amazonaws.com/folder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
 
+      const data = await response.json();
+      console.log('Response=>' , data)
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to move folder');
+      }
+      fetchSalesforceData(userId,instanceUrl);
+    } catch (error) {
+      console.error('Error moving folder:', error);
+    } finally {
+     
+    }
+  };
   const handleSaveFolder = async () => {
     await handleCreateFolder(
       folderName,
@@ -86,6 +146,71 @@ const FolderManager = ({
     );
     setIsEditModalOpen(false);
   };
+  const handleBulkDelete = async () => {
+  try {
+    const userId = sessionStorage.getItem("userId");
+    const instanceUrl = sessionStorage.getItem("instanceUrl");
+    const payload = {
+      selectedFolderIds,
+      instanceUrl,
+      userId,
+    };
+
+    const response = await fetch(
+      "https://8rq1el4sv2.execute-api.us-east-1.amazonaws.com/bulkFolder",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to delete folders");
+    }
+
+    setSelectedFolderIds([]);
+    fetchSalesforceData(userId, instanceUrl);
+  } catch (error) {
+    console.error("Error deleting folders:", error);
+  }
+};
+
+const handleBulkFavorite = async () => {
+  try {
+    const userId = sessionStorage.getItem("userId");
+    const instanceUrl = sessionStorage.getItem("instanceUrl");
+    const payload = {
+      selectedFolderIds,
+      instanceUrl,
+      userId,
+    };
+
+    const response = await fetch(
+      "https://8rq1el4sv2.execute-api.us-east-1.amazonaws.com/toggleFavorite",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to favorite folders");
+    }
+
+    setSelectedFolderIds([]);
+    fetchSalesforceData(userId, instanceUrl);
+  } catch (error) {
+    console.error("Error favoriting folders:", error);
+  }
+};
   const folderTree = buildFolderTree(filteredFolders);
   const foldersToShow =
     folderPath.length > 0
@@ -95,21 +220,21 @@ const FolderManager = ({
   return (
     <div>
       <div
-        className="px-10 py-8 shadow-lg relative"
+        className="px-10 py-6 shadow-sm relative"
         style={{ background: "linear-gradient(to right, #008AB0, #8FDCF1)" }}
       >
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-6 flex justify-between"
+          className=" "
         >
           <h1 className="text-3xl font-bold text-white mb-1">Folders</h1>
         </motion.div>
       </div>
 
       <motion.div
-        className="p-10 bg-white rounded-xl shadow-2xl"
+        className="p-10 bg-white rounded-xl h-[100vh] shadow-lg"
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
@@ -128,7 +253,21 @@ const FolderManager = ({
               size={18}
             />
           </div>{" "}
-          <div className="flex w-[20%] gap-6 justify-end items-center">
+          <div className="flex w-full gap-4 justify-end items-center">
+            {/* View Mode Dropdown */}
+            <Dropdown
+              menu={{
+                items: viewOptions.map((opt) => ({
+                  key: opt.key,
+                  label: opt.label,
+                  onClick: () => setViewMode(opt.key),
+                })),
+              }}
+              placement="bottomLeft"
+              trigger={["click"]}
+            >
+              <Button icon={<AppstoreOutlined />}>View</Button>
+            </Dropdown>
             <button
               onClick={() => {
                 setCurrentFolder(null);
@@ -206,22 +345,224 @@ const FolderManager = ({
             ))}
           </motion.div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {foldersToShow.map((folder) => (
-            <FolderCard
-              key={folder.Id}
-              folder={folder}
-              onEdit={handleEditFolder}
-              onDelete={() => {}}
-              onMove={() => {}}
-              allFolders={SFfolders}
-              token={token}
-              userId={userId}
-              instanceUrl={instanceUrl}
-              refreshData={fetchSalesforceData}
-              onClick={() => handleOpenFolder(folder)}
-            />
-          ))}
+        <div className="">
+          {/* Loading & Empty States */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-50 rounded-xl p-8">
+              {/* Main loading animation */}
+              <div className="relative flex justify-center items-center mb-8">
+                {/* Outer circle */}
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                  className="absolute h-24 w-24 border-4 border-blue-100 rounded-full"
+                />
+
+                {/* Middle circle */}
+                <motion.div
+                  animate={{ rotate: -360 }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 1.5,
+                    ease: "linear",
+                  }}
+                  className="absolute h-16 w-16 border-4 border-blue-200 border-t-transparent rounded-full"
+                />
+
+                {/* Inner circle with folder icon */}
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                  className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                    />
+                  </svg>
+                </motion.div>
+              </div>
+
+              {/* Loading text with animation */}
+              <motion.div
+                initial={{ opacity: 0.5, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  repeat: Infinity,
+                  repeatType: "reverse",
+                  duration: 1.5,
+                }}
+                className="text-center"
+              >
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  Organizing Your Files
+                </h3>
+                <p className="text-gray-500 max-w-md">
+                  Please wait while we prepare your folder structure...
+                </p>
+              </motion.div>
+
+              {/* Animated folder preview (skeleton) */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="mt-12 w-full max-w-md"
+              >
+                <div className="grid grid-cols-3 gap-4">
+                  {[1, 2, 3, 4, 5, 6].map((item) => (
+                    <motion.div
+                      key={item}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 + item * 0.1 }}
+                      className="bg-white p-3 rounded-lg shadow-sm border border-gray-100"
+                    >
+                      <div className="h-6 w-6 bg-blue-100 rounded mb-2"></div>
+                      <div className="h-4 w-3/4 bg-gray-100 rounded"></div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Progress indicator */}
+              <motion.div
+                className="mt-8 w-full max-w-md bg-gray-200 rounded-full h-2"
+                initial={{ scaleX: 0.1 }}
+                animate={{ scaleX: 1 }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  repeatType: "reverse",
+                }}
+              >
+                <div className="bg-blue-500 h-2 rounded-full w-full"></div>
+              </motion.div>
+            </div>
+          ) : foldersToShow.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex flex-col items-center justify-center min-h-[400px] bg-gray-50 rounded-xl p-8 text-center"
+            >
+              {/* Animated folder icon with floating effect */}
+              <motion.div
+                animate={{
+                  y: [-5, 5, -5],
+                  rotate: [0, 2, -2, 0],
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="mb-6 p-6 bg-white rounded-xl shadow-sm border border-gray-200"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-16 w-16 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={1}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                  />
+                </svg>
+              </motion.div>
+
+              {/* Main message */}
+              <h3 className="text-2xl font-semibold text-gray-800 mb-2">
+                No Folders Found
+              </h3>
+              <p className="text-gray-500 max-w-md mb-8">
+                It looks like you don't have any folders yet. Create your first
+                folder to get started.
+              </p>
+
+              {/* CTA button with hover animation */}
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setCurrentFolder(null);
+                  setFolderName("");
+                  setFolderDescription("");
+                  setSelectedFormIds([]);
+                  setIsEditModalOpen(true);
+                }}
+                className="flex items-center px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg shadow-sm transition-colors"
+              >
+                <PlusCircleIcon className="w-5 h-5 mr-2" />
+                Create New Folder
+              </motion.button>
+
+              {/* Optional decorative elements */}
+              <div className="mt-12 grid grid-cols-3 gap-4 opacity-30">
+                {[1, 2, 3, 4, 5, 6].map((item) => (
+                  <motion.div
+                    key={item}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 0.3, scale: 1 }}
+                    transition={{ delay: item * 0.1 }}
+                    className="h-12 w-12 bg-gray-200 rounded-lg flex items-center justify-center"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-6 w-6 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1}
+                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                      />
+                    </svg>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          ) : viewMode === viewModes.LIST ? (
+            <FolderList folders={foldersToShow} onFolderClick={handleOpenFolder} onEdit={handleEditFolder} onCopy={handleCopy} />
+          ) : viewMode === viewModes.DETAIL ? (
+            <FolderDetail folders={foldersToShow} onFolderClick={handleOpenFolder} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {foldersToShow.map((folder) => (
+                <FolderCard
+                  key={folder.Id}
+                  folder={folder}
+                  onEdit={handleEditFolder}
+                  onDelete={() => {}}
+                  onMove={() => {}}
+                  allFolders={SFfolders}
+                  token={token}
+                  userId={userId}
+                  instanceUrl={instanceUrl}
+                  refreshData={fetchSalesforceData}
+                  onClick={() => handleOpenFolder(folder)}
+                  selectedFolderIds={selectedFolderIds}
+                  setSelectedFolderIds={setSelectedFolderIds}
+                />
+              ))}
+            </div>
+          )}
         </div>
         {/* Show forms inside selected folder */}
         {selectedFolderForms.length > 0 && (
@@ -330,6 +671,28 @@ const FolderManager = ({
             </motion.div>
           </motion.div>
         )}
+        {selectedFolderIds.length > 0 && (
+  <motion.div
+    className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white rounded-full px-6 py-3 shadow-lg flex items-center gap-4"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 20 }}
+  >
+    <span>{selectedFolderIds.length} folder(s) selected</span>
+    <button
+      onClick={handleBulkDelete}
+      className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+    >
+      Delete
+    </button>
+    <button
+      onClick={handleBulkFavorite}
+      className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded"
+    >
+      Favorite
+    </button>
+  </motion.div>
+)}
       </motion.div>
     </div>
   );

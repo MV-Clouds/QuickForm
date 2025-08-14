@@ -97,7 +97,6 @@ function PublicFormViewer() {
         }
         const formVersion = data.formVersion;
 
-        console.log("formversion ", formVersion);
         let thankyouRecord = formVersion?.ThankYou;
         setThankyouData(thankyouRecord);
         setFormData(formVersion);
@@ -151,7 +150,7 @@ function PublicFormViewer() {
         formVersion.Fields.forEach((field) => {
           const properties = JSON.parse(field.Properties__c || "{}");
           const fieldType = field.Field_Type__c;
-
+          initialValues[field.Id || properties.id] = properties.defaultValue; // Use defaultValue
           if (
             fieldType === "phone" &&
             properties.subFields?.countryCode?.enabled
@@ -163,10 +162,12 @@ function PublicFormViewer() {
               properties.subFields?.phoneNumber?.value ?? "";
           } else if (
             fieldType === "checkbox" ||
-            (fieldType === "dropdown" && properties.allowMultipleSelections)
+            (fieldType === "dropdown")
           ) {
-            initialValues[field.Id || properties.id] =
+            if(properties.allowMultipleSelections){
+              initialValues[field.Id || properties.id] =
               properties.defaultValue || [];
+            }
           } else if (fieldType === "datetime" || fieldType === "date") {
             initialValues[field.Id || properties.id] =
               properties.defaultValue || null;
@@ -189,7 +190,6 @@ function PublicFormViewer() {
               : "";
           initialToggles[field.Id || properties.id] = false;
         });
-
         setFormValues(initialValues);
         setSignatures(initialSignatures);
         setFilePreviews(initialFilePreviews);
@@ -1747,6 +1747,7 @@ function PublicFormViewer() {
       formValues
     );
     const isHidden = state.hidden || properties.isHidden;
+    const defaultValue = properties.defaultValue || ""; // Get defaultValue
     if (isHidden) return null;
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
@@ -1766,6 +1767,7 @@ function PublicFormViewer() {
       "aria-describedby": hasError ? `${fieldId}-error` : undefined,
       className: `w-full p-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${hasError ? "border-red-500" : "border-gray-300"
         }`,
+      value: formValues[fieldId] || defaultValue, // Use defaultValue if no value is set
     };
 
     const labelAlignmentClass =
@@ -1911,17 +1913,22 @@ function PublicFormViewer() {
                 }}
               />
             ) : (
-              <textarea
-                {...commonProps}
-                rows="4"
-                value={formValues[fieldId] || ""}
-                onChange={(e) => handleChange(fieldId, e.target.value)}
-                placeholder={properties.placeholder?.main || ""}
-                maxLength={properties.longTextMaxChars}
-                disabled={isDisabled}
-              />
-            )}
-
+              <div>
+                <textarea
+                  {...commonProps}
+                  rows="4"
+                  value={formValues[fieldId] || ""}
+                  onChange={(e) => handleChange(fieldId, e.target.value)}
+                  placeholder={properties.placeholder?.main || ""}
+                  maxLength={properties.longTextMaxChars}
+                  disabled={isDisabled}
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Words: {formValues[fieldId].trim() ? formValues[fieldId].trim().split(/\s+/).length : 0}</span>
+                    <span>Characters: {formValues[fieldId].length}{properties.longTextMaxChars ? ` / ${properties.longTextMaxChars}` : ''}</span>
+                  </div>
+                </div>
+            )}  
             {renderError()}
           </div>
         );

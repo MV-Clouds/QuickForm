@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X, SearchIcon, StarIcon, ArrowRightIcon, PlusIcon, GitMergeIcon, SmartphoneIcon, CreditCardIcon, ListIcon, FolderIcon, UsersIcon, SparklesIcon, SquareIcon, UploadIcon, CircleIcon, CheckSquareIcon, ChevronDownIcon, PhoneIcon, MailIcon, UserIcon, BookTemplateIcon } from 'lucide-react';
+import { X, SearchIcon, StarIcon, ArrowRightIcon, PlusIcon, GitMergeIcon, SmartphoneIcon, CreditCardIcon, ListIcon, FolderIcon, UsersIcon, SparklesIcon, SquareIcon, UploadIcon, CircleIcon, CheckSquareIcon, ChevronDownIcon, PhoneIcon, MailIcon, UserIcon, BookTemplateIcon, ArrowDown } from 'lucide-react';
 import { GetFormTemplate, useForms } from './getFormTemplate'
 import './style.css'
+import { Select } from 'antd';
+const {Option} = Select;
 const TemplatePicker = ({ onClose, onTemplateSelect , loading }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -135,17 +137,19 @@ const TemplatePicker = ({ onClose, onTemplateSelect , loading }) => {
 
                 {/* Sort dropdown */}
                 <div className="flex items-center">
-                  <label htmlFor="sort" className="mr-2 text-sm text-gray-600">Sort by:</label>
-                  <select
+                  <label htmlFor="sort" className="mr-2 w-10/12 text-gray-600">Sort by:</label>
+                  <Select
+                  suffixIcon={null}
+                  prefix={<ChevronDownIcon className='w-5 h-5'/>}
                     id="sort"
-                    className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors"
+                    className="block w-full  text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md transition-colors"
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
+                    onChange={(e) => setSortBy(e)}
                   >
-                    <option value="Newest">Newest</option>
-                    <option value="Popular">Popular</option>
-                    <option value="A-Z">A-Z</option>
-                  </select>
+                    <Option value="Newest">Newest</Option>
+                    <Option value="Popular">Popular</Option>
+                    <Option value="A-Z">A-Z</Option>
+                  </Select>
                 </div>
               </div>
             </div>
@@ -340,7 +344,7 @@ const TemplatePicker = ({ onClose, onTemplateSelect , loading }) => {
                             e.stopPropagation();
                             handleUseTemplate(template);
                           }}
-                          className={`mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors ${
+                          className={`login-button mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white transition-colors ${
                             loading ? 'opacity-60 cursor-not-allowed' : ''
                           }`}
                           disabled={loading}

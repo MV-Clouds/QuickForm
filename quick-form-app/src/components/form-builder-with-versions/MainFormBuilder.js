@@ -206,21 +206,17 @@ function MainFormBuilder({
     secondaryTextColor: "#5f6165",
   });
   useEffect(() => {
-    console.log("formRecords =>", sfFormRecords);
     if (sfFormRecords.length === 0) {
       refreshData();
     }
     const formVersion = sfFormRecords
       .find((val) => val.Id === formId)
       ?.FormVersions.find((version) => version.Id === formVersionId);
-    console.log("formversion ", formVersion);
     let thankyouRecord;
     thankyouRecord = formVersion?.ThankYou;
-    console.log("ty record", thankyouRecord);
     if ((typeof thankyouRecord === 'object' && Object.keys(thankyouRecord)?.length > 0)  || thankyouRecord?.length > 0) {
       const { content: loadedContent, elements: loadedElements } =
         mapSalesforceThankYouToUI(thankyouRecord);
-        console.log('mapped...')
       setContent(loadedContent || content); // fallback to default if null
       setElements(
         Array.isArray(loadedElements) && loadedElements.length > 0
@@ -229,10 +225,6 @@ function MainFormBuilder({
       );
     }
   }, [sfFormRecords]);
-  useEffect(()=>{
-    console.log('elements in formbuilder' , elements);
-    console.log('content ==>',content)
-  },[elements , content])
   /**
    * Maps a Salesforce Thank_You__c record to your content and elements state shapes.
    * @param {object} sfRecord - The Thank_You__c record from Salesforce
@@ -300,7 +292,7 @@ function MainFormBuilder({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const fields = fieldsState.present;
-
+  console.log('fields' , fields)
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
       const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
@@ -432,7 +424,6 @@ function MainFormBuilder({
       console.log("skipping...");
       return { skip: true, message: "showThankYou is false, no request sent." };
     }
-    console.log("saving...");
 
     const invokeUrl =
       "https://l8rbccfzz8.execute-api.us-east-1.amazonaws.com/savedata/";
@@ -446,7 +437,6 @@ function MainFormBuilder({
         ...(isPatch && { Id: recordId }),
       },
     };
-    console.log("ty paylaod", payload);
     try {
       const response = await fetch(invokeUrl, {
         method: isPatch ? "PATCH" : "POST",
@@ -458,7 +448,6 @@ function MainFormBuilder({
       });
 
       const data = await response.json();
-      console.log("Responsefrom TY", data);
       if (!response.ok) {
         throw new Error(
           data?.error || data?.message || "Unknown error from API"
@@ -481,7 +470,6 @@ function MainFormBuilder({
   }
 
   const sendNotificationData = async (payload) => {
-    console.log(payload, "payload");
     try {
       const userId = sessionStorage.getItem("userId");
       const instanceUrl = sessionStorage.getItem("instanceUrl");
@@ -505,7 +493,6 @@ function MainFormBuilder({
         }
       );
       const res = await response.json();
-      console.log("Response from lambda ==> ", res);
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
@@ -569,7 +556,6 @@ function MainFormBuilder({
       setIsEditable(formVersion.Stage__c === "Draft");
       setCurrentFormVersion(formVersion);
       const formFields = formVersion.Fields || [];
-
       const pages = {};
       formFields.forEach((field) => {
         const pageNumber = field.Page_Number__c || 1;
@@ -593,9 +579,11 @@ function MainFormBuilder({
             properties.validation || getDefaultValidation(field.Field_Type__c),
           subFields:
             properties.subFields || getDefaultSubFields(field.Field_Type__c),
+          isHidden : field?.isHidden__c || false,
+          defaultValue : field?.Default_Value__c || null
         });
       });
-
+      console.log('formfields', JSON.stringify(formFields))
       Object.keys(pages).forEach((pageNum) => {
         pages[pageNum].sort(
           (a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)
@@ -745,6 +733,8 @@ function MainFormBuilder({
             Order_Number__c: index + 1,
             Properties__c: JSON.stringify(sectionProperties),
             Unique_Key__c: field.id,
+            isHidden__c : field.isHidden,
+            Default_Value__c : field.defaultValue
           };
         }
 
@@ -756,6 +746,8 @@ function MainFormBuilder({
             field.type?.charAt(0).toUpperCase() + field.type?.slice(1) ||
             "Field",
           subFields: field.subFields || getDefaultSubFields(field.type) || {},
+          isHidden: field.isHidden || false, //  isHidden
+          defaultValue: field.defaultValue || null, //  defaultValue
         };
 
         return {
@@ -765,6 +757,7 @@ function MainFormBuilder({
           Order_Number__c: index + 1,
           Properties__c: JSON.stringify(properties),
           Unique_Key__c: field.id,
+          isHidden__c : field.isHidden          
         };
       })
     );
@@ -1087,6 +1080,11 @@ function MainFormBuilder({
         .substr(2, 9)}`;
       const defaultValidation = getDefaultValidation(fieldType);
       const defaultSubFields = getDefaultSubFields(fieldType);
+       // Add default options for dropdown
+      const defaultOptions =
+      fieldType === "dropdown"
+        ? ["Option 1", "Option 2", "Option 3"]
+        : undefined;
       const newFieldObj = {
         id: newFieldId,
         type: fieldType,
@@ -1094,6 +1092,7 @@ function MainFormBuilder({
         sectionSide: sectionSide || null,
         validation: defaultValidation,
         subFields: defaultSubFields,
+        options: defaultOptions, // Add default options for dropdown
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
