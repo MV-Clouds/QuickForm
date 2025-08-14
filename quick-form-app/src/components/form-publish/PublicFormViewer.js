@@ -23,6 +23,8 @@ import {
 import { Select, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
+import { evaluateFormula } from './FormulaEvaluator';
+
 const { Option } = Select;
 
 function PublicFormViewer() {
@@ -1440,6 +1442,125 @@ function PublicFormViewer() {
     if (cond && evaluateCondition(cond, values)) return cond;
     return null;
   };
+  
+// const calculateFormCalculation = (field) => {
+//   const properties = JSON.parse(field.Properties__c || "{}");
+//   if (!properties.formula) return null;
+
+//   // Create a mapping of unique keys to Salesforce IDs for referenced fields
+//   const fieldIdMap = {};
+//   (properties.fieldReferences || []).forEach(refId => {
+//     // First try to find the field by Unique_Key__c
+//     const referencedField = formData.Fields.find(f => f.Unique_Key__c === refId);
+//     if (referencedField) {
+//       // Use the Salesforce ID if available, otherwise use the unique key
+//       fieldIdMap[refId] = referencedField.Id || referencedField.Unique_Key__c;
+//     } else {
+//       // If not found, assume refId is already a Salesforce ID
+//       fieldIdMap[refId] = refId;
+//     }
+//   });
+
+//   // Create a values object that maps the references to their actual values
+//   const referencedValues = {};
+//   Object.entries(fieldIdMap).forEach(([refKey, sfId]) => {
+//     referencedValues[refKey] = formValues[sfId];
+    
+//     // Handle subfields (like countryCode for phone fields)
+//     if (sfId in formValues) {
+//       Object.keys(formValues).forEach(key => {
+//         if (key.startsWith(`${sfId}_`)) {
+//           referencedValues[`${refKey}_${key.split('_')[1]}`] = formValues[key];
+//         }
+//       });
+//     }
+//   });
+
+//   console.log(properties.formula, referencedValues);
+  
+//   // Evaluate the formula using the mapped values
+//   const result = evaluateFormula(
+//     properties.formula,
+//     referencedValues,
+//     properties.fieldReferences || []
+//   );
+  
+//   // Handle decimal places if specified
+//   if (typeof result === 'number' && properties.decimalPlaces !== undefined) {
+//     return Number(result.toFixed(properties.decimalPlaces));
+//   }
+
+//   return result;
+// };
+
+const calculateFormCalculation = (field) => {
+  const properties = JSON.parse(field.Properties__c || "{}");
+  if (!properties.formula) return null;
+
+  // Create a mapping of unique keys to Salesforce IDs for referenced fields
+  const fieldIdMap = {};
+  (properties.fieldReferences || []).forEach(refId => {
+    // First try to find the field by Unique_Key__c
+    const referencedField = formData.Fields.find(f => f.Unique_Key__c === refId);
+    if (referencedField) {
+      // Use the Salesforce ID if available, otherwise use the unique key
+      fieldIdMap[refId] = referencedField.Id || referencedField.Unique_Key__c;
+    } else {
+      // If not found, assume refId is already a Salesforce ID
+      fieldIdMap[refId] = refId;
+    }
+  });
+
+  // Create a values object that maps the references to their actual values
+  const referencedValues = {};
+  Object.entries(fieldIdMap).forEach(([refKey, sfId]) => {
+    // Check if this field has subfields in the form values
+    const hasSubfields = Object.keys(formValues).some(key => 
+      key.startsWith(`${sfId}_`) && 
+      key !== sfId // Exclude the main field itself
+    );
+
+    if (hasSubfields) {
+      // For fields with subfields, collect all subfield values
+      const subfieldValues = [];
+      Object.keys(formValues).forEach(key => {
+        if (key.startsWith(`${sfId}_`)) {
+          subfieldValues.push(formValues[key]);
+        }
+      });
+      
+      // Join subfield values with space for the main field reference
+      referencedValues[refKey] = subfieldValues.join(' ').trim();
+      
+      // Also include individual subfields in case they're referenced directly
+      Object.keys(formValues).forEach(key => {
+        if (key.startsWith(`${sfId}_`)) {
+          referencedValues[`${refKey}_${key.split('_')[1]}`] = formValues[key];
+        }
+      });
+    } else {
+      // Regular field - use the value directly
+      referencedValues[refKey] = formValues[sfId];
+    }
+  });
+
+  console.log(properties.formula);
+  
+  
+  // Evaluate the formula using the mapped values
+  const result = evaluateFormula(
+    properties.formula,
+    referencedValues,
+    properties.fieldReferences || []
+  );
+  
+  // Handle decimal places if specified
+  if (typeof result === 'number' && properties.decimalPlaces !== undefined) {
+    return Number(result.toFixed(properties.decimalPlaces));
+  }
+
+  return result;
+};
 
   const handleNextPage = (e) => {
     e.preventDefault();
@@ -3083,6 +3204,15 @@ function PublicFormViewer() {
 
       case "formcalculation":
         if (isHidden) return null;
+         // Get calculation result
+          const calculationResult = calculateFormCalculation(field);
+          let formattedValue = calculationResult;
+          
+          // Handle decimal places if specified
+          if (typeof calculationResult === 'number' && properties.decimalPlaces !== undefined) {
+            formattedValue = Number(calculationResult.toFixed(properties.decimalPlaces));
+          }
+
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -3094,8 +3224,8 @@ function PublicFormViewer() {
             <input
               type="text"
               {...commonProps}
-              value={formValues[fieldId] || ""}
-              readOnly
+              value={formattedValue ?? ''}
+              readOnly={properties?.isReadOnly !== false} 
               className={`w-full p-2 border rounded-md ${hasError ? "border-red-500" : "border-gray-300"
                 }`}
             />

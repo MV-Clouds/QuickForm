@@ -277,7 +277,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       } else if (selectedField.options?.join(',') === 'Male,Female,Other') {
         setPredefinedOptionSet('gender');
       } else {
-        setPredefinedOptionSet('');
+        setPredefinedOptionSet('custom');
       }
     }
     if (selectedFooter) {
@@ -884,7 +884,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
         break;
       default:
         newOptions = ['Option 1', 'Option 2', 'Option 3'];
-        newRelatedValues = { 'Option 1': '', 'Option 2': '', 'Option 3': '' };
+        newRelatedValues = { 'Option 1': '1', 'Option 2': '2', 'Option 3': '3' };
     }
     setOptions(newOptions);
     if (selectedField.type === 'dropdown') {

@@ -272,6 +272,21 @@ function FormCalculationWidget({ selectedField, onUpdateField, fields }) {
     const warnings = [];
     const availableFieldIds = fields.map(f => f.id);
 
+    // Get all field references in the formula
+  const fieldReferences = parts
+    .filter(p => p.type === 'field')
+    .map(p => p.id);
+
+  // Check for hidden fields when ignoreHiddenFields is true
+  if (ignoreHiddenFields) {
+    fieldReferences.forEach(fieldId => {
+      const field = fields.find(f => f.id === fieldId);
+      if (field?.isHidden) {
+        warnings.push(`Field "${fieldId}" is hidden and will be ignored in the calculation`);
+      }
+    });
+  }
+
     // Field type mappings
     const fieldTypeMappings = {
       // Text types
@@ -504,76 +519,179 @@ function FormCalculationWidget({ selectedField, onUpdateField, fields }) {
     return { errors, warnings };
   };
 
-  const handleSaveFormula = () => {
-    const rawFormula = convertPartsToRawFormula(formulaParts);
-    const { errors, warnings } = validateFormula(formulaParts);
+  // const handleSaveFormula = () => {
+  //   const rawFormula = convertPartsToRawFormula(formulaParts);
+  //   const { errors, warnings } = validateFormula(formulaParts);
 
-    setValidationErrors(errors);
-    setValidationWarnings(warnings);
+  //   setValidationErrors(errors);
+  //   setValidationWarnings(warnings);
 
-    if (errors.length > 0) {
-      // Clear invalid formula
-      if (errors.some(e => e.includes('Invalid field reference') ||
-        e.includes('Function is not defined') ||
-        e.includes('Invalid consecutive operators'))) {
-        setManualInput('');
-        setFormulaParts([]);
+  //   if (errors.length > 0) {
+  //     // Clear invalid formula
+  //     if (errors.some(e => e.includes('Invalid field reference') ||
+  //       e.includes('Function is not defined') ||
+  //       e.includes('Invalid consecutive operators'))) {
+  //       setManualInput('');
+  //       setFormulaParts([]);
+  //     }
+  //     return;
+  //   }
+
+  //   const fieldReferences = formulaParts
+  //     .filter(p => p.type === 'field')
+  //     .map(p => p.id)
+  //     .filter((id, index, self) => self.indexOf(id) === index);
+
+  //   onUpdateField(selectedField.id, {
+  //     formula: rawFormula,
+  //     fieldReferences,
+  //     decimalPlaces,
+  //     ignoreHiddenFields,
+  //     isReadOnly
+  //   });
+  //   setShowOptionsInterface(false);
+  // };
+
+
+  // const handleTextareaBlur = () => {
+  //   // First check if there are any invalid function calls with dot notation
+  //   if (manualInput.includes('".') || manualInput.includes("'.")) {
+  //     setValidationErrors(['Invalid syntax: Use comma (,) to separate function arguments, not dot (.)']);
+  //     setValidationWarnings([]);
+  //     setManualInput('');
+  //     setFormulaParts([]);
+  //     return;
+  //   }
+
+  //   const parts = parseFormulaText(manualInput, fields, functionCategories);
+
+  //   // Check if there's any invalid text that wasn't parsed into parts
+  //   const hasInvalidText = manualInput.trim() && parts.length === 0;
+
+  //   if (hasInvalidText) {
+  //     setValidationErrors(['Invalid formula syntax. Please use valid fields, functions, or operators.']);
+  //     setValidationWarnings([]);
+  //     setManualInput('');
+  //     setFormulaParts([]);
+  //     return;
+  //   }
+
+  //   const { errors, warnings } = validateFormula(parts);
+
+  //   setValidationErrors(errors);
+  //   setValidationWarnings(warnings);
+
+  //   // Only update if there are no critical errors
+  //   if (!errors.some(e => e.includes('Invalid field reference') ||
+  //     e.includes('Function is not defined') ||
+  //     e.includes('Invalid syntax'))) {
+  //     setFormulaParts(parts);
+  //   }
+
+  //   setIsEditMode(false);
+  // };
+
+const handleSaveFormula = () => {
+  let partsToSave = [...formulaParts];
+  const warnings = [];
+
+  // Remove hidden field references if ignoreHiddenFields is true
+  if (ignoreHiddenFields) {
+    partsToSave = partsToSave.filter(part => {
+      if (part.type !== 'field') return true;
+      const field = fields.find(f => f.id === part.id);
+      if (field?.isHidden) {
+        warnings.push(`Field "${field?.label || part.id}" was removed from the formula because it is hidden`);
+        return false;
       }
-      return;
-    }
-
-    const fieldReferences = formulaParts
-      .filter(p => p.type === 'field')
-      .map(p => p.id)
-      .filter((id, index, self) => self.indexOf(id) === index);
-
-    onUpdateField(selectedField.id, {
-      formula: rawFormula,
-      fieldReferences,
-      decimalPlaces,
-      ignoreHiddenFields,
-      isReadOnly
+      return true;
     });
-    setShowOptionsInterface(false);
-  };
+  }
 
-  const handleTextareaBlur = () => {
-    // First check if there are any invalid function calls with dot notation
-    if (manualInput.includes('".') || manualInput.includes("'.")) {
-      setValidationErrors(['Invalid syntax: Use comma (,) to separate function arguments, not dot (.)']);
-      setValidationWarnings([]);
-      setManualInput('');
-      setFormulaParts([]);
-      return;
+  const rawFormula = convertPartsToRawFormula(partsToSave);
+  const { errors, warnings: validationWarnings } = validateFormula(partsToSave);
+
+  setValidationErrors(errors);
+  setValidationWarnings([...validationWarnings, ...warnings]);
+
+  // Update field references
+  const fieldReferences = partsToSave
+    .filter(p => p.type === 'field')
+    .map(p => p.id)
+    .filter((id, index, self) => self.indexOf(id) === index);
+
+  // Update state if formula parts changed due to hidden field removal
+  if (ignoreHiddenFields && partsToSave.length !== formulaParts.length) {
+    setFormulaParts(partsToSave);
+    setManualInput(rawFormula);
+  }
+
+  // Save options regardless of errors or warnings
+  onUpdateField(selectedField.id, {
+    formula: rawFormula,
+    fieldReferences,
+    decimalPlaces,
+    ignoreHiddenFields,
+    isReadOnly
+  });
+
+  setShowOptionsInterface(false);
+};
+
+const handleTextareaBlur = () => {
+  // First check if there are any invalid function calls with dot notation
+  if (manualInput.includes('".') || manualInput.includes("'.")) {
+    setValidationErrors(['Invalid syntax: Use comma (,) to separate function arguments, not dot (.)']);
+    setValidationWarnings([]);
+    setManualInput('');
+    setFormulaParts([]);
+    return;
+  }
+
+  const parts = parseFormulaText(manualInput, fields, functionCategories);
+
+  // Check if there's any invalid text that wasn't parsed into parts
+  const hasInvalidText = manualInput.trim() && parts.length === 0;
+
+  if (hasInvalidText) {
+    setValidationErrors(['Invalid formula syntax. Please use valid fields, functions, or operators.']);
+    setValidationWarnings([]);
+    setManualInput('');
+    setFormulaParts([]);
+    return;
+  }
+
+  let partsToUse = [...parts];
+  
+  // Remove hidden field references if ignoreHiddenFields is true
+  if (ignoreHiddenFields) {
+    partsToUse = partsToUse.filter(part => {
+      if (part.type !== 'field') return true;
+      
+      const field = fields.find(f => f.id === part.id);
+      return !field?.isHidden;
+    });
+  }
+
+  const { errors, warnings } = validateFormula(partsToUse);
+
+  setValidationErrors(errors);
+  setValidationWarnings(warnings);
+
+  // Only update if there are no critical errors
+  if (!errors.some(e => e.includes('Invalid field reference') ||
+    e.includes('Function is not defined') ||
+    e.includes('Invalid syntax'))) {
+    setFormulaParts(partsToUse);
+    
+    // Update manual input if fields were removed
+    if (ignoreHiddenFields && partsToUse.length !== parts.length) {
+      setManualInput(convertPartsToRawFormula(partsToUse));
     }
+  }
 
-    const parts = parseFormulaText(manualInput, fields, functionCategories);
-
-    // Check if there's any invalid text that wasn't parsed into parts
-    const hasInvalidText = manualInput.trim() && parts.length === 0;
-
-    if (hasInvalidText) {
-      setValidationErrors(['Invalid formula syntax. Please use valid fields, functions, or operators.']);
-      setValidationWarnings([]);
-      setManualInput('');
-      setFormulaParts([]);
-      return;
-    }
-
-    const { errors, warnings } = validateFormula(parts);
-
-    setValidationErrors(errors);
-    setValidationWarnings(warnings);
-
-    // Only update if there are no critical errors
-    if (!errors.some(e => e.includes('Invalid field reference') ||
-      e.includes('Function is not defined') ||
-      e.includes('Invalid syntax'))) {
-      setFormulaParts(parts);
-    }
-
-    setIsEditMode(false);
-  };
+  setIsEditMode(false);
+};
 
   const handleCalculationAreaClick = () => {
     setIsEditMode(true);
