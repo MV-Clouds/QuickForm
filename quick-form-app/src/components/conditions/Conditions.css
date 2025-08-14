@@ -1,6 +1,6 @@
 /* Hover effect for edges */
 .react-flow__edge-path:hover {
-    stroke-width: 4;
+    strokeWidth: 4;
     stroke-opacity: 0.9;
   }
   

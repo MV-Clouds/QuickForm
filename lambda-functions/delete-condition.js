@@ -1,78 +1,102 @@
-import { DynamoDBClient, QueryCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBClient,
+  QueryCommand,
+  BatchWriteItemCommand,
+} from "@aws-sdk/client-dynamodb";
 
-const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const METADATA_TABLE_NAME = 'SalesforceChunkData';
+const dynamoClient = new DynamoDBClient({ region: "us-east-1" });
+const METADATA_TABLE_NAME = "SalesforceChunkData";
 
 export const handler = async (event) => {
   try {
-    const body = JSON.parse(event.body || '{}');
+    const body = JSON.parse(event.body || "{}");
     const { userId, instanceUrl, conditionId, formVersionId } = body;
-    const token = event.headers.Authorization?.split(' ')[1];
+    const token = event.headers.Authorization?.split(" ")[1];
 
     if (!userId || !instanceUrl || !conditionId || !formVersionId || !token) {
       return {
         statusCode: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ error: 'Missing required parameters' }),
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify({ error: "Missing required parameters" }),
       };
     }
 
-    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+    const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
     const salesforceBaseUrl = `https://${cleanedInstanceUrl}/services/data/v60.0`;
 
     // Fetch existing conditions from Salesforce
     let existingConditionId = null;
     let existingConditions = [];
     const query = `SELECT Id, Condition_Data__c FROM Form_Condition__c WHERE Form_Version__c = '${formVersionId}' LIMIT 1`;
-    const queryResponse = await fetch(`${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    const queryResponse = await fetch(
+      `${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
     if (queryResponse.ok) {
       const queryData = await queryResponse.json();
       if (queryData.records.length > 0) {
         existingConditionId = queryData.records[0].Id;
-        existingConditions = JSON.parse(queryData.records[0].Condition_Data__c || '[]');
+        existingConditions = JSON.parse(
+          queryData.records[0].Condition_Data__c || "[]"
+        );
       }
     }
 
     // Filter out the condition to delete
-    const updatedConditions = existingConditions.filter(c => c.Id !== conditionId);
+    const updatedConditions = existingConditions.filter(
+      (c) => c.Id !== conditionId
+    );
 
     // Update Salesforce
     if (existingConditionId) {
       if (updatedConditions.length > 0) {
-        const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            Condition_Data__c: JSON.stringify(updatedConditions),
-          }),
-        });
+        const response = await fetch(
+          `${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              Condition_Data__c: JSON.stringify(updatedConditions),
+            }),
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData[0]?.message || 'Failed to update condition');
+          throw new Error(
+            errorData[0]?.message || "Failed to update condition"
+          );
         }
       } else {
         // Delete the record if no conditions remain
-        const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          `${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData[0]?.message || 'Failed to delete condition');
+          throw new Error(
+            errorData[0]?.message || "Failed to delete condition"
+          );
         }
       }
     }
@@ -84,8 +108,8 @@ export const handler = async (event) => {
       const queryResponse = await dynamoClient.send(
         new QueryCommand({
           TableName: METADATA_TABLE_NAME,
-          KeyConditionExpression: 'UserId = :userId',
-          ExpressionAttributeValues: { ':userId': { S: userId } },
+          KeyConditionExpression: "UserId = :userId",
+          ExpressionAttributeValues: { ":userId": { S: userId } },
           ExclusiveStartKey,
         })
       );
@@ -101,38 +125,47 @@ export const handler = async (event) => {
     let existingMetadata = {};
     let createdAt = new Date().toISOString();
 
-    const metadataItem = allItems.find(item => item.ChunkIndex?.S === 'Metadata');
-    const formRecordItems = allItems.filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'));
+    const metadataItem = allItems.find(
+      (item) => item.ChunkIndex?.S === "Metadata"
+    );
+    const formRecordItems = allItems.filter((item) =>
+      item.ChunkIndex?.S.startsWith("FormRecords_")
+    );
 
     if (metadataItem?.Metadata?.S) {
       try {
         existingMetadata = JSON.parse(metadataItem.Metadata.S);
       } catch (e) {
-        console.warn('Failed to parse Metadata:', e);
+        console.warn("Failed to parse Metadata:", e);
       }
       createdAt = metadataItem.CreatedAt?.S || createdAt;
     }
 
     if (formRecordItems.length > 0) {
       try {
-        const sortedChunks = formRecordItems
-          .sort((a, b) => {
-            const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-            const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-            return aNum - bNum;
-          });
+        const sortedChunks = formRecordItems.sort((a, b) => {
+          const aNum = parseInt(a.ChunkIndex.S.split("_")[1]);
+          const bNum = parseInt(b.ChunkIndex.S.split("_")[1]);
+          return aNum - bNum;
+        });
         const expectedChunks = sortedChunks.length;
         for (let i = 0; i < expectedChunks; i++) {
-          if (!sortedChunks.some(item => item.ChunkIndex.S === `FormRecords_${i}`)) {
+          if (
+            !sortedChunks.some(
+              (item) => item.ChunkIndex.S === `FormRecords_${i}`
+            )
+          ) {
             console.warn(`Missing chunk FormRecords_${i}`);
             formRecords = [];
             break;
           }
         }
-        const combinedFormRecords = sortedChunks.map(item => item.FormRecords.S).join('');
+        const combinedFormRecords = sortedChunks
+          .map((item) => item.FormRecords.S)
+          .join("");
         formRecords = JSON.parse(combinedFormRecords);
       } catch (e) {
-        console.warn('Failed to parse FormRecords chunks:', e);
+        console.warn("Failed to parse FormRecords chunks:", e);
         formRecords = [];
       }
     }
@@ -140,7 +173,9 @@ export const handler = async (event) => {
     let formVersion = null;
     let formIndex = -1;
     for (let i = 0; i < formRecords.length; i++) {
-      formVersion = formRecords[i].FormVersions.find(v => v.Id === formVersionId);
+      formVersion = formRecords[i].FormVersions.find(
+        (v) => v.Id === formVersionId
+      );
       if (formVersion) {
         formIndex = i;
         break;
@@ -166,7 +201,7 @@ export const handler = async (event) => {
         PutRequest: {
           Item: {
             UserId: { S: userId },
-            ChunkIndex: { S: 'Metadata' },
+            ChunkIndex: { S: "Metadata" },
             InstanceUrl: { S: cleanedInstanceUrl },
             Metadata: { S: JSON.stringify(existingMetadata) },
             CreatedAt: { S: createdAt },
@@ -195,14 +230,22 @@ export const handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
       body: JSON.stringify({ success: true }),
     };
   } catch (error) {
     return {
       statusCode: error.response?.status || 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ error: error.message || 'Failed to delete condition' }),
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        error: error.message || "Failed to delete condition",
+      }),
     };
   }
 };

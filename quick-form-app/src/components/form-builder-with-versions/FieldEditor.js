@@ -1,56 +1,126 @@
-import React, { useState, useEffect } from 'react';
-import FormCalculationWidget from './FormCalculationWidget';
-import { FaChevronDown, FaChevronUp, FaTimes, FaRegLightbulb, FaTrash, FaArrowsAltV, FaInfoCircle } from 'react-icons/fa';
-import { AiOutlineStar, AiOutlineHeart } from 'react-icons/ai';
-import { BiBoltCircle } from 'react-icons/bi';
-import EmojiPicker from 'emoji-picker-react';
-import { getCountryList } from './getCountries';
+import React, { useState, useEffect } from "react";
+import FormCalculationWidget from "./FormCalculationWidget";
+import {
+  FaChevronDown,
+  FaChevronUp,
+  FaTimes,
+  FaRegLightbulb,
+  FaTrash,
+  FaArrowsAltV,
+  FaInfoCircle,
+} from "react-icons/fa";
+import { AiOutlineStar, AiOutlineHeart } from "react-icons/ai";
+import { BiBoltCircle } from "react-icons/bi";
+import EmojiPicker from "emoji-picker-react";
+import { getCountryList } from "./getCountries";
+import PaymentFieldEditor from "./payment-fields/PaymentFieldEditor";
 
 // FieldEditor component for editing form fields and footer buttons
-function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteField, onClose, fields }) {
+function FieldEditor({
+  selectedField,
+  selectedFooter,
+  onUpdateField,
+  onDeleteField,
+  onClose,
+  fields,
+  userId = null, // Add userId prop
+  formId = null, // Add formId prop
+}) {
   // State for common properties
-  const [label, setLabel] = useState(selectedField?.label || '');
-  const [placeholder, setPlaceholder] = useState(selectedField?.placeholder || {});
-  const [isRequired, setIsRequired] = useState(selectedField?.isRequired || false);
-  const [labelAlignment, setLabelAlignment] = useState(selectedField?.labelAlignment || 'top');
+  const [label, setLabel] = useState(selectedField?.label || "");
+  const [placeholder, setPlaceholder] = useState(
+    selectedField?.placeholder || {}
+  );
+  const [isRequired, setIsRequired] = useState(
+    selectedField?.isRequired || false
+  );
+  const [labelAlignment, setLabelAlignment] = useState(
+    selectedField?.labelAlignment || "top"
+  );
 
   // State for additional properties (field-specific)
   const [options, setOptions] = useState(selectedField?.options || []);
   const [rows, setRows] = useState(selectedField?.rows || []);
   const [columns, setColumns] = useState(selectedField?.columns || []);
-  const [ratingType, setRatingType] = useState(selectedField?.ratingType || 'emoji');
-  const [ratingRange, setRatingRange] = useState(selectedField?.ratingRange || 5);
+  const [ratingType, setRatingType] = useState(
+    selectedField?.ratingType || "emoji"
+  );
+  const [ratingRange, setRatingRange] = useState(
+    selectedField?.ratingRange || 5
+  );
   const [ratingValues, setRatingValues] = useState(
-    selectedField?.ratingValues || Array(selectedField?.ratingRange || 5).fill('').map((_, i) => `Rating ${i + 1}`)
+    selectedField?.ratingValues ||
+      Array(selectedField?.ratingRange || 5)
+        .fill("")
+        .map((_, i) => `Rating ${i + 1}`)
   );
   const [ratingEmojis, setRatingEmojis] = useState(
-    selectedField?.ratingEmojis || Array(selectedField?.ratingRange || 5).fill('').map((_, i) => ['😞', '🙁', '😐', '🙂', '😀'][i % 5])
+    selectedField?.ratingEmojis ||
+      Array(selectedField?.ratingRange || 5)
+        .fill("")
+        .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
   );
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
 
   // State for email-specific properties
-  const [maxChars, setMaxChars] = useState(selectedField?.maxChars || '');
-  const [allowedDomains, setAllowedDomains] = useState(selectedField?.allowedDomains || '');
-  const [enableConfirmation, setEnableConfirmation] = useState(selectedField?.enableConfirmation || false);
-  const [enableVerification, setEnableVerification] = useState(selectedField?.enableVerification || false);
+  const [maxChars, setMaxChars] = useState(selectedField?.maxChars || "");
+  const [allowedDomains, setAllowedDomains] = useState(
+    selectedField?.allowedDomains || ""
+  );
+  const [enableConfirmation, setEnableConfirmation] = useState(
+    selectedField?.enableConfirmation || false
+  );
+  const [enableVerification, setEnableVerification] = useState(
+    selectedField?.enableVerification || false
+  );
 
   // State for address-specific properties (integrated into subFields)
   const [subFields, setSubFields] = useState(
     selectedField?.subFields || {
-      street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street' },
-      city: { visible: true, label: 'City', value: '', placeholder: 'Enter city' },
-      state: { visible: true, label: 'State', value: '', placeholder: 'Enter state' },
-      country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country' },
-      postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code' },
+      street: {
+        visible: true,
+        label: "Street Address",
+        value: "",
+        placeholder: "Enter street",
+      },
+      city: {
+        visible: true,
+        label: "City",
+        value: "",
+        placeholder: "Enter city",
+      },
+      state: {
+        visible: true,
+        label: "State",
+        value: "",
+        placeholder: "Enter state",
+      },
+      country: {
+        visible: true,
+        label: "Country",
+        value: "",
+        placeholder: "Enter country",
+      },
+      postal: {
+        visible: true,
+        label: "Postal Code",
+        value: "",
+        placeholder: "Enter postal code",
+      },
     }
   );
 
   // State for fullname-specific properties (integrated into subFields)
   const [fullnameSubFields, setFullnameSubFields] = useState(
     selectedField?.subFields || {
-      salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
-      firstName: { value: '', placeholder: 'First Name' },
-      lastName: { value: '', placeholder: 'Last Name' },
+      salutation: {
+        enabled: false,
+        options: ["Mr.", "Mrs.", "Ms.", "Dr."],
+        value: "",
+        placeholder: "Select Salutation",
+      },
+      firstName: { value: "", placeholder: "First Name" },
+      lastName: { value: "", placeholder: "Last Name" },
     }
   );
 
@@ -58,220 +128,396 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     selectedField?.subFields || {
       countryCode: {
         enabled: true,
-        value: 'US',
-        placeholder: 'Select country code',
+        value: "US",
+        placeholder: "Select country code",
         options: [],
       },
       phoneNumber: {
-        value: '',
-        placeholder: 'Enter phone number',
-        phoneMask: '(999) 999-9999',
+        value: "",
+        placeholder: "Enter phone number",
+        phoneMask: "(999) 999-9999",
       },
     }
   );
 
   // State for fileupload-specific properties
-  const [maxFileSize, setMaxFileSize] = useState(selectedField?.maxFileSize || '');
-  const [allowedFileTypes, setAllowedFileTypes] = useState(selectedField?.allowedFileTypes || '');
-  const [multipleFiles, setMultipleFiles] = useState(selectedField?.multipleFiles || false);
+  const [maxFileSize, setMaxFileSize] = useState(
+    selectedField?.maxFileSize || ""
+  );
+  const [allowedFileTypes, setAllowedFileTypes] = useState(
+    selectedField?.allowedFileTypes || ""
+  );
+  const [multipleFiles, setMultipleFiles] = useState(
+    selectedField?.multipleFiles || false
+  );
 
   // State for advanced properties
-  const [isDisabled, setIsDisabled] = useState(selectedField?.isDisabled || false);
-  const [showHelpText, setShowHelpText] = useState(selectedField?.showHelpText || false);
-  const [helpText, setHelpText] = useState(selectedField?.helpText || '');
+  const [isDisabled, setIsDisabled] = useState(
+    selectedField?.isDisabled || false
+  );
+  const [showHelpText, setShowHelpText] = useState(
+    selectedField?.showHelpText || false
+  );
+  const [helpText, setHelpText] = useState(selectedField?.helpText || "");
 
   // State for header and footer properties
   // const [headerText, setHeaderText] = useState('Form');
   // const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
-  const [footerText, setFooterText] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.text || selectedFooter.buttonType.charAt(0).toUpperCase() + selectedFooter.buttonType.slice(1)) : '');
-  const [footerBgColor, setFooterBgColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.bgColor || (selectedFooter.buttonType === 'previous' ? 'bg-gray-600' : 'bg-blue-600')) : '');
-  const [footerTextColor, setFooterTextColor] = useState(selectedFooter ? (fields.find(f => f.id === `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`)?.textColor || 'white') : 'white');
+  const [footerText, setFooterText] = useState(
+    selectedFooter
+      ? fields.find(
+          (f) =>
+            f.id ===
+            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
+        )?.text ||
+          selectedFooter.buttonType.charAt(0).toUpperCase() +
+            selectedFooter.buttonType.slice(1)
+      : ""
+  );
+  const [footerBgColor, setFooterBgColor] = useState(
+    selectedFooter
+      ? fields.find(
+          (f) =>
+            f.id ===
+            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
+        )?.bgColor ||
+          (selectedFooter.buttonType === "previous"
+            ? "bg-gray-600"
+            : "bg-blue-600")
+      : ""
+  );
+  const [footerTextColor, setFooterTextColor] = useState(
+    selectedFooter
+      ? fields.find(
+          (f) =>
+            f.id ===
+            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
+        )?.textColor || "white"
+      : "white"
+  );
 
   // State for terms-specific properties
-  const [makeAsLink, setMakeAsLink] = useState(selectedField?.makeAsLink || false);
-  const [termsLinkUrl, setTermsLinkUrl] = useState(selectedField?.termsLinkUrl || '');
+  const [makeAsLink, setMakeAsLink] = useState(
+    selectedField?.makeAsLink || false
+  );
+  const [termsLinkUrl, setTermsLinkUrl] = useState(
+    selectedField?.termsLinkUrl || ""
+  );
 
   // State for date and datetime-specific properties
-  const [dateSeparator, setDateSeparator] = useState(selectedField?.dateSeparator || '-');
-  const [dateFormat, setDateFormat] = useState(selectedField?.dateFormat || 'MM/dd/yyyy');
-  const [defaultDate, setDefaultDate] = useState(selectedField?.defaultDate || '');
-  const [weekStartDay, setWeekStartDay] = useState(selectedField?.weekStartDay || 'Sunday');
-  const [customMonthLabels, setCustomMonthLabels] = useState(selectedField?.customMonthLabels || [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ]);
-  const [customDayLabels, setCustomDayLabels] = useState(selectedField?.customDayLabels || [
-    'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
-  ]);
-  const [customTodayLabel, setCustomTodayLabel] = useState(selectedField?.customTodayLabel || 'Today');
-  const [enableAgeVerification, setEnableAgeVerification] = useState(selectedField?.enableAgeVerification || false);
+  const [dateSeparator, setDateSeparator] = useState(
+    selectedField?.dateSeparator || "-"
+  );
+  const [dateFormat, setDateFormat] = useState(
+    selectedField?.dateFormat || "MM/dd/yyyy"
+  );
+  const [defaultDate, setDefaultDate] = useState(
+    selectedField?.defaultDate || ""
+  );
+  const [weekStartDay, setWeekStartDay] = useState(
+    selectedField?.weekStartDay || "Sunday"
+  );
+  const [customMonthLabels, setCustomMonthLabels] = useState(
+    selectedField?.customMonthLabels || [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ]
+  );
+  const [customDayLabels, setCustomDayLabels] = useState(
+    selectedField?.customDayLabels || [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ]
+  );
+  const [customTodayLabel, setCustomTodayLabel] = useState(
+    selectedField?.customTodayLabel || "Today"
+  );
+  const [enableAgeVerification, setEnableAgeVerification] = useState(
+    selectedField?.enableAgeVerification || false
+  );
   const [minAge, setMinAge] = useState(selectedField?.minAge || 18);
-  const [dateRange, setDateRange] = useState(selectedField?.dateRange || { start: '', end: '' });
-  const [disabledDates, setDisabledDates] = useState(selectedField?.disabledDates || []);
+  const [dateRange, setDateRange] = useState(
+    selectedField?.dateRange || { start: "", end: "" }
+  );
+  const [disabledDates, setDisabledDates] = useState(
+    selectedField?.disabledDates || []
+  );
 
   // State for datetime-specific properties
-  const [datetimeRange, setDatetimeRange] = useState(selectedField?.datetimeRange || { start: '', end: '' });
+  const [datetimeRange, setDatetimeRange] = useState(
+    selectedField?.datetimeRange || { start: "", end: "" }
+  );
 
   // State for time-specific properties
-  const [timeFormat, setTimeFormat] = useState(selectedField?.timeFormat || 'HH:mm');
-  const [defaultTime, setDefaultTime] = useState(selectedField?.defaultTime || '');
-  const [restrictAmPm, setRestrictAmPm] = useState(selectedField?.restrictAmPm || '');
+  const [timeFormat, setTimeFormat] = useState(
+    selectedField?.timeFormat || "HH:mm"
+  );
+  const [defaultTime, setDefaultTime] = useState(
+    selectedField?.defaultTime || ""
+  );
+  const [restrictAmPm, setRestrictAmPm] = useState(
+    selectedField?.restrictAmPm || ""
+  );
 
   // State for tab navigation
-  const [activeTab, setActiveTab] = useState('settings');
+  const [activeTab, setActiveTab] = useState("settings");
 
   // State for expandable sections
-  const [expandedSection, setExpandedSection] = useState('common');
+  const [expandedSection, setExpandedSection] = useState("common");
 
   const [showMultiRowModal, setShowMultiRowModal] = useState(false);
   const [showMultiColumnModal, setShowMultiColumnModal] = useState(false);
-  const [multiRowInput, setMultiRowInput] = useState('');
-  const [multiColumnInput, setMultiColumnInput] = useState('');
+  const [multiRowInput, setMultiRowInput] = useState("");
+  const [multiColumnInput, setMultiColumnInput] = useState("");
 
-  const [inputType, setInputType] = useState(selectedField?.inputType || 'radio');
-  const [dropdownOptionsInput, setDropdownOptionsInput] = useState((selectedField?.dropdownOptions || []).join('\n'));
+  const [inputType, setInputType] = useState(
+    selectedField?.inputType || "radio"
+  );
+  const [dropdownOptionsInput, setDropdownOptionsInput] = useState(
+    (selectedField?.dropdownOptions || []).join("\n")
+  );
 
-  const [shortTextMaxChars, setShortTextMaxChars] = useState(selectedField?.shortTextMaxChars || '');
-  const [isRichText, setIsRichText] = useState(selectedField?.isRichText || false);
-  const [longTextMaxChars, setLongTextMaxChars] = useState(selectedField?.longTextMaxChars || '');
-  const [numberValueLimits, setNumberValueLimits] = useState(selectedField?.numberValueLimits || { enabled: false, min: '', max: '' });
-  const [relatedValues, setRelatedValues] = useState(selectedField?.[`${selectedField?.type}RelatedValues`] || {});
-  const [predefinedOptionSet, setPredefinedOptionSet] = useState('');
+  const [shortTextMaxChars, setShortTextMaxChars] = useState(
+    selectedField?.shortTextMaxChars || ""
+  );
+  const [isRichText, setIsRichText] = useState(
+    selectedField?.isRichText || false
+  );
+  const [longTextMaxChars, setLongTextMaxChars] = useState(
+    selectedField?.longTextMaxChars || ""
+  );
+  const [numberValueLimits, setNumberValueLimits] = useState(
+    selectedField?.numberValueLimits || { enabled: false, min: "", max: "" }
+  );
+  const [relatedValues, setRelatedValues] = useState(
+    selectedField?.[`${selectedField?.type}RelatedValues`] || {}
+  );
+  const [predefinedOptionSet, setPredefinedOptionSet] = useState("");
 
   // State for price-specific properties
-  const [priceLimits, setPriceLimits] = useState(selectedField?.priceLimits || { enabled: false, min: '', max: '' });
-  const [currencyType, setCurrencyType] = useState(selectedField?.currencyType || 'USD');
+  const [priceLimits, setPriceLimits] = useState(
+    selectedField?.priceLimits || { enabled: false, min: "", max: "" }
+  );
+  const [currencyType, setCurrencyType] = useState(
+    selectedField?.currencyType || "USD"
+  );
 
   // NEW: State for dropdown-specific properties
-  const [allowMultipleSelections, setAllowMultipleSelections] = useState(selectedField?.allowMultipleSelections || false);
-  const [shuffleOptions, setShuffleOptions] = useState(selectedField?.shuffleOptions || false);
+  const [allowMultipleSelections, setAllowMultipleSelections] = useState(
+    selectedField?.allowMultipleSelections || false
+  );
+  const [shuffleOptions, setShuffleOptions] = useState(
+    selectedField?.shuffleOptions || false
+  );
   const [dragIndex, setDragIndex] = useState(null);
-  const [dropdownRelatedValues, setDropdownRelatedValues] = useState(selectedField?.dropdownRelatedValues || {});
+  const [dropdownRelatedValues, setDropdownRelatedValues] = useState(
+    selectedField?.dropdownRelatedValues || {}
+  );
 
   // NEW : Default value / Hidden Feature / Unique Name
-  const [defaultValue, setDefaultValue] = useState(selectedField?.defaultValue || '');
+  const [defaultValue, setDefaultValue] = useState(
+    selectedField?.defaultValue || ""
+  );
   const [isHidden, setIsHidden] = useState(selectedField?.isHidden || false);
-  const [uniqueName, setUniqueName] = useState(selectedField?.uniqueName || '');
-  const [uniqueNameError, setUniqueNameError] = useState('');
-  const [headingText, setHeadingText] = useState(selectedField?.heading || 'Form Head');
-  const [headingAlignment, setHeadingAlignment] = useState(selectedField?.alignment || 'center');
+  const [uniqueName, setUniqueName] = useState(selectedField?.uniqueName || "");
+  const [uniqueNameError, setUniqueNameError] = useState("");
+  const [headingText, setHeadingText] = useState(
+    selectedField?.heading || "Form Head"
+  );
+  const [headingAlignment, setHeadingAlignment] = useState(
+    selectedField?.alignment || "center"
+  );
 
   useEffect(() => {
     if (selectedField) {
-      setLabel(selectedField.label || '');
+      setLabel(selectedField.label || "");
       setPlaceholder(selectedField.placeholder || {});
       setIsRequired(selectedField.isRequired || false);
       setIsDisabled(selectedField.isDisabled || false);
       setShowHelpText(selectedField.showHelpText || false);
-      setHelpText(selectedField.helpText || '');
-      setLabelAlignment(selectedField.labelAlignment || 'top');
-      setRows(selectedField.rows || ['Criteria 1', 'Criteria 2', 'Criteria 3']);
-      setColumns(selectedField.columns || ['1', '2', '3', '4', '5']);
-      setOptions(selectedField.options || ['Option 1', 'Option 2', 'Option 3']);
-      setRatingType(selectedField.ratingType || 'emoji');
+      setHelpText(selectedField.helpText || "");
+      setLabelAlignment(selectedField.labelAlignment || "top");
+      setRows(selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"]);
+      setColumns(selectedField.columns || ["1", "2", "3", "4", "5"]);
+      setOptions(selectedField.options || ["Option 1", "Option 2", "Option 3"]);
+      setRatingType(selectedField.ratingType || "emoji");
       setRatingRange(selectedField.ratingRange || 5);
       setRatingValues(
-        selectedField.ratingValues || Array(selectedField.ratingRange || 5).fill('').map((_, i) => `Rating ${i + 1}`)
+        selectedField.ratingValues ||
+          Array(selectedField.ratingRange || 5)
+            .fill("")
+            .map((_, i) => `Rating ${i + 1}`)
       );
       setRatingEmojis(
-        selectedField.ratingEmojis || Array(selectedField.ratingRange || 5).fill('').map((_, i) => ['😞', '🙁', '😐', '🙂', '😀'][i % 5])
+        selectedField.ratingEmojis ||
+          Array(selectedField.ratingRange || 5)
+            .fill("")
+            .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
       );
-      setMaxChars(selectedField.maxChars || '');
-      setAllowedDomains(selectedField.allowedDomains || '');
+      setMaxChars(selectedField.maxChars || "");
+      setAllowedDomains(selectedField.allowedDomains || "");
       setEnableConfirmation(selectedField.enableConfirmation || false);
       setEnableVerification(selectedField.enableVerification || false);
       // Initialize address subFields
       setSubFields(
         selectedField.subFields || {
-          street: { visible: true, label: 'Street Address', value: '', placeholder: 'Enter street' },
-          city: { visible: true, label: 'City', value: '', placeholder: 'Enter city' },
-          state: { visible: true, label: 'State', value: '', placeholder: 'Enter state' },
-          country: { visible: true, label: 'Country', value: '', placeholder: 'Enter country' },
-          postal: { visible: true, label: 'Postal Code', value: '', placeholder: 'Enter postal code' },
+          street: {
+            visible: true,
+            label: "Street Address",
+            value: "",
+            placeholder: "Enter street",
+          },
+          city: {
+            visible: true,
+            label: "City",
+            value: "",
+            placeholder: "Enter city",
+          },
+          state: {
+            visible: true,
+            label: "State",
+            value: "",
+            placeholder: "Enter state",
+          },
+          country: {
+            visible: true,
+            label: "Country",
+            value: "",
+            placeholder: "Enter country",
+          },
+          postal: {
+            visible: true,
+            label: "Postal Code",
+            value: "",
+            placeholder: "Enter postal code",
+          },
         }
       );
       // Initialize fullname subFields
       setFullnameSubFields(
         selectedField.subFields || {
-          salutation: { enabled: false, options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.'], value: '', placeholder: 'Select Salutation' },
-          firstName: { value: '', placeholder: 'First Name' },
-          lastName: { value: '', placeholder: 'Last Name' },
+          salutation: {
+            enabled: false,
+            options: ["Mr.", "Mrs.", "Ms.", "Dr."],
+            value: "",
+            placeholder: "Select Salutation",
+          },
+          firstName: { value: "", placeholder: "First Name" },
+          lastName: { value: "", placeholder: "Last Name" },
         }
       );
 
-      setInputType(selectedField.inputType || 'radio');
-      setDropdownOptionsInput((selectedField.dropdownOptions || []).join('\n'));
-      setShortTextMaxChars(selectedField.shortTextMaxChars || '');
+      setInputType(selectedField.inputType || "radio");
+      setDropdownOptionsInput((selectedField.dropdownOptions || []).join("\n"));
+      setShortTextMaxChars(selectedField.shortTextMaxChars || "");
       setIsRichText(selectedField.isRichText || false);
-      setLongTextMaxChars(selectedField.longTextMaxChars || '');
-      setNumberValueLimits(selectedField.numberValueLimits || { enabled: false, min: '', max: '' });
-      setRelatedValues(selectedField[`${selectedField.type}RelatedValues`] || {});
-      setPriceLimits(selectedField.priceLimits || { enabled: false, min: '', max: '' });
-      setCurrencyType(selectedField.currencyType || 'USD');
+      setLongTextMaxChars(selectedField.longTextMaxChars || "");
+      setNumberValueLimits(
+        selectedField.numberValueLimits || { enabled: false, min: "", max: "" }
+      );
+      setRelatedValues(
+        selectedField[`${selectedField.type}RelatedValues`] || {}
+      );
+      setPriceLimits(
+        selectedField.priceLimits || { enabled: false, min: "", max: "" }
+      );
+      setCurrencyType(selectedField.currencyType || "USD");
 
-      setAllowMultipleSelections(selectedField.allowMultipleSelections || false);
+      setAllowMultipleSelections(
+        selectedField.allowMultipleSelections || false
+      );
       setShuffleOptions(selectedField.shuffleOptions || false);
       setDropdownRelatedValues(selectedField.dropdownRelatedValues || {});
       // NEW: Set default value / Hidden Feature / Unique Name
-      setDefaultValue(selectedField.defaultValue || '');
+      setDefaultValue(selectedField.defaultValue || "");
       setIsHidden(selectedField.isHidden || false);
-      setUniqueName(selectedField.uniqueName || '');
-      setUniqueNameError('');
+      setUniqueName(selectedField.uniqueName || "");
+      setUniqueNameError("");
 
       // Set default predefined option set based on options
-      if (selectedField.options?.join(',') === 'Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday') {
-        setPredefinedOptionSet('days');
-      } else if (selectedField.options?.join(',') === 'Week 1,Week 2,Week 3,Week 4') {
-        setPredefinedOptionSet('week');
-      } else if (selectedField.options?.join(',') === 'Male,Female,Other') {
-        setPredefinedOptionSet('gender');
+      if (
+        selectedField.options?.join(",") ===
+        "Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday"
+      ) {
+        setPredefinedOptionSet("days");
+      } else if (
+        selectedField.options?.join(",") === "Week 1,Week 2,Week 3,Week 4"
+      ) {
+        setPredefinedOptionSet("week");
+      } else if (selectedField.options?.join(",") === "Male,Female,Other") {
+        setPredefinedOptionSet("gender");
       } else {
-        setPredefinedOptionSet('');
+        setPredefinedOptionSet("");
       }
     }
     if (selectedFooter) {
-      setFooterText(selectedFooter.text || '');
+      setFooterText(selectedFooter.text || "");
     }
   }, [selectedField, selectedFooter, fields]);
 
   // Add handlers for multiple rows/columns
   const handleMultiRowSave = () => {
     const newRows = multiRowInput
-      .split('\n')
-      .map(row => row.trim())
-      .filter(row => row);
+      .split("\n")
+      .map((row) => row.trim())
+      .filter((row) => row);
     if (newRows.length > 0) {
       const updatedRows = [...rows, ...newRows];
       setRows(updatedRows);
       onUpdateField(selectedField.id, { rows: updatedRows });
     }
-    setMultiRowInput('');
+    setMultiRowInput("");
     setShowMultiRowModal(false);
   };
 
   const handleMultiColumnSave = () => {
     const newColumns = multiColumnInput
-      .split('\n')
-      .map(col => col.trim())
-      .filter(col => col);
+      .split("\n")
+      .map((col) => col.trim())
+      .filter((col) => col);
     if (newColumns.length > 0) {
       const updatedColumns = [...columns, ...newColumns];
       setColumns(updatedColumns);
       onUpdateField(selectedField.id, { columns: updatedColumns });
     }
-    setMultiColumnInput('');
+    setMultiColumnInput("");
     setShowMultiColumnModal(false);
   };
 
   const handleRatingRangeChange = (e) => {
     const value = parseInt(e.target.value, 10);
     if (value >= 1 && value <= 10) {
-      const newRatingValues = Array(value).fill('').map((_, i) => ratingValues[i] || `Rating ${i + 1}`);
-      const newRatingEmojis = Array(value).fill('').map((_, i) => ratingEmojis[i] || ['😞', '🙁', '😐', '🙂', '😀'][i % 5]);
+      const newRatingValues = Array(value)
+        .fill("")
+        .map((_, i) => ratingValues[i] || `Rating ${i + 1}`);
+      const newRatingEmojis = Array(value)
+        .fill("")
+        .map(
+          (_, i) => ratingEmojis[i] || ["😞", "🙁", "😐", "🙂", "😀"][i % 5]
+        );
       setRatingRange(value);
       setRatingValues(newRatingValues);
       setRatingEmojis(newRatingEmojis);
-      onUpdateField(selectedField.id, { ratingRange: value, ratingValues: newRatingValues, ratingEmojis: newRatingEmojis });
+      onUpdateField(selectedField.id, {
+        ratingRange: value,
+        ratingValues: newRatingValues,
+        ratingEmojis: newRatingEmojis,
+      });
     }
   };
 
@@ -346,7 +592,10 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const handleSalutationEnabledChange = (e) => {
     const newSubFields = {
       ...fullnameSubFields,
-      salutation: { ...fullnameSubFields.salutation, enabled: e.target.checked }
+      salutation: {
+        ...fullnameSubFields.salutation,
+        enabled: e.target.checked,
+      },
     };
     setFullnameSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
@@ -357,27 +606,32 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     newOptions[index] = value;
     const newSubFields = {
       ...fullnameSubFields,
-      salutation: { ...fullnameSubFields.salutation, options: newOptions }
+      salutation: { ...fullnameSubFields.salutation, options: newOptions },
     };
     setFullnameSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
   const handleAddSalutationOption = () => {
-    const newOptions = [...fullnameSubFields.salutation.options, `Salutation ${fullnameSubFields.salutation.options.length + 1}`];
+    const newOptions = [
+      ...fullnameSubFields.salutation.options,
+      `Salutation ${fullnameSubFields.salutation.options.length + 1}`,
+    ];
     const newSubFields = {
       ...fullnameSubFields,
-      salutation: { ...fullnameSubFields.salutation, options: newOptions }
+      salutation: { ...fullnameSubFields.salutation, options: newOptions },
     };
     setFullnameSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
   };
 
   const handleRemoveSalutationOption = (index) => {
-    const newOptions = fullnameSubFields.salutation.options.filter((_, i) => i !== index);
+    const newOptions = fullnameSubFields.salutation.options.filter(
+      (_, i) => i !== index
+    );
     const newSubFields = {
       ...fullnameSubFields,
-      salutation: { ...fullnameSubFields.salutation, options: newOptions }
+      salutation: { ...fullnameSubFields.salutation, options: newOptions },
     };
     setFullnameSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
@@ -396,7 +650,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const handleAddressSubLabelChange = (key, value) => {
     const newSubFields = {
       ...subFields,
-      [key]: { ...subFields[key], label: value }
+      [key]: { ...subFields[key], label: value },
     };
     setSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
@@ -405,7 +659,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   const handleAddressVisibilityChange = (key) => {
     const newSubFields = {
       ...subFields,
-      [key]: { ...subFields[key], visible: !subFields[key].visible }
+      [key]: { ...subFields[key], visible: !subFields[key].visible },
     };
     setSubFields(newSubFields);
     onUpdateField(selectedField.id, { subFields: newSubFields });
@@ -520,7 +774,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
   };
 
   const handleAddDisabledDate = () => {
-    const newDates = [...disabledDates, ''];
+    const newDates = [...disabledDates, ""];
     setDisabledDates(newDates);
     onUpdateField(selectedField.id, { disabledDates: newDates });
   };
@@ -586,7 +840,6 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     onUpdateField(selectedField.id, { isDisabled: e.target.checked });
   };
 
-
   const handleShowHelpTextChange = (e) => {
     setShowHelpText(e.target.checked);
     onUpdateField(selectedField.id, { showHelpText: e.target.checked });
@@ -643,9 +896,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
 
   const handleDropdownOptionsSave = () => {
     const newOptions = dropdownOptionsInput
-      .split('\n')
-      .map(opt => opt.trim())
-      .filter(opt => opt);
+      .split("\n")
+      .map((opt) => opt.trim())
+      .filter((opt) => opt);
     onUpdateField(selectedField.id, { dropdownOptions: newOptions });
   };
 
@@ -692,36 +945,52 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     newOptions[index] = value;
     const newRelatedValues = { ...dropdownRelatedValues };
     if (oldOption !== value) {
-      newRelatedValues[value] = newRelatedValues[oldOption] || '';
+      newRelatedValues[value] = newRelatedValues[oldOption] || "";
       delete newRelatedValues[oldOption];
     }
     setOptions(newOptions);
     setDropdownRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: newOptions, dropdownRelatedValues: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: newOptions,
+      dropdownRelatedValues: newRelatedValues,
+    });
   };
 
   const handleDropdownRelatedValueChange = (option, value) => {
     const newRelatedValues = { ...dropdownRelatedValues, [option]: value };
     setDropdownRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { dropdownRelatedValues: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      dropdownRelatedValues: newRelatedValues,
+    });
   };
 
   const handleDropdownRemoveOption = (index) => {
     const newOptions = options.filter((_, i) => i !== index);
     const newRelatedValues = { ...dropdownRelatedValues };
     delete newRelatedValues[options[index]];
-    const updatedOptions = newOptions.length ? newOptions : ['Option 1', 'Option 2', 'Option 3'];
+    const updatedOptions = newOptions.length
+      ? newOptions
+      : ["Option 1", "Option 2", "Option 3"];
     setOptions(updatedOptions);
     setDropdownRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: updatedOptions, dropdownRelatedValues: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: updatedOptions,
+      dropdownRelatedValues: newRelatedValues,
+    });
   };
 
   const handleDropdownAddOption = () => {
     const newOptions = [...options, `Option ${options.length + 1}`];
-    const newRelatedValues = { ...dropdownRelatedValues, [`Option ${options.length + 1}`]: '' };
+    const newRelatedValues = {
+      ...dropdownRelatedValues,
+      [`Option ${options.length + 1}`]: "",
+    };
     setOptions(newOptions);
     setDropdownRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: newOptions, dropdownRelatedValues: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: newOptions,
+      dropdownRelatedValues: newRelatedValues,
+    });
   };
 
   const handlePredefinedOptionSetChange = (e) => {
@@ -730,31 +999,56 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     let newOptions = [];
     let newRelatedValues = {};
     switch (value) {
-      case 'days':
-        newOptions = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      case "days":
+        newOptions = [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ];
         newRelatedValues = {
-          Monday: '1', Tuesday: '2', Wednesday: '3', Thursday: '4', Friday: '5', Saturday: '6', Sunday: '7'
+          Monday: "1",
+          Tuesday: "2",
+          Wednesday: "3",
+          Thursday: "4",
+          Friday: "5",
+          Saturday: "6",
+          Sunday: "7",
         };
         break;
-      case 'week':
-        newOptions = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-        newRelatedValues = { 'Week 1': '1', 'Week 2': '2', 'Week 3': '3', 'Week 4': '4' };
+      case "week":
+        newOptions = ["Week 1", "Week 2", "Week 3", "Week 4"];
+        newRelatedValues = {
+          "Week 1": "1",
+          "Week 2": "2",
+          "Week 3": "3",
+          "Week 4": "4",
+        };
         break;
-      case 'gender':
-        newOptions = ['Male', 'Female', 'Other'];
-        newRelatedValues = { Male: 'M', Female: 'F', Other: 'O' };
+      case "gender":
+        newOptions = ["Male", "Female", "Other"];
+        newRelatedValues = { Male: "M", Female: "F", Other: "O" };
         break;
       default:
-        newOptions = ['Option 1', 'Option 2', 'Option 3'];
-        newRelatedValues = { 'Option 1': '', 'Option 2': '', 'Option 3': '' };
+        newOptions = ["Option 1", "Option 2", "Option 3"];
+        newRelatedValues = { "Option 1": "", "Option 2": "", "Option 3": "" };
     }
     setOptions(newOptions);
-    if (selectedField.type === 'dropdown') {
+    if (selectedField.type === "dropdown") {
       setDropdownRelatedValues(newRelatedValues);
-      onUpdateField(selectedField.id, { options: newOptions, dropdownRelatedValues: newRelatedValues });
+      onUpdateField(selectedField.id, {
+        options: newOptions,
+        dropdownRelatedValues: newRelatedValues,
+      });
     } else {
       setRelatedValues(newRelatedValues);
-      onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
+      onUpdateField(selectedField.id, {
+        options: newOptions,
+        [`${selectedField.type}RelatedValues`]: newRelatedValues,
+      });
     }
   };
 
@@ -764,35 +1058,53 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     newOptions[index] = value;
     const newRelatedValues = { ...relatedValues };
     if (oldOption !== value) {
-      newRelatedValues[value] = newRelatedValues[oldOption] || '';
+      newRelatedValues[value] = newRelatedValues[oldOption] || "";
       delete newRelatedValues[oldOption];
     }
     setOptions(newOptions);
     setRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: newOptions,
+      [`${selectedField.type}RelatedValues`]: newRelatedValues,
+    });
   };
 
   const handleRelatedValueChange = (option, value) => {
     const newRelatedValues = { ...relatedValues, [option]: value };
     setRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { [`${selectedField.type}RelatedValues`]: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      [`${selectedField.type}RelatedValues`]: newRelatedValues,
+    });
   };
 
   const handleRemoveOption = (index) => {
     const newOptions = options.filter((_, i) => i !== index);
     const newRelatedValues = { ...relatedValues };
     delete newRelatedValues[options[index]];
-    setOptions(newOptions.length ? newOptions : ['Option 1', 'Option 2', 'Option 3']);
+    setOptions(
+      newOptions.length ? newOptions : ["Option 1", "Option 2", "Option 3"]
+    );
     setRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: newOptions.length ? newOptions : ['Option 1', 'Option 2', 'Option 3'], [`${selectedField.type}RelatedValues`]: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: newOptions.length
+        ? newOptions
+        : ["Option 1", "Option 2", "Option 3"],
+      [`${selectedField.type}RelatedValues`]: newRelatedValues,
+    });
   };
 
   const handleAddOption = () => {
     const newOptions = [...options, `Option ${options.length + 1}`];
-    const newRelatedValues = { ...relatedValues, [`Option ${options.length + 1}`]: '' };
+    const newRelatedValues = {
+      ...relatedValues,
+      [`Option ${options.length + 1}`]: "",
+    };
     setOptions(newOptions);
     setRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: newOptions, [`${selectedField.type}RelatedValues`]: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: newOptions,
+      [`${selectedField.type}RelatedValues`]: newRelatedValues,
+    });
   };
 
   // Handlers for price-specific properties
@@ -822,12 +1134,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     const [draggedOption] = newOptions.splice(dragIndex, 1);
     newOptions.splice(index, 0, draggedOption);
     const newRelatedValues = {};
-    newOptions.forEach(opt => {
-      newRelatedValues[opt] = dropdownRelatedValues[opt] || '';
+    newOptions.forEach((opt) => {
+      newRelatedValues[opt] = dropdownRelatedValues[opt] || "";
     });
     setOptions(newOptions);
     setDropdownRelatedValues(newRelatedValues);
-    onUpdateField(selectedField.id, { options: newOptions, dropdownRelatedValues: newRelatedValues });
+    onUpdateField(selectedField.id, {
+      options: newOptions,
+      dropdownRelatedValues: newRelatedValues,
+    });
     setDragIndex(null);
   };
 
@@ -838,13 +1153,13 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
 
   const handleUniqueNameChange = (e) => {
     let value = e.target.value.trim();
-    const innerRaw = value.replace(/^{|}$/g, '');
-    const innerCleaned = innerRaw.replace(/\s/g, '');
+    const innerRaw = value.replace(/^{|}$/g, "");
+    const innerCleaned = innerRaw.replace(/\s/g, "");
     const finalValue = `{${innerCleaned}}`;
     if (/\s/.test(innerRaw)) {
-      setUniqueNameError('Unique name cannot contain spaces.');
+      setUniqueNameError("Unique name cannot contain spaces.");
     } else {
-      setUniqueNameError('');
+      setUniqueNameError("");
       setUniqueName(finalValue);
       onUpdateField(selectedField.id, { uniqueName: finalValue });
     }
@@ -852,33 +1167,52 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
 
   // Supported field types for placeholders
   const placeholderSupportedTypes = [
-    'shorttext', 'longtext', 'number', 'phone', 'email', 'price', 'fullname',
-    'address', 'link', 'date', 'datetime', 'time', 'fileupload',
-    'dropdown', 'signature', 'terms', 'displaytext', 'formcalculation'
+    "shorttext",
+    "longtext",
+    "number",
+    "phone",
+    "email",
+    "price",
+    "fullname",
+    "address",
+    "link",
+    "date",
+    "datetime",
+    "time",
+    "fileupload",
+    "dropdown",
+    "signature",
+    "terms",
+    "displaytext",
+    "formcalculation",
   ];
 
   // Field type checks
-  const isPlaceholderSupported = selectedField && placeholderSupportedTypes.includes(selectedField.type);
-  const isAlignmentSupported = selectedField?.type !== 'pagebreak';
-  const isOptionsSupported = selectedField && ['checkbox', 'radio', 'dropdown'].includes(selectedField.type);
-  const isScaleRating = selectedField?.type === 'scalerating';
-  const isFormCalculation = selectedField?.type === 'formcalculation';
-  const isRating = selectedField?.type === 'rating';
-  const isAddress = selectedField?.type === 'address';
-  const isFullname = selectedField?.type === 'fullname';
-  const isHeader = selectedField?.type === 'header'; // for Main Form Header
-  const isEmail = selectedField?.type === 'email';
-  const isFileUpload = selectedField?.type === 'fileupload';
-  const isTerms = selectedField?.type === 'terms';
-  const isDate = selectedField?.type === 'date';
-  const isDateTime = selectedField?.type === 'datetime';
-  const isTime = selectedField?.type === 'time';
-  const isShortText = selectedField?.type === 'shorttext';
-  const isLongText = selectedField?.type === 'longtext';
-  const isNumber = selectedField?.type === 'number';
-  const isPhone = selectedField?.type === 'phone';
-  const isPrice = selectedField?.type === 'price';
-  const isHeading = selectedField?.type === 'heading'; // For Headings in form
+  const isPlaceholderSupported =
+    selectedField && placeholderSupportedTypes.includes(selectedField.type);
+  const isAlignmentSupported = selectedField?.type !== "pagebreak";
+  const isOptionsSupported =
+    selectedField &&
+    ["checkbox", "radio", "dropdown"].includes(selectedField.type);
+  const isScaleRating = selectedField?.type === "scalerating";
+  const isFormCalculation = selectedField?.type === "formcalculation";
+  const isRating = selectedField?.type === "rating";
+  const isAddress = selectedField?.type === "address";
+  const isFullname = selectedField?.type === "fullname";
+  const isHeader = selectedField?.type === "header"; // for Main Form Header
+  const isEmail = selectedField?.type === "email";
+  const isFileUpload = selectedField?.type === "fileupload";
+  const isTerms = selectedField?.type === "terms";
+  const isDate = selectedField?.type === "date";
+  const isDateTime = selectedField?.type === "datetime";
+  const isTime = selectedField?.type === "time";
+  const isShortText = selectedField?.type === "shorttext";
+  const isLongText = selectedField?.type === "longtext";
+  const isNumber = selectedField?.type === "number";
+  const isPhone = selectedField?.type === "phone";
+  const isPrice = selectedField?.type === "price";
+  const isHeading = selectedField?.type === "heading"; // For Headings in form
+  const isPayPalPayment = selectedField?.type === "paypal_payment";
   // Get dynamic country list
   const countries = getCountryList();
 
@@ -886,7 +1220,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
     <div className="field-editor mt-10 bg-white text-gray-800 p-4 overflow-y-auto max-h-screen shadow-md rounded-lg">
       {/* Header and Close Button */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-gray-800">{selectedFooter ? 'Edit Footer Button' : 'Edit Field'}</h2>
+        <h2 className="text-xl font-semibold text-gray-800">
+          {selectedFooter ? "Edit Footer Button" : "Edit Field"}
+        </h2>
         <button
           type="button"
           className="text-gray-500 hover:text-gray-700"
@@ -899,44 +1235,54 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
       {/* Tabs for Settings and Widget */}
       <div className="flex border-b mb-4">
         <button
-          className={`px-4 py-2 font-medium text-sm ${activeTab === 'settings'
-            ? 'border-b-2 border-blue-500 text-blue-600'
-            : 'text-gray-500 hover:text-blue-600'
-            }`}
-          onClick={() => setActiveTab('settings')}
+          className={`px-4 py-2 font-medium text-sm ${
+            activeTab === "settings"
+              ? "border-b-2 border-blue-500 text-blue-600"
+              : "text-gray-500 hover:text-blue-600"
+          }`}
+          onClick={() => setActiveTab("settings")}
         >
           Settings
         </button>
         {isFormCalculation && (
           <button
-            className={`px-4 py-2 font-medium text-sm ${activeTab === 'widget'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-blue-600'
-              }`}
-            onClick={() => setActiveTab('widget')}
+            className={`px-4 py-2 font-medium text-sm ${
+              activeTab === "widget"
+                ? "border-b-2 border-blue-500 text-blue-600"
+                : "text-gray-500 hover:text-blue-600"
+            }`}
+            onClick={() => setActiveTab("widget")}
           >
             Widget
           </button>
         )}
       </div>
 
-      {activeTab === 'settings' && selectedField && (
+      {activeTab === "settings" && selectedField && (
         <div>
           {/* Common Properties Section */}
           <div className="mb-2">
             <button
               className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-              onClick={() => toggleSection('common')}
+              onClick={() => toggleSection("common")}
             >
-              <h3 className="text-lg font-semibold text-gray-800">Common Properties</h3>
-              {expandedSection === 'common' ? <FaChevronUp /> : <FaChevronDown />}
+              <h3 className="text-lg font-semibold text-gray-800">
+                Common Properties
+              </h3>
+              {expandedSection === "common" ? (
+                <FaChevronUp />
+              ) : (
+                <FaChevronDown />
+              )}
             </button>
-            {expandedSection === 'common' && (
+            {expandedSection === "common" && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                {isHeading ?
+                {isHeading ? (
                   <>
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Text</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Heading Text
+                      </label>
                       <input
                         type="text"
                         value={headingText}
@@ -946,7 +1292,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       />
                     </div>
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Heading Alignment</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Heading Alignment
+                      </label>
                       <select
                         value={headingAlignment}
                         onChange={handleHeadingAlignmentChange}
@@ -957,168 +1305,217 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         <option value="right">Right</option>
                       </select>
                     </div>
-                  </> : (
-                    <>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Label
+                      </label>
+                      <input
+                        type="text"
+                        value={label}
+                        onChange={handleLabelChange}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="Enter field label"
+                      />
+                    </div>
+                    {isPlaceholderSupported && (
                       <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
-                        <input
-                          type="text"
-                          value={label}
-                          onChange={handleLabelChange}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="Enter field label"
-                        />
-                      </div>
-                      {isPlaceholderSupported && (
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Placeholder(s)</label>
-                          {isAddress ? (
-                            <div className="flex flex-col gap-2">
-                              {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                                <div key={key}>
-                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
-                                  <input
-                                    type="text"
-                                    value={subFields[key]?.placeholder || ''}
-                                    onChange={(e) => handleAddressPlaceholderChange(key, e.target.value)}
-                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                    placeholder={`Enter ${key} placeholder`}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          ) : isFullname ? (
-                            <div className="flex flex-col gap-2">
-                              {['firstName', 'lastName'].map((key) => (
-                                <div key={key}>
-                                  <label className="text-xs text-gray-500 capitalize">{key}</label>
-                                  <input
-                                    type="text"
-                                    value={fullnameSubFields[key]?.placeholder || ''}
-                                    onChange={(e) => handleFullnamePlaceholderChange(key, e.target.value)}
-                                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                    placeholder={`Enter ${key} placeholder`}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          ) : isPhone ? (
-                            <div className="flex flex-col gap-2">
-                              <div>
-                                <label className="text-xs text-gray-500">Phone Number</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Placeholder(s)
+                        </label>
+                        {isAddress ? (
+                          <div className="flex flex-col gap-2">
+                            {[
+                              "street",
+                              "city",
+                              "state",
+                              "country",
+                              "postal",
+                            ].map((key) => (
+                              <div key={key}>
+                                <label className="text-xs text-gray-500 capitalize">
+                                  {key}
+                                </label>
                                 <input
                                   type="text"
-                                  value={phoneSubFields.phoneNumber?.placeholder || ''}
-                                  onChange={(e) => {
-                                    const newSubFields = {
-                                      ...phoneSubFields,
-                                      phoneNumber: {
-                                        ...phoneSubFields.phoneNumber,
-                                        placeholder: e.target.value
-                                      }
-                                    };
-                                    setPhoneSubFields(newSubFields);
-                                    onUpdateField(selectedField.id, { subFields: newSubFields });
-                                  }}
+                                  value={subFields[key]?.placeholder || ""}
+                                  onChange={(e) =>
+                                    handleAddressPlaceholderChange(
+                                      key,
+                                      e.target.value
+                                    )
+                                  }
                                   className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                  placeholder="Enter phone number"
+                                  placeholder={`Enter ${key} placeholder`}
                                 />
                               </div>
-                            </div>
-                          ) : (
-                            <input
-                              type="text"
-                              value={placeholder.main || ''}
-                              onChange={(e) => handlePlaceholderChange('main', e.target.value)}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter placeholder text"
-                            />
-                          )}
-                        </div>
-                      )}
-                      {isAlignmentSupported && (
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Label Alignment</label>
-                          <select
-                            value={labelAlignment}
-                            onChange={handleAlignmentChange}
-                            className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value="top">Top</option>
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                          </select>
-                        </div>
-                      )}
-                      {/* Default Value Feature */}
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Value</label>
-                        <input
-                          type="text"
-                          value={defaultValue}
-                          onChange={handleDefaultValueChange}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                          placeholder="Enter default value"
-                        />
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isRequired}
-                            onChange={handleRequiredChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Required</span>
-                        </label>
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isDisabled}
-                            onChange={handleDisabledChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Disable Field (Read-Only)</span>
-                        </label>
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isHidden}
-                            onChange={handleHiddenChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Hidden Field</span>
-                        </label>
-                      </div>
-                      <div className="mb-4">
-                        <label className="inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={showHelpText}
-                            onChange={handleShowHelpTextChange}
-                            className="mr-2"
-                          />
-                          <span className="text-sm font-medium text-gray-700">Show Help Text</span>
-                        </label>
-                        {showHelpText && (
-                          <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Help Text</label>
-                            <textarea
-                              value={helpText}
-                              onChange={handleHelpTextChange}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter help text"
-                              rows="4"
-                            />
+                            ))}
                           </div>
+                        ) : isFullname ? (
+                          <div className="flex flex-col gap-2">
+                            {["firstName", "lastName"].map((key) => (
+                              <div key={key}>
+                                <label className="text-xs text-gray-500 capitalize">
+                                  {key}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={
+                                    fullnameSubFields[key]?.placeholder || ""
+                                  }
+                                  onChange={(e) =>
+                                    handleFullnamePlaceholderChange(
+                                      key,
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Enter ${key} placeholder`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : isPhone ? (
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <label className="text-xs text-gray-500">
+                                Phone Number
+                              </label>
+                              <input
+                                type="text"
+                                value={
+                                  phoneSubFields.phoneNumber?.placeholder || ""
+                                }
+                                onChange={(e) => {
+                                  const newSubFields = {
+                                    ...phoneSubFields,
+                                    phoneNumber: {
+                                      ...phoneSubFields.phoneNumber,
+                                      placeholder: e.target.value,
+                                    },
+                                  };
+                                  setPhoneSubFields(newSubFields);
+                                  onUpdateField(selectedField.id, {
+                                    subFields: newSubFields,
+                                  });
+                                }}
+                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                placeholder="Enter phone number"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={placeholder.main || ""}
+                            onChange={(e) =>
+                              handlePlaceholderChange("main", e.target.value)
+                            }
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Enter placeholder text"
+                          />
                         )}
                       </div>
-                    </>
-                  )}
+                    )}
+                    {isAlignmentSupported && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Label Alignment
+                        </label>
+                        <select
+                          value={labelAlignment}
+                          onChange={handleAlignmentChange}
+                          className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="top">Top</option>
+                          <option value="left">Left</option>
+                          <option value="right">Right</option>
+                        </select>
+                      </div>
+                    )}
+                    {/* Default Value Feature */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Default Value
+                      </label>
+                      <input
+                        type="text"
+                        value={defaultValue}
+                        onChange={handleDefaultValueChange}
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        placeholder="Enter default value"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isRequired}
+                          onChange={handleRequiredChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          Required
+                        </span>
+                      </label>
+                    </div>
+                    <div className="mb-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isDisabled}
+                          onChange={handleDisabledChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          Disable Field (Read-Only)
+                        </span>
+                      </label>
+                    </div>
+                    <div className="mb-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={isHidden}
+                          onChange={handleHiddenChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          Hidden Field
+                        </span>
+                      </label>
+                    </div>
+                    <div className="mb-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={showHelpText}
+                          onChange={handleShowHelpTextChange}
+                          className="mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          Show Help Text
+                        </span>
+                      </label>
+                      {showHelpText && (
+                        <div className="mt-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Help Text
+                          </label>
+                          <textarea
+                            value={helpText}
+                            onChange={handleHelpTextChange}
+                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                            placeholder="Enter help text"
+                            rows="4"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1127,83 +1524,119 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
             <div className="mb-2">
               <button
                 className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-                onClick={() => toggleSection('additional')}
+                onClick={() => toggleSection("additional")}
               >
-                <h3 className="text-lg font-semibold text-gray-800">Additional Properties</h3>
-                {expandedSection === 'additional' ? <FaChevronUp /> : <FaChevronDown />}
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Additional Properties
+                </h3>
+                {expandedSection === "additional" ? (
+                  <FaChevronUp />
+                ) : (
+                  <FaChevronDown />
+                )}
               </button>
-              {expandedSection === 'additional' && (
+              {expandedSection === "additional" && (
                 <div className="p-4 border border-gray-200 rounded-lg mt-2">
-                  {isOptionsSupported && ['checkbox', 'radio'].includes(selectedField.type) && (
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
-                      <select
-                        value={predefinedOptionSet}
-                        onChange={handlePredefinedOptionSetChange}
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      >
-                        <option value="">Custom</option>
-                        <option value="days">Days of the Week</option>
-                        <option value="week">Weeks</option>
-                        <option value="gender">Gender</option>
-                      </select>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
-                      {options.map((opt, idx) => (
-                        <div key={idx} className="flex items-center mb-2 gap-2">
-                          <input
-                            type="text"
-                            value={opt}
-                            onChange={(e) => handleOptionChange(idx, e.target.value)}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder={`Option ${idx + 1}`}
-                          />
-                          <input
-                            type="text"
-                            value={relatedValues[opt] || ''}
-                            onChange={(e) => handleRelatedValueChange(opt, e.target.value)}
-                            className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                            placeholder="Related value"
-                          />
-                          <button
-                            onClick={() => handleRemoveOption(idx)}
-                            className="text-red-500 hover:text-red-700"
+                  {isOptionsSupported &&
+                    ["checkbox", "radio"].includes(selectedField.type) && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Predefined Options
+                        </label>
+                        <select
+                          value={predefinedOptionSet}
+                          onChange={handlePredefinedOptionSetChange}
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                        >
+                          <option value="">Custom</option>
+                          <option value="days">Days of the Week</option>
+                          <option value="week">Weeks</option>
+                          <option value="gender">Gender</option>
+                        </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
+                          Options
+                        </label>
+                        {options.map((opt, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center mb-2 gap-2"
                           >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        onClick={handleAddOption}
-                        className="text-blue-600 hover:underline"
-                      >
-                        + Add Item
-                      </button>
-                    </div>
-                  )}
-                  {selectedField?.type === 'imageuploader' && (
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={(e) =>
+                                handleOptionChange(idx, e.target.value)
+                              }
+                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder={`Option ${idx + 1}`}
+                            />
+                            <input
+                              type="text"
+                              value={relatedValues[opt] || ""}
+                              onChange={(e) =>
+                                handleRelatedValueChange(opt, e.target.value)
+                              }
+                              className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                              placeholder="Related value"
+                            />
+                            <button
+                              onClick={() => handleRemoveOption(idx)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <FaTrash />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={handleAddOption}
+                          className="text-blue-600 hover:underline"
+                        >
+                          + Add Item
+                        </button>
+                      </div>
+                    )}
+                  {selectedField?.type === "imageuploader" && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Image Width (px)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Image Width (px)
+                      </label>
                       <input
                         type="number"
                         min="1"
-                        value={selectedField.imageWidth || ''}
-                        onChange={e => onUpdateField(selectedField.id, { imageWidth: e.target.value })}
+                        value={selectedField.imageWidth || ""}
+                        onChange={(e) =>
+                          onUpdateField(selectedField.id, {
+                            imageWidth: e.target.value,
+                          })
+                        }
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                         placeholder="e.g. 200"
                       />
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Height (px)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">
+                        Image Height (px)
+                      </label>
                       <input
                         type="number"
                         min="1"
-                        value={selectedField.imageHeight || ''}
-                        onChange={e => onUpdateField(selectedField.id, { imageHeight: e.target.value })}
+                        value={selectedField.imageHeight || ""}
+                        onChange={(e) =>
+                          onUpdateField(selectedField.id, {
+                            imageHeight: e.target.value,
+                          })
+                        }
                         className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                         placeholder="e.g. 100"
                       />
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">Image Alignment</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-2">
+                        Image Alignment
+                      </label>
                       <select
-                        value={selectedField.imageAlign || 'center'}
-                        onChange={e => onUpdateField(selectedField.id, { imageAlign: e.target.value })}
+                        value={selectedField.imageAlign || "center"}
+                        onChange={(e) =>
+                          onUpdateField(selectedField.id, {
+                            imageAlign: e.target.value,
+                          })
+                        }
                         className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="left">Left</option>
@@ -1212,9 +1645,11 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </select>
                     </div>
                   )}
-                  {isOptionsSupported && selectedField.type === 'dropdown' && (
+                  {isOptionsSupported && selectedField.type === "dropdown" && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Predefined Options</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Predefined Options
+                      </label>
                       <select
                         value={predefinedOptionSet}
                         onChange={handlePredefinedOptionSetChange}
@@ -1225,7 +1660,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         <option value="week">Weeks</option>
                         <option value="gender">Gender</option>
                       </select>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Options</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
+                        Options
+                      </label>
                       {options.map((opt, idx) => (
                         <div
                           key={idx}
@@ -1241,14 +1678,21 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           <input
                             type="text"
                             value={opt}
-                            onChange={(e) => handleDropdownOptionChange(idx, e.target.value)}
+                            onChange={(e) =>
+                              handleDropdownOptionChange(idx, e.target.value)
+                            }
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder={`Option ${idx + 1}`}
                           />
                           <input
                             type="text"
-                            value={dropdownRelatedValues[opt] || ''}
-                            onChange={(e) => handleDropdownRelatedValueChange(opt, e.target.value)}
+                            value={dropdownRelatedValues[opt] || ""}
+                            onChange={(e) =>
+                              handleDropdownRelatedValueChange(
+                                opt,
+                                e.target.value
+                              )
+                            }
                             className="w-1/3 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder="Related value"
                           />
@@ -1274,7 +1718,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             onChange={handleAllowMultipleSelectionsChange}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Allow Multiple Selections</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Allow Multiple Selections
+                          </span>
                         </label>
                       </div>
                       <div className="mt-2">
@@ -1285,14 +1731,18 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             onChange={handleShuffleOptionsChange}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Shuffle/Reorder Options</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Enable Shuffle/Reorder Options
+                          </span>
                         </label>
                       </div>
                     </div>
                   )}
                   {isScaleRating && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Input Type</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Input Type
+                      </label>
                       <select
                         value={inputType}
                         onChange={handleInputTypeChange}
@@ -1303,12 +1753,16 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         <option value="text">Text</option>
                         <option value="dropdown">Dropdown</option>
                       </select>
-                      {inputType === 'dropdown' && (
+                      {inputType === "dropdown" && (
                         <div className="mt-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Dropdown Options</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Dropdown Options
+                          </label>
                           <textarea
                             value={dropdownOptionsInput}
-                            onChange={(e) => setDropdownOptionsInput(e.target.value)}
+                            onChange={(e) =>
+                              setDropdownOptionsInput(e.target.value)
+                            }
                             className="w-full p-2 border rounded-lg text-gray-800"
                             rows="5"
                             placeholder="Enter one option per line"
@@ -1323,13 +1777,17 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </div>
                         </div>
                       )}
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rows</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
+                        Rows
+                      </label>
                       {rows.map((rowLabel, rowIdx) => (
                         <div key={rowIdx} className="flex items-center mb-2">
                           <input
                             type="text"
                             value={rowLabel}
-                            onChange={(e) => handleRowChange(rowIdx, e.target.value)}
+                            onChange={(e) =>
+                              handleRowChange(rowIdx, e.target.value)
+                            }
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder={`Criteria ${rowIdx}idx + 1}`}
                           />
@@ -1351,7 +1809,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                       </div>
                       {showMultiRowModal && (
                         <div className="bg-white p-4 rounded-lg w-96">
-                          <h3 className="text-lg font-semibold mb-2">Add Multiple Rows</h3>
+                          <h3 className="text-lg font-semibold mb-2">
+                            Add Multiple Rows
+                          </h3>
                           <textarea
                             value={multiRowInput}
                             onChange={(e) => setMultiRowInput(e.target.value)}
@@ -1375,13 +1835,17 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </div>
                         </div>
                       )}
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Columns</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
+                        Columns
+                      </label>
                       {columns.map((colLabel, colIdx) => (
                         <div key={colIdx} className="flex items-center mb-2">
                           <input
                             type="text"
                             value={colLabel}
-                            onChange={(e) => handleColumnChange(colIdx, e.target.value)}
+                            onChange={(e) =>
+                              handleColumnChange(colIdx, e.target.value)
+                            }
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder={`Column ${colIdx}idx + 1}`}
                           />
@@ -1405,7 +1869,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {showMultiColumnModal && (
                     <div className="bg-white p-4 rounded-lg w-96">
-                      <h3 className="text-lg font-semibold mb-2">Add Multiple Columns</h3>
+                      <h3 className="text-lg font-semibold mb-2">
+                        Add Multiple Columns
+                      </h3>
                       <textarea
                         value={multiColumnInput}
                         onChange={(e) => setMultiColumnInput(e.target.value)}
@@ -1431,55 +1897,89 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {isRating && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Rating Type</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Rating Type
+                      </label>
                       <div className="flex gap-4">
                         <button
                           onClick={() => {
-                            setRatingType('emoji');
-                            onUpdateField(selectedField.id, { ratingType: 'emoji' });
+                            setRatingType("emoji");
+                            onUpdateField(selectedField.id, {
+                              ratingType: "emoji",
+                            });
                           }}
-                          className={`text-2xl ${ratingType === 'emoji' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          className={`text-2xl ${
+                            ratingType === "emoji"
+                              ? "text-blue-600"
+                              : "text-gray-400"
+                          } hover:text-blue-500`}
                         >
                           😀
                         </button>
                         <button
                           onClick={() => {
-                            setRatingType('star');
-                            onUpdateField(selectedField.id, { ratingType: 'star' });
+                            setRatingType("star");
+                            onUpdateField(selectedField.id, {
+                              ratingType: "star",
+                            });
                           }}
-                          className={`text-2xl ${ratingType === 'star' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          className={`text-2xl ${
+                            ratingType === "star"
+                              ? "text-blue-600"
+                              : "text-gray-400"
+                          } hover:text-blue-500`}
                         >
                           <AiOutlineStar />
                         </button>
                         <button
                           onClick={() => {
-                            setRatingType('heart');
-                            onUpdateField(selectedField.id, { ratingType: 'heart' });
+                            setRatingType("heart");
+                            onUpdateField(selectedField.id, {
+                              ratingType: "heart",
+                            });
                           }}
-                          className={`text-2xl ${ratingType === 'heart' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          className={`text-2xl ${
+                            ratingType === "heart"
+                              ? "text-blue-600"
+                              : "text-gray-400"
+                          } hover:text-blue-500`}
                         >
                           <AiOutlineHeart />
                         </button>
                         <button
                           onClick={() => {
-                            setRatingType('bulb');
-                            onUpdateField(selectedField.id, { ratingType: 'bulb' });
+                            setRatingType("bulb");
+                            onUpdateField(selectedField.id, {
+                              ratingType: "bulb",
+                            });
                           }}
-                          className={`text-2xl ${ratingType === 'bulb' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          className={`text-2xl ${
+                            ratingType === "bulb"
+                              ? "text-blue-600"
+                              : "text-gray-400"
+                          } hover:text-blue-500`}
                         >
                           <FaRegLightbulb />
                         </button>
                         <button
                           onClick={() => {
-                            setRatingType('lightning');
-                            onUpdateField(selectedField.id, { ratingType: 'lightning' });
+                            setRatingType("lightning");
+                            onUpdateField(selectedField.id, {
+                              ratingType: "lightning",
+                            });
                           }}
-                          className={`text-2xl ${ratingType === 'lightning' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500`}
+                          className={`text-2xl ${
+                            ratingType === "lightning"
+                              ? "text-blue-600"
+                              : "text-gray-400"
+                          } hover:text-blue-500`}
                         >
                           <BiBoltCircle />
                         </button>
                       </div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rating Range</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
+                        Rating Range
+                      </label>
                       <input
                         type="number"
                         value={ratingRange}
@@ -1489,32 +1989,54 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         min="1"
                         max="10"
                       />
-                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">Rating Values</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
+                        Rating Values
+                      </label>
                       {ratingValues.map((value, idx) => (
-                        <div key={idx} className="flex items-center mb-2 gap-4 relative">
+                        <div
+                          key={idx}
+                          className="flex items-center mb-2 gap-4 relative"
+                        >
                           <button
-                            onClick={() => setShowEmojiPicker(showEmojiPicker === idx ? null : idx)}
+                            onClick={() =>
+                              setShowEmojiPicker(
+                                showEmojiPicker === idx ? null : idx
+                              )
+                            }
                             className="text-2xl w-12 text-center text-gray-700 hover:text-blue-500"
                           >
-                            {ratingType === 'emoji' ? ratingEmojis[idx] :
-                              ratingType === 'star' ? <AiOutlineStar /> :
-                                ratingType === 'heart' ? <AiOutlineHeart /> :
-                                  ratingType === 'bulb' ? <FaRegLightbulb /> :
-                                    ratingType === 'lightning' ? <BiBoltCircle /> : <AiOutlineStar />}
+                            {ratingType === "emoji" ? (
+                              ratingEmojis[idx]
+                            ) : ratingType === "star" ? (
+                              <AiOutlineStar />
+                            ) : ratingType === "heart" ? (
+                              <AiOutlineHeart />
+                            ) : ratingType === "bulb" ? (
+                              <FaRegLightbulb />
+                            ) : ratingType === "lightning" ? (
+                              <BiBoltCircle />
+                            ) : (
+                              <AiOutlineStar />
+                            )}
                           </button>
-                          {ratingType === 'emoji' && showEmojiPicker === idx && (
-                            <div className="absolute top-10 left-0 z-10">
-                              <EmojiPicker
-                                onEmojiClick={(emojiObject) => handleEmojiChange(idx, emojiObject.emoji)}
-                                width={300}
-                                height={400}
-                              />
-                            </div>
-                          )}
+                          {ratingType === "emoji" &&
+                            showEmojiPicker === idx && (
+                              <div className="absolute top-10 left-0 z-10">
+                                <EmojiPicker
+                                  onEmojiClick={(emojiObject) =>
+                                    handleEmojiChange(idx, emojiObject.emoji)
+                                  }
+                                  width={300}
+                                  height={400}
+                                />
+                              </div>
+                            )}
                           <input
                             type="text"
                             value={value}
-                            onChange={(e) => handleRatingValueChange(idx, e.target.value)}
+                            onChange={(e) =>
+                              handleRatingValueChange(idx, e.target.value)
+                            }
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder={`Value for Rating ${idx + 1}`}
                           />
@@ -1531,38 +2053,63 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           onChange={handleSalutationEnabledChange}
                           className="mr-2"
                         />
-                        <span className="text-sm font-medium text-gray-700">Enable Salutation</span>
+                        <span className="text-sm font-medium text-gray-700">
+                          Enable Salutation
+                        </span>
                       </label>
                       {fullnameSubFields.salutation.enabled && (
                         <>
                           <div className="mb-3">
-                            <label className="text-xs text-gray-500">Salutation Placeholder</label>
+                            <label className="text-xs text-gray-500">
+                              Salutation Placeholder
+                            </label>
                             <input
                               type="text"
-                              value={fullnameSubFields.salutation.placeholder || ''}
-                              onChange={(e) => handleFullnamePlaceholderChange('salutation', e.target.value)}
+                              value={
+                                fullnameSubFields.salutation.placeholder || ""
+                              }
+                              onChange={(e) =>
+                                handleFullnamePlaceholderChange(
+                                  "salutation",
+                                  e.target.value
+                                )
+                              }
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Enter salutation dropdown placeholder"
                             />
                           </div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Edit Salutations</label>
-                          {fullnameSubFields.salutation.options.map((sal, idx) => (
-                            <div key={idx} className="flex items-center mb-2 gap-2">
-                              <input
-                                type="text"
-                                value={sal}
-                                onChange={(e) => handleSalutationOptionChange(idx, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Salutation ${idx + 1}`}
-                              />
-                              <button
-                                onClick={() => handleRemoveSalutationOption(idx)}
-                                className="text-red-500 hover:text-red-700"
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Edit Salutations
+                          </label>
+                          {fullnameSubFields.salutation.options.map(
+                            (sal, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center mb-2 gap-2"
                               >
-                                <FaTimes />
-                              </button>
-                            </div>
-                          ))}
+                                <input
+                                  type="text"
+                                  value={sal}
+                                  onChange={(e) =>
+                                    handleSalutationOptionChange(
+                                      idx,
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Salutation ${idx + 1}`}
+                                />
+                                <button
+                                  onClick={() =>
+                                    handleRemoveSalutationOption(idx)
+                                  }
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <FaTimes />
+                                </button>
+                              </div>
+                            )
+                          )}
                           <button
                             onClick={handleAddSalutationOption}
                             className="text-blue-600 hover:underline"
@@ -1575,46 +2122,74 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {isAddress && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Address Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Address Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <label className="text-xs text-gray-500">Sub-labels</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <div key={key} className="mb-2">
-                              <label className="text-xs text-gray-500 capitalize">{key}</label>
-                              <input
-                                type="text"
-                                value={subFields[key]?.label || ''}
-                                onChange={(e) => handleAddressSubLabelChange(key, e.target.value)}
-                                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                                placeholder={`Enter ${key} sub-label`}
-                              />
-                            </div>
-                          ))}
+                          <label className="text-xs text-gray-500">
+                            Sub-labels
+                          </label>
+                          {["street", "city", "state", "country", "postal"].map(
+                            (key) => (
+                              <div key={key} className="mb-2">
+                                <label className="text-xs text-gray-500 capitalize">
+                                  {key}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={subFields[key]?.label || ""}
+                                  onChange={(e) =>
+                                    handleAddressSubLabelChange(
+                                      key,
+                                      e.target.value
+                                    )
+                                  }
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder={`Enter ${key} sub-label`}
+                                />
+                              </div>
+                            )
+                          )}
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Visible Sub-fields</label>
-                          {['street', 'city', 'state', 'country', 'postal'].map((key) => (
-                            <label key={key} className="inline-flex items-center mb-2">
-                              <input
-                                type="checkbox"
-                                checked={subFields[key]?.visible}
-                                onChange={() => handleAddressVisibilityChange(key)}
-                                className="mr-2"
-                              />
-                              <span className="text-sm font-medium text-gray-700 capitalize">{key}</span>
-                            </label>
-                          ))}
+                          <label className="text-xs text-gray-500">
+                            Visible Sub-fields
+                          </label>
+                          {["street", "city", "state", "country", "postal"].map(
+                            (key) => (
+                              <label
+                                key={key}
+                                className="inline-flex items-center mb-2"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={subFields[key]?.visible}
+                                  onChange={() =>
+                                    handleAddressVisibilityChange(key)
+                                  }
+                                  className="mr-2"
+                                />
+                                <span className="text-sm font-medium text-gray-700 capitalize">
+                                  {key}
+                                </span>
+                              </label>
+                            )
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
                   {isEmail && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <label className="text-xs text-gray-500">Maximum Characters</label>
+                          <label className="text-xs text-gray-500">
+                            Maximum Characters
+                          </label>
                           <input
                             type="number"
                             value={maxChars}
@@ -1625,7 +2200,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Allowed Domains</label>
+                          <label className="text-xs text-gray-500">
+                            Allowed Domains
+                          </label>
                           <input
                             type="text"
                             value={allowedDomains}
@@ -1641,7 +2218,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             onChange={handleConfirmationChange}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Confirmation Field</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Enable Confirmation Field
+                          </span>
                         </label>
                         <label className="inline-flex items-center">
                           <input
@@ -1650,17 +2229,23 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             onChange={handleVerificationChange}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Verification Code</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Enable Verification Code
+                          </span>
                         </label>
                       </div>
                     </div>
                   )}
                   {isFileUpload && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">File Upload Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        File Upload Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <label className="text-xs text-gray-500">Maximum File Size (MB)</label>
+                          <label className="text-xs text-gray-500">
+                            Maximum File Size (MB)
+                          </label>
                           <input
                             type="number"
                             value={maxFileSize}
@@ -1671,7 +2256,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Allowed File Types</label>
+                          <label className="text-xs text-gray-500">
+                            Allowed File Types
+                          </label>
                           <input
                             type="text"
                             value={allowedFileTypes}
@@ -1681,16 +2268,22 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">File Selection</label>
+                          <label className="text-xs text-gray-500">
+                            File Selection
+                          </label>
                           <div className="flex gap-4">
                             <label className="inline-flex items-center">
                               <input
                                 type="radio"
                                 checked={!multipleFiles}
-                                onChange={() => handleMultipleFilesChange(false)}
+                                onChange={() =>
+                                  handleMultipleFilesChange(false)
+                                }
                                 className="mr-2"
                               />
-                              <span className="text-sm font-medium text-gray-700">Single File</span>
+                              <span className="text-sm font-medium text-gray-700">
+                                Single File
+                              </span>
                             </label>
                             <label className="inline-flex items-center">
                               <input
@@ -1699,7 +2292,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                                 onChange={() => handleMultipleFilesChange(true)}
                                 className="mr-2"
                               />
-                              <span className="text-sm font-medium text-gray-700">Multiple Files</span>
+                              <span className="text-sm font-medium text-gray-700">
+                                Multiple Files
+                              </span>
                             </label>
                           </div>
                         </div>
@@ -1708,7 +2303,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {isTerms && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Terms Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Terms Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <label className="inline-flex items-center">
                           <input
@@ -1717,11 +2314,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             onChange={handleMakeAsLinkChange}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Make Text as Link</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Make Text as Link
+                          </span>
                         </label>
                         {makeAsLink && (
                           <div>
-                            <label className="text-xs text-gray-500">Link URL</label>
+                            <label className="text-xs text-gray-500">
+                              Link URL
+                            </label>
                             <input
                               type="url"
                               value={termsLinkUrl}
@@ -1736,10 +2337,14 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {(isDate || isDateTime) && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Date Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Date Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <label className="text-xs text-gray-500">Date Separator</label>
+                          <label className="text-xs text-gray-500">
+                            Date Separator
+                          </label>
                           <select
                             value={dateSeparator}
                             onChange={handleDateSeparatorChange}
@@ -1751,7 +2356,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </select>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Date Format</label>
+                          <label className="text-xs text-gray-500">
+                            Date Format
+                          </label>
                           <select
                             value={dateFormat}
                             onChange={handleDateFormatChange}
@@ -1763,7 +2370,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </select>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Default Date</label>
+                          <label className="text-xs text-gray-500">
+                            Default Date
+                          </label>
                           <input
                             type="date"
                             value={defaultDate}
@@ -1772,7 +2381,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Week Start Day</label>
+                          <label className="text-xs text-gray-500">
+                            Week Start Day
+                          </label>
                           <select
                             value={weekStartDay}
                             onChange={handleWeekStartDayChange}
@@ -1783,13 +2394,20 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </select>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Custom Month Labels</label>
+                          <label className="text-xs text-gray-500">
+                            Custom Month Labels
+                          </label>
                           {customMonthLabels.map((month, idx) => (
                             <div key={idx} className="mb-2">
                               <input
                                 type="text"
                                 value={month}
-                                onChange={(e) => handleCustomMonthLabelChange(idx, e.target.value)}
+                                onChange={(e) =>
+                                  handleCustomMonthLabelChange(
+                                    idx,
+                                    e.target.value
+                                  )
+                                }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder={`Month ${idx + 1}`}
                               />
@@ -1797,13 +2415,20 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           ))}
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Custom Day Labels</label>
+                          <label className="text-xs text-gray-500">
+                            Custom Day Labels
+                          </label>
                           {customDayLabels.map((day, idx) => (
                             <div key={idx} className="mb-2">
                               <input
                                 type="text"
                                 value={day}
-                                onChange={(e) => handleCustomDayLabelChange(idx, e.target.value)}
+                                onChange={(e) =>
+                                  handleCustomDayLabelChange(
+                                    idx,
+                                    e.target.value
+                                  )
+                                }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder={`Day ${idx + 1}`}
                               />
@@ -1811,7 +2436,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           ))}
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Custom Today Label</label>
+                          <label className="text-xs text-gray-500">
+                            Custom Today Label
+                          </label>
                           <input
                             type="text"
                             value={customTodayLabel}
@@ -1827,11 +2454,15 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             onChange={handleAgeVerificationChange}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Age Verification</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Enable Age Verification
+                          </span>
                         </label>
                         {enableAgeVerification && (
                           <div>
-                            <label className="text-xs text-gray-500">Minimum Age</label>
+                            <label className="text-xs text-gray-500">
+                              Minimum Age
+                            </label>
                             <input
                               type="number"
                               value={minAge}
@@ -1843,32 +2474,64 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </div>
                         )}
                         <div>
-                          <label className="text-xs text-gray-500">{isDateTime ? 'Start-End Date Range' : 'Date Range'}</label>
+                          <label className="text-xs text-gray-500">
+                            {isDateTime ? "Start-End Date Range" : "Date Range"}
+                          </label>
                           <div className="flex gap-2">
                             <input
-                              type={isDateTime ? 'datetime-local' : 'date'}
-                              value={isDateTime ? datetimeRange.start : dateRange.start}
-                              onChange={(e) => (isDateTime ? handleDatetimeRangeChange('start', e.target.value) : handleDateRangeChange('start', e.target.value))}
+                              type={isDateTime ? "datetime-local" : "date"}
+                              value={
+                                isDateTime
+                                  ? datetimeRange.start
+                                  : dateRange.start
+                              }
+                              onChange={(e) =>
+                                isDateTime
+                                  ? handleDatetimeRangeChange(
+                                      "start",
+                                      e.target.value
+                                    )
+                                  : handleDateRangeChange(
+                                      "start",
+                                      e.target.value
+                                    )
+                              }
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Start date"
                             />
                             <input
-                              type={isDateTime ? 'datetime-local' : 'date'}
-                              value={isDateTime ? datetimeRange.end : dateRange.end}
-                              onChange={(e) => (isDateTime ? handleDatetimeRangeChange('end', e.target.value) : handleDateRangeChange('end', e.target.value))}
+                              type={isDateTime ? "datetime-local" : "date"}
+                              value={
+                                isDateTime ? datetimeRange.end : dateRange.end
+                              }
+                              onChange={(e) =>
+                                isDateTime
+                                  ? handleDatetimeRangeChange(
+                                      "end",
+                                      e.target.value
+                                    )
+                                  : handleDateRangeChange("end", e.target.value)
+                              }
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="End date"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Disabled Dates/Ranges</label>
+                          <label className="text-xs text-gray-500">
+                            Disabled Dates/Ranges
+                          </label>
                           {disabledDates.map((date, idx) => (
-                            <div key={idx} className="flex items-center mb-2 gap-2">
+                            <div
+                              key={idx}
+                              className="flex items-center mb-2 gap-2"
+                            >
                               <input
-                                type={isDateTime ? 'datetime-local' : 'date'}
+                                type={isDateTime ? "datetime-local" : "date"}
                                 value={date}
-                                onChange={(e) => handleDisabledDateChange(idx, e.target.value)}
+                                onChange={(e) =>
+                                  handleDisabledDateChange(idx, e.target.value)
+                                }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="Select disabled date"
                               />
@@ -1892,21 +2555,29 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {isTime && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Time Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Time Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <div>
-                          <label className="text-xs text-gray-500">Time Format</label>
+                          <label className="text-xs text-gray-500">
+                            Time Format
+                          </label>
                           <select
                             value={timeFormat}
                             onChange={handleTimeFormatChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           >
                             <option value="HH:mm">24-hour (HH:mm)</option>
-                            <option value="hh:mm a">12-hour (hh:mm AM/PM)</option>
+                            <option value="hh:mm a">
+                              12-hour (hh:mm AM/PM)
+                            </option>
                           </select>
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Default Time</label>
+                          <label className="text-xs text-gray-500">
+                            Default Time
+                          </label>
                           <input
                             type="time"
                             value={defaultTime}
@@ -1915,7 +2586,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-500">Restrict AM/PM</label>
+                          <label className="text-xs text-gray-500">
+                            Restrict AM/PM
+                          </label>
                           <select
                             value={restrictAmPm}
                             onChange={handleRestrictAmPmChange}
@@ -1931,7 +2604,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {isShortText && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Character Limit
+                      </label>
                       <input
                         type="number"
                         value={shortTextMaxChars}
@@ -1945,7 +2620,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   )}
                   {isLongText && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Text Type</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Text Type
+                      </label>
                       <label className="inline-flex items-center">
                         <input
                           type="checkbox"
@@ -1953,10 +2630,14 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           onChange={handleIsRichTextChange}
                           className="mr-2"
                         />
-                        <span className="text-sm font-medium text-gray-700">Use Rich Text</span>
+                        <span className="text-sm font-medium text-gray-700">
+                          Use Rich Text
+                        </span>
                       </label>
                       <div className="mt-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Character Limit</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Character Limit
+                        </label>
                         <input
                           type="number"
                           value={longTextMaxChars}
@@ -1975,29 +2656,50 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                         <input
                           type="checkbox"
                           checked={numberValueLimits.enabled}
-                          onChange={(e) => handleNumberValueLimitsChange('enabled', e.target.checked)}
+                          onChange={(e) =>
+                            handleNumberValueLimitsChange(
+                              "enabled",
+                              e.target.checked
+                            )
+                          }
                           className="mr-2"
                         />
-                        <span className="text-sm font-medium text-gray-700">Enable Value Limits</span>
+                        <span className="text-sm font-medium text-gray-700">
+                          Enable Value Limits
+                        </span>
                       </label>
                       {numberValueLimits.enabled && (
                         <div className="flex gap-2">
                           <div>
-                            <label className="text-xs text-gray-500">Minimum Value</label>
+                            <label className="text-xs text-gray-500">
+                              Minimum Value
+                            </label>
                             <input
                               type="number"
                               value={numberValueLimits.min}
-                              onChange={(e) => handleNumberValueLimitsChange('min', e.target.value)}
+                              onChange={(e) =>
+                                handleNumberValueLimitsChange(
+                                  "min",
+                                  e.target.value
+                                )
+                              }
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Enter min value"
                             />
                           </div>
                           <div>
-                            <label className="text-xs text-gray-500">Maximum Value</label>
+                            <label className="text-xs text-gray-500">
+                              Maximum Value
+                            </label>
                             <input
                               type="number"
                               value={numberValueLimits.max}
-                              onChange={(e) => handleNumberValueLimitsChange('max', e.target.value)}
+                              onChange={(e) =>
+                                handleNumberValueLimitsChange(
+                                  "max",
+                                  e.target.value
+                                )
+                              }
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Enter max value"
                             />
@@ -2010,25 +2712,40 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   {/* NEW: Phone-specific properties */}
                   {isPhone && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         {/* Enable Country Code Checkbox */}
                         <label className="inline-flex items-center">
                           <input
                             type="checkbox"
-                            checked={phoneSubFields.countryCode?.enabled || false}
+                            checked={
+                              phoneSubFields.countryCode?.enabled || false
+                            }
                             onChange={(e) => {
                               const newSubFields = {
                                 ...phoneSubFields,
                                 countryCode: {
                                   ...phoneSubFields.countryCode,
                                   enabled: e.target.checked,
-                                  value: e.target.checked ? phoneSubFields.countryCode?.value || 'US' : '',
+                                  value: e.target.checked
+                                    ? phoneSubFields.countryCode?.value || "US"
+                                    : "",
                                 },
                                 phoneNumber: {
-                                  value: phoneSubFields.phoneNumber?.value || '',
-                                  placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
-                                  ...(e.target.checked ? {} : { phoneMask: phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999' }),
+                                  value:
+                                    phoneSubFields.phoneNumber?.value || "",
+                                  placeholder:
+                                    phoneSubFields.phoneNumber?.placeholder ||
+                                    "Enter phone number",
+                                  ...(e.target.checked
+                                    ? {}
+                                    : {
+                                        phoneMask:
+                                          phoneSubFields.phoneNumber
+                                            ?.phoneMask || "(999) 999-9999",
+                                      }),
                                 },
                               };
                               setPhoneSubFields(newSubFields);
@@ -2039,15 +2756,19 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             }}
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Country Code</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Enable Country Code
+                          </span>
                         </label>
 
                         {/* Country Selector Dropdown */}
                         {phoneSubFields.countryCode?.enabled && (
                           <div>
-                            <label className="text-xs text-gray-500">Default Country Code</label>
+                            <label className="text-xs text-gray-500">
+                              Default Country Code
+                            </label>
                             <select
-                              value={phoneSubFields.countryCode?.value || 'US'}
+                              value={phoneSubFields.countryCode?.value || "US"}
                               onChange={(e) => {
                                 const newSubFields = {
                                   ...phoneSubFields,
@@ -2056,12 +2777,17 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                                     value: e.target.value,
                                   },
                                   phoneNumber: {
-                                    value: phoneSubFields.phoneNumber?.value || '',
-                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                    value:
+                                      phoneSubFields.phoneNumber?.value || "",
+                                    placeholder:
+                                      phoneSubFields.phoneNumber?.placeholder ||
+                                      "Enter phone number",
                                   },
                                 };
                                 setPhoneSubFields(newSubFields);
-                                onUpdateField(selectedField.id, { subFields: newSubFields });
+                                onUpdateField(selectedField.id, {
+                                  subFields: newSubFields,
+                                });
                               }}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -2087,18 +2813,26 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                             </label>
                             <input
                               type="text"
-                              value={phoneSubFields.phoneNumber?.phoneMask || '(999) 999-9999'}
+                              value={
+                                phoneSubFields.phoneNumber?.phoneMask ||
+                                "(999) 999-9999"
+                              }
                               onChange={(e) => {
                                 const newSubFields = {
                                   ...phoneSubFields,
                                   phoneNumber: {
-                                    value: phoneSubFields.phoneNumber?.value || '',
-                                    placeholder: phoneSubFields.phoneNumber?.placeholder || 'Enter phone number',
+                                    value:
+                                      phoneSubFields.phoneNumber?.value || "",
+                                    placeholder:
+                                      phoneSubFields.phoneNumber?.placeholder ||
+                                      "Enter phone number",
                                     phoneMask: e.target.value,
                                   },
                                 };
                                 setPhoneSubFields(newSubFields);
-                                onUpdateField(selectedField.id, { subFields: newSubFields });
+                                onUpdateField(selectedField.id, {
+                                  subFields: newSubFields,
+                                });
                               }}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="(999) 999-9999"
@@ -2112,36 +2846,53 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   {/* NEW: Price-specific properties */}
                   {isPrice && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Price Settings</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Price Settings
+                      </label>
                       <div className="flex flex-col gap-2">
                         <label className="inline-flex items-center">
                           <input
                             type="checkbox"
                             checked={priceLimits.enabled}
-                            onChange={(e) => handlePriceLimitsChange('enabled', e.target.checked)}
+                            onChange={(e) =>
+                              handlePriceLimitsChange(
+                                "enabled",
+                                e.target.checked
+                              )
+                            }
                             className="mr-2"
                           />
-                          <span className="text-sm font-medium text-gray-700">Enable Price Limits</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            Enable Price Limits
+                          </span>
                         </label>
                         {priceLimits.enabled && (
                           <div className="flex gap-2">
                             <div>
-                              <label className="text-xs text-gray-500">Minimum Price</label>
+                              <label className="text-xs text-gray-500">
+                                Minimum Price
+                              </label>
                               <input
                                 type="number"
                                 value={priceLimits.min}
-                                onChange={(e) => handlePriceLimitsChange('min', e.target.value)}
+                                onChange={(e) =>
+                                  handlePriceLimitsChange("min", e.target.value)
+                                }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="Enter min price"
                                 step="0.01"
                               />
                             </div>
                             <div>
-                              <label className="text-xs text-gray-500">Maximum Price</label>
+                              <label className="text-xs text-gray-500">
+                                Maximum Price
+                              </label>
                               <input
                                 type="number"
                                 value={priceLimits.max}
-                                onChange={(e) => handlePriceLimitsChange('max', e.target.value)}
+                                onChange={(e) =>
+                                  handlePriceLimitsChange("max", e.target.value)
+                                }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="Enter max price"
                                 step="0.01"
@@ -2150,7 +2901,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                           </div>
                         )}
                         <div>
-                          <label className="text-xs text-gray-500">Currency Type</label>
+                          <label className="text-xs text-gray-500">
+                            Currency Type
+                          </label>
                           <select
                             value={currencyType}
                             onChange={handleCurrencyTypeChange}
@@ -2176,51 +2929,83 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
           <div className="mb-2">
             <button
               className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-              onClick={() => toggleSection('advanced')}
+              onClick={() => toggleSection("advanced")}
             >
-              <h3 className="text-lg font-semibold text-gray-800">Advanced Properties</h3>
-              {expandedSection === 'advanced' ? <FaChevronUp /> : <FaChevronDown />}
+              <h3 className="text-lg font-semibold text-gray-800">
+                Advanced Properties
+              </h3>
+              {expandedSection === "advanced" ? (
+                <FaChevronUp />
+              ) : (
+                <FaChevronDown />
+              )}
             </button>
-            {expandedSection === 'advanced' && (
+            {expandedSection === "advanced" && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
                 {/* Unique Name Feature */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unique Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Unique Name
+                  </label>
                   <input
                     type="text"
                     value={uniqueName}
                     onChange={handleUniqueNameChange}
-                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? 'border-red-500' : ''}`}
+                    className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${
+                      uniqueNameError ? "border-red-500" : ""
+                    }`}
                     placeholder="{uniqueName}"
                     maxLength={50}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    This can be used to pre-populate fields from a URL and pass data to another form automatically. It can't include spaces.
+                    This can be used to pre-populate fields from a URL and pass
+                    data to another form automatically. It can't include spaces.
                   </p>
                   {uniqueNameError && (
-                    <p className="text-xs text-red-500 mt-1">{uniqueNameError}</p>
+                    <p className="text-xs text-red-500 mt-1">
+                      {uniqueNameError}
+                    </p>
                   )}
                 </div>
               </div>
+            )}
+
+            {/* Payment Field Configuration */}
+            {isPayPalPayment && (
+              <PaymentFieldEditor
+                selectedField={selectedField}
+                onUpdateField={onUpdateField}
+                className="mb-4"
+                userId={userId}
+                formId={formId}
+              />
             )}
           </div>
         </div>
       )}
 
-      {activeTab === 'settings' && selectedFooter && (
+      {activeTab === "settings" && selectedFooter && (
         <div>
           <div className="mb-2">
             <button
               className="flex justify-between w-full p-3 bg-gray-100 rounded-lg items-center"
-              onClick={() => toggleSection('footer')}
+              onClick={() => toggleSection("footer")}
             >
-              <h3 className="text-lg font-semibold text-gray-800">Footer Button Properties</h3>
-              {expandedSection === 'footer' ? <FaChevronUp /> : <FaChevronDown />}
+              <h3 className="text-lg font-semibold text-gray-800">
+                Footer Button Properties
+              </h3>
+              {expandedSection === "footer" ? (
+                <FaChevronUp />
+              ) : (
+                <FaChevronDown />
+              )}
             </button>
-            {expandedSection === 'footer' && (
+            {expandedSection === "footer" && (
               <div className="p-4 border border-gray-200 rounded-lg mt-2">
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Button Text</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Button Text
+                  </label>
                   <input
                     type="text"
                     value={footerText}
@@ -2230,7 +3015,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   />
                 </div>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Background Color</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Background Color
+                  </label>
                   <input
                     type="color"
                     value={footerBgColor}
@@ -2239,7 +3026,9 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
                   />
                 </div>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Text Color</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Text Color
+                  </label>
                   <input
                     type="color"
                     value={footerTextColor}
@@ -2261,7 +3050,7 @@ function FieldEditor({ selectedField, selectedFooter, onUpdateField, onDeleteFie
         </div>
       )}
 
-      {activeTab === 'widget' && isFormCalculation && (
+      {activeTab === "widget" && isFormCalculation && (
         <FormCalculationWidget
           selectedField={selectedField}
           onUpdateField={onUpdateField}
