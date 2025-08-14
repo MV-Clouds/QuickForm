@@ -1,3 +1,4 @@
+
 import { useRef, useState, useEffect } from 'react';
 import { DatePicker } from 'rsuite';
 import SignatureCanvas from 'react-signature-canvas';
@@ -10,6 +11,7 @@ import 'react-quill/dist/quill.snow.css';
 import InputMask from 'react-input-mask';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
+import ImageUploader from './ImageUploader';
 
 const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', dropdownOptions = [], onChange, onUpdateRows, onUpdateColumns }) => {
   const [selectedValues, setSelectedValues] = useState({});
@@ -236,11 +238,11 @@ const textToHtml = (text) => {
   return text ? `<p>${text.replace(/\n/g, '<br>')}</p>` : '';
 };
 
-function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme }) {
+function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme, selectedFieldId , selectedSectionSide }) {
   const {
     type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
-    helpText = '', alignment = 'center', isCut = false, sectionId,
+    helpText = '', alignment = 'center', isCut = false, sectionId, columnCount = 1,
     maxChars, allowedDomains, enableConfirmation = false, enableVerification = false,
     maxFileSize, allowedFileTypes, multipleFiles = false,
     makeAsLink = false, termsLinkUrl = '',
@@ -289,6 +291,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   const [signatureData, setSignatureData] = useState(null);
   const fileInputRef = useRef(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageDesign, setImageDesign] = useState({});
   const [selectedRating, setSelectedRating] = useState(null);
   const [localOptions, setLocalOptions] = useState(initialOptions?.length ? initialOptions : ['Option 1', 'Option 2', 'Option 3']);
   const [isHovered, setIsHovered] = useState(false);
@@ -502,60 +505,61 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   };
 
   const handleSectionDrop = (e, side) => {
-  e.preventDefault();
-  e.stopPropagation();
-  const fieldType = e.dataTransfer.getData('fieldType');
-  const fieldId = e.dataTransfer.getData('fieldId');
-  
-  if (fieldType === "section") {
-    console.warn('Cannot nest section fields');
-    return;
-  }
-  if (fieldType === 'divider' || fieldType === 'pagebreak') {
-    console.warn('Cannot add divider or pagebreak to section');
-    return;
-  }
+    e.preventDefault();
+    e.stopPropagation();
+    const fieldType = e.dataTransfer.getData('fieldType');
+    const fieldId = e.dataTransfer.getData('fieldId');
 
-  const newFieldId = fieldId || `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  let newField;
-  
-  if (fieldId) {
-    // Find the original field in the form fields array
-    const original = fields.find(f => f.id === fieldId);
-    if (!original) return;
-    
-    // Create a deep clone of the field
-    newField = JSON.parse(JSON.stringify(original));
-    newField.sectionId = id;
-    newField.sectionSide = side;
-  } else {
-    newField = {
-      id: newFieldId,
-      type: fieldType,
-      sectionId: id,
-      sectionSide: side,
+    if (fieldType === "section") {
+      console.warn('Cannot nest section fields');
+      return;
+    }
+    if (fieldType === 'divider' || fieldType === 'pagebreak') {
+      console.warn('Cannot add divider or pagebreak to section');
+      return;
+    }
+
+    const newFieldId = fieldId || `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    let newField;
+
+    if (fieldId) {
+      // Find the original field in the form fields array
+      const original = fields.find(f => f.id === fieldId);
+      if (!original) return;
+
+      // Create a deep clone of the field
+      newField = JSON.parse(JSON.stringify(original));
+      newField.sectionId = id;
+      newField.sectionSide = side;
+    } else {
+      newField = {
+        id: newFieldId,
+        type: fieldType,
+        sectionId: id,
+        sectionSide: side,
+      };
+    }
+
+    // Update the section's subFields with the new field
+    const updatedSubFields = {
+      ...subFields,
+      [side === 'left' ? 'leftField' : 'rightField']: newField
     };
-  }
 
-  // Update the section's subFields with the new field
-  const updatedSubFields = {
-    ...subFields,
-    [side === 'left' ? 'leftField' : 'rightField']: newField
+    onUpdateField(id, { subFields: updatedSubFields });
+
+    // If we're moving an existing field, delete the original
+    if (fieldId) {
+      onDeleteField(fieldId, false);
+    }
   };
-
-  onUpdateField(id, { subFields: updatedSubFields });
-  
-  // If we're moving an existing field, delete the original
-  if (fieldId) {
-    onDeleteField(fieldId, false);
-  }
-};
 
   const handleDragOver = (e) => {
     e.preventDefault();
   };
 
   const handleSectionDoubleClick = (side) => {
+    setHighlightedSide(side); // Highlight the selected side
     if (side === 'left' && subFields.leftField) {
       onClick(subFields.leftField.id, side);
     } else if (side === 'right' && subFields.rightField) {
@@ -575,16 +579,17 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     setClipboard({ field, operation: 'copy' });
   };
 
-  const SelectionWrapper = ({ children, isSection = false }) => (
+  const SelectionWrapper = ({ children, isSection = false, sectionSide = null }) => (
     <div
       className={`relative cursor-pointer group ${isSelected ? 'border-2 border-blue-500 rounded-lg' : ''} ${isCut ? 'opacity-50 blur-sm' : ''}`}
       style={isSelected ? { padding: isSection ? '10px' : '15px', zIndex: 10, position: 'relative' } : {}}
-      onClick={() => {
-        setHighlightedSide(null); // Always clear highlight on any click
+      onClick={(e) => {
+        e.stopPropagation(); // Prevent bubbling to parent
+        setHighlightedSide(sectionSide); // Highlight the selected side
         if (isSection) {
-          onClick(id);
+          onClick(id, sectionSide); // Pass the side to the onClick handler
         } else {
-          onClick(id, sectionSide);
+          onClick(id);
         }
       }}
       onDoubleClick={isSection ? (e) => e.stopPropagation() : undefined}
@@ -637,10 +642,10 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     </div>
   );
 
-  const wrapperProps = { 
-    alignment: labelAlignment, 
-    showHelpText, 
-    helpText 
+  const wrapperProps = {
+    alignment: labelAlignment,
+    showHelpText,
+    helpText
   };
 
   const formatDateForRsuite = (dateString) => {
@@ -702,28 +707,28 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   };
 
   const handleQuillChange = (value) => {
-  const plainText = stripHtml(value);
-  const maxChars = longTextMaxChars || 131072;
+    const plainText = stripHtml(value);
+    const maxChars = longTextMaxChars || 131072;
 
-  if (plainText.length <= maxChars) {
-    setRichTextValue(value);
-    setPlainTextValue(plainText);
-    if (onUpdateField && value !== field.value) {
-      onUpdateField(id, { value });
+    if (plainText.length <= maxChars) {
+      setRichTextValue(value);
+      setPlainTextValue(plainText);
+      if (onUpdateField && value !== field.value) {
+        onUpdateField(id, { value });
+      }
+    } else if (quillRef.current) {
+      const quill = quillRef.current.getEditor();
+      const currentText = quill.getText();
+      quill.deleteText(maxChars, currentText.length - maxChars);
+      const newValue = quill.root.innerHTML;
+      const newPlainText = stripHtml(newValue);
+      setRichTextValue(newValue);
+      setPlainTextValue(newPlainText);
+      if (onUpdateField && newValue !== field.value) {
+        onUpdateField(id, { value: newValue });
+      }
     }
-  } else if (quillRef.current) {
-    const quill = quillRef.current.getEditor();
-    const currentText = quill.getText();
-    quill.deleteText(maxChars, currentText.length - maxChars);
-    const newValue = quill.root.innerHTML;
-    const newPlainText = stripHtml(newValue);
-    setRichTextValue(newValue);
-    setPlainTextValue(newPlainText);
-    if (onUpdateField && newValue !== field.value) {
-      onUpdateField(id, { value: newValue });
-    }
-  }
-};
+  };
 
   const toggleOption = (option) => {
     let newSelectedOptions;
@@ -1156,32 +1161,37 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               </label>
             }
           >
-            <div className="flex flex-col gap-2">
-              {localOptions.map((opt, idx) => (
-                <div key={opt} className="flex items-center gap-2">
-                  <input type="checkbox" className="mr-2" disabled={isDisabled} pattern={field?.validation?.pattern} title={field?.validation?.description}/>
-                  <div
-                    // type="text"
-                    // value={opt}
-                    // onChange={(e) => handleOptionChange(idx, e.target.value)}
-                    className={`p-1 rounded flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                  // placeholder={`Option ${idx + 1}`}
-                  >{opt}</div>
-                  <button
-                    onClick={() => handleRemoveOption(idx)}
-                    className={`text-red-500 hover:text-red-700 ${selectedTheme?.buttonText || ''}`}
-                  >
-                    <FaTrash size={12} />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={handleAddOption}
-                className={`text-blue-600 text-xs hover:underline mt-1 ${selectedTheme?.buttonText || ''}`}
+            <div className="w-full">
+              <div
+                className="grid gap-2"
+                style={{
+                  gridTemplateColumns: columnCount === 1 ? '1fr' : `repeat(${columnCount}, minmax(0, 1fr))`,
+                  width: '100%'
+                }}
               >
-                + Add Item
-              </button>
+                {localOptions.map((opt, idx) => (
+                  <div key={opt} className="flex items-center gap-1 min-w-0">
+                    <input type="checkbox" className="flex-shrink-0" disabled={isDisabled} pattern={field?.validation?.pattern} title={field?.validation?.description} />
+                    <div
+                      className={`p-1 rounded flex-grow min-w-0 truncate ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                      title={opt}
+                    >{opt}</div>
+                    <button
+                      onClick={() => handleRemoveOption(idx)}
+                      className={`text-red-500 hover:text-red-700 flex-shrink-0 ${selectedTheme?.buttonText || ''}`}
+                    >
+                      <FaTrash size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
+            <button
+              onClick={handleAddOption}
+              className={`text-blue-600 text-xs hover:underline mt-2 ${selectedTheme?.buttonText || ''}`}
+            >
+              + Add Item
+            </button>
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1196,32 +1206,37 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
-            <div className="flex flex-col gap-2">
-              {localOptions.map((opt, idx) => (
-                <div key={opt} className="flex items-center gap-2">
-                  <input type="radio" name={`radio-${id}`} className="mr-2" disabled={isDisabled} />
-                  <div
-                    // type="text"
-                    // value={opt}
-                    // onChange={(e) => handleOptionChange(idx, e.target.value)}
-                    className={`p-1 flex-grow ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                  // placeholder={`Option ${idx + 1}`}
-                  >{opt}</div>
-                  <button
-                    onClick={() => handleRemoveOption(idx)}
-                    className={`text-red-500 hover:text-red-700 ${selectedTheme?.buttonText || ''}`}
-                  >
-                    <FaTrash size={12} />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={handleAddOption}
-                className={`text-blue-600 text-xs hover:underline mt-1 ${selectedTheme?.buttonText || ''}`}
+            <div className="w-full">
+              <div
+                className="grid gap-2"
+                style={{
+                  gridTemplateColumns: columnCount === 1 ? '1fr' : `repeat(${columnCount}, minmax(0, 1fr))`,
+                  width: '100%'
+                }}
               >
-                + Add Item
-              </button>
+                {localOptions.map((opt, idx) => (
+                  <div key={opt} className="flex items-center gap-1 min-w-0">
+                    <input type="radio" name={`radio-${id}`} className="flex-shrink-0" disabled={isDisabled} />
+                    <div
+                      className={`p-1 flex-grow min-w-0 truncate ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                      title={opt}
+                    >{opt}</div>
+                    <button
+                      onClick={() => handleRemoveOption(idx)}
+                      className={`text-red-500 hover:text-red-700 flex-shrink-0 ${selectedTheme?.buttonText || ''}`}
+                    >
+                      <FaTrash size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
+            <button
+              onClick={handleAddOption}
+              className={`text-blue-600 text-xs hover:underline mt-2 ${selectedTheme?.buttonText || ''}`}
+            >
+              + Add Item
+            </button>
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1258,8 +1273,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                     <div
                       key={idx}
                       className={`p-2 hover:bg-blue-100 cursor-pointer ${allowMultipleSelections
-                          ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
-                          : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                        ? selectedOptions.includes(dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
+                        : selectedOptions === (dropdownRelatedValues[opt] || opt) ? 'bg-blue-50' : ''
                         }`}
                       onClick={() => toggleOption(dropdownRelatedValues[opt] || opt)}
                     >
@@ -1286,17 +1301,30 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
           }>
-            <input
-              type="file"
-              className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-              ref={fileInputRef}
-              onChange={handleImageChange}
-              accept={allowedFileTypes ? allowedFileTypes.split(',').map(type => `.${type.trim()}`).join(',') : undefined}
-              multiple={multipleFiles}
-              disabled={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
-            />
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <div className="flex flex-col items-center justify-center gap-2">
+                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                </svg>
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold">Click to upload</span> or drag and drop
+                </p>
+                <p className="text-xs text-gray-500">
+                  {allowedFileTypes ? `Supported: ${allowedFileTypes}` : 'Any file type'}
+                  {maxFileSize && ` • Max size: ${maxFileSize}MB`}
+                </p>
+                <input
+                  type="file"
+                  className="hidden"
+                  ref={fileInputRef}
+                  accept={allowedFileTypes ? allowedFileTypes.split(',').map(type => `.${type.trim()}`).join(',') : undefined}
+                  multiple={multipleFiles}
+                  disabled={isDisabled}
+                  pattern={field?.validation?.pattern}
+                  title={field?.validation?.description}
+                />
+              </div>
+            </div>
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1304,72 +1332,24 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     case 'imageuploader':
       return (
         <SelectionWrapper>
-          <FieldWrapper {...wrapperProps} labelContent={
-            <label className={` ${selectedTheme?.textColor || 'text-gray-700'}`}>
-              {/* {label || 'Image Uploader'} */}
-              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
-              {isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-          }>
-
-            <div className="relative" style={{
-              width: field.imageWidth ? `${field.imageWidth}px` : undefined,
-              textAlign: field.imageAlign || 'center'
+          <FieldWrapper {...wrapperProps}>
+            <div style={{
+              display: 'flex',
+              justifyContent: field?.imageAlign || 'center',
             }}>
-              <input
-                type="file"
-                accept="image/*"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={handleImageChange}
-                disabled={isDisabled}
-                pattern={field?.validation?.pattern}
-                title={field?.validation?.description}
+              <ImageUploader
+                defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"}
+                onImageUpload={(newDesign) => {
+                  setImageDesign(newDesign);
+                  if (onUpdateField) {
+                    onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
+                  }
+                }}
+                style={{
+                  width: field?.imageWidth ? `${field.imageWidth}px` : '200px',
+                  height: field?.imageHeight ? `${field.imageHeight}px` : '150px',
+                }}
               />
-              {imagePreview ? (
-                <div
-                  className="relative"
-                  style={{
-                    width: '100%',
-                    textAlign:
-                      field.imageAlign === 'left'
-                        ? 'left'
-                        : field.imageAlign === 'right'
-                          ? 'right'
-                          : 'center',
-                  }}
-                >
-                  <img
-                    src={imagePreview}
-                    alt="Uploaded"
-                    style={{
-                      height: field.imageHeight ? `${field.imageHeight}px` : 'auto',
-                      width: field.imageWidth ? `${field.imageWidth}px` : 'auto',
-                      display: 'block',
-                      marginLeft:
-                        field.imageAlign === 'center'
-                          ? 'auto'
-                          : field.imageAlign === 'right'
-                            ? 'auto'
-                            : 0,
-                      marginRight:
-                        field.imageAlign === 'center'
-                          ? 'auto'
-                          : field.imageAlign === 'left'
-                            ? 'auto'
-                            : 0,
-                    }}
-                    className="object-contain border rounded"
-                  />
-                </div>
-              ) : (
-                <div
-                  className={`h-32 text-sm p-2 border rounded bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 cursor-pointer ${isDisabled ? 'cursor-not-allowed opacity-50' : ''} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                  onClick={() => !isDisabled && fileInputRef.current?.click()}
-                >
-                  Click to Upload Image
-                </div>
-              )}
             </div>
           </FieldWrapper>
         </SelectionWrapper>
@@ -1386,8 +1366,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             </span>
           }>
             <label className="inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" disabled={isDisabled} checked={isChecked} onChange={handleToggleChange}               pattern={field?.validation?.pattern}
-              title={field?.validation?.description}/>
+              <input type="checkbox" className="sr-only peer" disabled={isDisabled} checked={isChecked} onChange={handleToggleChange} pattern={field?.validation?.pattern}
+                title={field?.validation?.description} />
               <div className={`w-11 h-6 bg-gray-200 rounded-full peer ${isChecked ? 'peer-checked:bg-blue-600' : ''} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isChecked ? 'translate-x-5' : 'translate-x-1'}`} />
               </div>
@@ -1418,8 +1398,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 placeholder={placeholder.main || 'Enter price'}
                 onChange={handlePriceChange}
                 readOnly={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
+                pattern={field?.validation?.pattern}
+                title={field?.validation?.description}
               />
             </div>
             {/* NEW: Display price limits if enabled */}
@@ -1466,8 +1446,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   value={subFields.firstName?.value || ''}
                   onChange={(e) => handleSubFieldChange('firstName', { value: e.target.value })}
                   readOnly={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
+                  pattern={field?.validation?.pattern}
+                  title={field?.validation?.description}
                 />
               </div>
               <div className={subFields.salutation?.enabled ? 'w-2/5' : 'w-1/2'}>
@@ -1495,91 +1475,80 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               {isRequired && <span className="text-red-500 ml-1"></span>}
             </label>
           }>
-            <div className="flex flex-col gap-3">
-              {subFields.street?.visible && (
-                <div className="w-full">
+            {(() => {
+              // Create an intelligent layout based on visible fields
+              const renderAddressField = (key, field) => (
+                <div key={key} className="w-full">
                   <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
-                    {subFields.street?.label || 'Street Address'}
+                    {field?.label || key.charAt(0).toUpperCase() + key.slice(1)}
+                    {field?.isRequired && <span className="text-red-500 ml-1">*</span>}
                   </label>
                   <input
                     type="text"
                     className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                    placeholder={subFields.street?.placeholder || 'Street Address'}
-                    value={subFields.street?.value || ''}
-                    onChange={(e) => handleSubFieldChange('street', { value: e.target.value })}
+                    placeholder={field?.placeholder || `Enter ${key}`}
+                    value={field?.value || ''}
+                    onChange={(e) => handleSubFieldChange(key, { value: e.target.value })}
                     readOnly={isDisabled}
+                    required={field?.isRequired}
                   />
                 </div>
-              )}
-              {(subFields.city?.visible || subFields.state?.visible) && (
-                <div className="flex gap-3">
-                  {subFields.city?.visible && (
-                    <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
-                        {subFields.city?.label || 'City'}
-                      </label>
-                      <input
-                        type="text"
-                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={subFields.city?.placeholder || 'City'}
-                        value={subFields.city?.value || ''}
-                        onChange={(e) => handleSubFieldChange('city', { value: e.target.value })}
-                        readOnly={isDisabled}
-                      />
+              );
+
+              // Get visible fields in order
+              const fieldOrder = ['street', 'street2', 'city', 'state', 'country', 'postal'];
+              const visibleFields = fieldOrder.filter(key => subFields[key]?.visible);
+
+              if (visibleFields.length === 0) return null;
+
+              // Create layout groups
+              const layout = [];
+              let i = 0;
+
+              // First, handle street and street2 (always full width)
+              while (i < visibleFields.length && (visibleFields[i] === 'street' || visibleFields[i] === 'street2')) {
+                layout.push({
+                  type: 'fullWidth',
+                  fields: [visibleFields[i]]
+                });
+                i++;
+              }
+
+              // Group remaining fields in pairs
+              while (i < visibleFields.length) {
+                if (i + 1 < visibleFields.length) {
+                  layout.push({
+                    type: 'twoColumns',
+                    fields: [visibleFields[i], visibleFields[i + 1]]
+                  });
+                  i += 2;
+                } else {
+                  layout.push({
+                    type: 'fullWidth',
+                    fields: [visibleFields[i]]
+                  });
+                  i++;
+                }
+              }
+
+              return (
+                <div className="flex flex-col gap-3">
+                  {layout.map((row, rowIndex) => (
+                    <div
+                      key={rowIndex}
+                      className={row.type === 'twoColumns'
+                        ? 'grid grid-cols-1 sm:grid-cols-2 gap-3'
+                        : 'w-full'
+                      }
+                    >
+                      {row.fields.map(fieldKey =>
+                        renderAddressField(fieldKey, subFields[fieldKey])
+                      )}
                     </div>
-                  )}
-                  {subFields.state?.visible && (
-                    <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
-                        {subFields.state?.label || 'State'}
-                      </label>
-                      <input
-                        type="text"
-                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={subFields.state?.placeholder || 'State'}
-                        value={subFields.state?.value || ''}
-                        onChange={(e) => handleSubFieldChange('state', { value: e.target.value })}
-                        readOnly={isDisabled}
-                      />
-                    </div>
-                  )}
+                  ))}
                 </div>
-              )}
-              {(subFields.country?.visible || subFields.postal?.visible) && (
-                <div className="flex gap-3">
-                  {subFields.country?.visible && (
-                    <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
-                        {subFields.country?.label || 'Country'}
-                      </label>
-                      <input
-                        type="text"
-                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={subFields.country?.placeholder || 'Country'}
-                        value={subFields.country?.value || ''}
-                        onChange={(e) => handleSubFieldChange('country', { value: e.target.value })}
-                        readOnly={isDisabled}
-                      />
-                    </div>
-                  )}
-                  {subFields.postal?.visible && (
-                    <div className="w-1/2">
-                      <label className={`text-xs text-gray-500 ${selectedTheme?.textColor || ''}`}>
-                        {subFields.postal?.label || 'Postal Code'}
-                      </label>
-                      <input
-                        type="text"
-                        className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                        placeholder={subFields.postal?.placeholder || 'Postal Code'}
-                        value={subFields.postal?.value || ''}
-                        onChange={(e) => handleSubFieldChange('postal', { value: e.target.value })}
-                        readOnly={isDisabled}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              );
+            })()}
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1654,8 +1623,8 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                 type="checkbox"
                 className="mr-2"
                 disabled={isDisabled}
-              pattern={field?.validation?.pattern}
-              title={field?.validation?.description}
+                pattern={field?.validation?.pattern}
+                title={field?.validation?.description}
               />
               {makeAsLink && termsLinkUrl ? (
                 <a
@@ -1820,33 +1789,36 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
 
     case 'section':
       return (
-        <SelectionWrapper isSection>
-          <div className="flex gap-2">
-            <div
-              className={`w-1/2 min-h-[100px] rounded ${subFields.leftField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
-              onDrop={(e) => handleSectionDrop(e, 'left')}
-              onDragOver={handleDragOver}
-              onDoubleClick={() => handleSectionDoubleClick('left')}
-            >
-              {subFields.leftField ? (
+        <div className="flex gap-2">
+          {/* Left Side */}
+          <div
+            className={`w-1/2 min-h-[100px] rounded ${highlightedSide === 'left' ? 'border-2 border-blue-500' : 'border-gray-300'
+              }`}
+            onDrop={(e) => handleSectionDrop(e, 'left')}
+            onDragOver={handleDragOver}
+            onDoubleClick={() => handleSectionDoubleClick('left')}
+             onClick={(e) => onClick(field.id, "left")}
+          >
+            {subFields.leftField ? (
+              <SelectionWrapper
+                isSection
+                sectionSide="left"
+                isSelected={selectedFieldId === subFields.leftField?.id && selectedSectionSide === "left"}              >
                 <FormField
                   field={subFields.leftField}
-                  isSelected={isSelected && sectionSide === 'left'}
-                  onClick={onClick}
+                  isSelected={selectedFieldId === subFields.leftField?.id && selectedSectionSide === "left"}                  onClick={(fid) => onClick(fid, 'left')}
                   onDrop={onDrop}
                   onUpdateField={(fieldId, updates) => {
-                    // Update the left field within subFields
                     const updatedSubFields = {
                       ...subFields,
-                      leftField: { ...subFields.leftField, ...updates }
+                      leftField: { ...subFields.leftField, ...updates },
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
                   onDeleteField={(fieldId) => {
-                    // Remove the left field
                     const updatedSubFields = {
                       ...subFields,
-                      leftField: null
+                      leftField: null,
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
@@ -1857,36 +1829,46 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   clipboard={clipboard}
                   handlePaste={() => handlePaste(pageIndex, null, id, 'left')}
                   selectedTheme={selectedTheme}
+                  selectedFieldId={selectedFieldId} 
+                  selectedSectionSide={selectedSectionSide}
                 />
-              ) : (
-                <p className="text-gray-500 text-center p-4">Drop field here</p>
-              )}
-            </div>
-            <div
-              className={`w-1/2 ${highlightedSide === 'right' ? 'rounded border-2 border-gray-500' : ''}`}
-              onDrop={(e) => handleSectionDrop(e, 'right')}
-              onDragOver={handleDragOver}
-              onDoubleClick={() => handleSectionDoubleClick('right')}
-            >
-              {subFields.rightField ? (
+              </SelectionWrapper>
+            ) : (
+              <p className="text-gray-500 text-center p-4">Drop field here</p>
+            )}
+          </div>
+
+          {/* Right Side */}
+          <div
+            className={`w-1/2 min-h-[100px] rounded ${highlightedSide === 'right' ? 'border-2 border-blue-500' : 'border-gray-300'
+              }`}
+            onDrop={(e) => handleSectionDrop(e, 'right')}
+            onDragOver={handleDragOver}
+            onDoubleClick={() => handleSectionDoubleClick('right')}
+             onClick={(e) => onClick(field.id, "right")}
+          >
+            {subFields.rightField ? (
+              <SelectionWrapper
+                isSection
+                sectionSide="right"
+                isSelected={selectedFieldId === subFields.rightField?.id && selectedSectionSide === "right"}
+              >
                 <FormField
                   field={subFields.rightField}
-                  isSelected={isSelected && sectionSide === 'right'}
-                  onClick={onClick}
+                  isSelected={selectedFieldId === subFields.rightField?.id && selectedSectionSide === "right"}
+                  onClick={(fid) => onClick(fid, 'right')}
                   onDrop={onDrop}
                   onUpdateField={(fieldId, updates) => {
-                    // Update the right field within subFields
                     const updatedSubFields = {
                       ...subFields,
-                      rightField: { ...subFields.rightField, ...updates }
+                      rightField: { ...subFields.rightField, ...updates },
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
                   onDeleteField={(fieldId) => {
-                    // Remove the right field
                     const updatedSubFields = {
                       ...subFields,
-                      rightField: null
+                      rightField: null,
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
@@ -1897,13 +1879,15 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   clipboard={clipboard}
                   handlePaste={() => handlePaste(pageIndex, null, id, 'right')}
                   selectedTheme={selectedTheme}
+                   selectedFieldId={selectedFieldId} 
+                  selectedSectionSide={selectedSectionSide}
                 />
-              ) : (
-                <p className="text-gray-500 text-center p-4">Drop field here</p>
-              )}
-            </div>
+              </SelectionWrapper>
+            ) : (
+              <p className="text-gray-500 text-center p-4">Drop field here</p>
+            )}
           </div>
-        </SelectionWrapper>
+        </div>
       );
 
     default:

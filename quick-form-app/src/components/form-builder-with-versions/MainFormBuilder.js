@@ -580,7 +580,8 @@ function MainFormBuilder({
           subFields:
             properties.subFields || getDefaultSubFields(field.Field_Type__c),
           isHidden : field?.isHidden__c || false,
-          defaultValue : field?.Default_Value__c || null
+          defaultValue : field?.Default_Value__c || null,
+          sectionSide : properties?.sectionSide || null
         });
       });
       console.log('formfields', JSON.stringify(formFields))
@@ -1107,6 +1108,8 @@ function MainFormBuilder({
     });
 
     setFields(flattenedFields);
+    setSelectedFieldId(null)
+    setSelectedSectionSide(null);
   };
 
   const handleReorder = (fromIndex, toIndex, pageIndex) => {
@@ -1180,13 +1183,16 @@ function MainFormBuilder({
     const updatedFields = fields
       .map((field) => {
         if (field.type === "section") {
-          if (field.leftField?.id === fieldId) {
-            return { ...field, leftField: null };
-          }
-          if (field.rightField?.id === fieldId) {
-            return { ...field, rightField: null };
-          }
+        const updatedSubFields = { ...field.subFields };
+        if (updatedSubFields.leftField?.id === fieldId) {
+          updatedSubFields.leftField = null;
+          return { ...field, subFields: updatedSubFields };
         }
+        if (updatedSubFields.rightField?.id === fieldId) {
+          updatedSubFields.rightField = null;
+          return { ...field, subFields: updatedSubFields };
+        }
+      }
         return field;
       })
       .filter((field) => field.id !== fieldId);
