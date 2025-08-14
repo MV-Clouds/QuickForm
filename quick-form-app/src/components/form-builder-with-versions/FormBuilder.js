@@ -156,11 +156,13 @@ function FormBuilder({
     }
   };
 
-  const handleFieldClick = (fieldId, sectionSide = null) => {
+   const handleFieldClick = (fieldId, sectionSide = null) => {
     const field = fields.find((field) => field.id === fieldId);
-    
     // Don't auto-select divider, pagebreak, or section fields
-    if (field && ['divider', 'pagebreak', 'section'].includes(field.type)) {
+    if (field && ['divider', 'pagebreak'].includes(field.type)) {
+      return;
+    }
+    if (field?.type === 'section' && sectionSide === null) {
       return;
     }
     
@@ -383,6 +385,9 @@ function FormBuilder({
                             clipboard={clipboard}
                             handlePaste={() => handlePaste(pageIndex, index + 1, null, null)}
                             selectedTheme={selectedTheme}
+                            selectedFieldId={selectedFieldId}         
+                            selectedSectionSide={selectedSectionSide} 
+
                           />
                         </div>
                       ))}

@@ -595,6 +595,9 @@ function MainFormBuilder({
             properties.validation || getDefaultValidation(field.Field_Type__c),
           subFields:
             properties.subFields || getDefaultSubFields(field.Field_Type__c),
+          isHidden : field?.isHidden__c || false,
+          defaultValue : field?.Default_Value__c || null,
+          sectionSide : properties?.sectionSide || null
         });
       });
 
@@ -747,6 +750,8 @@ function MainFormBuilder({
             Order_Number__c: index + 1,
             Properties__c: JSON.stringify(sectionProperties),
             Unique_Key__c: field.id,
+            isHidden__c : field.isHidden,
+            Default_Value__c : field.defaultValue
           };
         }
 
@@ -758,6 +763,8 @@ function MainFormBuilder({
             field.type?.charAt(0).toUpperCase() + field.type?.slice(1) ||
             "Field",
           subFields: field.subFields || getDefaultSubFields(field.type) || {},
+          isHidden: field.isHidden || false, //  isHidden
+          defaultValue: field.defaultValue || null, //  defaultValue
         };
 
         return {
@@ -767,6 +774,7 @@ function MainFormBuilder({
           Order_Number__c: index + 1,
           Properties__c: JSON.stringify(properties),
           Unique_Key__c: field.id,
+          isHidden__c : field.isHidden          
         };
       })
     );
@@ -1089,6 +1097,11 @@ function MainFormBuilder({
         .substr(2, 9)}`;
       const defaultValidation = getDefaultValidation(fieldType);
       const defaultSubFields = getDefaultSubFields(fieldType);
+       // Add default options for dropdown
+      const defaultOptions =
+      fieldType === "dropdown"
+        ? ["Option 1", "Option 2", "Option 3"]
+        : undefined;
       const newFieldObj = {
         id: newFieldId,
         type: fieldType,
@@ -1096,6 +1109,7 @@ function MainFormBuilder({
         sectionSide: sectionSide || null,
         validation: defaultValidation,
         subFields: defaultSubFields,
+        options: defaultOptions, // Add default options for dropdown
       };
 
       targetPage.fields.splice(insertIndex, 0, newFieldObj);
@@ -1110,6 +1124,8 @@ function MainFormBuilder({
     });
 
     setFields(flattenedFields);
+    setSelectedFieldId(null)
+    setSelectedSectionSide(null);
   };
 
   const handleReorder = (fromIndex, toIndex, pageIndex) => {
@@ -1183,11 +1199,14 @@ function MainFormBuilder({
     const updatedFields = fields
       .map((field) => {
         if (field.type === "section") {
-          if (field.leftField?.id === fieldId) {
-            return { ...field, leftField: null };
+        const updatedSubFields = { ...field.subFields };
+        if (updatedSubFields.leftField?.id === fieldId) {
+          updatedSubFields.leftField = null;
+          return { ...field, subFields: updatedSubFields };
           }
-          if (field.rightField?.id === fieldId) {
-            return { ...field, rightField: null };
+        if (updatedSubFields.rightField?.id === fieldId) {
+          updatedSubFields.rightField = null;
+          return { ...field, subFields: updatedSubFields };
           }
         }
         return field;

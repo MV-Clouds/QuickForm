@@ -1,3 +1,4 @@
+
 import { useRef, useState, useEffect } from 'react';
 import { DatePicker } from 'rsuite';
 import SignatureCanvas from 'react-signature-canvas';
@@ -10,7 +11,7 @@ import 'react-quill/dist/quill.snow.css';
 import InputMask from 'react-input-mask';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
-import ImageUploader  from './ImageUploader';
+import ImageUploader from './ImageUploader';
 
 const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', dropdownOptions = [], onChange, onUpdateRows, onUpdateColumns }) => {
   const [selectedValues, setSelectedValues] = useState({});
@@ -237,7 +238,7 @@ const textToHtml = (text) => {
   return text ? `<p>${text.replace(/\n/g, '<br>')}</p>` : '';
 };
 
-function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme }) {
+function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme, selectedFieldId , selectedSectionSide }) {
   const {
     type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
@@ -391,6 +392,54 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     onUpdateField(id, { subFields: updatedSubFields });
   };
 
+  const handleImageChange = (e) => {
+    const files = e.target.files;
+    if (files) {
+      for (const file of files) {
+        if (maxFileSize && file.size > maxFileSize * 1024 * 1024) {
+          alert(`File ${file.name} exceeds ${maxFileSize}MB limit`);
+          return;
+        }
+        if (allowedFileTypes) {
+          const extension = file.name.split('.').pop().toLowerCase();
+          const allowed = allowedFileTypes.split(',').map(type => type.trim().toLowerCase());
+          if (!allowed.includes(extension)) {
+            alert(`File type ${extension} is not allowed. Allowed types: ${allowedFileTypes}`);
+            return;
+          }
+        }
+      }
+      const file = files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setImagePreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  };
+
+  const handleOptionChange = (index, newValue) => {
+    const newOptions = [...localOptions];
+    const oldOption = newOptions[index];
+    newOptions[index] = newValue;
+
+    // Update related values for checkbox or radio
+    const relatedValuesKey = type === 'checkbox' ? 'checkboxRelatedValues' : 'radioRelatedValues';
+    const relatedValues = type === 'checkbox' ? checkboxRelatedValues : radioRelatedValues;
+    const newRelatedValues = { ...relatedValues };
+    if (oldOption !== newValue && newRelatedValues[oldOption]) {
+      newRelatedValues[newValue] = newRelatedValues[oldOption];
+      delete newRelatedValues[oldOption];
+    }
+
+    setLocalOptions(newOptions);
+    if (onUpdateField) {
+      onUpdateField(id, { options: newOptions, [relatedValuesKey]: newRelatedValues });
+    }
+  };
+
   const handleAddOption = () => {
     const newOptions = [...localOptions, `Option ${localOptions.length + 1}`];
     const relatedValuesKey = type === 'checkbox' ? 'checkboxRelatedValues' : 'radioRelatedValues';
@@ -510,6 +559,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
   };
 
   const handleSectionDoubleClick = (side) => {
+    setHighlightedSide(side); // Highlight the selected side
     if (side === 'left' && subFields.leftField) {
       onClick(subFields.leftField.id, side);
     } else if (side === 'right' && subFields.rightField) {
@@ -529,21 +579,22 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
     setClipboard({ field, operation: 'copy' });
   };
 
-  const SelectionWrapper = ({ children, isSection = false }) => (
+  const SelectionWrapper = ({ children, isSection = false, sectionSide = null }) => (
     <div
       className={`relative cursor-pointer group ${isSelected ? 'border-2 border-blue-500 rounded-lg' : ''} ${isCut ? 'opacity-50 blur-sm' : ''}`}
       style={isSelected ? { padding: isSection ? '10px' : '15px', zIndex: 10, position: 'relative' } : {}}
-      onClick={() => {
-        setHighlightedSide(null); // Always clear highlight on any click
+      onClick={(e) => {
+        e.stopPropagation(); // Prevent bubbling to parent
+        setHighlightedSide(sectionSide); // Highlight the selected side
         if (isSection) {
-          onClick(id);
+          onClick(id, sectionSide); // Pass the side to the onClick handler
         } else {
-          onClick(id, sectionSide);
+          onClick(id);
         }
       }}
       onDoubleClick={isSection ? (e) => e.stopPropagation() : undefined}
-      // onMouseEnter={() => setIsHovered(true)}
-      // onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {isSelected && type !== 'pagebreak' && (
         <div className="absolute top-0 right-0 flex gap-1 z-20" style={{ transform: 'translate(0, -50%)' }}>
@@ -895,8 +946,6 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
       );
 
     case 'longtext':
-      console.log('render longtext');
-      
       return (
         <SelectionWrapper>
           <FieldWrapper labelContent={
@@ -1280,31 +1329,31 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
         </SelectionWrapper>
       );
 
-  case 'imageuploader':
-  return (
-    <SelectionWrapper>
-      <FieldWrapper {...wrapperProps}>
-        <div style={{
-          display: 'flex',
-          justifyContent: field?.imageAlign || 'center',
-        }}>
-          <ImageUploader 
-            defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"} 
-            onImageUpload={(newDesign) => {
-              setImageDesign(newDesign);
-              if (onUpdateField) {
-                onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
-              }
-            }}
-            style={{
-              width: field?.imageWidth ? `${field.imageWidth}px` : '200px',
-              height: field?.imageHeight ? `${field.imageHeight}px` : '150px',
-            }}
-          />
-        </div>
-      </FieldWrapper>
-    </SelectionWrapper>
-  );
+    case 'imageuploader':
+      return (
+        <SelectionWrapper>
+          <FieldWrapper {...wrapperProps}>
+            <div style={{
+              display: 'flex',
+              justifyContent: field?.imageAlign || 'center',
+            }}>
+              <ImageUploader
+                defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"}
+                onImageUpload={(newDesign) => {
+                  setImageDesign(newDesign);
+                  if (onUpdateField) {
+                    onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
+                  }
+                }}
+                style={{
+                  width: field?.imageWidth ? `${field.imageWidth}px` : '200px',
+                  height: field?.imageHeight ? `${field.imageHeight}px` : '150px',
+                }}
+              />
+            </div>
+          </FieldWrapper>
+        </SelectionWrapper>
+      );
 
     case 'toggle':
       return (
@@ -1740,33 +1789,36 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
 
     case 'section':
       return (
-        <SelectionWrapper isSection>
-          <div className="flex gap-2">
-            <div
-              className={`w-1/2 min-h-[100px] rounded ${subFields.leftField ? 'border-gray-300' : 'border-gray-200 bg-gray-50'}`}
-              onDrop={(e) => handleSectionDrop(e, 'left')}
-              onDragOver={handleDragOver}
-              onDoubleClick={() => handleSectionDoubleClick('left')}
-            >
-              {subFields.leftField ? (
+        <div className="flex gap-2">
+          {/* Left Side */}
+          <div
+            className={`w-1/2 min-h-[100px] rounded ${highlightedSide === 'left' ? 'border-2 border-blue-500' : 'border-gray-300'
+              }`}
+            onDrop={(e) => handleSectionDrop(e, 'left')}
+            onDragOver={handleDragOver}
+            onDoubleClick={() => handleSectionDoubleClick('left')}
+             onClick={(e) => onClick(field.id, "left")}
+          >
+            {subFields.leftField ? (
+              <SelectionWrapper
+                isSection
+                sectionSide="left"
+                isSelected={selectedFieldId === subFields.leftField?.id && selectedSectionSide === "left"}              >
                 <FormField
                   field={subFields.leftField}
-                  isSelected={isSelected && sectionSide === 'left'}
-                  onClick={onClick}
+                  isSelected={selectedFieldId === subFields.leftField?.id && selectedSectionSide === "left"}                  onClick={(fid) => onClick(fid, 'left')}
                   onDrop={onDrop}
                   onUpdateField={(fieldId, updates) => {
-                    // Update the left field within subFields
                     const updatedSubFields = {
                       ...subFields,
-                      leftField: { ...subFields.leftField, ...updates }
+                      leftField: { ...subFields.leftField, ...updates },
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
                   onDeleteField={(fieldId) => {
-                    // Remove the left field
                     const updatedSubFields = {
                       ...subFields,
-                      leftField: null
+                      leftField: null,
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
@@ -1777,36 +1829,46 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   clipboard={clipboard}
                   handlePaste={() => handlePaste(pageIndex, null, id, 'left')}
                   selectedTheme={selectedTheme}
+                  selectedFieldId={selectedFieldId} 
+                  selectedSectionSide={selectedSectionSide}
                 />
-              ) : (
-                <p className="text-gray-500 text-center p-4">Drop field here</p>
-              )}
-            </div>
-            <div
-              className={`w-1/2 ${highlightedSide === 'right' ? 'rounded border-2 border-gray-500' : ''}`}
-              onDrop={(e) => handleSectionDrop(e, 'right')}
-              onDragOver={handleDragOver}
-              onDoubleClick={() => handleSectionDoubleClick('right')}
-            >
-              {subFields.rightField ? (
+              </SelectionWrapper>
+            ) : (
+              <p className="text-gray-500 text-center p-4">Drop field here</p>
+            )}
+          </div>
+
+          {/* Right Side */}
+          <div
+            className={`w-1/2 min-h-[100px] rounded ${highlightedSide === 'right' ? 'border-2 border-blue-500' : 'border-gray-300'
+              }`}
+            onDrop={(e) => handleSectionDrop(e, 'right')}
+            onDragOver={handleDragOver}
+            onDoubleClick={() => handleSectionDoubleClick('right')}
+             onClick={(e) => onClick(field.id, "right")}
+          >
+            {subFields.rightField ? (
+              <SelectionWrapper
+                isSection
+                sectionSide="right"
+                isSelected={selectedFieldId === subFields.rightField?.id && selectedSectionSide === "right"}
+              >
                 <FormField
                   field={subFields.rightField}
-                  isSelected={isSelected && sectionSide === 'right'}
-                  onClick={onClick}
+                  isSelected={selectedFieldId === subFields.rightField?.id && selectedSectionSide === "right"}
+                  onClick={(fid) => onClick(fid, 'right')}
                   onDrop={onDrop}
                   onUpdateField={(fieldId, updates) => {
-                    // Update the right field within subFields
                     const updatedSubFields = {
                       ...subFields,
-                      rightField: { ...subFields.rightField, ...updates }
+                      rightField: { ...subFields.rightField, ...updates },
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
                   onDeleteField={(fieldId) => {
-                    // Remove the right field
                     const updatedSubFields = {
                       ...subFields,
-                      rightField: null
+                      rightField: null,
                     };
                     onUpdateField(id, { subFields: updatedSubFields });
                   }}
@@ -1817,13 +1879,15 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
                   clipboard={clipboard}
                   handlePaste={() => handlePaste(pageIndex, null, id, 'right')}
                   selectedTheme={selectedTheme}
+                   selectedFieldId={selectedFieldId} 
+                  selectedSectionSide={selectedSectionSide}
                 />
-              ) : (
-                <p className="text-gray-500 text-center p-4">Drop field here</p>
-              )}
-            </div>
+              </SelectionWrapper>
+            ) : (
+              <p className="text-gray-500 text-center p-4">Drop field here</p>
+            )}
           </div>
-        </SelectionWrapper>
+        </div>
       );
 
     default:
