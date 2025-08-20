@@ -99,19 +99,33 @@ function PublicFormViewer() {
         if (props.id && field.Id) {
           // Base mapping
           localIdToSFId[props.id] = field.Id;
-          // Add subfield mappings if present in metadata
-          if (props.subFields && typeof props.subFields === 'object' && !Array.isArray(props.subFields)) {
-            Object.keys(props.subFields).forEach(subName => {
-              if(props.type === 'section'){
-                localIdToSFId[props.subFields[subName].id] = `${field.Id}_${subName}`;
-              }
-              else
-              localIdToSFId[`${props.id}_${subName}`] = `${field.Id}_${subName}`;
+          
+          // Handle subfields (including nested subfields)
+          if (props.subFields && typeof props.subFields === 'object') {
+            Object.entries(props.subFields).forEach(([subName, subField]) => {
+              // if (subField.id) {
+                // For section subfields (leftField/rightField)
+                if (field.Field_Type__c === 'section') {
+                  localIdToSFId[subField.id] = `${field.Id}_${subName}`;
+                  
+                  // Handle nested subfields (like fullname subfields)
+                  if (subField.subFields) {
+                    Object.entries(subField.subFields).forEach(([nestedName, nestedField]) => {
+                      if (nestedField.value !== undefined) { // Check if it's a subfield config
+                        localIdToSFId[`${subField.id}_${nestedName}`] = `${field.Id}_${subName}_${nestedName}`;
+                      }
+                    });
+                  }
+                } 
+                // For other field types with subfields (like address)
+                else {
+                  localIdToSFId[`${props.id}_${subName}`] = `${field.Id}_${subName}`;
+                }
+              // }
             });
           }
         }
       });
-      console.log('Local id ',localIdToSFId);
       
        // Parse Prefill array from formVersion.Prefills if available
       if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
@@ -367,7 +381,12 @@ function PublicFormViewer() {
       const runPrefillForField = async (sfFieldId) => {
         // Step 1: Find prefills directly triggered by this blurred field (condition field)
         const directlyTriggered = prefills.filter(p =>
-          (p.lookupFilters?.conditions || []).some(c => localIdToSFId[c.formField] === sfFieldId)
+          (p.lookupFilters?.conditions || []).some(c => {
+            const formFieldId = localIdToSFId[c.formField] || c.formField;
+            return formFieldId === sfFieldId || 
+                  formFieldId.startsWith(`${sfFieldId}_`) || // Check for subfields
+                  sfFieldId.startsWith(`${formFieldId}_`);   // Check if this is a subfield of the condition
+          })
         );
 
         // If none triggered, stop early
@@ -430,6 +449,16 @@ function PublicFormViewer() {
                 if (runtimeFieldId && !updatedFields.has(runtimeFieldId) && data.record[sfName] !== undefined) {
                   updates[runtimeFieldId] = data.record[sfName];
                   updatedFields.add(runtimeFieldId); // mark as final for this trigger round
+                  Object.keys(localIdToSFId).forEach(key => {
+                  if (key.startsWith(`${localId}_`)) {
+                    const subRuntimeId = localIdToSFId[key];
+                    const subSfName = `${sfName}_${key.split('_').pop()}`;
+                    if (data.record[subSfName] !== undefined) {
+                      updates[subRuntimeId] = data.record[subSfName];
+                      updatedFields.add(subRuntimeId);
+                    }
+                  }
+                });
                 }
               });
 

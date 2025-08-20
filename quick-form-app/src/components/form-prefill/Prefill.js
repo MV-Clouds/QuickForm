@@ -122,7 +122,6 @@ const Prefill = () => {
       if (!response.ok) throw new Error('Failed to fetch metadata');
 
       const data = await response.json();
-      console.log(data);
       
       setMetadata(Array.isArray(data.metadata) ? data.metadata : []);
       setFormFields(
@@ -167,6 +166,82 @@ const Prefill = () => {
     }
   };
 
+  // Helper: Expand special fields into subfields
+  const getSelectableFields = () => {
+    const expanded = [];
+
+    formFields.forEach(ff => {
+      const type = ff.Field_Type__c || ff.properties?.type;
+      const props = ff.properties || {};
+      
+      // For special fields, push each visible subField
+      if (['address', 'phone', 'fullname'].includes(type)) {
+        Object.entries(props.subFields || {}).forEach(([subKey, subMeta]) => {
+          if (subMeta.visible !== false && subMeta.enabled !== false) {
+            expanded.push({
+              ...ff,
+              label: `${props.label} - ${subMeta.label}`,
+              properties: {
+                ...props,
+                id: `${props.id}_${subKey}` // Special ID format
+              }
+            });
+          }
+        });
+      } 
+      else if (type === 'section') {
+        Object.entries(props.subFields || {}).forEach(([sideKey, subMeta]) => {
+          if (!subMeta) return;
+
+          const subType = subMeta.type;
+          const subProps = subMeta; // already contains its own id/type/etc.
+
+          if (['address', 'phone', 'fullname'].includes(subType)) {
+            const formatLabel = (key) => {
+                return key
+                    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+                    .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+            };
+            // Expand nested special type
+            Object.entries(subProps.subFields || {}).forEach(([nestedKey, nestedMeta]) => {
+              
+              if (nestedMeta.visible !== false && nestedMeta.enabled !== false) {
+                expanded.push({
+                  ...ff,
+                  Field_Type__c: subType,
+                  label: `${subMeta.label} - ${formatLabel(nestedKey)}`,
+                  properties: {
+                    ...subProps,
+                    id: `${subProps.id}_${nestedKey}`
+                  }
+                });
+              }
+            });
+          } else {
+            // Push the direct subfield (email, link, text, dropdown, etc.)
+            expanded.push({
+              ...ff,
+              Field_Type__c: subType,
+              label: `Section - ${subMeta.label}`,
+              properties: {
+                ...subProps,
+                id: subProps.id // Use direct subfield's own id
+              }
+            });
+          }
+        });
+      }
+
+      else {
+        // Normal field
+        expanded.push(ff);
+      }
+    });
+
+    return expanded;
+  };
+
+
   /* Fetch Object Fields with Caching */
   const fetchObjectFields = async (objectName) => {
     setError('');
@@ -200,7 +275,6 @@ const Prefill = () => {
       if (!response.ok) throw new Error('Failed to fetch object fields');
 
       const data = await response.json();
-      console.log('Fields: ',data.fields);
       
       setObjectFieldsCache((prev) => ({
         ...prev,
@@ -447,7 +521,6 @@ const Prefill = () => {
         const unmappedFields = formFields.filter(
         (ff) => !Object.keys(newList[prefillIndex].fieldMappings).includes(ff.properties?.id)
         );
-        console.log(unmappedFields);
         
         if (unmappedFields.length === 0) return prev; // all fields are mapped, nothing to add
 
@@ -457,8 +530,6 @@ const Prefill = () => {
         ...newList[prefillIndex].fieldMappings,
         [firstUnmapped.properties?.id]: ''
         };
-        console.log(newList);
-        
         return newList;
     });
     };
@@ -825,20 +896,20 @@ const Prefill = () => {
                               option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
                             }
                           >
-                            {formFields
-                              // If objectField is selected in this condition, filter for compatible formFields only
-                              .filter((ff) => {
-                                if (!cond.objectField) return true; // show all if SF field not selected yet
+                            {getSelectableFields()
+                              .filter(ff => {
+                                if (!cond.objectField) return true;
                                 const sfField = objectFieldsCache[prefillList[editingIndex].selectedObject]
                                   ?.find(f => f.name === cond.objectField);
                                 if (!sfField) return true;
                                 return isFieldTypeCompatible(ff.Field_Type__c, sfField.type);
                               })
-                              .map((ff) => (
+                              .map(ff => (
                                 <Option key={ff.properties?.id} value={ff.properties?.id}>
-                                  {ff.Name}
+                                  {ff.label || ff.Name}
                                 </Option>
                               ))}
+
                           </Select>
 
                           <Button
@@ -954,17 +1025,17 @@ const Prefill = () => {
                                 style={{ flex: 1 }}
                                 showSearch
                                 >
-                                {formFields
-                                // filter: exclude already mapped IDs except the one we're editing
-                                .filter(ff => {
-                                const mappedKeys = Object.keys(prefillList[editingIndex].fieldMappings);
-                                return !mappedKeys.includes(ff.properties?.id) || ff.properties?.id === formFieldId;
-                                })
-                                .map(ff => (
-                                <Option key={ff.properties?.id} value={ff.properties?.id}>
-                                    {ff.Name}
-                                </Option>
-                                ))}
+                                {getSelectableFields()
+                                  .filter(ff => {
+                                    const mappedKeys = Object.keys(prefillList[editingIndex].fieldMappings);
+                                    return !mappedKeys.includes(ff.properties?.id) || ff.properties?.id === formFieldId;
+                                  })
+                                  .map(ff => (
+                                    <Option key={ff.properties?.id} value={ff.properties?.id}>
+                                      {ff.label || ff.Name}
+                                    </Option>
+                                  ))}
+
                                 </Select>
 
 
@@ -983,9 +1054,35 @@ const Prefill = () => {
                                 
                               {objectFieldsCache[prefillList[editingIndex].selectedObject]
                                 ?.filter((of) => {
-                                    const formField = formFields?.find(f => f.properties?.id === formFieldId);
-                                    if(!formField) return false;
-                                    return isFieldTypeCompatible(formField.Field_Type__c, of.type);
+                                    let baseFormFieldId = formFieldId.includes('_') 
+                                      ? formFieldId.split('_')[0] 
+                                      : formFieldId;
+                                  
+                                  // First try to find the field directly
+                                  const formField = formFields?.find(f => f.properties?.id === baseFormFieldId);
+                                  
+                                  // If not found directly, check if it's a subField within a section
+                                  if (!formField) {
+                                      // Look through all sections to find if this is a subField
+                                      const section = formFields?.find(f => 
+                                          f.Field_Type__c === 'section' && 
+                                          (f.properties?.subFields?.leftField?.id === baseFormFieldId || 
+                                          f.properties?.subFields?.rightField?.id === baseFormFieldId)
+                                      );
+                                      
+                                      if (section) {
+                                          // Determine if it's left or right field
+                                          const subField = 
+                                              section.properties.subFields.leftField?.id === baseFormFieldId 
+                                                  ? section.properties.subFields.leftField
+                                                  : section.properties.subFields.rightField;
+                                          
+                                          return isFieldTypeCompatible(subField.type, of.type);
+                                      }
+                                      return false;
+                                  }
+                                  
+                                  return isFieldTypeCompatible(formField.Field_Type__c, of.type);
                                 })
                                 .map((of) => (
                                     <Option key={of.name} value={of.name}>
@@ -1000,7 +1097,6 @@ const Prefill = () => {
                               danger
                               onClick={() => removeFieldMapping(editingIndex, formFieldId)}
                               disabled={isLoading}
-                              aria-label={`Remove mapping for ${formField.Name}`}
                             >
                               &times;
                             </Button>
