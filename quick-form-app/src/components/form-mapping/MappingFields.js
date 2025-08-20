@@ -12,6 +12,7 @@ const Sidebar = ({ onDragStart }) => {
   const utilities = ["Formatter", "Filter", "Path", "Loop"];
   const integrations = ["Google Sheet"]; // Add Google Sheet Integration
 
+  
   return (
     <motion.div
       className="w-1/5 min-w-[200px] bg-white p-6 h-full overflow-y-auto shadow-lg border-r border-gray-200"
