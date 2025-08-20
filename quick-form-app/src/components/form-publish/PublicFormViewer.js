@@ -1264,8 +1264,6 @@ function PublicFormViewer() {
       throw new Error(data.error || 'Failed to submit form');
     }
 
-    const submissionId = data.submissionId;
-
     const updatedSubmissionData = { ...submissionData };
 
     // Show success message based on whether payment was involved
@@ -1289,6 +1287,7 @@ function PublicFormViewer() {
         formVersionId: formData.Id,
         formData: updatedSubmissionData,
         nodes: formData.mappings,
+        ...(data.submissionId ? { submissionId: data.submissionId } : { submissionId: data.tempSubmissionId })
       }),
     });
 

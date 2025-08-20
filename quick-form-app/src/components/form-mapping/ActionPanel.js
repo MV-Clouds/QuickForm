@@ -6,7 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import timezones from "timezones-list";
 import countries from "i18n-iso-countries";
 import currencyCodes from "currency-codes";
-
+import { ArrowRightOutlined } from "@ant-design/icons";
+import CreatableSelect from "react-select/creatable";
+import { Select as AntSelect, Spin, Button, message } from "antd";
+const { Option } = AntSelect;
 countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
 
 const ActionPanel = ({
@@ -22,6 +25,7 @@ const ActionPanel = ({
   nodeLabel,
   nodes,
   edges,
+  sfToken
 }) => {
   const isFindNode = nodeType === "Find";
   const isCreateUpdateNode = nodeType === "Create/Update";
@@ -30,6 +34,7 @@ const ActionPanel = ({
   const isFormatterNode = nodeType === "Formatter";
   const isFilterNode = nodeType === "Filter";
   const isConditionNode = nodeType === "Condition";
+  const isGoogleSheet = nodeType === 'Google Sheet'
   const [selectedObject, setSelectedObject] = useState("");
   const [localMappings, setLocalMappings] = useState([{ formFieldId: "", fieldType: "", salesforceField: "", picklistValue: "" }]);
   const [conditions, setConditions] = useState([{ field: "", operator: "=", value: "", value2: "" }]);
@@ -56,7 +61,11 @@ const ActionPanel = ({
   const [sortField, setSortField] = useState("");
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
-
+  const [sheetName, setSheetName] = useState("");
+  const [sheetLink , setSheetLink] = useState("");
+  const [fieldMappings, setFieldMappings] = useState([]);
+  const instanceUrl = sessionStorage.getItem('instanceUrl');
+  const userId = sessionStorage.getItem('userId');
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
     double: ["number", "price"],
@@ -94,7 +103,8 @@ const ActionPanel = ({
     setSortField(nodeMapping.sortField || "");
     setSortOrder(nodeMapping.sortOrder || "ASC");
     setPathOption(nodeMapping.pathOption || (isConditionNode ? "Rules" : undefined));
-
+    setFieldMappings(nodeMapping?.fieldMappings || []);
+    setSheetName(nodeMapping?.selectedSheetName || "");
     const loopConfig = nodeMapping.loopConfig || {};
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
@@ -374,6 +384,17 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
+  const handleSave = () => {
+    setMappings((prev) => ({
+      ...prev,
+      [nodeId]: {
+        ...prev[nodeId],
+        selectedSheetName : sheetName,
+        fieldMappings,
+      },
+    }));
+    onClose();
+  };
 
   const handleMappingChange = (index, key, value, extra = {}) => {
     const newMappings = [...localMappings];
@@ -1227,7 +1248,16 @@ const ActionPanel = ({
             </motion.p>
           )}
         </AnimatePresence>
-
+        {isGoogleSheet && (
+          <motion.div
+            className=""
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+          >
+          <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId}/>
+          </motion.div>
+        )}
         <div className="space-y-6">
           {(isPathNode || isConditionNode) && (
             <motion.div
@@ -2487,6 +2517,273 @@ const ActionPanel = ({
         </div>
       </div>
     </motion.div>
+  );
+};
+
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave ,sheetLink , setsheetLink , instanceUrl , userId,sfToken }) => {
+  const [error, setError] = useState("");
+  const [spreadsheets, setSpreadsheets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState([]);
+
+  async function fetchSpreadsheets({ instanceUrl, sfToken, userId }) {
+    const apiUrl = "https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch";
+  
+    if (!instanceUrl || !sfToken || !userId) {
+      throw new Error("Missing required parameters: instanceUrl, sfToken, userId");
+    }
+  
+    // Build URL with query parameters
+    const url = new URL(apiUrl);
+    url.searchParams.append("instanceUrl", instanceUrl);
+    url.searchParams.append("sfToken", sfToken);
+    url.searchParams.append("userId", userId);
+  
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+  
+      if (!response.ok) {
+        // Try to parse error details from response body if JSON
+        let errorBody;
+        try {
+          errorBody = await response.json();
+        } catch {
+          errorBody = await response.text();
+        }
+        throw new Error(`API Error ${response.status}: ${JSON.stringify(errorBody)}`);
+      }
+  
+      const data = await response.json();
+      return data; // expected to contain { spreadsheets: [...] }
+    } catch (error) {
+      // Network error or other unexpected error
+      console.error("Fetch spreadsheets failed:", error);
+      throw new Error(`Failed to fetch spreadsheets: ${error.message}`);
+    }
+  }
+  
+  useEffect(() => {
+    async function loadSpreadsheets() {
+      try {
+        setLoading(true);
+        const result = await fetchSpreadsheets({ instanceUrl, sfToken, userId });
+        setSpreadsheets(result.spreadsheets);
+        setError(null);
+        console.log('Results ==>' , result.spreadsheets)
+      } catch (err) {
+        setError(err.message);
+      }finally{
+        setLoading(false);
+      }
+    }
+
+    if(!sheetName){
+      console.log('sheetname' , !sheetName)
+      loadSpreadsheets();
+    }
+  }, [instanceUrl, sfToken, userId]);
+  // Handler when spreadsheet is selected
+ // When a spreadsheet is selected, update sheetName and set its columns
+ const onSpreadsheetChange = (spreadsheetId) => {
+  const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+  if (selected) {
+    setSheetName(selected.spreadsheetName);
+    setSelectedColumns(selected.columns || []);
+    if(selected.columns[0]){
+       // Populate fieldMappings automatically based on columns
+    const newMappings = selected.columns[0]
+    .map(col => ({
+      column: col,
+      id: "",     // no form field selected yet
+      name: "",
+      label: col  // keep label as trimmed column
+    }));
+      setFieldMappings(newMappings);
+    } else {
+      setSelectedColumns([]);
+      setFieldMappings([]);
+    }
+    }
+};
+  // Add a new mapping entry
+  const addFieldMapping = () => {
+    setFieldMappings([...fieldMappings, { column: "", id: "", name: "" }]);
+    setError("");
+  };
+
+  // Remove a mapping entry
+  const removeFieldMapping = (index) => {
+    setFieldMappings(fieldMappings.filter((_, i) => i !== index));
+    setError("");
+  };
+
+  // Handle column name (left side): select or create
+  const handleColumnChange = (index, val) => {
+    const updated = [...fieldMappings];
+    updated[index].column = val?.value || "";
+    updated[index].label = val?.label || "Label";
+    console.log(val)
+    setFieldMappings(updated);
+  };
+
+  // Handle form field (right side)
+  const handleFieldChange = (index, val) => {
+    const field = formFields.find(f => f.id === val.value);
+    const updated = [...fieldMappings];
+    updated[index].id = field.id;
+    updated[index].name = field.name;
+    setFieldMappings(updated);
+  };
+
+  // Validation & Save
+  const handleSave = () => {
+    if (!sheetName) {
+      setError("Please provide a sheet name.");
+      return;
+    }
+    const hasError = fieldMappings.some(m => !m.column || !m.id);
+    if (hasError) {
+      setError("Please map all columns and form fields.");
+      return;
+    }
+    const columnNames = fieldMappings.map(m => m.column);
+    if (new Set(columnNames).size !== columnNames.length) {
+      setError("Sheet column names must be unique.");
+      return;
+    }
+    setError("");
+    message.success("Mapping config saved!");
+    onSave();
+  };
+
+  // For left-side column suggestions (show already used columns + allow new)
+  const usedColumns = fieldMappings.map(m => m.column).filter(n => !!n);
+  const columnOptions = usedColumns.map(col => ({ value: col, label: col }));
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        {/* <label style={{ fontWeight: 600 }}>Sheet Name</label>
+        <input
+          style={{ marginTop: 4, maxWidth: 300, padding: 8, border: "1px solid #eee", borderRadius: 4 }}
+          value={sheetName}
+          onChange={e => setSheetName(e.target.value)}
+          placeholder="Google Sheet Name"
+        /> */}
+         <label style={{ fontWeight: 600, marginRight: 10 }}>Select Spreadsheet</label>
+        {loading ? (
+          <Spin />
+        ) : (
+          <AntSelect
+            style={{ width: 300 }}
+            placeholder="Select a spreadsheet"
+            value={sheetName || undefined}
+            onChange={onSpreadsheetChange}
+            allowClear
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().includes(input.toLowerCase())
+            }
+          >
+            {spreadsheets?.map(sheet => (
+              <Option key={sheet.spreadsheetId} value={sheet.spreadsheetId}>
+                {sheet.spreadsheetName}
+              </Option>
+            ))}
+          </AntSelect>
+        )}
+
+      </div>
+      <div>
+        <label style={{ fontWeight: 600 }}>Column &rarr; Form Field Mapping</label>
+        <AnimatePresence>
+          {fieldMappings.map((mapping, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              style={{
+                display: "flex",
+                gap: 16,
+                alignItems: "center",
+                marginBottom: 12,
+                background: "#f9fafb",
+                padding: 12,
+                borderRadius: 8,
+                border: error && (!mapping.column || !mapping.id) ? "1px solid #ff4d4f" : "1px solid #e5e7eb",
+                boxShadow: "0 2px 8px 0 rgba(0,0,0,0.03)",
+              }}
+            >
+              <CreatableSelect
+                style={{ width: 170 }}
+                placeholder="Sheet Column"
+                value={mapping.column ? { value: mapping.column, label: mapping.label } : null}
+                onChange={val => handleColumnChange(index, val)}
+                options={formFields
+                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                  .map(f => ({ value: f.id, label: f.name }))}
+                isClearable
+                size="middle"
+                
+                // Prevent duplication of column names already chosen elsewhere
+                isOptionDisabled={option =>
+                  fieldMappings.some((m, i) => m.column === option.value && i !== index)
+                }
+              />
+              <motion.div
+                initial={{ scale: 0.67, opacity: 0.7 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", duration: 0.45 }}
+                style={{ pointerEvents: "none" }}
+              >
+                <ArrowRightOutlined style={{ fontSize: 22, color: "#1890ff" }} />
+              </motion.div>
+              <Select
+                style={{ width: 170 }}
+                placeholder="Form Field"
+                value={mapping.id ? { value: mapping.id, label: mapping.name } : null}
+                onChange={val => handleFieldChange(index, val)}
+                options={formFields
+                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                  .map(f => ({ value: f.id, label: f.name }))
+                }
+                showSearch
+                allowClear
+                size="middle"
+              />
+              <Button
+                danger
+                onClick={() => removeFieldMapping(index)}
+                disabled={fieldMappings.length <= 1}
+                type="default"
+              >
+                Remove
+              </Button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <Button onClick={addFieldMapping} type="primary" style={{ marginTop: 6 }}>
+          Add More Fields
+        </Button>
+      </div>
+      {error && <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{ color: "#ff4d4f", marginTop: 16, fontWeight: 500 }}
+      >
+        {error}
+      </motion.div>}
+      <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        <Button onClick={handleSave} type="primary">Save</Button>
+      </div>
+    </div>
   );
 };
 

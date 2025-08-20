@@ -40,8 +40,8 @@ const Login = () => {
   // Check if already logged in on mount
   useEffect(() => {
     sessionStorage.setItem('isLoggedIn', 'true');
-    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    sessionStorage.setItem('userId', '2F005gK0000068QxxQAE'); // Clear userId
+    sessionStorage.setItem('instanceUrl', 'https://orgfarm-407f70be85-dev-ed.develop.my.salesforce.com');  // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {
