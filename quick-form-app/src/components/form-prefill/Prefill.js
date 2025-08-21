@@ -270,6 +270,7 @@ const Prefill = () => {
           instanceUrl: instanceUrl,
           objectName: objectName,
           access_token: accessToken,
+          requestType: "prefill",
         }),
       });
 

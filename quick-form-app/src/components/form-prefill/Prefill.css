@@ -35,33 +35,6 @@ body {
   box-shadow: var(--box-shadow);
 }
 
-/* Typography */
-h2, h3, h4, h5, h6 {
-  color: var(--dark);
-  margin-bottom: 1rem;
-  font-weight: 600;
-}
-
-h2 {
-  font-size: 2rem;
-  color: var(--primary);
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-h3 {
-  font-size: 1.5rem;
-}
-
-h4 {
-  font-size: 1.25rem;
-}
-
-p {
-  color: #666;
-  margin-bottom: 1.5rem;
-}
-
 /* Steps Container */
 .step-container {
   margin-top: 2rem;

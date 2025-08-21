@@ -441,4 +441,68 @@
   transition: color 0.3s ease, border-color 0.3s ease, font-weight 0.3s ease;
   z-index: 1;
 }
-  
+
+
+/* Modal/prompt content, centered */
+.no-publish-link-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 15;
+  transform: translate(-50%, -50%);
+  width: 70%;
+  text-align: center;
+  background-color: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  align-items: center;
+}
+
+.no-publish-title {
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  margin-bottom: 0px;
+  color: #0B0A0A;
+  font-weight: 700;
+  font-size: 32px;
+  line-height: 40px;
+}
+
+.no-publish-content {
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-weight: 500;
+  font-style: Medium;
+  font-size: 24px;
+  line-height: 32px;
+  letter-spacing: 0px;
+  margin-bottom: 32px;
+}
+
+.button-container {
+  width: 15%;
+}
+
+.button-text-container {
+  display: flex;
+  flex-direction: row;
+  padding: 4px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.publish-text {
+  font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 16px;
+  letter-spacing: 0px;
+  text-align: right;
+}
+
+
+.main-share-content.blurred {
+  filter: blur(4px);
+  pointer-events: none;
+  user-select: none;
+}

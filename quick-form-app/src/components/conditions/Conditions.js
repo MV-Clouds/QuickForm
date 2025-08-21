@@ -16,6 +16,20 @@ import './Conditions.css';
 
 const { TabPane } = Tabs;
 const { Option } = Select;
+// Utility: Generate 100 distinct bracket colors (as background)
+const BRACKET_COLORS = [
+  '#FF4500', '#FF6EB4', '#32CD32', '#FFD700', '#800080', '#FF1493', '#00CED1', '#FF8C00', '#8B0000', '#006400',
+  '#8B008B', '#00BFFF', '#228B22', '#DAA520', '#4B0082', '#FF69B4', '#48D1CC', '#FF7F50', '#A52A2A', '#228B22',
+  '#BA55D3', '#87CEFA', '#9ACD32', '#FF6347', '#9400D3', '#FF00FF', '#40E0D0', '#FF4500', '#A52A2A', '#2E8B57',
+  '#D2691E', '#7B68EE', '#00FA9A', '#FFA07A', '#8A2BE2', '#FF6EB4', '#20B2AA', '#FF6347', '#B22222', '#556B2F',
+  '#9932CC', '#ADD8E6', '#7FFF00', '#FF69B4', '#800000', '#48D1CC', '#DA70D6', '#00BFFF', '#9ACD32', '#FF4500',
+  '#4B0082', '#66CDAA', '#FF8C00', '#8B0000', '#00FF7F', '#FF1493', '#2E8B57', '#D2691E', '#7B68EE', '#00FA9A',
+  '#FFA07A', '#8A2BE2',  '#B22222', '#20B2AA', '#FF6347', '#B22222', '#556B2F', '#9932CC', '#ADD8E6', '#7FFF00',
+  '#FF69B4', '#800000', '#48D1CC', '#DA70D6', '#00BFFF', '#9ACD32', '#FF4500', '#4B0082', '#66CDAA', '#FF8C00',
+  '#8B0000', '#00FF7F', '#FF1493', '#2E8B57', '#D2691E', '#7B68EE', '#00FA9A', '#FFA07A', '#8A2BE2', '#FF6EB4',
+  '#20B2AA', '#FF6347', '#1E90FF', '#556B2F', '#9932CC', '#ADD8E6', '#7FFF00', '#FF69B4', '#800000', '#48D1CC'
+];
+
 
 const Conditions = ({ formVersionId }) => {
   const navigate = useNavigate();
@@ -1573,8 +1587,123 @@ const Conditions = ({ formVersionId }) => {
     return evaluateCalculation(calcExpression, defaultFieldValues);
   }, [calcExpression, fields]); // no dependency on formRecords since no real input yet
 
+  function parseLogicExpression(logicExpression) {
+    if (!logicExpression) return null;
+    const tokens = logicExpression.match(/\d+|AND|OR|\(|\)/g);
+    if (!tokens) return null;
+    let i = 0;
+
+    function parseGroup() {
+      const group = [];
+      while (i < tokens.length) {
+        const token = tokens[i];
+        if (token === '(') {
+          i++;
+          group.push(parseGroup());
+        } else if (token === ')') {
+          i++;
+          break;
+        } else if (/^\d+$/.test(token)) {
+          group.push({ type: 'condition', idx: Number(token) });
+          i++;
+        } else if (token === 'AND' || token === 'OR') {
+          group.push(token);
+          i++;
+        } else {
+          i++;
+        }
+      }
+      return group;
+    }
+    i = 0;
+    return parseGroup();
+  }
+
+
+  const ConditionChip = ({ label, value }) => (
+    <span className="condition-chip">
+      <span className="chip-label">{label}</span>
+      {value !== undefined && value !== null && value !== '' && (
+        <span className="chip-value">{value}</span>
+      )}
+    </span>
+  );
+  
+
+  function renderLogicGroup({
+    group,
+    conditions,
+    fields,
+    bracketColorIndex = 0,
+  }) {
+    if (!Array.isArray(group)) return null;
+    const bracketColor = BRACKET_COLORS[bracketColorIndex % 100];
+
+    return (
+      <>
+        <span
+          className="logic-bracket"
+          style={{
+            color: bracketColor,
+            fontSize: '20px',
+            fontWeight: 700,
+          }}
+        >
+          {'{'}
+        </span>
+        {group.map((item, idx) => {
+          if (item === 'AND' || item === 'OR') {
+            return (
+              <span key={idx} className="logic-connector">
+                {item}
+              </span>
+            );
+          }
+          if (Array.isArray(item)) {
+            // Recursively render with increased color index
+            return renderLogicGroup({
+              group: item,
+              conditions,
+              fields,
+              bracketColorIndex: bracketColorIndex + 1,
+            
+            });
+          }
+          if (item.type === 'condition') {
+            const cond = conditions[item.idx - 1]; // 1-based index
+            const fieldObj = fields.find((f) => f.Unique_Key__c === cond.ifField);
+            return (
+              <span className="condition-item" key={idx} style={{ margin: '0 4px', whiteSpace: 'nowrap' }}>
+                <span className="condition-field" style={{ fontWeight: '600' }}>
+                  {fieldObj ? fieldObj.Name : 'Unknown'}
+                </span>{' '}
+                <span className="condition-operator" style={{ fontWeight: '500' }}>
+                  {cond.operator}
+                </span>{' '}
+                <span className="condition-value" style={{ fontStyle: 'italic' }}>
+                  {cond.value !== undefined && cond.value !== null && cond.value !== '' ? cond.value : 'N/A'}
+                </span>
+              </span>
+            );
+          }
+          return null;
+        })}
+        <span
+          className="logic-bracket"
+          style={{
+            color: bracketColor,
+            fontSize: '20px',
+            fontWeight: 700,
+          }}
+        >
+          {'}'}
+        </span>
+      </>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="conditions-wrapper">
       {/* {showSidebar && (
         <motion.div
           className="w-64 bg-white shadow-lg"
@@ -1582,15 +1711,35 @@ const Conditions = ({ formVersionId }) => {
           <MainMenuBar formVersionId={formVersionId} />
         </motion.div>
       )} */}
+      
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="flex-1 p-6 overflow-y-auto"
+        className="conditions-main-container"
       >
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">Form Conditions</h1>
+        <div className='heading-container'>
+          <div className='svg-container'>
+            <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="50" height="50" rx="8" fill="#5F6165"/>
+              <rect x="24.6011" y="18.8008" width="14.9501" height="14.9501" transform="rotate(45 24.6011 18.8008)" fill="white"/>
+              <path d="M12.7408 29.375H6.76074V34.2587" stroke="white" stroke-width="0.797341"/>
+              <path d="M37.259 29.375H43.239V34.2587" stroke="white" stroke-width="0.797341"/>
+              <line x1="24.7009" y1="14.3262" x2="24.7009" y2="17.5155" stroke="white" stroke-width="0.797341"/>
+              <circle cx="24.7008" cy="9.14249" r="3.18936" fill="white"/>
+              <circle cx="6.76065" cy="39.4394" r="3.18936" fill="white"/>
+              <path d="M5.5647 38.2441L7.95672 40.6362M5.5647 40.6362L7.95672 38.2441" stroke="#5F6165" stroke-width="0.717607" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="43.2389" cy="39.4394" r="3.18936" fill="white"/>
+              <path d="M41.8435 39.7392L42.5412 40.6362L44.9332 38.2441" stroke="#5F6165" stroke-width="0.717607" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div className='heading-container-text'>
+            <p className='heading-conditions-text'>CONDITIONS</p>
+            <p className='heading-desc-text'>Make your form interactive with conditional display.</p>
+          </div>
+        </div>
+        <div className="tabs-container">
           {error && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -1630,7 +1779,7 @@ const Conditions = ({ formVersionId }) => {
               }}
             >
               <TabPane tab="Show/Hide Fields" key="show_hide">
-                <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
+                {/* <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
                   <h2 className="text-xl font-semibold mb-3">Add Show/Hide Condition</h2>
                   <div className="mb-4">
                     {newCondition.conditions?.map((condition, index) => (
@@ -1839,64 +1988,148 @@ const Conditions = ({ formVersionId }) => {
                       )}
                     </div>
                   </div>
-                </motion.div>
-                <motion.div variants={containerVariants} className="mt-4">
-                  <h2 className="text-xl font-semibold mb-3">Existing Conditions</h2>
-                  <AnimatePresence>
-                    {conditions
-                      .filter((c) => c.type === 'show_hide')
-                      .map((condition) => (
-                        <motion.div
-                          key={condition.Id}
-                          variants={itemVariants}
-                          initial="hidden"
-                          animate="visible"
-                          exit="exit"
-                          className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
-                        >
-                          <div>
-                            {condition.logic === 'Custom' ? (
-                              <>
-                                <p><strong>If:</strong></p>
-                                {condition.conditions?.map((cond, index) => (
-                                  <p key={index}>
-                                    <strong>Condition {index + 1}:</strong>{' '}
-                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                    {cond.value || 'N/A'}
-                                  </p>
-                                ))}
-                                <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
-                              </>
-                            ) : (
-                              <p>
-                                <strong>If:</strong>{' '}
-                                {condition.conditions?.map((cond, index) => (
-                                  <span key={index}>
-                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                    {cond.value || 'N/A'}
-                                    {index < condition.conditions.length - 1 && ` ${condition.logic} `}
-                                  </span>
-                                ))}
-                              </p>
-                            )}
-                            <p>
-                              <strong>Then:</strong> {condition.thenAction}{' '}
-                              {(Array.isArray(condition.thenFields)
-                                ? condition.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean)?.join(', ')
-                                : fields.find((f) => f.Unique_Key__c === condition.thenFields)?.Name) || 'None'}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button size="small" onClick={() => editCondition(condition)}>
-                              <FaEdit />
-                            </Button>
-                            <Button size="small" onClick={() => deleteCondition(condition.Id)}>
-                              <FaTrash />
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
-                  </AnimatePresence>
+                </motion.div> */}
+                <motion.div variants={containerVariants} className="existing-conditions-container">
+                  <div className='conditions-heading-container'>
+                    <div><p className="existing-condition-text">Existing Conditions</p></div>
+                    <div>
+                      <button className='login-button'>
+                        <svg className='plus-icon-svg' width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M8.57153 12H15.4287" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M12 8.57227V15.4294" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Add New Rule 
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {conditions.filter((c) => c.type === 'show_hide').length === 0 ? (
+                    <div className="no-conditions-container">
+                      <p className="no-conditions-text">No conditions added yet</p>
+                    </div>
+                  ) : (
+                    <div className="conditions-list">
+                      <AnimatePresence>
+                        {conditions
+                          .filter((c) => c.type === 'show_hide')
+                          .map((condition, idx) => {
+                            const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
+                            const conds = conditionData.conditions || [];
+
+                            const logicTree =
+                              conditionData.logic === 'Custom' && conditionData.logicExpression
+                                ? parseLogicExpression(conditionData.logicExpression)
+                                : null;
+
+                            return (
+                              <motion.div
+                                key={condition.Id}
+                                variants={itemVariants}
+                                initial="hidden"
+                                animate="visible"
+                                exit="exit"
+                                className="condition-card"
+                              >
+                                <div className="condition-content">
+                                  <div className="condition-header">
+                                    <div className="condition-numbering">{idx + 1}</div>
+                                    <div className="condition-actions">
+                                      <button
+                                        className="icon-btn edit-btn"
+                                        onClick={() => editCondition(condition)}
+                                        aria-label="Edit condition"
+                                      >
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M11.2171 5.62695H5.6509C5.22911 5.62695 4.8246 5.79451 4.52635 6.09276C4.2281 6.39101 4.06055 6.79552 4.06055 7.21731V18.3498C4.06055 18.7716 4.2281 19.1761 4.52635 19.4743C4.8246 19.7726 5.22911 19.9401 5.6509 19.9401H16.7834C17.2052 19.9401 17.6097 19.7726 17.9079 19.4743C18.2062 19.1761 18.3737 18.7716 18.3737 18.3498V12.7835" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M17.1811 4.43351C17.4975 4.11717 17.9265 3.93945 18.3739 3.93945C18.8213 3.93945 19.2503 4.11717 19.5667 4.43351C19.883 4.74985 20.0607 5.1789 20.0607 5.62628C20.0607 6.07365 19.883 6.5027 19.5667 6.81904L12.0125 14.3732L8.83179 15.1684L9.62696 11.9877L17.1811 4.43351Z" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+
+                                      </button>
+                                      <button
+                                        className="icon-btn delete-btn"
+                                        onClick={() => deleteCondition(condition.Id)}
+                                        aria-label="Delete condition"
+                                      >
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.19826 8.7046C7.05895 8.7046 6.95304 8.82979 6.97613 8.96717L8.62132 18.7568H15.3786L17.0238 8.96717C17.0469 8.82979 16.941 8.7046 16.8017 8.7046H7.19826ZM17.4058 6.35909C17.5302 6.35909 17.631 6.45994 17.631 6.58434V7.25076C17.631 7.37515 17.5302 7.476 17.4058 7.476H6.59414C6.46974 7.476 6.3689 7.37515 6.3689 7.25076V6.58434C6.3689 6.45994 6.46974 6.35909 6.59414 6.35909H9.5848C10.0916 6.35909 10.5032 5.74535 10.5032 5.24219H13.4967C13.4967 5.74535 13.9078 6.35909 14.4151 6.35909H17.4058Z" fill="#5F6165"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="condition-body">
+                                    <div className="condition-logic">
+                                      <div className="logic-label">Condition: </div>
+
+                                      {logicTree ? (
+                                        <div className="logic-display">
+                                          {renderLogicGroup({
+                                            group: logicTree,
+                                            conditions: conds,
+                                            fields: fields,
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="logic-display">
+                                          {conds.map((cond, index) => {
+                                            const fieldObj = fields.find((f) => f.Unique_Key__c === cond.ifField);
+                                            return (
+                                              <React.Fragment key={index}>
+                                                <div className="condition-item">
+                                                  <span className="condition-field"><b>{fieldObj ? fieldObj.Name : 'Unknown'}</b></span>
+                                                  <span className="condition-operator">{cond.operator}</span>
+                                                  <span className="condition-value">{cond.value || 'N/A'}</span>
+                                                </div>
+                                                {index < conds.length - 1 && (
+                                                  <span className="logic-connector">{conditionData.logic}</span>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                  </div>
+                                  <div className='condition-body'>
+                                    <div className="condition-logic">
+                                      <div className="logic-label">Outcome</div>
+                                      <div>
+                                        <span className="action-label">
+                                          Action:
+                                        </span>
+                                        <span className='action-text'>{conditionData.thenAction}</span>
+                                      </div>
+                                      <div className='field-container'>
+                                        <span className="field-label">
+                                          Fields:
+                                        </span>
+                                        {Array.isArray(conditionData.thenFields) && conditionData.thenFields.length > 0
+                                          ? conditionData.thenFields.map((id) => {
+                                              const field = fields.find((f) => f.Unique_Key__c === id);
+                                              return field ? (
+                                                <span key={id} className="field-pill">{field.Name}</span>
+                                              ) : null;
+                                            })
+                                          : (
+                                            fields.find((f) => f.Unique_Key__c === conditionData.thenFields)
+                                              ? <span className="field-pill">{fields.find((f) => f.Unique_Key__c === conditionData.thenFields).Name}</span>
+                                              : 'None'
+                                          )
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+
+
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </motion.div>
               </TabPane>
               <TabPane tab="Dependent Picklist" key="dependent">

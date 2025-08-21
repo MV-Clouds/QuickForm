@@ -1727,7 +1727,7 @@ function MainFormBuilder({
           ) : showCondition ? (
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
-            <SharePage publishLink={publishLink} />
+            <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish}/>
           ) : showPrefill ? <Prefill /> : showNotification ? (
             <NotificationPage
               currentFields={formVersions[0]?.Fields}

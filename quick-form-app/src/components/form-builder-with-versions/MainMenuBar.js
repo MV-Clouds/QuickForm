@@ -320,11 +320,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
       path: '/share',
       route: '/share',
       onClick: () => {
-        if (publishLink) {
-          navigate(`/share/${selectedVersionId}`, { state: { publishLink } });
-        } else {
-          alert('Publish link not available');
-        }
+        navigate(`/share/${selectedVersionId}`, { state: { publishLink } });  
       },
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

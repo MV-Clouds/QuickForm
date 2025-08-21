@@ -80,6 +80,14 @@ function App() {
                   }/>
                 }
               />
+               <Route 
+                path="/prefill/:formVersionId"
+                element={
+                  <ProtectedRoute element={
+                    <MainFormBuilder showPrefill />
+                  }/>
+                }
+              />
             </Routes>
           </div>
         </Router>
