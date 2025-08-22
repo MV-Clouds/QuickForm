@@ -39,9 +39,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    sessionStorage.setItem('isLoggedIn', 'true');
-    sessionStorage.setItem('userId', '2F005gK0000068QxxQAE'); // Clear userId
-    sessionStorage.setItem('instanceUrl', 'https://orgfarm-407f70be85-dev-ed.develop.my.salesforce.com');  // Clear instanceUrl
+    // sessionStorage.setItem('isLoggedIn', 'true');
+    // sessionStorage.setItem('userId', '2F005gK0000068QxxQAE'); // Clear userId
+    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-407f70be85-dev-ed.develop.my.salesforce.com');  // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -60,6 +60,8 @@ const Login = () => {
     // Add message event listener
     const handleMessage = (event) => {
       if (event.origin === 'https://d2bri1qui9cr5s.cloudfront.net/') {
+                console.log('Message from popup:', event.data);
+
         if (event.data.type === 'login_error') {
           if (popup && !popup.closed) {
             popup.close(); // Close popup on error
@@ -67,6 +69,7 @@ const Login = () => {
         }
       }
       if (event.origin === 'https://vm6pandneg.execute-api.us-east-1.amazonaws.com') {
+        console.log('Message from API:', event.data);
         if (event.data.type === 'login_success') {
           if (popup && !popup.closed) {
             popup.close(); // Close popup on success
@@ -76,6 +79,14 @@ const Login = () => {
           sessionStorage.setItem('userId', event.data.userId); // Store userId
           sessionStorage.setItem('instanceUrl', event.data.instanceUrl); // Store instanceUrl
           navigate('/guest'); // Redirect to home
+        }
+        else if (event.data.type === 'setup_required') {
+          console.log('Setup required, redirecting to setup page');
+          
+          if (popup && !popup.closed) {
+            popup.close(); // Close popup
+          }
+          navigate('/setup'); // Redirect to setup page
         } else if (event.data === 'login_failed') {
           alert('Login failed. Please try again.'); // Show error
         }

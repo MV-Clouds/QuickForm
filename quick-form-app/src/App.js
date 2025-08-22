@@ -14,6 +14,7 @@ import ChatBot from './components/chat-bot/chat-bot-new';
 import GuestPageD from './components/LandingPage/GuestPageD';
 import NotificationPage from './components/NotificationSettings/NotificationSettingsModal';
 import NotFound from './components/not-found/NotFound';
+import SetupPage from './components/setup-page/SetupPage'; 
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
 
 function App() {
@@ -37,7 +38,7 @@ function App() {
               {/* Protected route for Home component */}
               <Route
                 path="/home"
-                element={<ProtectedRoute element={<Home />} />}
+                element={<ProtectedRoute element={<SetupPage />} />}
               />
 
               {/* Duplicate protected route for Home (to support /app/home path) */}
@@ -72,6 +73,7 @@ function App() {
               <Route path='/thankyou/:formVersionId' element={<ProtectedRoute element = {<MainFormBuilder showThankYou />}/>} />
               <Route path='/template' element={<ProtectedRoute element={<FormTemplate />}/>} />
               <Route path="*" element={<ProtectedRoute element={<NotFound />} />} />
+              <Route path="/setup" element={<SetupPage />} /> 
                <Route 
                 path="/share/:formVersionId"
                 element={

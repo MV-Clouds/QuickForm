@@ -792,6 +792,48 @@ export const handler = async (event) => {
   } catch (err) {
     const stackTrace = (err && err.stack) || new Error().stack;
     console.error('Error in storeMetadata:', err.message, '\nStack trace:', stackTrace);
+    
+    // Check if this is a Salesforce object error (object not found/not supported)
+    const isSalesforceObjectError = err.message && (
+      err.message.includes('sObject type') && err.message.includes('is not supported') ||
+      err.message.includes('sObject') && err.message.includes('not found') ||
+      err.message.includes('Cannot deserialize instance') ||
+      err.message.includes('INVALID_TYPE') ||
+      err.message.includes('NOT_FOUND')
+    );
+
+    if (isSalesforceObjectError) {
+      // Return HTML that redirects to setup page and closes popup
+      const htmlResponse = `
+      <html>
+        <head><title>Setup Required</title></head>
+        <body>
+          <script>
+            // Notify parent window that setup is required
+            window.opener?.postMessage(
+              { 
+                type: 'setup_required', 
+                error: ${JSON.stringify(err.message)},
+                userId: '${userId || ''}',
+                instanceUrl: '${instance_url || ''}'
+              },
+              'https://d2bri1qui9cr5s.cloudfront.net'
+            );
+            window.close();
+          </script>
+        </body>
+      </html>
+      `;
+
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'text/html',
+        },
+        body: htmlResponse,
+      };
+    }
+
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
