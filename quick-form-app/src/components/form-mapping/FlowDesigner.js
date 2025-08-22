@@ -9,7 +9,7 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
   const [isHovered, setIsHovered] = useState(false);
   const { deleteElements } = useReactFlow();
   
-  const nodeType =  data.action || "default";
+  const nodeType = data.actionType || data.action || "default";
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -695,6 +695,11 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
                 type,
                 action,
                 order: null,
+                selectedSheetName: '', // Initialize
+                spreadsheetId: '', // Initialize
+                sheetConditions: [], // Initialize
+                conditionsLogic: 'AND', // Initialize
+                sheetcustomLogic: '', // Initialize
                 ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),  
               } : {}
         },

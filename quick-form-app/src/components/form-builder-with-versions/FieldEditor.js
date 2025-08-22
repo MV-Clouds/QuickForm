@@ -24,6 +24,8 @@ function FieldEditor({
   onDeleteField,
   onClose,
   fields,
+  fieldsets,
+  onAddFieldsFromFieldset
 }) {
   // State for common properties
   const [label, setLabel] = useState(selectedField?.label || "");
@@ -1393,7 +1395,7 @@ function FieldEditor({
     "displaytext",
     "formcalculation",
   ];
-
+  
   // Field type checks
   const isPlaceholderSupported =
     selectedField && placeholderSupportedTypes.includes(selectedField.type);

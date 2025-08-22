@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Select from "react-select";
 import { getCountryList } from "../form-builder-with-versions/getCountries";
@@ -7,7 +8,7 @@ import countries from "i18n-iso-countries";
 import currencyCodes from "currency-codes";
 import { ArrowRightOutlined } from "@ant-design/icons";
 import CreatableSelect from "react-select/creatable";
-import { Select as AntSelect, Spin, Button, message } from "antd";
+import { Select as AntSelect, Spin, Button, message, Input, Switch } from "antd";
 const { Option } = AntSelect;
 countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
 
@@ -64,10 +65,15 @@ const ActionPanel = ({
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
   const [sheetName, setSheetName] = useState("");
-  const [sheetLink, setSheetLink] = useState("");
+  const [spreadsheetId , setSpreadsheetId] = useState();
+  const [sheetLink , setSheetLink] = useState("");
   const [fieldMappings, setFieldMappings] = useState([]);
+  const [sheetConditions , setsheetConditions] = useState([]);
+  const [conditionsLogic, setConditionsLogic] = useState('AND');
+  const [sheetcustomLogic, setsheetCustomLogic] = useState(''); // custom logic string e.g. "(1 AND 2) OR 3"
   const instanceUrl = sessionStorage.getItem('instanceUrl');
   const userId = sessionStorage.getItem('userId');
+  const [updateMultiple, setUpdateMultiple] = useState(false); // New state variable
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
     double: ["number", "price"],
@@ -108,6 +114,10 @@ const ActionPanel = ({
     setPathOption(nodeMapping.pathOption || (isConditionNode ? "Rules" : undefined));
     setFieldMappings(nodeMapping?.fieldMappings || []);
     setSheetName(nodeMapping?.selectedSheetName || "");
+    setSpreadsheetId(nodeMapping?.spreadsheetId || "")
+    setsheetConditions(nodeMapping?.sheetConditions || []);
+    setConditionsLogic(nodeMapping?.conditionsLogic || 'AND'); // Add this line
+    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || ''); // Add this line
     const loopConfig = nodeMapping.loopConfig || {};
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
@@ -147,6 +157,7 @@ const ActionPanel = ({
         }
       }
     }
+    setUpdateMultiple(nodeMapping.updateMultiple || false); // Initialize updateMultiple
   }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
@@ -382,13 +393,19 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
-  const handleSave = () => {
+  const handleSave = (spreadsheetId = null) => {
     setMappings((prev) => ({
       ...prev,
       [nodeId]: {
         ...prev[nodeId],
-        selectedSheetName: sheetName,
+        selectedSheetName : sheetName,
         fieldMappings,
+        spreadsheetId,
+        conditions : sheetConditions,
+        customLogic : sheetcustomLogic,
+        sheetConditions : sheetConditions,
+        conditionsLogic : conditionsLogic,
+        sheetcustomLogic : sheetcustomLogic
       },
     }));
     onClose();
@@ -1298,7 +1315,8 @@ const ActionPanel = ({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
           >
-            <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} />
+          <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
+            sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple}/>
           </motion.div>
         )}
         <div className="space-y-6">
@@ -2537,13 +2555,281 @@ const ActionPanel = ({
     </motion.div>
   );
 };
+const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
+  const STRING_OPERATORS = [
+    { label: "Equals", value: "=" },
+    { label: "Not Equals", value: "!=" },
+    { label: "Contains", value: "LIKE" },
+    { label: "Not Contains", value: "NOT LIKE" },
+    { label: "Starts With", value: "STARTS WITH" },
+    { label: "Ends With", value: "ENDS WITH" }
+  ];
+  
+  const colType = condition.fieldType || 'string';
+  const operators = STRING_OPERATORS;
 
-const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave, sheetLink, setsheetLink, instanceUrl, userId, sfToken }) => {
+  return (
+    <motion.div 
+      key={index} 
+      layout 
+      initial={{ opacity: 0, x: -20 }} 
+      animate={{ opacity: 1, x: 0 }} 
+      exit={{ opacity: 0, x: 20 }}
+      style={{ display:'flex', gap:12, alignItems:'center', marginBottom:10 }}
+    >
+      {/* Left: Column select */}
+      <AntSelect
+        style={{ width: 150 }}
+        placeholder="Select Column"
+        value={condition.field || undefined}
+        onChange={value => {
+          onChange(index, { 
+            field: value, 
+            operator: '', 
+            value: '' 
+          });
+        }}
+        options={columns.map(c => ({ label: c, value: c }))}
+      />
+
+       {/* Center: Operator select */}
+       <AntSelect
+        style={{ width: 180 }}
+        placeholder="Select Operator"
+        value={condition.operator || undefined}
+        onChange={operator => onChange(index, { ...condition, operator })}
+        options={operators.map(op => ({ label: op.label, value: op.value }))}
+        disabled={!condition.field}
+      />
+
+      {/* Right: Value input (conditional) */}
+       {/* Right: Value input */}
+       <Input
+        style={{ width: 150 }}
+        placeholder="Enter Value"
+        value={condition.value || ''}
+        onChange={e => onChange(index, {...condition, value: e.target.value })}
+        disabled={!condition.operator}
+      />
+
+      {/* Remove button */}
+      <Button danger size="small" onClick={() => onRemove(index)}>-</Button>
+    </motion.div>
+  );
+};
+
+const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, setsheetLogicType ,customLogic,setCustomLogic ,updateMultiple ,setUpdateMultiple }) => {
+  const selectedLogic = sheetlogicType || 'AND';
+  console.log('selectedlogic', selectedLogic)
+  const onConditionChange = (index, updatedCondition) => {
+    setConditions(conds => conds.map((c,i) => i === index ? updatedCondition : c));
+  };
+
+  const onAddCondition = () => {
+    setConditions(conds => [...conds, {field:'', operator:'', value:'', fieldType:''}]);
+  };
+
+  const onRemoveCondition = (index) => {
+    setConditions(conds => conds.filter((_,i) => i !== index));
+  };
+  const validateCustomLogic = (logic, conditionsLength) => {
+    // Tokenize input
+    const tokens = logic
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ");
+  
+    let errors = [];
+  
+    // Validate individual tokens
+    tokens.forEach((token, i) => {
+      if (/^\d+$/.test(token)) {
+        const num = parseInt(token, 10);
+        if (num < 1 || num > conditionsLength) {
+          errors.push(`Condition ${num} does not exist.`);
+        }
+      } else if (!["AND", "OR", "(", ")", ""].includes(token)) {
+        errors.push(`Invalid token "${token}"`);
+      }
+    });
+  
+    // Check for invalid operator sequences
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (
+        ["AND", "OR"].includes(tokens[i]) &&
+        ["AND", "OR"].includes(tokens[i + 1])
+      ) {
+        errors.push(`Operators '${tokens[i]}' and '${tokens[i + 1]}' cannot be together—must be separated by a condition.`);
+      }
+    }
+  
+    // Check brackets balance
+    let balance = 0;
+    for (let ch of logic) {
+      if (ch === "(") balance++;
+      else if (ch === ")") balance--;
+      if (balance < 0) {
+        errors.push("Too many closing brackets");
+        break;
+      }
+    }
+    if (balance > 0) errors.push("Unclosed brackets");
+  
+    // Optionally check if logic starts/ends with AND/OR (which is usually invalid)
+    if (["AND", "OR"].includes(tokens[0])) {
+      errors.push("Logic cannot start with an operator.");
+    }
+    if (["AND", "OR"].includes(tokens[tokens.length - 1])) {
+      errors.push("Logic cannot end with an operator.");
+    }
+  
+    return errors;
+  };
+  
+  const handleKeyDown = (e) => {
+    if (e.key === " " || e.key === "Enter") {
+      // Use the value just before space is added
+      let val = e.target.value;
+      // Match the last word before the cursor (just typed)
+      const match = val.split(' ')[val.split(' ').length - 1];
+      if (match) {
+        let num = match[1];
+        let op = match.toString().toUpperCase() === 'A' ? 'AND' : 'OR';
+        // Replace last word with AND/OR
+        val = val.replace(/([AO])$/, op);
+        setCustomLogic(val + " "); // add a space after, for continued typing
+        e.preventDefault(); // prevents doubling space
+      }
+    }
+  };
+  
+  if (!columns || columns?.length === 0) {
+    // If no columns, do not show condition panel
+    setsheetLogicType('AND')
+    return null;
+  }
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <Switch 
+        checked={conditions?.length > 0} 
+        onChange={enabled => {
+          if (!enabled) setConditions([]);
+          else onAddCondition();
+        }}
+        style={{ marginBottom: 12 }}
+      /> Enable Conditions
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={updateMultiple}
+            onChange={() => setUpdateMultiple(!updateMultiple)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <span className="text-sm font-medium text-gray-700">Update Multiple Records</span>
+        </label>
+      </div>
+      {/* New AND/OR selector */}
+      {conditions.length > 1 && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ marginRight: 10, fontWeight: 600 }}>Conditions Logic:</label>
+          <Select
+            style={{ width: 160 }}
+            value={selectedLogic}
+            onChange={value => {
+              setsheetLogicType(value.value);
+              if (value !== 'Custom') setCustomLogic('');
+            }}
+            options={[
+              { label: 'AND', value: 'AND' },
+              { label: 'OR', value: 'OR' },
+              { label: 'Custom', value: 'Custom' }
+            ]}
+          />
+        </div>
+      )}  
+       {sheetlogicType === 'Custom' && conditions.length > 1  && (
+      <div style={{ marginBottom:16 }}>
+        <textarea
+          value={customLogic}
+          onChange={e => {
+            const newLogic = e.target.value;
+            console.log('NEw logic',newLogic)
+            setCustomLogic(newLogic);
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder='e.g., (1 AND 2) OR 3'
+          style={{
+            width: '100%',
+            minHeight: 60,
+            padding: 8,
+            fontSize: 14,
+            borderRadius: 4,
+            borderColor: '#ccc',
+            marginBottom: 8,
+            fontFamily: 'monospace',
+            resize: 'vertical'
+          }}
+        />
+
+        {/* Validation */}
+        {customLogic && (
+          validateCustomLogic(customLogic, conditions.length).length > 0 ? (
+            <div style={{ color: "red", fontSize: 13 }}>
+              {validateCustomLogic(customLogic, conditions.length).map((err, idx) => (
+                <div key={idx}>⚠ {err}</div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: "green", fontSize: 13 }}>
+              ✅ Logic looks good
+            </div>
+          )
+        )}
+      </div>
+    )}
+
+      <AnimatePresence>
+      {conditions.length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            style={{ overflow: 'hidden' }}
+          >
+            {conditions.map((cond, i) => (
+              <ConditionRow
+                key={i}
+                index={i}
+                condition={cond}
+                onChange={(idx, updatedCond) =>
+                  setConditions(conds => conds.map((c, ii) => (ii === idx ? updatedCond : c)))
+                }
+                onRemove={idx => setConditions(conds => conds.filter((_, ii) => ii !== idx))}
+                columns={columns}
+              />
+            ))}
+
+            <Button type="dashed" onClick={() => setConditions(conds => [...conds, { field: '', operator: '', value: '', fieldType: '' }])}>
+              + Add Condition
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave , sheetconditions , setsheetConditions , instanceUrl , userId,sfToken ,conditionsLogic , setConditionsLogic ,sheetcustomLogic , setsheetCustomLogic ,spreadsheetId , setSpreadsheetId , updateMultiple , setUpdateMultiple}) => {
   const [error, setError] = useState("");
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState([]);
-
+  const [conditionsEnabled, setConditionsEnabled] = useState(false);
+  
+  
   async function fetchSpreadsheets({ instanceUrl, sfToken, userId }) {
     const apiUrl = "https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch";
 
@@ -2591,6 +2877,28 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
         setLoading(true);
         const result = await fetchSpreadsheets({ instanceUrl, sfToken, userId });
         setSpreadsheets(result.spreadsheets);
+        if (spreadsheetId) {
+          const selected = result.spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+          if (selected) {
+            setSheetName(selected.spreadsheetName);
+            setSelectedColumns(selected.columns || []);
+            if (selected.columns[0]) {
+              const newMappings = selected.columns[0].map(col => ({
+                column: col,
+                id: "",
+                name: "",
+                label: col
+              }));
+              // Only update fieldMappings if there are no existing ones from saved state
+              if (fieldMappings.length === 0) {
+                setFieldMappings(newMappings);
+              }
+            } else if (fieldMappings.length === 0) {
+              setSelectedColumns([]);
+              setFieldMappings([]);
+            }
+          }
+        }
         setError(null);
         console.log('Results ==>', result.spreadsheets)
       } catch (err) {
@@ -2600,32 +2908,44 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
       }
     }
 
-    if (!sheetName) {
-      console.log('sheetname', !sheetName)
+   // Only fetch if spreadsheetId not set — else skip to avoid unnecessary API call
+   // Only fetch spreadsheets if they are not already loaded or if spreadsheetId exists but columns are not loaded
+     if (spreadsheets.length === 0 || (spreadsheetId && selectedColumns.length === 0)) {
       loadSpreadsheets();
-    }
-  }, [instanceUrl, sfToken, userId]);
+    } 
+  }, [instanceUrl, sfToken, userId , fieldMappings.length, spreadsheets.length, selectedColumns.length]);
   // Handler when spreadsheet is selected
-  // When a spreadsheet is selected, update sheetName and set its columns
-  const onSpreadsheetChange = (spreadsheetId) => {
-    const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
-    if (selected) {
-      setSheetName(selected.spreadsheetName);
-      setSelectedColumns(selected.columns || []);
-      if (selected.columns[0]) {
-        // Populate fieldMappings automatically based on columns
-        const newMappings = selected.columns[0]
-          .map(col => ({
-            column: col,
-            id: "",     // no form field selected yet
-            name: "",
-            label: col  // keep label as trimmed column
-          }));
-        setFieldMappings(newMappings);
-      } else {
-        setSelectedColumns([]);
-        setFieldMappings([]);
-      }
+ // When a spreadsheet is selected, update sheetName and set its columns
+ const onSpreadsheetChange = (spreadsheetId) => {
+  const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+  if (selected) {
+    setSheetName(selected.spreadsheetName);
+    setSelectedColumns(selected.columns || []);
+    setSpreadsheetId(selected.spreadsheetId)
+    setsheetConditions([]); // Clear conditions when changing spreadsheet
+    setsheetCustomLogic(''); // Reset custom logic
+    // setConditionsEnabled(true); // Enable conditions when a new spreadsheet is selected
+    if(selected.columns[0]){
+       // Populate fieldMappings automatically based on columns
+       setsheetConditions([])
+    const newMappings = selected.columns[0]
+    .map(col => ({
+      column: col,
+      id: "",     // no form field selected yet
+      name: "",
+      label: col  // keep label as trimmed column
+    }));
+      setFieldMappings(newMappings);
+    } else {
+      setSheetName("");
+      setSelectedColumns([]);
+      setSpreadsheetId(undefined);
+      setFieldMappings([]);
+      setsheetConditions([]);
+      setConditionsLogic('AND');
+      setsheetCustomLogic('');
+      // setConditionsEnabled(false);
+    }
     }
   };
   // Add a new mapping entry
@@ -2676,7 +2996,8 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
     }
     setError("");
     message.success("Mapping config saved!");
-    onSave();
+    console.log('SpreadsheetId', spreadsheetId);
+    onSave(spreadsheetId);
   };
 
   // For left-side column suggestions (show already used columns + allow new)
@@ -2798,6 +3119,19 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
       >
         {error}
       </motion.div>}
+       {spreadsheetId && (
+        <ConditionsPanel 
+          columns={selectedColumns.flat()} 
+          conditions={sheetconditions} 
+          setConditions={setsheetConditions} 
+          sheetlogicType={conditionsLogic}
+          setsheetLogicType={setConditionsLogic}
+          customLogic={sheetcustomLogic}
+          setCustomLogic={setsheetCustomLogic}
+          updateMultiple={updateMultiple}
+          setUpdateMultiple={setUpdateMultiple}
+        />
+      )}
       <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-end", gap: 12 }}>
         <Button onClick={handleSave} type="primary">Save</Button>
       </div>

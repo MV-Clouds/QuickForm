@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SiRazorpay, SiStripe, SiSquare, SiPaypal, SiTwilio, SiAwsamplify, SiGooglesheets, SiGmail } from 'react-icons/si';
 import { Filter, Trash } from 'lucide-react';
 
 const GMAIL_CLIENT_ID = '932194946717-snt34c2fiiqkpeuj36ivj5u83eaf5vua.apps.googleusercontent.com';
-const GMAIL_REDIRECT_URI = 'http://localhost:5173/home';
+const GMAIL_REDIRECT_URI = 'http://localhost:3000/home';
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly email profile openid';
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly email profile openid';
-
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly email profile openid';
 const allApps = [
     { id: 'twilio', name: 'Twilio', description: 'Twilio lets you send SMS and make calls through powerful APIs. Easily add communication features to any app.', icon: <SiTwilio size={32} color="#F22F46" /> },
     { id: 'square', name: 'Square', description: 'Square offers tools for payments, POS, and business management. Accept payments anywhere and grow your business with ease.', icon: <SiSquare size={32} color="#000" /> },
@@ -25,45 +24,89 @@ const initialConnectedApps = [
 
 const tabGradient = 'linear-gradient(360deg, #008AB033 0%, #8FDCF100 100%)';
 const buttonGradient = 'linear-gradient(90deg, #0B295E 0%, #1D6D9E 100%)';
+// 🔄 Skeleton Loader Component
+const AppCardSkeleton = () => (
+    <motion.div
+        className="bg-white border rounded-xl p-5 flex flex-col gap-4 shadow-sm min-h-[170px]"
+        initial={{ opacity: 0.7 }}
+        animate={{ opacity: [0.7, 0.4, 0.7] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+    >
+        <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+            <div className="h-6 w-28 bg-gray-200 rounded"></div>
+        </div>
+        <div className="space-y-3">
+            <div className="h-4 bg-gray-200 rounded w-full"></div>
+            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+        </div>
+    </motion.div>
+);
 
-function openGoogleOAuthPopup(scope, onSuccess, onError) {
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GMAIL_CLIENT_ID)}&redirect_uri=${encodeURIComponent(GMAIL_REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(scope)}&prompt=consent&access_type=online`;
+function openGoogleOAuthPopup(scope, onSuccess, onError, token, instanceUrl , userId , type) {
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(GMAIL_CLIENT_ID)}&redirect_uri=${encodeURIComponent(GMAIL_REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scope)}&prompt=consent&access_type=offline`;
     const width = 500, height = 600;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
     const popup = window.open(url, 'GoogleAuth', `width=${width},height=${height},left=${left},top=${top}`);
     if (!popup) return onError && onError('Popup blocked');
-
-    const timer = setInterval(() => {
-        try {
-            if (!popup || popup.closed) {
-                clearInterval(timer);
-                onError && onError('Popup closed');
-                return;
-            }
-            // Check for redirect URI in popup location
-            const href = popup.location.href;
-            if (href.startsWith(GMAIL_REDIRECT_URI)) {
-                const hash = popup.location.hash;
-                const params = new URLSearchParams(hash.substring(1));
-                const accessToken = params.get('access_token');
-                clearInterval(timer);
-                popup.close();
-                if (accessToken) {
-                    onSuccess(accessToken);
-                } else {
-                    onError && onError('No access token');
-                }
-            }
-        } catch (e) {
-            // Ignore cross-origin errors until redirect
+    let handled = false;
+    const timer = setInterval(async () => {
+      try {
+        if (handled) return; // prevent multiple calls
+        if (!popup || popup.closed) {
+          clearInterval(timer);
+          onError && onError('Popup closed');
+          return;
         }
+  
+        // Detect redirect
+        const href = popup.location.href;
+        if (href.startsWith(GMAIL_REDIRECT_URI)) {
+            handled = true;
+          clearInterval(timer); // ✅ stop immediately
+          const search = popup.location.search;
+          const params = new URLSearchParams(search.substring(1));
+          const code = params.get("code");
+  
+          if (!code) {
+            popup.close();
+            onError && onError("No authorization code found");
+            return;
+          }
+  
+          try {
+            // Exchange code with backend
+            const res = await fetch("https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code, sfToken: token, sfInstanceUrl: instanceUrl , sfuserId : userId , type})
+            });
+  
+            if (!res.ok) throw new Error("Backend exchange failed");
+            const tokens = await res.json();
+            console.log('tokens' , tokens)
+            popup.close();
+            onSuccess && onSuccess(tokens); // ✅ single success call
+          } catch (err) {
+            popup.close();
+            onError && onError(err.message || "Token exchange error");
+          }
+        }
+      } catch (e) {
+        // ignore cross-origin errors until redirect happens
+      }
     }, 500);
-}
-
+  }
+  
 const Integrations = ({ token }) => {
+    const [integrations, setIntegrations] = useState([]);
+    const [google_access_token , setgoogle_access_token] = useState();
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [showAuthenticator, setShowAuthenticator] = useState(false);
     const [activeTab, setActiveTab] = useState('all');
+    const [googleUsers, setGoogleUsers] = useState([]);
     const [search, setSearch] = useState('');
     const [selectedApp, setSelectedApp] = useState(null);
     const [connectedApps, setConnectedApps] = useState(initialConnectedApps);
@@ -81,10 +124,111 @@ const Integrations = ({ token }) => {
     const [twilioError, setTwilioError] = useState('');
     // Change awsuser to an array of user objects
     const [awsuser, setawsuser] = useState([]); // [{ username, date, accountId, arn, bucketName }]
+    const userId = sessionStorage.getItem('userId')
     const instanceUrl = sessionStorage.getItem('instanceUrl');
     const filteredApps = allApps.filter(app =>
         app.name.toLowerCase().includes(search.toLowerCase())
     );
+     // ✅ Helper function to call backend
+    const fetchIntegrations = async () => {
+        try {
+        const res = await fetch(`https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth?instanceUrl=${encodeURIComponent(instanceUrl)}&sfToken=${encodeURIComponent(token)}`, { method: "GET" });
+        if (!res.ok) {
+            throw new Error(`Failed to fetch: ${res.status}`);
+        }
+        const data = await res.json();
+        console.log('Repsonse data' , data)
+        // Salesforce-like response mapping
+        // Assume data.records is returned from Lambda
+        const mapped = (data.records || []).map((rec) => ({
+            name: rec.Name,
+            picture1: rec.PictureUrl_1__c,
+            picture2: rec.PictureUrl_2__c,
+            picture3: rec.PictureUrl_3__c,
+            tokenType: rec.TokenType__c, // gmail or google-sheet
+            connected: !!rec.Access_Token__c // true if token exists
+        }));
+
+        setIntegrations(mapped);
+
+        const googleApps = mapped
+            .filter(
+                (integration) =>
+                    (integration.tokenType === 'gmail' || integration.tokenType === 'google-sheet') &&
+                    integration.connected
+            )
+            .map((integration) => {
+                const app = allApps.find((app) => app.id === integration.tokenType);
+                if (app) {
+                    return { ...app, description: `Connected to your ${app.name} account.` };
+                }
+                return null;
+            })
+            .filter(Boolean);
+
+        if (googleApps.length > 0) {
+            setConnectedApps((prev) => {
+                const existingIds = new Set(prev.map((app) => app.id));
+                const newApps = googleApps.filter((app) => !existingIds.has(app.id));
+                return [...prev, ...newApps];
+            });
+            setGoogleUsers(data?.records.map(user => ({
+                Id: user.Id || user.TokenType__c + Date.now(),  // unique key fallback
+                PictureUrl_1: user.PictureUrl_1__c || 'default-picture.png',  // fallback image
+                UserName: user.UserName__c || 'Unknown User',
+                Type : user.TokenType__c 
+              })));
+        }
+        setgoogle_access_token(data.token)
+        setError(null);
+        } catch (err) {
+        console.error("Error fetching integrations:", err);
+        setError(err.message);
+        } finally {
+        setLoading(false);
+        }
+    };
+    async function deleteGoogleCredential(recordId, instanceUrl, sfToken) {
+        if (!recordId || !instanceUrl || !sfToken) {
+          throw new Error("Missing required parameters");
+        }
+        
+        // Construct URL with query parameters
+        const url = new URL('https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth');
+        url.searchParams.append('recordId', recordId);
+        url.searchParams.append('instanceUrl', instanceUrl);
+        url.searchParams.append('sfToken', sfToken);
+      
+        const response = await fetch(url.toString(), {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+      
+        if (response.ok) {
+          const result = await response.json();
+          return result;  // e.g. { success: true, message: "..."} 
+        } else {
+          const errorText = await response.text();
+          throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+        }
+      }
+      
+    // Handler to delete Google user from confirmation & UI (you can enhance to call API)
+    const handleDeleteGoogleUser = async (id) => {
+        // Add your API call to disconnect here if required
+        const response = await deleteGoogleCredential(id , instanceUrl , token);
+        console.log('Delete Response' , response)
+        setGoogleUsers(prev => prev.filter((user, i) => user.Id !== id));
+    };  
+    // ✅ useEffect to call on mount
+    useEffect(() => {
+        if(token){
+            console.log(token)
+            fetchIntegrations();
+        }
+    }, [token , google_access_token]);
 
     const handleConnect = async (app) => {
         if (app.id === 'aws') {
@@ -191,7 +335,8 @@ const Integrations = ({ token }) => {
                 (error) => {
                     setConnecting(false);
                     alert('Gmail connection failed: ' + error);
-                }
+                } ,
+                token , instanceUrl , userId , "gmail"
             );
         } else if (app.id === 'google-sheet') {
             setConnecting(true);
@@ -205,7 +350,8 @@ const Integrations = ({ token }) => {
                 (error) => {
                     setConnecting(false);
                     alert('Google Sheets connection failed: ' + error);
-                }
+                } ,
+                token , instanceUrl , userId , "google-sheet"
             );
         } else {
             setConnectedApps(prev => [...prev, { ...app, description: `Connected to your ${app.name} account.` }]);
@@ -245,6 +391,7 @@ const Integrations = ({ token }) => {
     };
 
     return (
+        <div>
         <div className=""
             style={{
                 background: selectedApp
@@ -296,7 +443,10 @@ const Integrations = ({ token }) => {
                                     <button className="ml-4 px-5 py-2 border border-2  rounded-lg text-gray-600 flex items-end justify-right gap-2"><span className="material-icons"><Filter className='h-5 w-5' /></span>Filter</button>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <AnimatePresence>
+                                    {loading ? (
+                                        Array.from({length : 8}).map((_,i) => <AppCardSkeleton key={i}/>)
+                                    ) : (
+                                        <AnimatePresence>
                                         {filteredApps.map(app => (
                                             <motion.div
                                                 key={app.id}
@@ -318,7 +468,9 @@ const Integrations = ({ token }) => {
                                         {filteredApps.length === 0 && (
                                             <div className="col-span-4 text-gray-400 text-center">No applications found.</div>
                                         )}
+                                        
                                     </AnimatePresence>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -580,11 +732,53 @@ const Integrations = ({ token }) => {
                             </motion.div>
                         </div>
                         </div>
-                    )}</div>
+                    )}
+                    {(selectedApp?.id === 'google' || selectedApp?.id === 'gmail' || selectedApp?.id === 'google-sheet') && googleUsers.length > 0 && (
+                        <div className="flex justify-center">
+                            <div className="w-[42%]">
+                            <h3 className="text-lg font-semibold mb-2">Connected Google Users</h3>
+                            <motion.div layout initial={false} className="flex flex-col gap-3">
+                                <AnimatePresence>
+                                {googleUsers.map((user, idx) => (
+                                    <motion.div
+                                    key={user.Id}
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 20 }}
+                                    transition={{ duration: 0.3 }}
+                                    className="flex items-center bg-white rounded-lg shadow border px-4 py-3 gap-4"
+                                    >
+                                    <img
+                                        src={user.PictureUrl_1}
+                                        alt={user.UserName}
+                                        crossOrigin='anonymous'
+                                        className="w-10 h-10 rounded-full object-cover"
+                                    />
+                                    <div className="flex-1 flex flex-col">
+                                        <span className="font-medium text-gray-900">{user.UserName}</span>
+                                    </div>
+                                    <button
+                                        className="p-2 rounded hover:bg-gray-100 transition"
+                                        onClick={() => handleDeleteGoogleUser(user.Id)}
+                                        title="Delete"
+                                    >
+                                        <Trash className="w-5 h-5 text-red-500" />
+                                    </button>
+                                    </motion.div>
+                                ))}
+                                </AnimatePresence>
+                            </motion.div>
+                            </div>
+                        </div>
+                        )}
+
+                    </div>
                 )}
             </div>
         </div>
+        </div>
     );
 };
+
 
 export default Integrations; 

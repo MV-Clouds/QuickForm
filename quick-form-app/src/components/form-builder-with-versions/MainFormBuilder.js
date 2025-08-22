@@ -99,6 +99,7 @@ function MainFormBuilder({
   showPrefill
 }) {
   // const { formVersionId } = useParams();
+  const { Fieldset: fieldsets } = useSalesforceData();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
@@ -1176,7 +1177,7 @@ function MainFormBuilder({
       });
       targetPage.fields.splice(insertIndex, 0, { ...newField, isCut: false });
     } else if (newField && !fieldId) {
-      targetPage.fields.splice(insertIndex, 0, newField);
+      targetPage.fields.splice(insertIndex, 0, ...newField);
     } else if (fieldType) {
       const newFieldId = `field-${Date.now()}-${Math.random()
         .toString(36)
@@ -1212,6 +1213,10 @@ function MainFormBuilder({
     setFields(flattenedFields);
     setSelectedFieldId(null)
     setSelectedSectionSide(null);
+  };
+
+   const handleAddFieldsFromFieldset = (newFields) => {
+    setFields([...fields, ...newFields]);
   };
 
   const handleReorder = (fromIndex, toIndex, pageIndex) => {
@@ -1775,6 +1780,8 @@ function MainFormBuilder({
                     selectedTheme={selectedTheme}
                     onThemeSelect={setSelectedTheme}
                     themes={themes}
+                    fieldsets = {fieldsets}
+                    onAddFieldsFromFieldset = {handleAddFieldsFromFieldset}
                   />
                 ) : (
                   <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
@@ -1791,6 +1798,8 @@ function MainFormBuilder({
                           setShowSidebar(true);
                         }}
                         fields={fields}
+                        fieldsets = {fieldsets}
+                        onAddFieldsFromFieldset = {handleAddFieldsFromFieldset}
                       />
                     )}
                   </div>

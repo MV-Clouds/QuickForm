@@ -101,6 +101,28 @@ function FormBuilder({
     const fieldType = e.dataTransfer.getData('fieldType');
     const fieldId = e.dataTransfer.getData('fieldId');
 
+    // Check if a fieldset is being dropped
+    const draggedFieldset = window.draggedFieldset;
+    if (draggedFieldset) {
+      const newFields = draggedFieldset.Fieldset_Fields__c.map((fieldsetField) => {
+        const properties = JSON.parse(fieldsetField.Properties__c || "{}");
+        return {
+          ...properties,
+          id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate unique ID
+        };
+      });
+
+      // Insert the new fields at the correct dropIndex
+      if (dropIndex !== null) {
+        onDrop(null, pageIndex, dropIndex, null, sectionId, sectionSide, newFields);
+      } else {
+        onDrop(null, pageIndex, null, null, sectionId, sectionSide, newFields);
+      }
+
+      window.draggedFieldset = null; // Clear the dragged fieldset
+      return;
+    }
+
     if (fieldType && !fieldId) {
       onDrop(fieldType, pageIndex, dropIndex, null, sectionId, sectionSide);
     } else if (fieldId) {

@@ -170,8 +170,8 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: dropUp ? 10 : -10, scale: 0.97 }}
                 transition={{ duration: 0.18 }}
-                className={`absolute right-0 z-[99999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? 'mb-2 bottom-full' : 'mt-2 top-full'}`}
-                style={{ boxShadow: '0 8px 32px 0 rgba(60,60,60,0.12)' }}
+                className={`fixed right-[6%] z-[999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? "bottom-[20%]" : ''}`}
+                style={{ boxShadow: '0 8px 32px 0 rgba(18, 3, 3, 0.12)12)' }}
               >
                 <button
                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-800 font-medium transition-colors"

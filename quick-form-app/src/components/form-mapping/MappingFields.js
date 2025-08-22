@@ -254,6 +254,7 @@ const MappingFields = () => {
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
+console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       if (!token || !instanceUrl || !userId) {
         throw new Error('User not authenticated or instance URL missing');
       }
@@ -630,7 +631,14 @@ const MappingFields = () => {
         order,
         formVersionId,
       };
-      if(actionType === 'Google Sheet') mappingData.selectedSheetName = nodeMapping.selectedSheetName || 'Default';
+      if(actionType === 'Google Sheet'){ 
+        mappingData.selectedSheetName = nodeMapping.selectedSheetName || '';
+        mappingData.spreadsheetId = nodeMapping.spreadsheetId || '';
+        mappingData.sheetConditions = nodeMapping.sheetConditions || [];
+        mappingData.conditionsLogic = nodeMapping.conditionsLogic || 'AND'; // Add this line
+        mappingData.sheetcustomLogic = nodeMapping.sheetcustomLogic || ''; // Add this line
+        mappingData.updateMultiple = nodeMapping.updateMultiple || false;
+      }
 
       allMappings.push(mappingData);
     }
@@ -682,20 +690,21 @@ const MappingFields = () => {
         throw new Error(`Save failed: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
-      if (error.message.includes('INVALID_JWT_FORMAT')) {
-        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId }),
-        });
+      console.log('Error in Saving mapping' , error)
+      // if (error.message.includes('INVALID_JWT_FORMAT')) {
+      //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ userId }),
+      //   });
 
-        const tokenData = await tokenResponse.json();
-        if (!tokenResponse.ok || tokenData.error) {
-          throw new Error(tokenData.error || 'Failed to fetch access token');
-        }
-        tokenRef.current = tokenData.access_token;
-        saveAllConfiguration();
-      }
+      //   const tokenData = await tokenResponse.json();
+      //   if (!tokenResponse.ok || tokenData.error) {
+      //     throw new Error(tokenData.error || 'Failed to fetch access token');
+      //   }
+      //   tokenRef.current = tokenData.access_token;
+      //   saveAllConfiguration();
+      // }
     } finally {
       setIsSaving(false);
     }
@@ -784,7 +793,12 @@ const MappingFields = () => {
                 ? 'utility'
                 : 'action',
             displayLabel: mapping.label || mapping.actionType,
-            selectedSheetName : mapping.selectedSheetName || 'Default'
+            selectedSheetName : mapping.selectedSheetName || '',
+            spreadsheetId : mapping.spreadsheetId || '',
+            sheetConditions : mapping.sheetConditions || [],
+            conditionsLogic: mapping.conditionsLogic || 'AND', // Add this
+            sheetcustomLogic: mapping.sheetcustomLogic || '', // Add this
+            updateMultiple : mapping.updateMultiple || false
           };
         });
 
