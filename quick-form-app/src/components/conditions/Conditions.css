@@ -619,10 +619,6 @@
   margin-left: 4px;
 }
 
-.ant-select-multiple .ant-select-arrow{
-  margin-top: -6px !important;
-}
-
 .ant-input-disabled {
   background-color: #F9FAFB !important;
 }

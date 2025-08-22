@@ -396,11 +396,6 @@
   font-weight: 500;
 }
 
-/* Dropdown arrow */
-.ant-select-arrow {
-  color: #0B0A0A !important;
-}
-
 /* Hover and focus */
 .ant-select-focused .ant-select-selector,
 .ant-select-selector:hover {
