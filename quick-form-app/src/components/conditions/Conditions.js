@@ -71,7 +71,33 @@ const Conditions = ({ formVersionId }) => {
   const [calcFields, setCalcFields] = useState([]); // fields list for Add Field dropdown
   const [calcFieldToAdd, setCalcFieldToAdd] = useState(''); // selected field to add
   const [fieldPills, setFieldPills] = React.useState([]);
+  const [isShowHideModalVisible, setIsShowHideModalVisible] = React.useState(false);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const [logicValidationError, setLogicValidationError] = useState(null);
+  const canShowPreview = newCondition.logic === 'Custom' && !logicValidationError && newCondition.logicExpression.trim().length > 0;
 
+  // Show preview icon only if logic is Custom and expression valid
+  const handleLogicExpressionBlur = () => {
+    
+    if (newCondition.logic === 'Custom') {
+      const validationError = validateCustomLogic(newCondition.logicExpression, newCondition.conditions.length);
+      setLogicValidationError(validationError);
+    } else {
+      setLogicValidationError(null);
+    }
+  };
+
+
+  // Handler for preview icon click
+  const openPreview = () => {
+    setIsPreviewVisible(true);
+    setIsShowHideModalVisible(false); // hide editing modal
+  };
+
+  const closePreview = () => {
+    setIsPreviewVisible(false);
+    setIsShowHideModalVisible(true); // show editing modal back
+  };
   // Animation variants for Framer Motion
   const containerVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -774,6 +800,7 @@ const Conditions = ({ formVersionId }) => {
         setSelectedNode(null);
         setIsModalVisible(false);
       }
+      setIsShowHideModalVisible(false);
     } catch (err) {
       setError(err.message);
     }
@@ -885,6 +912,12 @@ const Conditions = ({ formVersionId }) => {
     }
   };
 
+  useEffect(() => {
+  if (newCondition.logicExpression !== undefined) {
+    handleLogicExpressionBlur();
+  }
+}, [newCondition.logicExpression]);
+
   const handleFieldChange = (field, value, conditionIndex = null) => {
     setNewCondition((prev) => {
       if (prev.type === 'dependent') {
@@ -901,6 +934,7 @@ const Conditions = ({ formVersionId }) => {
           ...updatedConditions[conditionIndex],
           [field]: value,
           ...(field === 'ifField' ? { operator: '', value: '' } : {}), // Reset operator and value when ifField changes
+          ...(field === 'operator' && ['is null', 'is not null'].includes(value) ? { value: '' } : {}),
         };
         return {
           ...prev,
@@ -912,7 +946,7 @@ const Conditions = ({ formVersionId }) => {
         [field]: value,
         ...(field === 'thenFields' ? { thenFields: value } : {}),
         ...(field === 'thenAction' && !['set mask', 'unmask'].includes(value) ? { maskPattern: '' } : {}),
-        ...(field === 'logic' ? { logic: value } : {}),
+        ...(field === 'logic' ? { logic: value, logicExpression: '' } : {}),
         ...(field === 'logicExpression' ? { logicExpression: value } : {}),
       };
     });
@@ -1993,7 +2027,28 @@ const Conditions = ({ formVersionId }) => {
                   <div className='conditions-heading-container'>
                     <div><p className="existing-condition-text">Existing Conditions</p></div>
                     <div>
-                      <button className='login-button'>
+                      <button className='login-button'
+                        onClick={() => {
+                          setNewCondition({
+                            type: 'show_hide',
+                            conditions: [{ ifField: '', operator: '', value: '' }],
+                            logic: 'AND',
+                            logicExpression: '',
+                            thenAction: 'show',
+                            thenFields: [],
+                            dependentField: '',
+                            dependentValues: [],
+                            maskPattern: '',
+                            sourcePage: '',
+                            targetPage: [],
+                            ifField: '',
+                            value: '',
+                          });
+                          setEditingConditionId(null);
+                          setIsShowHideModalVisible(true);  // OPEN MODAL HERE
+                        }}
+
+                      >
                         <svg className='plus-icon-svg' width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                           <path d="M8.57153 12H15.4287" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2037,7 +2092,10 @@ const Conditions = ({ formVersionId }) => {
                                     <div className="condition-actions">
                                       <button
                                         className="icon-btn edit-btn"
-                                        onClick={() => editCondition(condition)}
+                                        onClick={() => {
+                                          editCondition(condition);
+                                          setIsShowHideModalVisible(true);  // OPEN MODAL ON EDIT
+                                        }}
                                         aria-label="Edit condition"
                                       >
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -3559,6 +3617,358 @@ const Conditions = ({ formVersionId }) => {
           </div>
         </Modal>
           </motion.div>
+          {isShowHideModalVisible && (
+            <div className="showhide-modal-bg" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+              <motion.div
+                className="showhide-modal-box"
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.85, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              >
+                <div className="showhide-modal-header">
+                  <h2 className="showhide-modal-title">{editingConditionId ? 'Edit Show/Hide Condition' : 'Add Show/Hide Condition'}</h2>
+                  <button
+                    onClick={() => {
+                      setIsShowHideModalVisible(false);
+                      setEditingConditionId(null);
+                      setNewCondition(prev => ({
+                        ...prev,
+                        conditions: [{ ifField: '', operator: '', value: '' }],
+                        thenFields: [],
+                        logic: 'AND',
+                        logicExpression: '',
+                        thenAction: 'show',
+                      }));
+                      setError(null);
+                    }}
+                    className="showhide-modal-close"
+                    aria-label="Close"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M11 2.00714L9.99286 1L6 4.99286L2.00714 1L1 2.00714L4.99286 6L1 9.99286L2.00714 11L6 7.00714L9.99286 11L11 9.99286L7.00714 6L11 2.00714Z" fill="#5F6165"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="showhide-modal-content">
+                  <div className="showhide-form-container">
+                    {error && <div className="showhide-modal-error">{error}</div>}
+                    
+                    {/* Condition Section Header */}
+                    <div className="condition-section-header">
+                      <p>Condition these conditions are met:</p>
+                    </div>
+                    
+                    {/* Conditions Container with Scroll */}
+                    <div className="modal-conditions-container">
+                      <label className="showhide-modal-label">When</label>
+                      <div className='modal-overflow-container'>
+                      {newCondition.conditions?.map((condition, index) => (
+                        <div key={index} className="condition-block">
+                            <div className="modal-condition-row">
+                              <div className="modal-condition-field">
+                                <Select
+                                  value={condition.ifField || undefined}
+                                  onChange={value => {
+                                    handleFieldChange('ifField', value, index);
+                                    setError(null);
+                                  }}
+                                  placeholder="Select field"
+                                  className="showhide-modal-select"
+                                  style={{ width: '100%' }}
+                                >
+                                  {validIfFields.map(field => (
+                                    <Select.Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                                      {field.Name}
+                                    </Select.Option>
+                                  ))}
+                                </Select>
+                              </div>
+
+                              
+                                <>
+                                  <div className="modal-condition-operator">
+                                    <Select
+                                      value={condition.operator || undefined}
+                                      onChange={value => {
+                                        handleFieldChange('operator', value, index);
+                                        setError(null);
+                                      }}
+                                      placeholder="Select operator"
+                                      className="showhide-modal-select"
+                                      style={{ width: '100%' }}
+                                    >
+                                      {getOperators(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map(op => (
+                                        <Select.Option key={op} value={op}>{op}</Select.Option>
+                                      ))}
+                                    </Select>
+                                  </div>
+                                  <div className="modal-condition-value">
+                                    {['checkbox', 'radio', 'dropdown'].includes(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c) ? (
+                                      <Select
+                                        value={condition.value || undefined}
+                                        onChange={value => handleFieldChange('value', value, index)}
+                                        placeholder="Select value"
+                                        className="showhide-modal-select"
+                                        style={{ width: '100%' }}
+                                      >
+                                        {getFieldOptions(condition.ifField).map(option => (
+                                          <Select.Option key={option} value={option}>{option}</Select.Option>
+                                        ))}
+                                      </Select>
+                                    ) : ['date', 'datetime', 'date-time', 'time'].includes(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c) ? (
+                                      <Input
+                                        type={
+                                          fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                            ? 'date'
+                                            : fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                            ? 'time'
+                                            : 'datetime-local'
+                                        }
+                                        value={condition.value}
+                                        onChange={e => handleFieldChange('value', e.target.value, index)}
+                                        placeholder={
+                                          fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                            ? 'YYYY-MM-DD'
+                                            : fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                            ? 'HH:MM'
+                                            : 'YYYY-MM-DD HH:MM'
+                                        }
+                                        className="showhide-modal-input"
+                                        style={{ width: '100%' }}
+                                      />
+                                    ) : (
+                                      <Input
+                                        value={['is null','is not null'].includes(condition.operator) ? ' ' : condition.value}
+                                        disabled={['is null','is not null'].includes(condition.operator)}
+                                        onChange={e => handleFieldChange('value', e.target.value, index)}
+                                        placeholder="Enter value"
+                                        className="showhide-modal-input"
+                                      />
+                                    )}
+                                  </div>
+                                </>
+                                {newCondition.conditions?.length > 1 && (
+                                  <button
+                                    className="condition-delete-btn"
+                                    onClick={() => removeCondition(index)}
+                                    aria-label="Delete condition"
+                                  >
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M16.9722 8.70703L15.2241 19.1074H8.49268L6.74561 8.70703H16.9722ZM13.0259 4.60742C13.1079 4.82217 13.2196 5.02429 13.354 5.19922C13.5135 5.40685 13.7353 5.6114 14.0083 5.75195H9.7085C9.98149 5.61137 10.2033 5.40675 10.3628 5.19922C10.4973 5.02424 10.6098 4.82235 10.6919 4.60742H13.0259Z" stroke="#5F6165" stroke-width="1.5"/>
+                                    </svg>
+                                  </button>
+                                )}
+                            </div>
+                          
+                          {/* Delete button for each condition */}
+                          
+                        </div>
+                      ))}
+                      </div>
+                      {/* Add Condition Button */}
+                      <button
+                        type="primary"
+                        onClick={addCondition}
+                        className="add-condition-btn"
+                      >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="#028AB0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8.57129 12H15.4284" stroke="#028AB0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 8.57227V15.4294" stroke="#028AB0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+
+                         <span className='add-condition-text'>Add Condition</span>
+                      </button>
+                    </div>
+
+                    
+
+                    {/* Logic Selection Area */}
+                    {newCondition.conditions?.length > 1 && (
+                      <div className="logic-selection-area">
+                        <label className="showhide-modal-label">Apply this logic to all conditions:</label>
+                        <Select
+                          value={newCondition.logic}
+                          onChange={value => {
+                            handleFieldChange('logic', value);
+                            setError(null);
+                          }}
+                          className="showhide-modal-select logic-select"
+                          style={{ width: '100%' }}
+                        >
+                          <Select.Option value="AND">AND</Select.Option>
+                          <Select.Option value="OR">OR</Select.Option>
+                          <Select.Option value="Custom">Custom</Select.Option>
+                        </Select>
+
+                        {newCondition.logic === 'Custom' && (
+                          <div className="modal-custom-logic-input">
+                            <label className="showhide-modal-label">
+                              Custom Logic Expression{' '}
+                              
+                            </label>
+                            <Input
+                              value={newCondition.logicExpression}
+                              onChange={e => handleFieldChange('logicExpression', e.target.value)}
+                              placeholder={`e.g., 1 OR (2 AND 3)`}
+                              className="showhide-modal-input"
+                              style={{ width: '100%' }}
+                            />
+                            {canShowPreview && (
+                              <button
+                                onClick={openPreview}
+                                title="Preview Logic"
+                                className='preview-button'
+                                aria-label="Open logic preview"
+                              >
+                                {/* Eye icon SVG or similar */}
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="11.9999" cy="11.9989" r="2.80556" stroke="#028AB0" stroke-width="1.5"/>
+                                <path d="M19.2782 11.052C19.6233 11.471 19.7958 11.6804 19.7958 11.9993C19.7958 12.3183 19.6233 12.5277 19.2782 12.9466C18.0159 14.4792 15.2318 17.3327 12 17.3327C8.76824 17.3327 5.98405 14.4792 4.72175 12.9466C4.37672 12.5277 4.2042 12.3183 4.2042 11.9993C4.2042 11.6804 4.37672 11.471 4.72175 11.052C5.98405 9.51947 8.76824 6.66602 12 6.66602C15.2318 6.66602 18.0159 9.51947 19.2782 11.052Z" stroke="#028AB0" stroke-width="1.5"/>
+                                </svg> <span className='add-condition-text'>Preview</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Result Section Header */}
+                    <div className="modal-result-section-header">
+                      <p>Result perform these actions:</p>
+                    </div>
+                    
+                    {/* Then Action Section */}
+                    <div className="modal-then-action-section">
+                      <label className="showhide-modal-label">Then</label>
+                      <div className="modal-then-action-row">
+                        <div className="modal-then-action-type">
+                          <Select
+                            value={newCondition.thenAction}
+                            onChange={value => handleFieldChange('thenAction', value)}
+                            className="showhide-modal-select"
+                            style={{ width: '100%' }}
+                          >
+                            <Select.Option value="show">Show</Select.Option>
+                            <Select.Option value="hide">Hide</Select.Option>
+                          </Select>
+                        </div>
+                        
+                        <div className="then-action-field">
+                          <Select
+                          mode='multiple'
+                            value={newCondition.thenFields || undefined}
+                            onChange={value => {
+                              handleFieldChange('thenFields', value);
+                              setError(null);
+                            }}
+                            placeholder="Select field(s) to show/hide"
+                            disabled={!(newCondition.conditions?.[0]?.ifField)}
+                            style={{ width: '100%' }}
+                          >
+                            {validIfFields
+                              .filter(f => !newCondition.conditions?.some(c => c.ifField === f.Unique_Key__c))
+                              .map(f => (
+                                <Select.Option key={f.Unique_Key__c} value={f.Unique_Key__c}>
+                                  {f.Name}
+                                </Select.Option>
+                              ))}
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="showhide-modal-footer">
+                  <div className='cancel-button'>
+                    <button
+                      className="wizard-btn wizard-btn-secondary"
+                      onClick={() => {
+                        setIsShowHideModalVisible(false);
+                        setEditingConditionId(null);
+                      }}
+                    >
+                      Back
+                    </button>
+                  </div>
+                  <div className={` ${!newCondition.conditions?.every(c => c.ifField && c.operator) ||
+                        !newCondition.thenFields.length ? 'next-button' : 'next-button-enabled'}`}>
+              
+                    <button
+                      type="primary"
+                      onClick={() => saveCondition(editingConditionId)}
+                      disabled={
+                        !newCondition.conditions?.every(c => c.ifField && c.operator) ||
+                        !newCondition.thenFields.length
+                      }
+                      className="wizard-btn wizard-btn-primary"
+                    >
+                      {editingConditionId ? 'Update Condition' : 'Save Condition'}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            
+            </div>
+          )}
+          {isPreviewVisible && (
+          <div className="showhide-modal-bg" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
+            <motion.div
+              className="showhide-modal-box"
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              style={{ maxWidth: 900, width: '90%' }}
+            >
+              <div className="showhide-modal-header">
+                <p id="preview-modal-title" className="showhide-modal-title">Logic Preview</p>
+                <button
+                  aria-label="Close Preview"
+                  className="showhide-modal-close"
+                  onClick={closePreview}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M11 2.00714L9.99286 1L6 4.99286L2.00714 1L1 2.00714L4.99286 6L1 9.99286L2.00714 11L6 7.00714L9.99286 11L11 9.99286L7.00714 6L11 2.00714Z" fill="#5F6165"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="showhide-modal-content">
+                <div className="showhide-form-container">
+                  <p className="showhide-modal-label">Custom Logic Expression:</p>
+                  <div className="preview-expression">
+                    {newCondition.logicExpression}
+                  </div>
+                  
+                  <p className="showhide-modal-label">Visual Representation:</p>
+                  <div className="logic-preview-display">
+                    {renderLogicGroup({
+                      group: parseLogicExpression(newCondition.logicExpression),
+                      conditions: newCondition.conditions,
+                      fields: fields,
+                    })}
+                  </div> 
+                </div>
+              </div>
+
+              <div className="showhide-modal-footer">
+                <div className='cancel-button'>
+                    <button
+                      className="wizard-btn wizard-btn-secondary"
+                      onClick={closePreview}
+                    >
+                      Back
+                    </button>
+                  </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
     </div>
   );
 };

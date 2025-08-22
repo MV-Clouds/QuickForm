@@ -245,8 +245,7 @@
 
 .ant-select-arrow {
   color: var(--text-dark) !important;
-  padding-top: 10px;
-  padding-right: 5px;
+  margin-top: -4px !important;
 }
 
 .ant-select-focused .ant-select-selector,
@@ -358,6 +357,11 @@
   margin-right: 8px;
 }
 
+@media (min-width: 1540px){
+  .ant-select-arrow{
+    margin-top: 0px !important;
+  }
+}
 /* Media query for medium screens (up to 1440px) */
 @media (max-width: 1440px) {
   .content-container {
