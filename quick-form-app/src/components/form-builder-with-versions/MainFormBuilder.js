@@ -95,6 +95,8 @@ function MainFormBuilder({
   showShare
 }) {
   // const { formVersionId } = useParams();
+    const { Fieldset: fieldsets } = useSalesforceData(); // Fetch fieldsets from context
+
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
@@ -1032,7 +1034,7 @@ function MainFormBuilder({
     };
     return subFields[field] || subFields["default"];
   };
-
+  
   const handleDrop = (
     fieldType,
     pageIndex,
@@ -1074,7 +1076,7 @@ function MainFormBuilder({
       });
       targetPage.fields.splice(insertIndex, 0, { ...newField, isCut: false });
     } else if (newField && !fieldId) {
-      targetPage.fields.splice(insertIndex, 0, newField);
+      targetPage.fields.splice(insertIndex, 0, ...newField);
     } else if (fieldType) {
       const newFieldId = `field-${Date.now()}-${Math.random()
         .toString(36)
@@ -1406,6 +1408,9 @@ function MainFormBuilder({
 
   const selectedField = getSelectedField();
 
+  const handleAddFieldsFromFieldset = (newFields) => {
+    setFields([...fields, ...newFields]);
+  };
   return (
     <div className="flex h-screen">
       <MainMenuBar
@@ -1673,6 +1678,8 @@ function MainFormBuilder({
                     selectedTheme={selectedTheme}
                     onThemeSelect={setSelectedTheme}
                     themes={themes}
+                    fieldsets = {fieldsets}
+                    onAddFieldsFromFieldset = {handleAddFieldsFromFieldset}
                   />
                 ) : (
                   <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
@@ -1689,6 +1696,8 @@ function MainFormBuilder({
                           setShowSidebar(true);
                         }}
                         fields={fields}
+                        fieldsets={fieldsets} // Pass fieldsets to FieldEditor
+                        onAddFieldsFromFieldset={handleAddFieldsFromFieldset} // Handle adding fields
                       />
                     )}
                   </div>

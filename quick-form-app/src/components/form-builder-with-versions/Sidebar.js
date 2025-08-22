@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import FieldsetTab from './FieldsetTab';
 const fieldTypes = [
   // Recommended
   { type: 'heading', label: 'Heading' },
@@ -227,7 +227,7 @@ const getFieldIcon = (type) => {
   }
 };
 
-function Sidebar({ selectedTheme, onThemeSelect, themes }) {
+function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFieldsFromFieldset}) {
   const [activeMainTab, setActiveMainTab] = useState('Form');
   const [activeSubTab, setActiveSubTab] = useState('Fields');
   const [searchTerm, setSearchTerm] = useState('');
@@ -290,7 +290,18 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
       }
     }, 0);
   };
-
+    const handleFieldsetDrop = (fieldset) => {
+    if (fieldset && fieldset.Fieldset_Fields__c) {
+      const newFields = fieldset.Fieldset_Fields__c.map((fieldsetField) => {
+        const properties = JSON.parse(fieldsetField.Properties__c || "{}");
+        return {
+          ...properties,
+          id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate unique ID
+        };
+      });
+      onAddFieldsFromFieldset(newFields);
+    }
+  };
   const handleDragEnd = (e) => {
     // Reset visual feedback
     e.currentTarget.style.opacity = '';
@@ -435,11 +446,12 @@ function Sidebar({ selectedTheme, onThemeSelect, themes }) {
         )}
 
         {activeMainTab === 'Form' && activeSubTab === 'Fieldsets' && (
-          <div className="p-4 flex items-center justify-center h-64">
-            <div className="text-center text-gray-500">
-              <p className="text-sm">Fieldsets coming soon</p>
-            </div>
-          </div>
+          <div className="p-2">
+          <FieldsetTab
+            fieldsets={fieldsets}
+            onDropFieldset={handleFieldsetDrop}
+          />
+       </div>
         )}
 
         {activeMainTab === 'Form' && activeSubTab === 'Payments' && (

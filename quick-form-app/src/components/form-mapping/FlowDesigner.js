@@ -689,6 +689,19 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
               options: {}
             }
           } : {}),
+          ...(type === "integration" && action === 'Google Sheet') ? {   
+                label: `${action}_Level0`,
+                displayLabel: action,
+                type,
+                action,
+                order: null,
+                selectedSheetName: '', // Initialize
+                spreadsheetId: '', // Initialize
+                sheetConditions: [], // Initialize
+                conditionsLogic: 'AND', // Initialize
+                sheetcustomLogic: '', // Initialize
+                ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),  
+              } : {}
         },
         draggable: true,
       };
@@ -710,7 +723,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           return;
         }
       }
-      if (["Create/Update", "Find", "Filter", "Condition", "Path", "Loop", "Formatter"].includes(node.data.action)) {
+      if (["Create/Update", "Find", "Filter", "Condition", "Path", "Loop", "Formatter" , 'Google Sheet'].includes(node.data.action)) {
         setSelectedNode(node);
       }
     },

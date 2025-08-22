@@ -138,6 +138,7 @@ function PublicFormViewer() {
         if (!mappingsResponse.ok) {
           throw new Error(mappingsData.error || "Failed to fetch mappings");
         }
+        console.log('mapping data', mappingsData)
         setFormData((prev) => ({ ...prev, mappings: mappingsData.mappings }));
 
         const initialValues = {};
@@ -802,7 +803,7 @@ function PublicFormViewer() {
     if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
       return;
     }
-
+    console.log('formData' , formData)
     setIsSubmitting(true);
     try {
       const visiblePageIds = new Set(
@@ -1026,56 +1027,63 @@ function PublicFormViewer() {
       if (!response.ok) {
         throw new Error(data.error || "Failed to submit form");
       }
-
+      console.log('Submission Done' , data)
       const submissionId = data.submissionId;
 
       const updatedSubmissionData = { ...submissionData };
+      console.log('form payload' ,{
+        userId: linkData.userId,
+        instanceUrl,
+        formVersionId: formData.Id,
+        formData: updatedSubmissionData,
+        nodes: formData.mappings,
+      })
+      const flowResponse = await fetch('https://5cxppeo583.execute-api.us-east-1.amazonaws.com/runMapping', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: linkData.userId,
+          instanceUrl,
+          formVersionId: formData.Id,
+          formData: updatedSubmissionData,
+          nodes: formData.mappings,
+        }),
+      });
 
-      // const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //     Authorization: `Bearer ${accessToken}`,
-      //   },
-      //   body: JSON.stringify({
-      //     userId: linkData.userId,
-      //     instanceUrl,
-      //     formVersionId: formData.Id,
-      //     formData: updatedSubmissionData,
-      //     nodes: formData.mappings,
-      //   }),
-      // });
-
-      // const flowData = await flowResponse.json();
-      // if (!flowResponse.ok) {
-      //   const newErrors = {};
-      //   if (flowData.results) {
-      //     Object.entries(flowData.results).forEach(([nodeId, result]) => {
-      //       if (result.error) {
-      //         const mapping = formData.mappings.find(
-      //           (m) => m.Node_Id__c === nodeId
-      //         );
-      //         if (mapping?.Formatter_Config__c) {
-      //           const formatterConfig = JSON.parse(
-      //             mapping.Formatter_Config__c || "{}"
-      //           );
-      //           let fieldId = formatterConfig.inputField;
-      //           if (fieldId.includes("_phoneNumber")) {
-      //             fieldId = fieldId.replace("_phoneNumber", "");
-      //           }
-      //           newErrors[fieldId] = result.error;
-      //         }
-      //       }
-      //     });
-      //     if (Object.keys(newErrors).length > 0) {
-      //       setErrors(newErrors);
-      //       throw new Error(
-      //         "Form submission completed but flow execution had errors"
-      //       );
-      //     }
-      //   }
-      //   throw new Error(flowData.error || "Failed to execute flow");
-      // }
+      const flowData = await flowResponse.json();
+      console.log('Mapping done ', flowData)
+      if (!flowResponse.ok) {
+        const newErrors = {};
+        if (flowData.results) {
+          Object.entries(flowData.results).forEach(([nodeId, result]) => {
+            if (result.error) {
+              const mapping = formData.mappings.find(
+                (m) => m.Node_Id__c === nodeId
+              );
+              if (mapping?.Formatter_Config__c) {
+                const formatterConfig = JSON.parse(
+                  mapping.Formatter_Config__c || "{}"
+                );
+                let fieldId = formatterConfig.inputField;
+                if (fieldId.includes("_phoneNumber")) {
+                  fieldId = fieldId.replace("_phoneNumber", "");
+                }
+                newErrors[fieldId] = result.error;
+              }
+            }
+          });
+          if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            throw new Error(
+              "Form submission completed but flow execution had errors"
+            );
+          }
+        }
+        throw new Error(flowData.error || "Failed to execute flow");
+      }
 
 
       // Set to show thank you page

@@ -1,6 +1,8 @@
-import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, QueryCommand, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import moment from 'moment-timezone';
-import { parsePhoneNumber,getCountryCallingCode } from 'libphonenumber-js';
+import { parsePhoneNumber, getCountryCallingCode } from 'libphonenumber-js';
+
+const LOG_TABLE_NAME = 'SF-PermanentStorage';
 
 // Input format patterns for parsing
 const INPUT_DATE_FORMATS = [
@@ -369,7 +371,7 @@ const createUpdateNode = async (node, formData, salesforceBaseUrl, token) => {
             });
           }
         }
-         else {
+        else {
           successfulIds.push(...chunk);
         }
 
@@ -506,166 +508,9 @@ const processLoopNode = async (node, previousResults, formData, salesforceBaseUr
     nodeId,
     processedCount,
     loopResults,
-    loopContext: loopResults.length > 0 ? loopResults[0].context : formData
+    loopContext: loopResults.length > 0 ? loopResults[0].context : formData,
+    status: 'processed'
   };
-};
-
-const processConditionNode = async (node, context, salesforceBaseUrl, token) => {
-  const {
-    Node_Id__c: nodeId,
-    Salesforce_Object__c: salesforceObject,
-    Conditions__c: conditionsStr,
-    Next_Node_Id__c: nextNodeId,
-    Fallback_Node_Id__c: fallbackNodeId
-  } = node;
-
-  // Initialize result object
-  const result = {
-    nodeId,
-    status: 'processed',
-    shouldContinue: false,
-    skipUntilNextCondition: false,
-    isAlwaysRun: false,
-    isFallback: false,
-    recordsMatched: 0,
-    nextNodeId: null,
-    fallbackNodeId: null
-  };
-
-  // Parse conditions configuration
-  let conditionsConfig = {};
-  try {
-    conditionsConfig = conditionsStr ? JSON.parse(conditionsStr) : {};
-  } catch (e) {
-    console.error(`Error parsing conditions for node ${nodeId}:`, e);
-    return {
-      ...result,
-      status: 'failed',
-      error: 'Invalid conditions configuration'
-    };
-  }
-
-  const {
-    pathOption = 'Rules',
-    conditions = [],
-    logicType = 'AND',
-    customLogic = null
-  } = conditionsConfig;
-
-  // Handle "Always Run" path option
-  if (pathOption === 'Always Run') {
-    return {
-      ...result,
-      shouldContinue: true,
-      isAlwaysRun: true,
-      nextNodeId: nextNodeId,
-      message: 'Always Run path - proceeding to next node'
-    };
-  }
-
-  // Handle "Fallback" path option
-  if (pathOption === 'Fallback') {
-    return {
-      ...result,
-      shouldContinue: true,
-      isFallback: true,
-      nextNodeId: nextNodeId,
-      message: 'Fallback path - proceeding to next node'
-    };
-  }
-
-  // Validate we have conditions for Rules path
-  if (conditions.length === 0) {
-    return {
-      ...result,
-      status: 'failed',
-      error: 'No conditions defined for Rules path'
-    };
-  }
-
-  try {
-    // For Salesforce object conditions
-    if (salesforceObject) {
-      const queryNode = {
-        ...node,
-        salesforceObject,
-        conditions: {
-          conditions,
-          logicType,
-          customLogic
-        },
-        type: 'Find'
-      };
-
-      const soqlQuery = buildSOQLQuery(queryNode);
-      if (!soqlQuery) {
-        throw new Error('Failed to build SOQL query');
-      }
-
-      const queryData = await executeSOQLQuery(soqlQuery, salesforceBaseUrl, token);
-      const matchedRecords = processQueryResults(queryData, queryNode.conditions);
-      result.recordsMatched = matchedRecords.length;
-
-      // Determine if we should continue
-      if (customLogic) {
-        result.shouldContinue = evaluateCustomLogic(
-          conditions,
-          customLogic,
-          matchedRecords.length > 0 ? matchedRecords[0] : {}
-        );
-      } else {
-        result.shouldContinue = matchedRecords.length > 0;
-      }
-
-      // Set next nodes based on evaluation
-      if (result.shouldContinue) {
-        result.nextNodeId = nextNodeId;
-        result.message = `${matchedRecords.length} records matched - proceeding to next node`;
-      } else {
-        result.skipUntilNextCondition = true;
-        result.fallbackNodeId = fallbackNodeId;
-        result.message = 'No records matched - skipping until next condition';
-      }
-    } 
-    // For form data conditions
-    else {
-      const evaluationResults = conditions.map(cond => 
-        evaluateCondition(context, cond)
-      );
-
-      if (customLogic) {
-        result.shouldContinue = evaluateCustomLogic(
-          conditions,
-          customLogic,
-          context
-        );
-      } else {
-        result.shouldContinue = evaluationResults.every(r => r);
-      }
-
-      // Set next nodes based on evaluation
-      if (result.shouldContinue) {
-        result.nextNodeId = nextNodeId;
-        result.message = 'Conditions met - proceeding to next node';
-      } else {
-        result.skipUntilNextCondition = true;
-        result.fallbackNodeId = fallbackNodeId;
-        result.message = 'Conditions not met - skipping until next condition';
-      }
-    }
-
-    return result;
-  } catch (error) {
-    console.error(`Error processing condition node ${nodeId}:`, error);
-    return {
-      ...result,
-      status: 'failed',
-      error: error.message,
-      shouldContinue: false,
-      skipUntilNextCondition: true, // Skip on error
-      fallbackNodeId: fallbackNodeId
-    };
-  }
 };
 
 const queryNode = async (node, salesforceBaseUrl, token) => {
@@ -674,8 +519,19 @@ const queryNode = async (node, salesforceBaseUrl, token) => {
   const matchedRecords = processQueryResults(queryData, node.conditions);
 
   const ids = matchedRecords.map(record => record.Id);
+
+  if (ids.length === 0) {
+    return {
+      nodeId: node.nodeId,
+      ids: null,
+      conditions: node.conditions,
+      message: "No data found for the given query conditions"
+    };
+  }
+
   return {
     nodeId: node.nodeId,
+    conditions: node.conditions,
     ids: ids.length > 1 ? ids : ids[0]
   };
 };
@@ -749,7 +605,8 @@ const getNodeData = async (nodeId, userId, formVersionId) => {
       conditions: nodeMapping.conditions ? JSON.parse(JSON.stringify(nodeMapping.conditions)) : null,
       fieldMappings: nodeMapping.fieldMappings || [],
       loopConfig: nodeMapping.loopConfig ? JSON.parse(JSON.stringify(nodeMapping.loopConfig)) : null,
-      formatterConfig: nodeMapping.formatterConfig ? JSON.parse(JSON.stringify(nodeMapping.formatterConfig)) : null
+      formatterConfig: nodeMapping.formatterConfig ? JSON.parse(JSON.stringify(nodeMapping.formatterConfig)) : null,
+      config : nodeMapping.config ? JSON.parse(JSON.stringify(nodeMapping.config)) : null
     };
   } catch (error) {
     console.error('Error getting node data:', error);
@@ -958,10 +815,10 @@ const numberFormatters = {
   },
   phone_format: (value, format, countryCode, formData, inputField, inputType = 'combined') => {
     if (typeof value !== 'string' || !value.trim()) {
-      return { 
-        output: value, 
+      return {
+        output: value,
         error: 'Phone number cannot be empty',
-        status: 'skipped' 
+        status: 'skipped'
       };
     }
 
@@ -974,13 +831,13 @@ const numberFormatters = {
 
     try {
       let phoneNumber;
-      
+
       // Handle case where input is just a country code (like "IN")
       if (inputType === 'country_code' || value.length <= 3) {
         try {
           // Try to get calling code for the input value (might be country code or calling code)
           let callingCode;
-          
+
           if (/^\+?\d+$/.test(value)) {
             // If it's numeric (like "91" or "+91")
             callingCode = value.startsWith('+') ? value : `+${value}`;
@@ -988,19 +845,19 @@ const numberFormatters = {
             // If it's a country code (like "IN")
             callingCode = `+${getCountryCallingCode(value.toUpperCase())}`;
           }
-          
+
           // Get calling code for target country
           const targetCallingCode = `+${getCountryCallingCode(countryCode)}`;
-          
+
           return {
             output: targetCallingCode,
             status: 'completed'
           };
         } catch (e) {
-          return { 
-            output: value, 
+          return {
+            output: value,
             error: 'Could not convert country code',
-            status: 'skipped' 
+            status: 'skipped'
           };
         }
       }
@@ -1009,54 +866,54 @@ const numberFormatters = {
       if (inputType === 'phone_number') {
         // Case: Only phone number is selected - validate and add country code
         if (!effectiveCountryCode) {
-          return { 
-            output: value, 
+          return {
+            output: value,
             error: 'Country code is required for phone number validation',
-            status: 'skipped' 
+            status: 'skipped'
           };
         }
-        
+
         phoneNumber = parsePhoneNumber(value, effectiveCountryCode);
-        
+
         if (!phoneNumber || !phoneNumber.isValid()) {
-          return { 
-            output: value, 
+          return {
+            output: value,
             error: `Invalid phone number for country ${effectiveCountryCode}`,
-            status: 'skipped' 
+            status: 'skipped'
           };
         }
-      } 
+      }
       else {
         // Case: Combined input - parse and replace country code if needed
         if (!effectiveCountryCode && !countryCode) {
-          return { 
-            output: value, 
+          return {
+            output: value,
             error: 'Country code is required for combined phone number validation',
-            status: 'skipped' 
+            status: 'skipped'
           };
         }
 
         // First parse with original country code (if available)
         const originalCountry = effectiveCountryCode || countryCode || 'US';
         phoneNumber = parsePhoneNumber(value, originalCountry);
-        
+
         if (!phoneNumber || !phoneNumber.isValid()) {
-          return { 
-            output: value, 
+          return {
+            output: value,
             error: `Invalid phone number for country ${originalCountry}`,
-            status: 'skipped' 
+            status: 'skipped'
           };
         }
 
         // If we have a new country code to apply (different from original)
         if (countryCode && phoneNumber.country !== countryCode) {
           phoneNumber = parsePhoneNumber(phoneNumber.nationalNumber, countryCode);
-          
+
           if (!phoneNumber || !phoneNumber.isValid()) {
-            return { 
-              output: value, 
+            return {
+              output: value,
               error: `Invalid phone number format for country ${countryCode}`,
-              status: 'skipped' 
+              status: 'skipped'
             };
           }
         }
@@ -1085,22 +942,22 @@ const numberFormatters = {
             .replace(/^[+\d]+/, '');
           break;
         default:
-          return { 
-            output: value, 
+          return {
+            output: value,
             error: `Unsupported format: ${format}`,
-            status: 'skipped' 
+            status: 'skipped'
           };
       }
 
-      return { 
+      return {
         output: formattedNumber,
         status: 'completed'
       };
     } catch (error) {
-      return { 
-        output: value, 
+      return {
+        output: value,
         error: `Formatting failed: ${error.message}`,
-        status: 'skipped' 
+        status: 'skipped'
       };
     }
   },
@@ -1151,8 +1008,8 @@ const processFormatter = (formatterConfig, formData) => {
   result.originalValue = userValue;
   result.secondOriginalValue = secondValue;
 
-   // Handle missing values more gracefully
-   if (userValue === undefined || userValue === null || userValue === '') {
+  // Handle missing values more gracefully
+  if (userValue === undefined || userValue === null || userValue === '') {
     console.warn(`Missing value for field ${inputField}. Available keys: ${Object.keys(formData).join(', ')}`);
     result.status = 'skipped';
     result.output = userValue;
@@ -1178,7 +1035,7 @@ const processFormatter = (formatterConfig, formData) => {
         inputField,
         options.inputType || 'phone_number'
       );
-      
+
       formattedValue = phoneResult.output;
       result.status = phoneResult.status;
       if (phoneResult.error) {
@@ -1317,12 +1174,243 @@ const processFormatter = (formatterConfig, formData) => {
 
   return result;
 };
+async function fetchSheetColumns(spreadsheetId, sheetName, accessToken) {
+  const encodedRange = encodeURIComponent(`1:1`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`;
 
-const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionId) => {
+  const resp = await fetch(
+    url,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!resp.ok) throw new Error(await resp.text());
+  const data = await resp.json();
+  return data.values?.[0] || [];
+}
+
+async function updateSheetColumns(spreadsheetId, sheetName, columns, accessToken) {
+  const encodedRange = encodeURIComponent(`1:1`);
+  const resp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}!1:1?valueInputOption=RAW`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ values: [columns] })
+    }
+  );
+  if (!resp.ok) throw new Error(await resp.text());
+}
+async function appendRow(spreadsheetId, sheetName, row, accessToken) {
+  const resp = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A:Z:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ values: [row] })
+    }
+  );
+  if (!resp.ok) throw new Error(await resp.text());
+  return await resp.json();
+}
+// Util: Evaluate condition on a row
+function evaluatesheetCondition(condition, row, headers) {
+  const colIndex = headers.indexOf(condition.field);
+  if (colIndex === -1) return false; // No such column
+  const cellValue = row[colIndex] || "";
+
+  switch (condition.operator) {
+    case "=":
+      return cellValue == condition.value;
+    case "!=":
+      return cellValue != condition.value;
+    case "LIKE":
+      return cellValue.includes(condition.value);
+    case "NOT LIKE":
+      return !cellValue.includes(condition.value);
+    case "STARTS WITH":
+      return cellValue.startsWith(condition.value);
+    case "ENDS WITH":
+      return cellValue.endsWith(condition.value);
+    default:
+      return false;
+  }
+}
+
+// Util: Evaluate the full custom logic on a row, given conditions array, headers, row data
+// A safer alternative to the eval() approach
+function evaluatesheetCustomLogic(customLogic, conditions, row, headers) {
+  const results = {};
+  conditions.forEach((cond, idx) => {
+      results[idx + 1] = evaluatesheetCondition(cond, row, headers);
+  });
+
+  const tokens = customLogic.toUpperCase().split(/\s+/);
+  const outputQueue = [];
+  const operatorStack = [];
+
+  const precedence = {
+      'AND': 2,
+      'OR': 1
+  };
+
+  function processOperator() {
+      while (operatorStack.length > 0 &&
+             precedence[operatorStack[operatorStack.length - 1]] >= precedence[tokens[i]]) {
+          outputQueue.push(operatorStack.pop());
+      }
+      operatorStack.push(tokens[i]);
+  }
+
+  for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token in precedence) {
+          processOperator();
+      } else if (token === '(') {
+          operatorStack.push(token);
+      } else if (token === ')') {
+          while (operatorStack[operatorStack.length - 1] !== '(') {
+              outputQueue.push(operatorStack.pop());
+          }
+          operatorStack.pop(); // Pop the '('
+      } else {
+          // It's a number
+          outputQueue.push(parseInt(token, 10));
+      }
+  }
+
+  while (operatorStack.length > 0) {
+      outputQueue.push(operatorStack.pop());
+  }
+
+  const evaluationStack = [];
+  outputQueue.forEach(token => {
+      if (typeof token === 'number') {
+          evaluationStack.push(results[token]);
+      } else {
+          const right = evaluationStack.pop();
+          const left = evaluationStack.pop();
+          if (token === 'AND') {
+              evaluationStack.push(left && right);
+          } else if (token === 'OR') {
+              evaluationStack.push(left || right);
+          }
+      }
+  });
+
+  return evaluationStack[0];
+}
+
+// Note: This is a simplified example and does not handle all edge cases.
+// It is intended to show a conceptual alternative to `eval()`.
+
+async function runGoogleMapping({ node, formData, accessToken }) {
+  const mappings = node.fieldMappings || [];
+  const spreadsheetId = node.config?.spreadsheetId || 'id';
+  const sheetName = node.config?.sheetName || 'Sheet1';
+  const conditions = node.config?.sheetConditions || [];
+  const customLogic = node.config?.customLogic || "1"; // default to condition 1 if no custom logic
+  console.log('Node ',node)
+  try {
+    let existingColumns = await fetchSheetColumns(spreadsheetId, sheetName, accessToken);
+    console.log('Existing columns:', existingColumns)
+    const requiredColumns = mappings.map(m => m.column.trim());
+    const newColumns = requiredColumns.filter(c => !existingColumns.includes(c));
+    console.log('New columns:', newColumns)
+    if (newColumns.length > 0) {
+      const updatedColumns = [...existingColumns, ...newColumns];
+      await updateSheetColumns(spreadsheetId, sheetName, updatedColumns, accessToken);
+      existingColumns = updatedColumns;
+    }
+
+    console.log('Existing columns after update:', existingColumns)
+    // 2. Fetch all rows (except header) to evaluate against conditions
+    const rowsResp = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/2:1000`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!rowsResp.ok) throw new Error(await rowsResp.text());
+    const rowsData = await rowsResp.json();
+    const rows = rowsData.values || [];
+    // Prepare row data from formData with existingColumns order
+    const newRow = existingColumns.map(col => {
+      const map = mappings.find(m => m.column.trim() === col);
+      return map ? (formData[map.id] ?? '') : '';
+    });
+
+    // 3. Find matching rows
+    let matchedRowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (evaluatesheetCustomLogic(customLogic, conditions, row, existingColumns)) {
+        console.log('Matched row:', row);
+        matchedRowIndex = i + 2; // Sheet API rows start from 1 + header row (so +2)
+        break; // Assuming only one row updated; remove break to update multiple
+      }
+    }
+
+    // 4. If matched row exists, update it; else, append new row
+     // 3. Find matching rows and perform updates
+     let updatedRowsCount = 0;
+     const updatePromises = [];
+ 
+     for (let i = 0; i < rows.length; i++) {
+       const row = rows[i];
+       if (evaluatesheetCustomLogic(customLogic, conditions, row, existingColumns)) {
+         const matchedRowIndex = i + 2;
+         console.log(`Matched row at index ${matchedRowIndex}:`, row);
+ 
+         // Perform the update for this specific row
+         const updatePromise = fetch(
+           `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${matchedRowIndex}:${matchedRowIndex}?valueInputOption=RAW`,
+           {
+             method: 'PUT',
+             headers: {
+               Authorization: `Bearer ${accessToken}`,
+               'Content-Type': 'application/json'
+             },
+             body: JSON.stringify({ values: [newRow] }),
+           }
+         ).then(resp => {
+           if (!resp.ok) {
+             return resp.text().then(text => Promise.reject(new Error(text)));
+           }
+           updatedRowsCount++;
+           return resp.json();
+         });
+         updatePromises.push(updatePromise);
+       }
+     }
+ 
+     // Wait for all update promises to complete
+     await Promise.all(updatePromises);
+ 
+    // Prepare row data according to current header columns
+    const row = existingColumns.map((col) => {
+      const map = mappings.find(m => m.column.trim() === col);
+      return map ? (formData[map.id] ?? '') : '';
+    });
+    if (updatedRowsCount === 0) {
+      const appendResult = await appendRow(spreadsheetId, sheetName, newRow, accessToken);
+      console.log('Appended row:', appendResult);
+      return { success: true, message: 'Data written successfully (new row appended)', appendResult };
+    } else {
+      return { success: true, message: `${updatedRowsCount} rows updated.` };
+    }
+  } catch (error) {
+    console.error('Error in runGoogleMapping:', error);
+    return { success: false, message: error.message, error };
+  }
+}
+
+const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionId, submissionId) => {
   const salesforceBaseUrl = `https://${instanceUrl.replace(/https?:\/\//, '')}/services/data/v60.0`;
   const results = {};
   const processedNodeIds = new Set();
-  
+
   // Create node map for quick lookup
   const nodeMap = {};
   nodes.forEach(node => {
@@ -1330,7 +1418,7 @@ const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionI
   });
 
   // Sort nodes by order
-  const sortedNodes = [...nodes].sort((a, b) => 
+  const sortedNodes = [...nodes].sort((a, b) =>
     parseInt(a.Order__c || a.order) - parseInt(b.Order__c || b.order)
   );
 
@@ -1354,29 +1442,278 @@ const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionI
         status: 'skipped',
         reason: 'Previous condition not met'
       };
+
+      // Log skipped node
+      await logNodeEventDirect({
+        userId,
+        submissionId,
+        formId: formData.formId,
+        formVersionId,
+        nodeType,
+        type: 'Mapping',
+        subType: nodeType,
+        status: 'Skipped',
+        message: 'Previous condition not met',
+        input: { context: currentContext },
+        output: { result: 'skipped' }
+      });
+
       processedNodeIds.add(nodeId);
       continue;
     }
+    if(nodeType === 'action' || nodeType === 'Google Sheet'){
+      try {
+        console.log('Here 1')
+      // Query Salesforce for GoogleCredentials__c record(s) for userId
+      const soql = `
+      SELECT Id, Access_Token__c, Refresh_Token__c, Expiry__c, LastModifiedDate 
+      FROM GoogleCredentials__c 
+      WHERE User_Id__c='${userId}' 
+        AND TokenType__c = 'google-sheet' 
+      ORDER BY LastModifiedDate DESC LIMIT 1
+    `;
+    
+      const queryUrl = `https://${instanceUrl}/services/data/v60.0/query?q=${encodeURIComponent(soql)}`;
+      const sfRes = await fetch(queryUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      if (!sfRes.ok) {
+        const errorText = await sfRes.text();
+        return {
+          statusCode: sfRes.status,
+          headers : {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: JSON.stringify({ error: "Failed to query Salesforce", details: errorText }),
+        };
+      }
+      const sfData = await sfRes.json();
+      console.log("Salesforce query result:", sfData);
+      if (!sfData.records || sfData.records.length === 0) {
+        return {
+          statusCode: 404,
+          headers : {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: JSON.stringify({ error: "No Google Credentials found for user" }),
+        };
+      }
 
+      const credential = sfData.records[0];
+      let access_token = credential.Access_Token__c;
+      console.log('Google mapping data' , node , currentContext)
+        const googleMappingResult = await runGoogleMapping({
+          node,
+          formData: currentContext,
+          accessToken: access_token
+        });
+        results[node.nodeId] = googleMappingResult;
+        console.log('Google mapping result', googleMappingResult)
+        // Log success or failure
+        await logNodeEventDirect({
+          userId,
+          submissionId,
+          nodeId: node.nodeId,
+          type: 'GoogleSheetMapping',
+          status: googleMappingResult.success ? 'Success' : 'Failed',
+          message: googleMappingResult.message,
+          error: googleMappingResult.error || null,
+          input: currentContext,
+          output: googleMappingResult
+        });
+      } catch (ex) {
+        console.error('GoogleSheetMapping node error:', ex);
+        results[node.nodeId] = { success: false, error: ex.message || 'Unknown error' };
+      }
+  
+      continue;
+  
+    }
     try {
       // Handle Condition nodes
+      // if (nodeType === 'Condition') {
+      //   const conditions = node.Conditions__c ? JSON.parse(node.Conditions__c) : node.conditions || {};
+      //   const pathOption = conditions.pathOption || 'Rules';
+
+      //   // Always Run path - just continue to next node
+      //   if (pathOption === 'Always Run') {
+      //     skipUntilNextCondition = false;
+      //     results[nodeId] = {
+      //       nodeId,
+      //       status: 'processed',
+      //       message: 'Always Run path - proceeding to next node'
+      //     };
+
+      //     await logNodeEventDirect({
+      //       userId,
+      //       submissionId,
+      //       formId: formData.formId,
+      //       formVersionId,
+      //       nodeType,
+      //       type: 'Mapping',
+      //       subType: nodeType,
+      //       status: 'Success',
+      //       message: 'Always Run path - proceeding to next node',
+      //       input: { conditions, pathOption },
+      //       output: { result: 'always_run' }
+      //     });
+
+      //     continue;
+      //   }
+
+      //   // Rules path - evaluate conditions
+      //   if (pathOption === 'Rules') {
+      //     const soqlQuery = buildSOQLQuery({
+      //       ...node,
+      //       type: 'Find',
+      //       conditions: conditions
+      //     });
+
+      //     if (!soqlQuery) {
+      //       throw new Error('Failed to build SOQL query');
+      //     }
+
+      //     const queryData = await executeSOQLQuery(soqlQuery, salesforceBaseUrl, token);
+      //     const matchedRecords = processQueryResults(queryData, conditions);
+
+      //     if (matchedRecords.length > 0) {
+      //       skipUntilNextCondition = false;
+      //       results[nodeId] = {
+      //         nodeId,
+      //         status: 'processed',
+      //         message: `${matchedRecords.length} records matched - proceeding`,
+      //         recordsMatched: matchedRecords.length
+      //       };
+      //       await logNodeEventDirect({
+      //         userId,
+      //         submissionId,
+      //         formId: formData.formId,
+      //         formVersionId,
+      //         nodeType,
+      //         type: 'Mapping',
+      //         subType: nodeType,
+      //         status: 'Success',
+      //         message: `${matchedRecords.length} records matched - proceeding`,
+      //         input: { conditions, soqlQuery },
+      //         output: { 
+      //           recordsMatched: matchedRecords.length,
+      //           recordIds: matchedRecords.map(r => r.Id)
+      //         }
+      //       });
+
+      //     } else {
+      //       skipUntilNextCondition = true;
+      //       results[nodeId] = {
+      //         nodeId,
+      //         status: 'processed',
+      //         message: 'No records matched - skipping until next condition',
+      //         recordsMatched: 0
+      //       };
+
+      //       await logNodeEventDirect({
+      //         userId,
+      //         submissionId,
+      //         formId: formData.formId,
+      //         formVersionId,
+      //         nodeType,
+      //         type: 'Mapping',
+      //         subType: nodeType,
+      //         status: 'Success',
+      //         message: 'No records matched - skipping until next condition',
+      //         input: { conditions, soqlQuery },
+      //         output: { recordsMatched: 0 }
+      //       });
+      //     }
+      //     continue;
+      //   }
+
+      //   // Fallback path - only runs when Rules path fails
+      //   if (pathOption === 'Fallback') {
+      //     if (!skipUntilNextCondition) {
+      //       results[nodeId] = {
+      //         nodeId,
+      //         status: 'skipped',
+      //         reason: 'Previous condition succeeded - fallback not needed'
+      //       };
+
+      //       await logNodeEventDirect({
+      //         userId,
+      //         submissionId,
+      //         formId: formData.formId,
+      //         formVersionId,
+      //         nodeType,
+      //         type: 'Mapping',
+      //         subType: nodeType,
+      //         status: 'Skipped',
+      //         message: 'Previous condition succeeded - fallback not needed',
+      //         input: { conditions, pathOption },
+      //         output: { result: 'fallback_skipped' }
+      //       });
+
+      //       continue;
+      //     }
+
+      //     skipUntilNextCondition = false;
+      //     results[nodeId] = {
+      //       nodeId,
+      //       status: 'processed',
+      //       message: 'Fallback path - proceeding to next node'
+      //     };
+
+      //     await logNodeEventDirect({
+      //       userId,
+      //       submissionId,
+      //       formId: formData.formId,
+      //       formVersionId,
+      //       nodeType,
+      //       type: 'Mapping',
+      //       subType: nodeType,
+      //       status: 'Success',
+      //       message: 'Fallback path - proceeding to next node',
+      //       input: { conditions, pathOption },
+      //       output: { result: 'fallback_executed' }
+      //     });
+
+      //     continue;
+      //   }
+      // }
+
       if (nodeType === 'Condition') {
         const conditions = node.Conditions__c ? JSON.parse(node.Conditions__c) : node.conditions || {};
         const pathOption = conditions.pathOption || 'Rules';
 
-        // Always Run path - just continue to next node
+        let conditionResult;
+        let logData = {
+          userId,
+          submissionId,
+          formId: formData.formId,
+          formVersionId,
+          nodeType,
+          type: 'Mapping',
+          subType: nodeType,
+          input: { conditions, pathOption }
+        };
+
+        // Always Run path
         if (pathOption === 'Always Run') {
           skipUntilNextCondition = false;
-          results[nodeId] = {
+          conditionResult = {
             nodeId,
             status: 'processed',
             message: 'Always Run path - proceeding to next node'
           };
-          continue;
+          logData.status = 'Success';
+          logData.message = 'Always Run path - proceeding to next node';
+          logData.output = { result: 'always_run' };
         }
-
-        // Rules path - evaluate conditions
-        if (pathOption === 'Rules') {
+        // Rules path
+        else if (pathOption === 'Rules') {
           const soqlQuery = buildSOQLQuery({
             ...node,
             type: 'Find',
@@ -1392,67 +1729,230 @@ const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionI
 
           if (matchedRecords.length > 0) {
             skipUntilNextCondition = false;
-            results[nodeId] = {
+            conditionResult = {
               nodeId,
               status: 'processed',
               message: `${matchedRecords.length} records matched - proceeding`,
               recordsMatched: matchedRecords.length
             };
+            logData.status = 'Success';
+            logData.message = `${matchedRecords.length} records matched - proceeding`;
+            logData.output = {
+              recordsMatched: matchedRecords.length,
+              recordIds: matchedRecords.map(r => r.Id)
+            };
           } else {
             skipUntilNextCondition = true;
-            results[nodeId] = {
+            conditionResult = {
               nodeId,
               status: 'processed',
               message: 'No records matched - skipping until next condition',
               recordsMatched: 0
             };
+            logData.status = 'Success';
+            logData.message = 'No records matched - skipping until next condition';
+            logData.output = { recordsMatched: 0 };
           }
-          continue;
         }
-
-        // Fallback path - only runs when Rules path fails
-        if (pathOption === 'Fallback') {
+        // Fallback path
+        else if (pathOption === 'Fallback') {
           if (!skipUntilNextCondition) {
-            results[nodeId] = {
+            conditionResult = {
               nodeId,
               status: 'skipped',
               reason: 'Previous condition succeeded - fallback not needed'
             };
-            continue;
+            logData.status = 'Skipped';
+            logData.message = 'Previous condition succeeded - fallback not needed';
+            logData.output = { result: 'fallback_skipped' };
+          } else {
+            skipUntilNextCondition = false;
+            conditionResult = {
+              nodeId,
+              status: 'processed',
+              message: 'Fallback path - proceeding to next node'
+            };
+            logData.status = 'Success';
+            logData.message = 'Fallback path - proceeding to next node';
+            logData.output = { result: 'fallback_executed' };
           }
-          
-          skipUntilNextCondition = false;
-          results[nodeId] = {
-            nodeId,
-            status: 'processed',
-            message: 'Fallback path - proceeding to next node'
-          };
-          continue;
         }
+
+        // Store the result and log it
+        results[nodeId] = conditionResult;
+        await logNodeEventDirect(logData);
+
+        processedNodeIds.add(nodeId);
+        continue;
       }
 
       // Process other node types only if not skipping
       if (!skipUntilNextCondition) {
+        let nodeResult;
+        let inputData = {};
+
         switch (nodeType) {
           case 'CreateUpdate':
-            results[nodeId] = await createUpdateNode(node, currentContext, salesforceBaseUrl, token);
+            inputData.nodeConfig = {
+              context: currentContext,
+              salesforceObject: node.salesforceObject,
+              conditions: node.conditions,
+              fieldMappings: node.fieldMappings
+            };
+            nodeResult = await createUpdateNode(node, currentContext, salesforceBaseUrl, token);
             break;
           case 'Find':
           case 'Filter':
-            results[nodeId] = await queryNode(node, salesforceBaseUrl, token);
+            inputData.nodeConfig = {
+              salesforceObject: node.salesforceObject,
+              conditions: node.conditions
+            };
+            nodeResult = await queryNode(node, salesforceBaseUrl, token);
+            break;
+          case 'Loop':
+            inputData.nodeConfig = {
+              loopConfig: node.loopConfig,
+              previousResults: results
+            };
+
+            // Get the source collection from previous results
+            const sourceCollection = results[node.loopConfig.loopCollection];
+            if (!sourceCollection) {
+              throw new Error(`Source collection ${node.loopConfig.loopCollection} not found in previous results`);
+            }
+
+            nodeResult = await processLoopNode(node, results, currentContext, salesforceBaseUrl, token);
+
+            // Update context with loop results for subsequent nodes
+            if (nodeResult.loopContext) {
+              currentContext = { ...currentContext, ...nodeResult.loopContext };
+            }
+
+            // Store loop results for potential use by other nodes
+            results[nodeId] = nodeResult;
             break;
           case 'Path':
-            results[nodeId] = { status: 'processed', message: 'Path node processed' };
+            nodeResult = { status: 'processed', message: 'Path node processed' };
             break;
+          case 'Formatter':
+            inputData.formatterConfig = node.formatterConfig;
+            nodeResult = processFormatter(node.formatterConfig, currentContext);
+            // Update context if formatter has output variable
+            if (nodeResult.outputVariable && nodeResult.output !== undefined) {
+              currentContext[nodeResult.outputVariable] = nodeResult.output;
+            }
+            break;
+            case 'Google Sheet': {
+              try {
+                console.log('Here 2')
+                // Query Salesforce for GoogleCredentials__c record(s) for userId
+                const soql = `SELECT Id, Access_Token__c, Refresh_Token__c FROM GoogleCredentials__c WHERE User_Id__c='${userId}' AND TokenType__c = 'google-sheet'`;
+            
+                const queryUrl = `https://${instanceUrl}/services/data/v60.0/query?q=${encodeURIComponent(soql)}`;
+                const sfRes = await fetch(queryUrl, {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                  },
+                });
+            
+                if (!sfRes.ok) {
+                  const errorText = await sfRes.text();
+                  results[node.nodeId] = {
+                    success: false,
+                    error: "Failed to query Salesforce",
+                    details: errorText
+                  };
+                  break;
+                }
+            
+                const sfData = await sfRes.json();
+                console.log('sfData', sfData)
+                if (!sfData.records || sfData.records.length === 0) {
+                  results[node.nodeId] = {
+                    success: false,
+                    error: "No Google Credentials found for user"
+                  };
+                  break;
+                }
+            
+                const credential = sfData.records[0];
+                let access_token = credential.Access_Token__c;
+            
+                // Run Google Mapping Logic
+                const googleMappingResult = await runGoogleMapping({
+                  node,
+                  formData: currentContext,
+                  accessToken: access_token
+                });
+                results[node.nodeId] = googleMappingResult;
+                console.log('googleMappingResult', googleMappingResult)
+                // Log success or failure
+                await logNodeEventDirect({
+                  userId,
+                  submissionId,
+                  nodeId: node.nodeId,
+                  type: 'GoogleSheetMapping',
+                  status: googleMappingResult.success ? 'Success' : 'Failed',
+                  message: googleMappingResult.message,
+                  error: googleMappingResult.error || null,
+                  input: currentContext,
+                  output: googleMappingResult
+                });
+            
+              } catch (ex) {
+                console.error('GoogleSheetMapping node error:', ex);
+                results[node.nodeId] = { success: false, error: ex.message || 'Unknown error' };
+              }
+              break;
+            }            
           default:
-            results[nodeId] = { error: `Unsupported node type: ${nodeType}` };
+            nodeResult = { error: `Unsupported node type: ${nodeType}` };
         }
+
+        results[nodeId] = nodeResult;
+
+        // Log node result with detailed input/output
+        await logNodeEventDirect({
+          userId,
+          submissionId,
+          formId: formData.formId,
+          formVersionId,
+          nodeType,
+          type: 'Mapping',
+          subType: nodeType,
+          status: nodeResult.status || (nodeResult.error ? 'Failed' : 'Success'),
+          message: nodeResult.message || nodeResult.error || 'Node processed successfully',
+          error: nodeResult.error,
+          recordsMatched: nodeResult.recordsMatched,
+          updatedRecords: nodeResult.updatedRecords,
+          failedRecords: nodeResult.failedRecords,
+          input: inputData,
+          output: nodeResult
+        });
       }
 
       processedNodeIds.add(nodeId);
     } catch (error) {
       console.error(`Error processing node ${nodeId}:`, error);
       results[nodeId] = { error: error.message };
+
+      // Log node error with input context
+      await logNodeEventDirect({
+        userId,
+        submissionId,
+        formId: formData.formId,
+        formVersionId,
+        nodeType,
+        type: 'Mapping',
+        subType: nodeType,
+        status: 'Failed',
+        message: 'Error processing node',
+        error: error.message,
+        input: { context: currentContext },
+        output: { error: error.message }
+      });
     }
   }
 
@@ -1462,7 +1962,7 @@ const runFlow = async (nodes, formData, instanceUrl, token, userId, formVersionI
 export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}');
-    const { userId, instanceUrl, formVersionId, formData, nodes } = body;
+    const { userId, instanceUrl, formVersionId, formData, nodes, submissionId } = body;
     const token = event.headers.Authorization?.split(' ')[1] || event.headers.authorization?.split(' ')[1];
 
     if (!userId || !instanceUrl || !formVersionId || !formData || !nodes || !Array.isArray(nodes) || !token) {
@@ -1486,6 +1986,7 @@ export const handler = async (event) => {
         fieldMappings: node.Field_Mappings__c ? JSON.parse(node.Field_Mappings__c) : node.fieldMappings,
         loopConfig: node.Loop_Config__c ? JSON.parse(node.Loop_Config__c) : node.loopConfig,
         formatterConfig: node.Formatter_Config__c ? JSON.parse(node.Formatter_Config__c) : node.formatterConfig,
+        config: node.config || {} 
       };
     });
 
@@ -1498,10 +1999,10 @@ export const handler = async (event) => {
       };
     }
 
-    const flowResults = await runFlow(parsedNodes, formData, instanceUrl, token, userId, formVersionId);
+    const flowResults = await runFlow(parsedNodes, formData, instanceUrl, token, userId, formVersionId, submissionId);
 
     // Only consider results with status: 'failed' as critical errors
-    const hasCriticalErrors = Object.values(flowResults).some(result => 
+    const hasCriticalErrors = Object.values(flowResults).some(result =>
       result.status === 'failed' || (result.error && result.status !== 'skipped')
     );
 
@@ -1534,4 +2035,243 @@ export const handler = async (event) => {
       body: JSON.stringify({ error: error.message || 'Failed to execute flow' }),
     };
   }
+
 };
+
+// helper function for direct DynamoDB logging with correct format
+async function logNodeEventDirect(logData) {
+  try {
+    const timestamp = new Date().toISOString();
+    const recordId = logData.submissionId || logData.tempSubmissionId ;
+    const subType = logData.subType || 'NA';
+
+    // Simplify input and output based on node type
+    let simplifiedInput = {};
+    let simplifiedOutput = {};
+
+    switch (logData.subType) {
+      case 'CreateUpdate':
+        simplifiedInput = simplifyCreateUpdateInput(logData.input);
+        simplifiedOutput = simplifyCreateUpdateOutput(logData.output);
+        break;
+      case 'Find':
+      case 'Filter':
+        simplifiedInput = simplifyFindFilterInput(logData.input);
+        simplifiedOutput = simplifyFindFilterOutput(logData.output);
+        break;
+      case 'Condition':
+        simplifiedInput = simplifyConditionInput(logData.input);
+        simplifiedOutput = simplifyConditionOutput(logData.output);
+        break;
+      case 'Loop':
+        simplifiedInput = simplifyLoopInput(logData.input);
+        simplifiedOutput = simplifyLoopOutput(logData.output);
+        break;
+      case 'Formatter':
+        simplifiedInput = simplifyFormatterInput(logData.input);
+        simplifiedOutput = simplifyFormatterOutput(logData.output);
+        break;
+      default:
+        simplifiedInput = logData.input || {};
+        simplifiedOutput = logData.output || {};
+    }
+
+    await dynamoClient.send(new PutItemCommand({
+      TableName: LOG_TABLE_NAME,
+      Item: {
+        UserId: { S: logData.userId || '' },
+        SK: { S: `LOG#Submission Log#${subType}` },
+        RecordId: { S: recordId },
+        RecordType: { S: 'Submission Log' },
+        Type: { S: logData.type || 'Mapping' },
+        SubType: { S: subType },
+        Status: { S: logData.status || '' },
+        Message: { S: logData.message || '' },
+        Timestamp: { S: timestamp },
+        FormId: { S: logData.formId || '' },
+        FormVersionId: { S: logData.formVersionId || '' },
+        RetryStatus: { S: 'N/A' },
+        RetryAttempts: { N: '0' },
+        Data: {
+          S: JSON.stringify({
+            input: simplifiedInput,
+            output: simplifiedOutput,
+          })
+        },
+      },
+    }));
+
+    console.log('Node event stored directly in DynamoDB:', logData.nodeId);
+  } catch (error) {
+    console.error('Failed to store node event in DynamoDB:', error);
+  }
+}
+
+// Helper functions for simplifying input/output
+function simplifyCreateUpdateInput(inputData) {
+  if (!inputData?.nodeConfig) return {};
+
+  const { context, salesforceObject, conditions, fieldMappings } = inputData.nodeConfig;
+
+  // Extract only the visible form field values
+  const formValues = {};
+  if (context) {
+    Object.keys(context).forEach(key => {
+      if (context[key] !== undefined && context[key] !== null && context[key] !== '') {
+        formValues[key] = context[key];
+      }
+    });
+  }
+
+  // Build SOQL query for conditions
+  let query = null;
+  if (conditions && conditions.conditions && conditions.conditions.length > 0) {
+    try {
+      const queryNode = {
+        salesforceObject,
+        conditions,
+        type: 'Find'
+      };
+      query = buildSOQLQuery(queryNode);
+    } catch (error) {
+      query = 'Could not build query';
+    }
+  }
+
+  // Simplify field mappings
+  const mappings = fieldMappings?.map(mapping => ({
+    from: mapping.formFieldId,
+    to: mapping.salesforceField,
+    value: context?.[mapping.formFieldId] || 'N/A'
+  })) || [];
+
+  return {
+    object: salesforceObject,
+    query: query,
+    formValues: formValues,
+    fieldMappings: mappings
+  };
+}
+
+function simplifyCreateUpdateOutput(output) {
+  if (!output) return {};
+
+  return {
+    nodeId: output.nodeId,
+    success: output.success,
+    updatedRecords: output.updatedRecords?.length || 0,
+    failedRecords: output.failedRecords?.length || 0,
+    status: output.status,
+    recordId: output.recordId
+  };
+}
+
+function simplifyFindFilterInput(inputData) {
+  if (!inputData?.nodeConfig) return {};
+
+  const { salesforceObject, conditions } = inputData.nodeConfig;
+
+  // Build SOQL query
+  let query = null;
+  if (conditions) {
+    try {
+      const queryNode = {
+        salesforceObject,
+        conditions,
+        type: 'Find'
+      };
+      query = buildSOQLQuery(queryNode);
+    } catch (error) {
+      query = 'Could not build query';
+    }
+  }
+
+  return {
+    object: salesforceObject,
+    query: query
+  };
+}
+
+function simplifyFindFilterOutput(output) {
+  if (!output) return {};
+
+  return {
+    nodeId: output.nodeId,
+    recordsFound: Array.isArray(output.ids) ? output.ids.length : (output.ids ? 1 : 0),
+    recordIds: output.ids,
+    message: output.message
+  };
+}
+
+function simplifyConditionInput(inputData) {
+  if (!inputData) return {};
+
+  if (inputData.conditions && inputData.soqlQuery) {
+    return {
+      query: inputData.soqlQuery,
+      pathOption: inputData.conditions?.pathOption
+    };
+  }
+
+  return {
+    pathOption: inputData.conditions?.pathOption
+  };
+}
+
+function simplifyConditionOutput(output) {
+  if (!output) return {};
+
+  return {
+    nodeId: output.nodeId,
+    recordsMatched: output.recordsMatched || 0,
+    shouldContinue: output.shouldContinue,
+    message: output.message
+  };
+}
+
+function simplifyLoopInput(inputData) {
+  if (!inputData?.nodeConfig) return {};
+
+  const { loopConfig, previousResults } = inputData.nodeConfig;
+
+  return {
+    sourceCollection: loopConfig?.loopCollection,
+    itemsToProcess: previousResults?.[loopConfig?.loopCollection]?.ids?.length || 0
+  };
+}
+
+function simplifyLoopOutput(output) {
+  if (!output) return {};
+
+  return {
+    nodeId: output.nodeId,
+    processedCount: output.processedCount || 0,
+    status: output.status
+  };
+}
+
+function simplifyFormatterInput(inputData) {
+  if (!inputData?.formatterConfig) return {};
+
+  const { formatType, operation, inputField, options } = inputData.formatterConfig;
+
+  return {
+    type: formatType,
+    operation: operation,
+    inputField: inputField,
+    options: options
+  };
+}
+
+function simplifyFormatterOutput(output) {
+  if (!output) return {};
+
+  return {
+    nodeId: output.nodeId,
+    operation: output.operation,
+    inputValue: output.originalValue,
+    outputValue: output.output,
+    status: output.status,
+    error: output.error
+  };
+}

@@ -79,7 +79,7 @@ export const SalesforceDataProvider = ({ children }) => {
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
-      setFieldset(parsedFieldset);
+      setFieldset(Object.keys(parsedFieldset).length > 0 ? parsedFieldset : []);
       setdeletedData(parsedDeletedData);
       setfavoriteData(favoriteRecords);
       setFolders(folderData);
