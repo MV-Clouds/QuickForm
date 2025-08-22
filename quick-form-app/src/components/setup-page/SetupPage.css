@@ -1,0 +1,164 @@
+/* SetupPage.css */
+.full-page-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: url('/public/images/setup-bg.png');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.full-page-content {
+  display: flex;
+  width: 100%;
+  max-width: 1400px;
+  height: 100vh;
+  box-sizing: border-box;
+  gap: 2rem;
+}
+
+.logo{
+    margin-bottom: 3rem;
+}
+
+.content-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* padding-right: 60px; */
+}
+
+.text-content{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.text-content .text-heading {
+  font-size: 32px;
+  color: #2d3748;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 700px;
+  margin-top: 2rem;
+}
+
+.text-content .text-subheading {
+  font-size: 20px;
+  color: #4a5568;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.setup-btn {
+    width: 30%;
+    cursor: pointer;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.support-link p {
+  color: #718096;
+  font-size: 16px;
+  margin-bottom: 0;
+}
+
+.support-link a {
+  color: #028AB0;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.support-link a:hover {
+  text-decoration: underline;
+}
+
+.image-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* padding-left: 60px; */
+}
+
+.image-section img {
+  max-width: 100%;
+  max-height: 80vh;
+  height: auto;
+  width: auto;
+}
+
+/* Responsive design for tablets */
+@media (max-width: 1024px) {
+  .full-page-content {
+    padding: 40px;
+  }
+  
+  .content-section {
+    padding-right: 40px;
+  }
+  
+  .image-section {
+    padding-left: 40px;
+  }
+  
+  .text-content h1 {
+    font-size: 36px;
+  }
+  
+  .text-content p {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 900px) {
+  .full-page-content {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    padding: 60px 40px;
+  }
+  
+  .content-section {
+    padding-right: 0;
+    padding-bottom: 40px;
+    text-align: center;
+    align-items: center;
+  }
+  
+  .text-content p {
+    max-width: 100%;
+  }
+  
+  .image-section {
+    padding-left: 0;
+    padding-top: 40px;
+  }
+  
+  .image-section img {
+    max-height: 50vh;
+  }
+}
+
+/* Responsive design for mobile */
+@media (max-width: 480px) {
+  .full-page-content {
+    padding: 40px 20px;
+  }
+  
+  .text-content h1 {
+    font-size: 28px;
+  }
+  
+  .text-content p {
+    font-size: 16px;
+  }
+  
+  .setup-button {
+    width: 100%;
+    padding: 18px;
+  }
+}

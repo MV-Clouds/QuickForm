@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from 'react-router-dom';
-import { ReactFlowProvider } from "reactflow";
+import { ReactFlowProvider, useEdges } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
@@ -10,6 +10,7 @@ import { useSalesforceData } from '../Context/MetadataContext';
 const Sidebar = ({ onDragStart }) => {
   const actions = ["Create/Update", "Find"];
   const utilities = ["Formatter", "Filter", "Path", "Loop"];
+  const integrations = ["Google Sheet"]; // Add Google Sheet Integration
 
   return (
     <motion.div
@@ -19,7 +20,7 @@ const Sidebar = ({ onDragStart }) => {
       transition={{ duration: 0.3 }}
     >
       <h2 className="text-lg font-semibold text-gray-700 mb-6 border-b border-gray-200 pb-3">Actions</h2>
-      {actions.map((action) => (
+      {actions.map((action) => (        
         <motion.div
           key={action}
           draggable
@@ -50,6 +51,20 @@ const Sidebar = ({ onDragStart }) => {
           </svg>
         </motion.div>
       ))}
+      {/* New Integration Panel */}
+      <h2 className="text-lg font-semibold text-gray-700 mb-6 mt-8 border-b border-gray-200 pb-3">Integrations</h2>
+      {integrations.map((integration) => (
+        <motion.div
+          key={integration}
+          draggable
+          onDragStart={(event) => onDragStart(event, "integration", integration)}
+          className="mb-3 p-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-md cursor-grab shadow-sm hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200 ease-in-out flex items-center justify-between text-sm"
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+        >
+          <span>{integration}</span>
+        </motion.div>
+      ))}
     </motion.div>
   );
 };
@@ -70,6 +85,7 @@ const MappingFields = () => {
   const [nodes, setNodes] = useState([]); // Initialize empty to avoid premature rendering
   const [edges, setEdges] = useState([]);
   const tokenRef = useRef(null);
+  const [googleSheetConfig, setGoogleSheetConfig] = useState(null);
 
   const initialNodes = [
     {
@@ -89,10 +105,43 @@ const MappingFields = () => {
   ];
 
   const initialEdges = [];
-  console.log(metadata, 'metadata');
-  
-  console.log('formRecords ', formRecords);
 
+  const fetchGoogleSheetCredentials = async (token) => {
+    try {
+      const response = await fetch("fetchcustomsetting/fetch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch Google Sheet credentials.");
+      }
+
+      const data = await response.json();
+      return data.credentials; // Assuming the API returns credentials in this format
+    } catch (error) {
+      console.error("Error fetching Google Sheet credentials:", error);
+      return null;
+    }
+  };
+  const handleGoogleSheetConfig = async (nodeId) => {
+    if (!token) {
+      showToast("User not authenticated. Please log in again.", "error");
+      return;
+    }
+
+    const credentials = await fetchGoogleSheetCredentials(token);
+    if (!credentials) {
+      showToast("Failed to fetch Google Sheet credentials.", "error");
+      return;
+    }
+
+    setGoogleSheetConfig({ nodeId, credentials });
+  };
 
   const showToast = (message, type = 'error') => {
     setSaveError({ message, type });
@@ -205,7 +254,6 @@ const MappingFields = () => {
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
-console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       if (!token || !instanceUrl || !userId) {
         throw new Error('User not authenticated or instance URL missing');
       }
@@ -548,7 +596,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
             (actionType === "Condition" && nodeMapping.pathOption === "Rules")
             ? nodeMapping.salesforceObject || ""
             : "",
-        fieldMappings: actionType === "CreateUpdate" ? nodeMapping.fieldMappings || [] : [],
+        fieldMappings: actionType === "CreateUpdate" || actionType === 'Google Sheet' ? nodeMapping.fieldMappings || [] :  [],
         conditions:
           actionType === "Find" ||
             actionType === "Filter" ||
@@ -582,6 +630,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         order,
         formVersionId,
       };
+      if(actionType === 'Google Sheet') mappingData.selectedSheetName = nodeMapping.selectedSheetName || 'Default';
 
       allMappings.push(mappingData);
     }
@@ -677,7 +726,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
 
       // Extract mappings data from formVersion
       const mappingsData = formVersion.Mappings || {};
-
+      console.log(mappingsData)
       // Process the mappings data to match your component's expected format
       const processedMappings = {};
       const processedNodes = [];
@@ -734,7 +783,8 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                 mapping.actionType === 'Loop' || mapping.actionType === 'Formatter'
                 ? 'utility'
                 : 'action',
-            displayLabel: mapping.label || mapping.actionType
+            displayLabel: mapping.label || mapping.actionType,
+            selectedSheetName : mapping.selectedSheetName || 'Default'
           };
         });
 
@@ -808,7 +858,9 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       setIsLoading(false);
     }
   };
-
+  useEffect(()=>{
+    console.log('Mapping data' ,mappings)
+  },[mappings])
   useEffect(() => {
     initializeData();
   }, [formVersionId,formRecords]);
@@ -880,7 +932,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                   </ReactFlowProvider>
                 </div>
 
-                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition"].includes(selectedNode.data.action) && (
+                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition" , 'Google Sheet'].includes(selectedNode.data.action) && (
                   <ActionPanel
                     nodeId={selectedNode.id}
                     nodeType={selectedNode.data.action}
@@ -894,7 +946,8 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                     nodeLabel={selectedNode.data.action}
                     nodes={nodes}
                     edges={edges}
-
+                    credentials={googleSheetConfig?.credentials}
+                    sfToken = {token}
                   />
                 )}
               </div>

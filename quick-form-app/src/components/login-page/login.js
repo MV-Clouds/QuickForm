@@ -76,6 +76,12 @@ const Login = () => {
           sessionStorage.setItem('userId', event.data.userId); // Store userId
           sessionStorage.setItem('instanceUrl', event.data.instanceUrl); // Store instanceUrl
           navigate('/guest'); // Redirect to home
+        }
+        else if (event.data.type === 'setup_required') {
+          if (popup && !popup.closed) {
+            popup.close(); // Close popup
+          }
+          navigate('/setup'); // Redirect to setup page
         } else if (event.data === 'login_failed') {
           alert('Login failed. Please try again.'); // Show error
         }

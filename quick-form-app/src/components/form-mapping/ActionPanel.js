@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Select from "react-select";
 import { getCountryList } from "../form-builder-with-versions/getCountries";
@@ -6,7 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import timezones from "timezones-list";
 import countries from "i18n-iso-countries";
 import currencyCodes from "currency-codes";
-
+import { ArrowRightOutlined } from "@ant-design/icons";
+import CreatableSelect from "react-select/creatable";
+import { Select as AntSelect, Spin, Button, message } from "antd";
+const { Option } = AntSelect;
 countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
 
 const ActionPanel = ({
@@ -22,6 +24,7 @@ const ActionPanel = ({
   nodeLabel,
   nodes,
   edges,
+  sfToken
 }) => {
   const isFindNode = nodeType === "Find";
   const isCreateUpdateNode = nodeType === "Create/Update";
@@ -30,7 +33,11 @@ const ActionPanel = ({
   const isFormatterNode = nodeType === "Formatter";
   const isFilterNode = nodeType === "Filter";
   const isConditionNode = nodeType === "Condition";
-  const [selectedObject, setSelectedObject] = useState("");
+  const isGoogleSheet = nodeType === 'Google Sheet'
+
+  // const [selectedObject, setSelectedObject] = useState("");
+  const selectedObject = mappings[nodeId]?.salesforceObject || "";
+
   const [localMappings, setLocalMappings] = useState([{ formFieldId: "", fieldType: "", salesforceField: "", picklistValue: "" }]);
   const [conditions, setConditions] = useState([{ field: "", operator: "=", value: "", value2: "" }]);
   const [logicType, setLogicType] = useState("AND");
@@ -56,7 +63,11 @@ const ActionPanel = ({
   const [sortField, setSortField] = useState("");
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
-
+  const [sheetName, setSheetName] = useState("");
+  const [sheetLink, setSheetLink] = useState("");
+  const [fieldMappings, setFieldMappings] = useState([]);
+  const instanceUrl = sessionStorage.getItem('instanceUrl');
+  const userId = sessionStorage.getItem('userId');
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
     double: ["number", "price"],
@@ -74,11 +85,12 @@ const ActionPanel = ({
     time: ["time"],
   };
 
+  const selectedFindNode = mappings[nodeId]?.selectedFindNode || "";
+
   useEffect(() => {
     // Load node-specific mappings if they exist
     const nodeMapping = mappings[nodeId] || {};
 
-    setSelectedObject(nodeMapping.salesforceObject || "");
     setLocalMappings(nodeMapping.fieldMappings?.length > 0 ? nodeMapping.fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
     setConditions(
       nodeMapping.conditions?.length > 0
@@ -94,9 +106,10 @@ const ActionPanel = ({
     setSortField(nodeMapping.sortField || "");
     setSortOrder(nodeMapping.sortOrder || "ASC");
     setPathOption(nodeMapping.pathOption || (isConditionNode ? "Rules" : undefined));
-
+    setFieldMappings(nodeMapping?.fieldMappings || []);
+    setSheetName(nodeMapping?.selectedSheetName || "");
     const loopConfig = nodeMapping.loopConfig || {};
-    setCurrentItemVariableName(loopConfig.currentItemVariableName || "");
+    setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
     setMaxIterations(loopConfig.maxIterations || "");
     setExitConditions(
@@ -121,22 +134,17 @@ const ActionPanel = ({
     const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
       .filter((node) => node.data.action === "Find")
       .map((node) => node.id);
-    if (loopConfig.loopCollection && validCollectionOptions.includes(loopConfig.loopCollection)) {
-      setLoopCollection(loopConfig.loopCollection);
-    } else {
-      setLoopCollection("");
-      if (loopConfig.loopCollection) {
-        setSaveError("Selected loop collection is no longer valid. Please select a valid Find node.");
-        setMappings((prev) => ({
-          ...prev,
-          [nodeId]: {
-            ...prev[nodeId],
-            loopConfig: {
-              ...(prev[nodeId]?.loopConfig || {}),
-              loopCollection: "",
-            },
-          },
-        }));
+
+    // Handle loop collection
+    if (isLoopNode) {
+      const loopConfig = nodeMapping.loopConfig || {};
+      if (loopConfig.loopCollection && validCollectionOptions.includes(loopConfig.loopCollection)) {
+        setLoopCollection(loopConfig.loopCollection);
+      } else {
+        setLoopCollection("");
+        if (loopConfig.loopCollection) {
+          setSaveError("Selected loop collection is no longer valid. Please select a valid Find node.");
+        }
       }
     }
   }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
@@ -160,7 +168,7 @@ const ActionPanel = ({
           setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
         });
     }
-  }, [selectedObject, salesforceObjects, fetchSalesforceFields]);
+  }, []);
 
   const operatorGroups = {
     text: [
@@ -374,6 +382,17 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
+  const handleSave = () => {
+    setMappings((prev) => ({
+      ...prev,
+      [nodeId]: {
+        ...prev[nodeId],
+        selectedSheetName: sheetName,
+        fieldMappings,
+      },
+    }));
+    onClose();
+  };
 
   const handleMappingChange = (index, key, value, extra = {}) => {
     const newMappings = [...localMappings];
@@ -453,6 +472,43 @@ const ActionPanel = ({
     );
   };
 
+  const handleFindNodeChange = (selected, isLoop = false) => {
+    const findNodeId = selected ? selected.value : "";
+    console.log('isLoop:', isLoop, 'findNodeId:', findNodeId);
+    
+    if (isLoop) {
+      console.log('Setting loop collection to:', findNodeId);
+      
+      setLoopCollection(findNodeId);
+      // Update mappings state for loop collection
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          loopConfig: {
+            ...(prev[nodeId]?.loopConfig || {}),
+            loopCollection: findNodeId,
+          },
+        },
+      }));
+    } else {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          selectedFindNode: findNodeId,
+        },
+      }));
+    }
+
+    // Get the Salesforce object from the selected Find node
+    if (findNodeId && mappings[findNodeId] && mappings[findNodeId].salesforceObject) {
+      handleObjectChange(mappings[findNodeId].salesforceObject);
+    } else {
+      handleObjectChange("");
+    }
+  };
+
   const addMapping = () => {
     setLocalMappings((prev) => [...prev, { formFieldId: "", fieldType: "", salesforceField: "" }]);
   };
@@ -492,45 +548,26 @@ const ActionPanel = ({
     }));
   };
 
-  // const handleObjectSelect = (selectedOption) => {
-  //   if (!selectedOption) {
-  //     setSelectedObject("");
-  //     return;
-  //   }
-
-  //   const selectedObjectName = selectedOption.value;
-  //   setSelectedObject(selectedObjectName);
-
-  //   const shouldFetchFields =
-  //     selectedObjectName &&
-  //     (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
-
-  //   if (!shouldFetchFields) return;
-
-  //   fetchSalesforceFields(selectedObjectName)
-  //     .then((data) => {
-  //       const newFields = data.fields;
-
-  //       setSalesforceObjects(prev => [
-  //         ...prev.filter(obj => obj.name !== selectedObjectName), // remove old entry if any
-  //         { name: selectedObjectName, fields: newFields }          // add fresh entry
-  //       ]);
-  //     })
-  //     .catch((error) => {
-  //       setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
-  //     });
-  // };
+  const handleObjectChange = (objectName) => {
+    setMappings((prev) => ({
+      ...prev,
+      [nodeId]: {
+        ...prev[nodeId],
+        salesforceObject: objectName,
+      },
+    }));
+  };
 
   const handleObjectSelect = (selectedOption) => {
     if (!selectedOption) {
-      setSelectedObject("");
+      handleObjectChange("");
       setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
       return;
     }
 
     const selectedObjectName = selectedOption.value;
-    setSelectedObject(selectedObjectName);
 
+    handleObjectChange(selectedObjectName);
     const shouldFetchFields =
       selectedObjectName &&
       (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
@@ -586,13 +623,25 @@ const ActionPanel = ({
     .filter((node) => node.data.action === "Find")
     .map((node) => ({
       value: node.id,
-      label: `${node.data.label}.records`,
+      label: `${node.data.label}`,
     }));
 
   const saveLocalMappings = () => {
     console.log("Saving mappings for node:", nodeId, "Formatter Config:", formatterConfig);
 
-    if ((isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
+    // For Filter nodes, validate that a Find node is selected
+    if (isFilterNode && !selectedFindNode) {
+      setSaveError("Please select a Find node.");
+      return;
+    }
+
+    // For Filter nodes, validate that we have an object from the Find node
+    if (isFilterNode && !selectedObject) {
+      setSaveError("The selected Find node does not have a Salesforce object configured.");
+      return;
+    }
+
+    if ((isCreateUpdateNode || isFindNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
       setSaveError("Please select a Salesforce object.");
       return;
     }
@@ -812,6 +861,7 @@ const ActionPanel = ({
         ...prev,
         [nodeId]: {
           actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
+          selectedFindNode: isFilterNode || isConditionNode || isLoopNode ? selectedFindNode : '',
           salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
           fieldMappings: isCreateUpdateNode ? validMappings.map(m => ({
             formFieldId: m.formFieldId,
@@ -1067,41 +1117,54 @@ const ActionPanel = ({
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-5">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Field</label>
-                {isExit ? (
-                  <input
-                    type="text"
-                    value={condition.field}
-                    onChange={(e) => handleConditionChange(index, "field", e.target.value, conditionType)}
-                    placeholder={`e.g., ${currentItemVariableName || "currentRecord"}.Email`}
-                    className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <Select
-                    value={fieldOptions.find((opt) => opt.value === condition.field) || null}
-                    onChange={(selected) => handleConditionChange(index, "field", selected ? selected.value : "", conditionType)}
-                    options={fieldOptions}
-                    placeholder="Select Field"
-                    styles={{
-                      container: (base) => ({
-                        ...base,
-                        borderRadius: "0.375rem",
-                        borderColor: "#e5e7eb",
-                        fontSize: "0.875rem",
-                      }),
-                      control: (base) => ({
-                        ...base,
-                        minHeight: "34px",
-                      }),
-                      menu: (base) => ({
-                        ...base,
-                        zIndex: 9999,
-                      }),
-                    }}
-                    isDisabled={!selectedObject}
-                    isClearable
-                    classNamePrefix="select"
-                  />
-                )}
+                <Select
+                  value={
+                    fieldOptions.find((opt) => opt.value === condition.field)
+                      ? {
+                        ...fieldOptions.find((opt) => opt.value === condition.field),
+                        label: isExit && currentItemVariableName
+                          ? `${currentItemVariableName}.${fieldOptions.find((opt) => opt.value === condition.field).label}`
+                          : fieldOptions.find((opt) => opt.value === condition.field).label
+                      }
+                      : null
+                  }
+                  onChange={(selected) =>
+                    handleConditionChange(
+                      index,
+                      "field",
+                      selected ? selected.value : "",
+                      conditionType
+                    )
+                  }
+                  options={
+                    isExit && currentItemVariableName
+                      ? fieldOptions.map((opt) => ({
+                        ...opt,
+                        label: `${currentItemVariableName}.${opt.label}`,
+                      }))
+                      : fieldOptions
+                  }
+                  placeholder="Select Field"
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                  }}
+                  isDisabled={!selectedObject}
+                  isClearable
+                  classNamePrefix="select"
+                />
               </div>
 
               <div className="col-span-2">
@@ -1228,6 +1291,16 @@ const ActionPanel = ({
           )}
         </AnimatePresence>
 
+        {isGoogleSheet && (
+          <motion.div
+            className=""
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+          >
+            <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} />
+          </motion.div>
+        )}
         <div className="space-y-6">
           {(isPathNode || isConditionNode) && (
             <motion.div
@@ -1265,51 +1338,10 @@ const ActionPanel = ({
                   classNamePrefix="select"
                 />
               </div>
-              {pathOption === "Rules" && (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-gray-50 p-4 rounded-lg border border-gray-200"
-                  >
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Object</label>
-                    <Select
-                      value={objectOptions.find((opt) => opt.value === selectedObject) || null}
-                      onChange={handleObjectSelect}
-                      options={objectOptions}
-                      placeholder={objectOptions.length ? "Select Salesforce Object" : "No Objects Available"}
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          marginTop: "4px",
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          borderColor: "#e5e7eb",
-                          minHeight: "42px",
-                          "&:hover": {
-                            borderColor: "#d1d5db",
-                          },
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      isClearable
-                      isDisabled={!objectOptions.length}
-                      classNamePrefix="select"
-                    />
-                  </motion.div>
-                  {renderConditions("conditions")}
-                </>
-              )}
             </motion.div>
           )}
 
-          {(isCreateUpdateNode || isFindNode || isFilterNode) && (
+          {(isCreateUpdateNode || isFindNode) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1348,19 +1380,28 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {isLoopNode && (
+          {(isFilterNode || (pathOption == 'Rules') || isLoopNode) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="space-y-6"
+              className="p-4 rounded-lg border border-gray-200"
             >
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Loop Collection</label>
+              <div className="">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {isLoopNode ? "Select Collection Node" : "Select Find Node"}
+                </label>
+                
                 <Select
-                  value={collectionOptions.find((opt) => opt.value === loopCollection) || null}
-                  onChange={(selected) => setLoopCollection(selected ? selected.value : "")}
+                  value={
+                    collectionOptions.find(
+                      (opt) =>
+                        opt.value === (isLoopNode ? loopCollection : selectedFindNode)
+                    ) || null
+                  }
+                 
+                  onChange={(selected) => handleFindNodeChange(selected, isLoopNode)}
                   options={collectionOptions}
-                  placeholder={collectionOptions.length ? "Select Collection" : "No data collection available"}
+                  placeholder={collectionOptions.length ? "Select Find Node" : "No Find Nodes Available"}
                   styles={{
                     container: (base) => ({
                       ...base,
@@ -1376,12 +1417,6 @@ const ActionPanel = ({
                         borderColor: "#d1d5db",
                       },
                     }),
-                    placeholder: (base) => ({
-                      ...base,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }),
                     menu: (base) => ({
                       ...base,
                       zIndex: 9999,
@@ -1391,11 +1426,21 @@ const ActionPanel = ({
                   isDisabled={!collectionOptions.length}
                   classNamePrefix="select"
                 />
-                {!collectionOptions.length && (
-                  <p className="text-red-500 text-xs mt-2">No data collection available. Please add a Find node upstream.</p>
+                {selectedObject && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Using Salesforce object: <span className="font-medium">{selectedObject}</span>
+                  </p>
                 )}
               </div>
+            </motion.div>
+          )}
 
+          {isLoopNode && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Item Variable Name</label>
                 <input
@@ -1493,7 +1538,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {(isFindNode || isFilterNode) && (
+          {(isFindNode || isFilterNode || (pathOption == 'Rules')) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1501,79 +1546,83 @@ const ActionPanel = ({
             >
               {renderConditions("conditions")}
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Return Limit (optional, max 100)</label>
-                <input
-                  type="number"
-                  value={returnLimit}
-                  onChange={(e) => setReturnLimit(e.target.value)}
-                  placeholder="Leave blank for all records"
-                  className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                  min="1"
-                  max="100"
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
-              </div>
+              {(!isConditionNode) && (
+                <>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Limit (optional, max 100)</label>
+                    <input
+                      type="number"
+                      value={returnLimit}
+                      onChange={(e) => setReturnLimit(e.target.value)}
+                      placeholder="Leave blank for all records"
+                      className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                      min="1"
+                      max="100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
+                  </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Sort Records (optional)</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
-                    <Select
-                      value={fieldOptions.find((opt) => opt.value === sortField) || null}
-                      onChange={(selected) => setSortField(selected ? selected.value : "")}
-                      options={fieldOptions}
-                      placeholder="Select Field"
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                          fontSize: "0.875rem",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          minHeight: "34px",
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      isDisabled={!selectedObject}
-                      isClearable
-                      classNamePrefix="select"
-                    />
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Sort Records (optional)</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
+                        <Select
+                          value={fieldOptions.find((opt) => opt.value === sortField) || null}
+                          onChange={(selected) => setSortField(selected ? selected.value : "")}
+                          options={fieldOptions}
+                          placeholder="Select Field"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          isDisabled={!selectedObject}
+                          isClearable
+                          classNamePrefix="select"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Sort Order</label>
+                        <Select
+                          value={sortOrderOptions.find((opt) => opt.value === sortOrder) || null}
+                          onChange={(selected) => setSortOrder(selected ? selected.value : "ASC")}
+                          options={sortOrderOptions}
+                          placeholder="Select Order"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Sort Order</label>
-                    <Select
-                      value={sortOrderOptions.find((opt) => opt.value === sortOrder) || null}
-                      onChange={(selected) => setSortOrder(selected ? selected.value : "ASC")}
-                      options={sortOrderOptions}
-                      placeholder="Select Order"
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                          fontSize: "0.875rem",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          minHeight: "34px",
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      classNamePrefix="select"
-                    />
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </motion.div>
           )}
 
@@ -1584,12 +1633,11 @@ const ActionPanel = ({
               className="space-y-6"
             >
               <div className="space-y-4">
-               
+
                 {localMappings.map((mapping, index) => {
                   const isRequiredField = selectedObject && safeSalesforceObjects
                     .find(obj => obj.name === selectedObject)
                     ?.fields?.find(f => f.name === mapping.salesforceField && f.required);
-
                   return (
                     <motion.div
                       key={index}
@@ -1785,7 +1833,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          
+
           {isFormatterNode && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -2487,6 +2535,273 @@ const ActionPanel = ({
         </div>
       </div>
     </motion.div>
+  );
+};
+
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave, sheetLink, setsheetLink, instanceUrl, userId, sfToken }) => {
+  const [error, setError] = useState("");
+  const [spreadsheets, setSpreadsheets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState([]);
+
+  async function fetchSpreadsheets({ instanceUrl, sfToken, userId }) {
+    const apiUrl = "https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch";
+
+    if (!instanceUrl || !sfToken || !userId) {
+      throw new Error("Missing required parameters: instanceUrl, sfToken, userId");
+    }
+
+    // Build URL with query parameters
+    const url = new URL(apiUrl);
+    url.searchParams.append("instanceUrl", instanceUrl);
+    url.searchParams.append("sfToken", sfToken);
+    url.searchParams.append("userId", userId);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        // Try to parse error details from response body if JSON
+        let errorBody;
+        try {
+          errorBody = await response.json();
+        } catch {
+          errorBody = await response.text();
+        }
+        throw new Error(`API Error ${response.status}: ${JSON.stringify(errorBody)}`);
+      }
+
+      const data = await response.json();
+      return data; // expected to contain { spreadsheets: [...] }
+    } catch (error) {
+      // Network error or other unexpected error
+      console.error("Fetch spreadsheets failed:", error);
+      throw new Error(`Failed to fetch spreadsheets: ${error.message}`);
+    }
+  }
+
+  useEffect(() => {
+    async function loadSpreadsheets() {
+      try {
+        setLoading(true);
+        const result = await fetchSpreadsheets({ instanceUrl, sfToken, userId });
+        setSpreadsheets(result.spreadsheets);
+        setError(null);
+        console.log('Results ==>', result.spreadsheets)
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (!sheetName) {
+      console.log('sheetname', !sheetName)
+      loadSpreadsheets();
+    }
+  }, [instanceUrl, sfToken, userId]);
+  // Handler when spreadsheet is selected
+  // When a spreadsheet is selected, update sheetName and set its columns
+  const onSpreadsheetChange = (spreadsheetId) => {
+    const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+    if (selected) {
+      setSheetName(selected.spreadsheetName);
+      setSelectedColumns(selected.columns || []);
+      if (selected.columns[0]) {
+        // Populate fieldMappings automatically based on columns
+        const newMappings = selected.columns[0]
+          .map(col => ({
+            column: col,
+            id: "",     // no form field selected yet
+            name: "",
+            label: col  // keep label as trimmed column
+          }));
+        setFieldMappings(newMappings);
+      } else {
+        setSelectedColumns([]);
+        setFieldMappings([]);
+      }
+    }
+  };
+  // Add a new mapping entry
+  const addFieldMapping = () => {
+    setFieldMappings([...fieldMappings, { column: "", id: "", name: "" }]);
+    setError("");
+  };
+
+  // Remove a mapping entry
+  const removeFieldMapping = (index) => {
+    setFieldMappings(fieldMappings.filter((_, i) => i !== index));
+    setError("");
+  };
+
+  // Handle column name (left side): select or create
+  const handleColumnChange = (index, val) => {
+    const updated = [...fieldMappings];
+    updated[index].column = val?.value || "";
+    updated[index].label = val?.label || "Label";
+    console.log(val)
+    setFieldMappings(updated);
+  };
+
+  // Handle form field (right side)
+  const handleFieldChange = (index, val) => {
+    const field = formFields.find(f => f.id === val.value);
+    const updated = [...fieldMappings];
+    updated[index].id = field.id;
+    updated[index].name = field.name;
+    setFieldMappings(updated);
+  };
+
+  // Validation & Save
+  const handleSave = () => {
+    if (!sheetName) {
+      setError("Please provide a sheet name.");
+      return;
+    }
+    const hasError = fieldMappings.some(m => !m.column || !m.id);
+    if (hasError) {
+      setError("Please map all columns and form fields.");
+      return;
+    }
+    const columnNames = fieldMappings.map(m => m.column);
+    if (new Set(columnNames).size !== columnNames.length) {
+      setError("Sheet column names must be unique.");
+      return;
+    }
+    setError("");
+    message.success("Mapping config saved!");
+    onSave();
+  };
+
+  // For left-side column suggestions (show already used columns + allow new)
+  const usedColumns = fieldMappings.map(m => m.column).filter(n => !!n);
+  const columnOptions = usedColumns.map(col => ({ value: col, label: col }));
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        {/* <label style={{ fontWeight: 600 }}>Sheet Name</label>
+        <input
+          style={{ marginTop: 4, maxWidth: 300, padding: 8, border: "1px solid #eee", borderRadius: 4 }}
+          value={sheetName}
+          onChange={e => setSheetName(e.target.value)}
+          placeholder="Google Sheet Name"
+        /> */}
+        <label style={{ fontWeight: 600, marginRight: 10 }}>Select Spreadsheet</label>
+        {loading ? (
+          <Spin />
+        ) : (
+          <AntSelect
+            style={{ width: 300 }}
+            placeholder="Select a spreadsheet"
+            value={sheetName || undefined}
+            onChange={onSpreadsheetChange}
+            allowClear
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().includes(input.toLowerCase())
+            }
+          >
+            {spreadsheets?.map(sheet => (
+              <Option key={sheet.spreadsheetId} value={sheet.spreadsheetId}>
+                {sheet.spreadsheetName}
+              </Option>
+            ))}
+          </AntSelect>
+        )}
+
+      </div>
+      <div>
+        <label style={{ fontWeight: 600 }}>Column &rarr; Form Field Mapping</label>
+        <AnimatePresence>
+          {fieldMappings.map((mapping, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              style={{
+                display: "flex",
+                gap: 16,
+                alignItems: "center",
+                marginBottom: 12,
+                background: "#f9fafb",
+                padding: 12,
+                borderRadius: 8,
+                border: error && (!mapping.column || !mapping.id) ? "1px solid #ff4d4f" : "1px solid #e5e7eb",
+                boxShadow: "0 2px 8px 0 rgba(0,0,0,0.03)",
+              }}
+            >
+              <CreatableSelect
+                style={{ width: 170 }}
+                placeholder="Sheet Column"
+                value={mapping.column ? { value: mapping.column, label: mapping.label } : null}
+                onChange={val => handleColumnChange(index, val)}
+                options={formFields
+                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                  .map(f => ({ value: f.id, label: f.name }))}
+                isClearable
+                size="middle"
+
+                // Prevent duplication of column names already chosen elsewhere
+                isOptionDisabled={option =>
+                  fieldMappings.some((m, i) => m.column === option.value && i !== index)
+                }
+              />
+              <motion.div
+                initial={{ scale: 0.67, opacity: 0.7 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", duration: 0.45 }}
+                style={{ pointerEvents: "none" }}
+              >
+                <ArrowRightOutlined style={{ fontSize: 22, color: "#1890ff" }} />
+              </motion.div>
+              <Select
+                style={{ width: 170 }}
+                placeholder="Form Field"
+                value={mapping.id ? { value: mapping.id, label: mapping.name } : null}
+                onChange={val => handleFieldChange(index, val)}
+                options={formFields
+                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                  .map(f => ({ value: f.id, label: f.name }))
+                }
+                showSearch
+                allowClear
+                size="middle"
+              />
+              <Button
+                danger
+                onClick={() => removeFieldMapping(index)}
+                disabled={fieldMappings.length <= 1}
+                type="default"
+              >
+                Remove
+              </Button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <Button onClick={addFieldMapping} type="primary" style={{ marginTop: 6 }}>
+          Add More Fields
+        </Button>
+      </div>
+      {error && <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{ color: "#ff4d4f", marginTop: 16, fontWeight: 500 }}
+      >
+        {error}
+      </motion.div>}
+      <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        <Button onClick={handleSave} type="primary">Save</Button>
+      </div>
+    </div>
   );
 };
 
