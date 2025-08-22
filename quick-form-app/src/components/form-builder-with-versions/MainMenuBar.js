@@ -3,13 +3,36 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSalesforceData } from '../Context/MetadataContext';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId, publishLink  }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId, publishLink, submissionStats  }) {
   const navigate = useNavigate();
   const [submissionCount, setSubmissionCount] = useState(0);
   const { userProfile } = useSalesforceData();
 
   useEffect(() => {
-    setSubmissionCount(6);
+    if (!selectedVersionId || !formRecords || formRecords.length === 0) {
+      setSubmissionCount(0);
+      return;
+    }
+
+    // Find the form record that contains the selected version
+    const currentFormRecord = formRecords.find((record) =>
+      record.FormVersions?.some((version) => version.Id === selectedVersionId)
+    );
+
+    if (currentFormRecord) {
+      // Find the specific version and get its submission count
+      const currentVersion = currentFormRecord.FormVersions.find(
+        (version) => version.Id === selectedVersionId
+      );
+
+      if (currentVersion && currentVersion.Submission_Count__c !== undefined) {
+        setSubmissionCount(currentVersion.Submission_Count__c || 0);
+      } else {
+        setSubmissionCount(0);
+      }
+    } else {
+      setSubmissionCount(0);
+    }
   }, [selectedVersionId, formRecords]);
 
   const handleMappingClick = () => {
@@ -70,29 +93,54 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
       ),
     },
     {
-      name: 'Submission',
-      path: '/submissions',
+      name: "Submission",
+      path: "/submissions",
       route: `/submissions`,
-      onClick: () => {/* Handle submission functionality */ },
+      onClick: () =>
+        selectedVersionId && navigate(`/submissions/${selectedVersionId}`),
       icon: (
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
           <defs>
-            <linearGradient id="submissionIconGradient" x1="100%" y1="0%" x2="0%" y2="0%">
+            <linearGradient
+              id="submissionIconGradient"
+              x1="100%"
+              y1="0%"
+              x2="0%"
+              y2="0%"
+            >
               <stop offset="0%" stopColor="rgba(11, 41, 94, 1)" />
               <stop offset="100%" stopColor="rgba(29, 109, 158, 1)" />
             </linearGradient>
           </defs>
           <path
             d="M7.5075 20.25H5.25C4.42157 20.25 3.75 19.5784 3.75 18.75V5.25C3.75 4.42157 4.42157 3.75 5.25 3.75H18.75C19.5784 3.75 20.25 4.42157 20.25 5.25V10.5M9.915 16.479L12.6208 19.1848C13.2066 19.7706 14.1564 19.7706 14.7422 19.1848L20.4615 13.4655M7 7H16M7 10H14M7 13H11"
-            stroke={window.location.pathname.includes('/submissions') ? "url(#submissionIconGradient)" : "#0B0A0A"}
-            fill={window.location.pathname.includes('/submissions') ? "url(#submissionIconGradient)" : ""}
+            stroke={
+              window.location.pathname.includes("/submissions")
+                ? "url(#submissionIconGradient)"
+                : "#0B0A0A"
+            }
+            fill={
+              window.location.pathname.includes("/submissions")
+                ? "url(#submissionIconGradient)"
+                : ""
+            }
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
         </svg>
       ),
-      badge: submissionCount,
+      // Prefer the centralized submissionStats if provided (keeps counts accurate)
+      badge:
+        submissionStats && typeof submissionStats.totalSubmissions === "number"
+          ? submissionStats.totalSubmissions
+          : submissionCount,
     },
     {
       name: 'Notification',

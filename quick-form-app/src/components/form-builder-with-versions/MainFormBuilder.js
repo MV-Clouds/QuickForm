@@ -23,6 +23,7 @@ import SharePage from '../share-page/SharePage.js'
 import Prefill from '../form-prefill/Prefill.js';
 import { enhancedFormPaymentProcessor } from "./payment-fields/EnhancedFormPaymentProcessor";
 import { setUserContext } from "./payment-fields/paypal/api/paypalApi";
+import Submissions from "./Submissions";
 
 const themes = [
   {
@@ -96,7 +97,8 @@ function MainFormBuilder({
   showNotification,
   showCondition,
   showShare,
-  showPrefill
+  showPrefill,
+  showSubmission
 }) {
   // const { formVersionId } = useParams();
   const { Fieldset: fieldsets } = useSalesforceData();
@@ -126,6 +128,11 @@ function MainFormBuilder({
 
   const [formRecords, setFormRecords] = useState([]);
   const [publishLink, setPublishLink] = useState('');
+   const [submissionStats, setSubmissionStats] = useState({
+    totalSubmissions: 0,
+    recentSubmissions: 0,
+    lastSubmissionDate: null,
+  });
 
   const [fieldsState, { set: setFields, undo, redo, canUndo, canRedo }] =
     useUndo([]);
@@ -669,6 +676,37 @@ function MainFormBuilder({
       setHasChanges(hasFieldChanges);
     }
   }, [fields]);
+
+  const updateSubmissionStats = (submissions) => {
+    if (!submissions || submissions.length === 0) {
+      setSubmissionStats({
+        totalSubmissions: 0,
+        recentSubmissions: 0,
+        lastSubmissionDate: null,
+      });
+      return;
+    }
+
+    const now = new Date();
+    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const recentSubmissions = submissions.filter(
+      (sub) => new Date(sub.submissionDate) >= last24Hours
+    ).length;
+
+    const lastSubmissionDate =
+      submissions.length > 0
+        ? new Date(
+            Math.max(...submissions.map((sub) => new Date(sub.submissionDate)))
+          )
+        : null;
+
+    setSubmissionStats({
+      totalSubmissions: submissions.length,
+      recentSubmissions,
+      lastSubmissionDate,
+    });
+  };
 
   const prepareFormData = (isNewForm = false) => {
     const pages = [];
@@ -1733,7 +1771,15 @@ function MainFormBuilder({
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
             <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish}/>
-          ) : showPrefill ? <Prefill /> : showNotification ? (
+          ) : showSubmission ? (
+            <Submissions
+              isSidebarOpen={isSidebarOpen}
+              formVersionId={formVersionId}
+              onStatsUpdate={updateSubmissionStats}
+              formId={formId}
+            />
+          ) 
+          : showPrefill ? <Prefill /> : showNotification ? (
             <NotificationPage
               currentFields={formVersions[0]?.Fields}
               sendNotificationData={sendNotificationData}

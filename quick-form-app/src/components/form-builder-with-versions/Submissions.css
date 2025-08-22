@@ -1,0 +1,1046 @@
+/* Submissions Component Styles - improved visual system */
+:root {
+    --page-bg: #f3f5f7;
+    --card-bg: #ffffff;
+    --header-grad-left: #2fb7d9;
+    /* approximate */
+    --header-grad-right: #3ca9c9;
+    /* approximate */
+    --primary: #0b2960;
+    /* deep navy used in selection bar */
+    --primary-2: #1d6d9e;
+    /* teal-blue */
+    --accent: #1f6fb0;
+    /* action blue */
+    --muted: #6b7280;
+    --text: #0f1724;
+    --table-header-bg: #eef7fb;
+    --table-border: #e6e9ee;
+}
+
+.main-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    /* Use 100% to be flexible, not 100vh */
+    display: flex;
+    flex-direction: column;
+    /* keep layout contained but allow modals to escape via fixed positioning */
+    overflow: hidden;
+
+}
+
+.submissions-container {
+    background-color: var(--page-bg);
+    min-height: 100vh;
+    padding: 1.5rem;
+}
+
+.submissions-container input[type="checkbox"]:checked~table .row-checkbox {
+    opacity: 1 !important;
+}
+
+/* When component is in selection mode (JS sets .selected-mode) show all checkboxes */
+.selected-mode .row-checkbox {
+    opacity: 1 !important;
+}
+
+.submissions-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(15, 23, 36, 0.06);
+    /* CSS variables used by JS to position sticky columns so offsets stay in sync
+         Default values provide a sensible fallback before JS runs. */
+    --sticky-left-0: 0px;
+    --sticky-left-1: 64px;
+    --sticky-left-2: 160px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.submissions-header {
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid var(--table-border);
+    background: linear-gradient(90deg, var(--header-grad-left), var(--header-grad-right));
+    color: var(--card-bg);
+}
+
+.tab-section {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+
+}
+
+.controls-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--table-border);
+}
+
+.search-input {
+    position: relative;
+}
+
+.search-input input {
+    padding-left: 2.5rem;
+    padding-right: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    width: 18rem;
+    transition: box-shadow 0.16s, border-color 0.16s;
+    background: white;
+    color: var(--text);
+}
+
+.search-input input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 6px 20px rgba(31, 111, 176, 0.08);
+}
+
+.search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    width: 1rem;
+    height: 1rem;
+}
+
+.filter-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.56rem 0.9rem;
+    border: 1px solid #e6e9ee;
+    border-radius: 10px;
+    background: white;
+    color: var(--text);
+    font-size: 0.95rem;
+    cursor: pointer;
+    position: relative;
+}
+
+.filter-button:hover {
+    background: #fbfdff;
+}
+
+.filter-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.5rem;
+    background: white;
+    border: 1px solid var(--table-border);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(15, 23, 36, 0.08);
+    z-index: 50;
+    min-width: 200px;
+}
+
+/* Modal styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 36, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 36, 0.12);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--table-border);
+}
+
+.modal-header {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--table-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    position: relative;
+    height: 100%;
+}
+
+.results-count {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.date-range-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.submissions-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.submissions-table th {
+    border-bottom: 1px solid #E4E7EC;
+}
+
+.submissions-table td {
+    border: 1px solid #E4E7EC;
+}
+
+/* Sticky header and improved header visuals */
+thead.sticky-header th {
+    background: var(--table-header-bg);
+    border-bottom: 1px solid var(--table-border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+thead.sticky-header th {
+    padding: 14px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* tbody tr {
+    border-bottom: 1px solid var(--table-border);
+}
+
+tbody tr:hover {
+    background: #fbfdff;
+} */
+
+/* Row lines and spacing to emulate screenshot */
+.submissions-table tbody tr {
+    border-bottom: 1px solid #eef2f6;
+}
+
+.submissions-table tbody td {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+/* Left-most columns spacing */
+.eye-checkbox-col,
+.eye-checkbox-cell {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.preview-title {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.preview-submitted {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+/* Table cells */
+.table-cell {
+    padding: 14px 12px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.table-cell.date-cell {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* Checkbox and eye button styles */
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.row-checkbox {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+tr:hover .row-checkbox {
+    opacity: 1;
+}
+
+/* Selection mode uses .selected-mode class applied by JS */
+
+.eye-button {
+    opacity: 1;
+    margin-left: 0.5rem;
+}
+
+/* Sticky columns: left-most checkbox, preview button, date */
+/* Body sticky columns (lower z so header can sit above them) */
+.sticky-col {
+    position: sticky;
+    left: var(--sticky-left-0);
+    z-index: 10;
+    background: var(--card-bg);
+}
+
+.sticky-col-2 {
+    position: sticky;
+    left: var(--sticky-left-1);
+    z-index: 9;
+    background: var(--card-bg);
+}
+
+.sticky-col-3 {
+    position: sticky;
+    left: var(--sticky-left-2);
+    z-index: 8;
+    background: var(--card-bg);
+}
+
+/* Ensure the table header creates a higher stacking context and sits above body cells */
+.submissions-table thead {
+    position: sticky;
+    /* reinforce */
+    top: 0;
+    z-index: 200;
+    /* high so header sits above sticky body cells */
+    background: var(--table-header-bg);
+}
+
+.submissions-table thead th {
+    /* ensure each th is above body td */
+    background: var(--table-header-bg);
+}
+
+/* Column resize handle */
+.col-resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.col-resize-handle:before {
+    content: '';
+    width: 2px;
+    height: 36px;
+    background: transparent;
+    transition: background 0.12s;
+}
+
+th.group:hover .col-resize-handle:before {
+    background: rgba(59, 130, 246, 0.18);
+}
+
+/* Sort indicator styling: lighter on hover, stronger when active */
+.sort-indicator {
+    color: rgba(15, 23, 36, 0.35);
+    transition: color 0.12s;
+}
+
+.sorted-col .sort-indicator {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.sort-hover {
+    color: transparent;
+    transition: color 0.12s;
+}
+
+.group:hover .sort-hover {
+    color: rgba(15, 23, 36, 0.35);
+}
+
+/* Inputs */
+.checkbox-input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+}
+
+.eye-button {
+    color: #8b93a3;
+    transition: color 0.12s;
+}
+
+.eye-button:hover {
+    color: #55606b;
+}
+
+/* Make row checkbox visible when row hovered or when selection mode is active */
+.eye-checkbox-cell .row-checkbox {
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+tr:hover .eye-checkbox-cell .row-checkbox,
+.selected-mode .row-checkbox {
+    opacity: 1;
+}
+
+.submissions-table tbody td {
+    background: white;
+}
+
+
+.rows-per-page span {
+    font-size: 0.95rem;
+    color: var(--muted);
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-button {
+    padding: 0.36rem 0.7rem;
+    font-size: 0.95rem;
+    border: 1px solid #e6e9ee;
+    border-radius: 8px;
+    background: white;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.pagination-button.active {
+    background: rgba(31, 111, 176, 0.08);
+    color: var(--accent);
+    border-color: rgba(31, 111, 176, 0.12);
+}
+
+/* Floating selection bar with brand gradient */
+.selection-bar {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(15, 23, 36, 0.18);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    z-index: 300;
+    width: auto;
+    min-width: 320px;
+    max-width: 420px;
+}
+
+.selection-bar .left-edge {
+    width: 12px;
+}
+
+.selection-gradient {
+    background: linear-gradient(270deg, rgba(11, 41, 94, 0.95) 4.81%, rgba(29, 109, 158, 0.95) 100%);
+}
+
+.selection-close {
+    color: white;
+    cursor: pointer;
+}
+
+.selection-count {
+    font-weight: 600;
+}
+
+.selection-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.6rem;
+}
+
+.export-button {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.delete-button {
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.empty-state {
+    padding: 3rem;
+    text-align: center;
+}
+
+.empty-icon {
+    width: 4rem;
+    height: 4rem;
+    background: #f3f4f6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+}
+
+.empty-title {
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.empty-description {
+    color: #9ca3af;
+    font-size: 0.95rem;
+}
+
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.loading-spinner {
+    width: 3rem;
+    height: 3rem;
+    border: 3px solid #e9eef3;
+    border-top: 3px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-text {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.loading-subtext {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0.5rem;
+}
+
+.error-card {
+    background: #fff5f5;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.error-title {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+/* RSuite overrides (kept) */
+.rs-picker-toggle {
+    border-radius: 8px !important;
+}
+
+.rs-picker-toggle:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 6px 20px rgba(31, 111, 176, 0.08) !important;
+}
+
+/* Modal styles to align with submissions card visual language */
+.submission-modal-container {
+    /* use semi-opaque dark backdrop but keep existing z-index behavior */
+    height: inherit;
+    width: inherit;
+    padding: 20px;
+    position: relative;
+    height: 100%;
+}
+
+
+.submission-modal {
+
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: -2px 1px 14px 0px #2121341A;
+    border: 1px solid var(--table-border);
+    overflow: hidden;
+    position: relative;
+    height: 100%;
+}
+
+.submission-modal .modal-close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    background: var(--card-bg);
+    border-radius: 9999px;
+    padding: 0.45rem;
+    box-shadow: 0 6px 18px rgba(15, 23, 36, 0.06);
+    border: 1px solid rgba(15, 23, 36, 0.04);
+}
+
+.submission-modal .modal-close-btn:hover {
+    background: #fbfdff;
+}
+
+
+.submission-modal .modal-body {
+    /* Make outer modal body allow inner layout to control scrolling so
+       header and body are packed in a flex container inside. */
+    overflow: hidden;
+    /* inner .preview-modal-body will scroll */
+}
+
+/* Preview modal inner layout: static header + scrollable body (no shadow) */
+.preview-modal-inner {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.preview-modal-header {
+    background: var(--card-bg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.preview-modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Constrain inner scroll to viewport minus header area */
+    position: relative;
+    height: 100%;
+}
+
+/* WebKit: hide by default, show subtle thumb on hover */
+.submission-modal .modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.submission-modal .modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.submission-modal .modal-body::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 6px;
+    transition: background 0.12s;
+}
+
+.submission-modal .modal-body:hover::-webkit-scrollbar-thumb {
+    background: rgba(11, 41, 94, 0.12);
+}
+
+/* Firefox hidden scrollbar until hover */
+.submission-modal .modal-body:hover {
+    scrollbar-color: rgba(11, 41, 94, 0.12) transparent;
+}
+
+.submission-modal .modal-section {
+    padding: 1.25rem;
+    border-radius: 10px;
+    background: transparent;
+}
+
+/* Thumbnail helpers: ensure images are contained and centered across table rows and modals */
+.table-thumb-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #fafafa;
+}
+
+.table-thumb-wrapper img {
+    object-fit: contain;
+    object-position: center;
+    display: block;
+}
+
+/* File modal thumbnails */
+.modal-body img.w-14.h-14 {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+    object-position: center;
+}
+
+/* Top tab bar (Active / Archived / All) */
+.top-tab-bar {
+    box-sizing: border-box;
+    /* Auto layout */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 0px;
+    gap: 8px;
+
+    /* width: auto; */
+    height: 44px;
+
+    /* Color/Outer Border Stroke */
+    border-bottom: 2px solid #E4E7EC;
+    background: transparent;
+}
+
+.top-tab-bar .tab {
+    box-sizing: border-box;
+    /* Tab sizing */
+    height: 44px;
+    min-width: 52px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border-radius: 0;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #6b7280;
+    /* muted grey */
+    border: 1px solid transparent;
+    cursor: pointer;
+    position: relative;
+}
+
+.top-tab-bar .tab.active {
+    /* Active tab look — cyan background and bottom accent */
+    color: var(--primary-2);
+    background: linear-gradient(0deg, rgba(0, 138, 176, 0.12) 0%, rgba(143, 220, 241, 0) 100%);
+    border-bottom: 2px solid #028AB0;
+    box-shadow: 0 6px 14px rgba(15, 23, 36, 0.04);
+
+
+}
+
+/* Submission preview side panel (inline) */
+.submission-preview-panel {
+    width: 44rem;
+    /* ~704px */
+    min-width: 34rem;
+    background: #fafbfd;
+    /* very light bluish background similar to image */
+    border-left: 1px solid var(--table-border);
+    padding: 1.25rem;
+    overflow-y: auto;
+}
+
+.preview-card {
+    background: white;
+    border-radius: 10px;
+    border: 1px solid var(--table-border);
+    box-shadow: 0 8px 24px rgba(15, 23, 36, 0.06);
+    padding: 1rem;
+}
+
+.preview-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.preview-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.preview-submitted {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.preview-section {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f7fafb;
+    /* section background per image */
+    border-radius: 8px;
+    border: 1px solid #eef2f6;
+}
+
+.preview-section h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.95rem;
+    color: var(--primary-2);
+}
+
+
+
+.rs-daterange-picker-toggle {
+    border-radius: 8px !important;
+    padding: 0.5rem 0.75rem !important;
+}
+
+.rs-daterange-picker-toggle:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 6px 20px rgba(31, 111, 176, 0.08) !important;
+}
+
+/* Left tab stack (compact) */
+.left-tab-stack {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.left-tab-stack .tab {
+    /* padding: 6px 10px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    font-size: 13px;
+    color: #254b6b; */
+    background: none;
+    border: none;
+    padding: 8px 24px;
+    cursor: pointer;
+    font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
+    font-size: 0.875rem;
+    outline: none;
+    color: #0B0A0A;
+    font-weight: 600;
+    /* border-bottom: 2px solid #E4E7EC; */
+    transition: color 0.3s ease, border-color 0.3s ease, font-weight 0.3s ease;
+    z-index: 1;
+
+}
+
+.left-tab-stack .tab.active {
+    background: linear-gradient(0deg, rgba(0, 138, 176, 0.12) 0%, rgba(143, 220, 241, 0) 100%);
+    color: rgb(11, 10, 10);
+    font-weight: 700;
+    border-bottom: 2px solid rgb(2, 138, 176);
+}
+
+/* Icon-only action buttons */
+.submission-actions button {
+    padding: 6px;
+    border-radius: 6px;
+}
+
+/* Download menu */
+.download-menu {
+    min-width: 10rem;
+}
+
+/* Eye + checkbox column behavior */
+/* Compact eye+checkbox column */
+.eye-checkbox-col {
+    width: 80px;
+}
+
+.eye-checkbox-cell {
+    padding: 4px;
+}
+
+.eye-checkbox-cell .row-checkbox {
+    display: inline-block !important;
+}
+
+/* Show checkbox when row is hovered */
+.submissions-table tbody tr:hover .row-checkbox {
+    display: inline-block !important;
+}
+
+.eye-checkbox-cell .eye-col {
+    display: inline-flex;
+    align-items: center;
+}
+
+
+.main-content-area {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    /* Allow this area to grow and shrink */
+    overflow: hidden;
+}
+
+/* Make table content padded and allow resize handle visible on hover */
+.content-area {
+    padding: 16px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: -2px 1px 14px 0px #2121341A;
+    height: 100%;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Table related actions  */
+
+.table-realted-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.table-realted-actions .left-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.table-realted-actions .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.table-footer {
+    padding: 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.table-realted-actions,
+.table-footer {
+    flex-shrink: 0;
+}
+
+/* Ensure table area scrolls independently and pagination stays fixed below */
+.table-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    /* Make the table wrapper grow */
+    overflow: hidden;
+    /* Contains the scrollable div */
+    border-radius: 10px;
+    border: 1px solid #E4E7EC;
+    margin-top: 10px;
+}
+
+.table-wrapper {
+    width: 100%;
+    overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-grow: 1;
+}
+
+/* subtle scrollbar styling for table (always thin) */
+.table-scroll::-webkit-scrollbar {
+    height: 8px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+    background: rgba(11, 41, 94, 0.12);
+    border-radius: 6px;
+}
+
+/* Visual separator when table is scrolled horizontally to indicate fixed columns */
+.table-scroll.is-scrolled .eye-checkbox-col,
+.table-scroll.is-scrolled .eye-checkbox-cell,
+.table-scroll.is-scrolled .submission-date-col,
+.table-scroll.is-scrolled .submission-date-cell {
+    box-shadow: 6px 0 10px -6px rgba(11, 41, 94, 0.12);
+    border-right: 1px solid rgba(11, 41, 94, 0.06);
+}
+
+/* Ensure header sticky labels sit above body cells */
+thead th.sticky,
+thead th[style] {
+    background: var(--table-header-bg);
+}
+
+.table-wrapper .table-scroll {
+    overflow: auto;
+    flex: 1 1 auto;
+}
+
+.pagination-footer {
+    flex: 0 0 auto;
+}
+
+.submissions-table th.group:hover .absolute,
+.submissions-table th.group:hover .absolute {
+    opacity: 1 !important;
+}
+
+.submissions-table th .cursor-col-resize {
+    width: 6px;
+}
+
+/* Make the resize handle easier to hit */
+.submissions-table th .cursor-col-resize:hover {
+    background: rgba(59, 130, 246, 0.12);
+}
+
+
+/* submission modal header css */
+.header-container {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 100;
+}

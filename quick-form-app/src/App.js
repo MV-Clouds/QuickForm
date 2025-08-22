@@ -65,6 +65,14 @@ function App() {
                 path="/notifications/:formVersionId"
                 element={<ProtectedRoute element={<MainFormBuilder showNotification />} />}
               />
+                <Route
+                path="/submissions/:formVersionId"
+                element={
+                  <ProtectedRoute
+                    element={<MainFormBuilder showSubmission />}
+                  />
+                }
+              />
               <Route
                 path="/mapping/:formVersionId"
                 element={<ProtectedRoute element={<MainFormBuilder showMapping />} />}
