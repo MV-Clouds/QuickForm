@@ -18,8 +18,9 @@ import ThankYouPageBuilder from "../Thankyou/TY3";
 import NotificationPage from "../NotificationSettings/NotificationSettingsModal.js";
 import Conditions from "../conditions/Conditions"; // Or your actual path
 import { v4 as uuidv4 } from "uuid";
-import AnimatedTooltip from '../create-form-wizard/AnimatedTooltip';
-import SharePage from '../share-page/SharePage.js'
+import AnimatedTooltip from "../create-form-wizard/AnimatedTooltip";
+import SharePage from "../share-page/SharePage.js";
+import Submissions from "./Submissions";
 
 const themes = [
   {
@@ -92,7 +93,8 @@ function MainFormBuilder({
   showThankYou,
   showNotification,
   showCondition,
-  showShare
+  showShare,
+  showSubmission,
 }) {
   // const { formVersionId } = useParams();
   const location = useLocation();
@@ -120,7 +122,12 @@ function MainFormBuilder({
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const [formRecords, setFormRecords] = useState([]);
-  const [publishLink, setPublishLink] = useState('');
+  const [publishLink, setPublishLink] = useState("");
+  const [submissionStats, setSubmissionStats] = useState({
+    totalSubmissions: 0,
+    recentSubmissions: 0,
+    lastSubmissionDate: null,
+  });
 
   const [fieldsState, { set: setFields, undo, redo, canUndo, canRedo }] =
     useUndo([]);
@@ -217,10 +224,14 @@ function MainFormBuilder({
     let thankyouRecord;
     thankyouRecord = formVersion?.ThankYou;
     console.log("ty record", thankyouRecord);
-    if ((typeof thankyouRecord === 'object' && Object.keys(thankyouRecord)?.length > 0)  || thankyouRecord?.length > 0) {
+    if (
+      (typeof thankyouRecord === "object" &&
+        Object.keys(thankyouRecord)?.length > 0) ||
+      thankyouRecord?.length > 0
+    ) {
       const { content: loadedContent, elements: loadedElements } =
         mapSalesforceThankYouToUI(thankyouRecord);
-        console.log('mapped...')
+      console.log("mapped...");
       setContent(loadedContent || content); // fallback to default if null
       setElements(
         Array.isArray(loadedElements) && loadedElements.length > 0
@@ -229,10 +240,10 @@ function MainFormBuilder({
       );
     }
   }, [sfFormRecords]);
-  useEffect(()=>{
-    console.log('elements in formbuilder' , elements);
-    console.log('content ==>',content)
-  },[elements , content])
+  useEffect(() => {
+    console.log("elements in formbuilder", elements);
+    console.log("content ==>", content);
+  }, [elements, content]);
   /**
    * Maps a Salesforce Thank_You__c record to your content and elements state shapes.
    * @param {object} sfRecord - The Thank_You__c record from Salesforce
@@ -370,6 +381,37 @@ function MainFormBuilder({
     } finally {
       setIsLoadingForm(false);
     }
+  };
+
+  const updateSubmissionStats = (submissions) => {
+    if (!submissions || submissions.length === 0) {
+      setSubmissionStats({
+        totalSubmissions: 0,
+        recentSubmissions: 0,
+        lastSubmissionDate: null,
+      });
+      return;
+    }
+
+    const now = new Date();
+    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const recentSubmissions = submissions.filter(
+      (sub) => new Date(sub.submissionDate) >= last24Hours
+    ).length;
+
+    const lastSubmissionDate =
+      submissions.length > 0
+        ? new Date(
+            Math.max(...submissions.map((sub) => new Date(sub.submissionDate)))
+          )
+        : null;
+
+    setSubmissionStats({
+      totalSubmissions: submissions.length,
+      recentSubmissions,
+      lastSubmissionDate,
+    });
   };
   function prepareThankYouData(rawData, elements, theme, formVersionId) {
     // Extract elements by type for mapping
@@ -512,6 +554,36 @@ function MainFormBuilder({
       await refreshData();
     } catch (error) {
       console.error("There was a problem with the fetch operation:", error);
+    }
+  };
+
+  const handleSubmissionProcessing = async (submissionData) => {
+    try {
+      const userId = sessionStorage.getItem("userId");
+      const instanceUrl = sessionStorage.getItem("instanceUrl");
+      const token = await fetchAccessToken(userId, instanceUrl);
+
+      if (!token) throw new Error("Failed to obtain access token.");
+
+      // Process submission data
+      const processedData = {
+        formVersionId: selectedVersionId,
+        submissionData,
+        timestamp: new Date().toISOString(),
+        userId,
+        instanceUrl,
+      };
+
+      // You can add additional processing logic here
+      console.log("Processing submission:", processedData);
+
+      // Refresh form data to update submission counts
+      await refreshData();
+
+      return processedData;
+    } catch (error) {
+      console.error("Error processing submission:", error);
+      throw error;
     }
   };
   const fetchFormData = async (userId, instanceUrl) => {
@@ -1402,13 +1474,14 @@ function MainFormBuilder({
   const selectedField = getSelectedField();
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen w-screen relative flex">
       <MainMenuBar
         isSidebarOpen={isSidebarOpen}
         toggleSidebar={toggleSidebar}
         formRecords={formRecords}
         selectedVersionId={selectedVersionId}
         publishLink={publishLink}
+        submissionStats={submissionStats}
       />
       <div
         className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
@@ -1441,10 +1514,15 @@ function MainFormBuilder({
                   <FaRegStar className="text-white text-base" />
                 </span>
               </Whisper> */}
-               <AnimatedTooltip content={currentFormVersion?.Description__c || 'Define the form structure'}>
+              <AnimatedTooltip
+                content={
+                  currentFormVersion?.Description__c ||
+                  "Define the form structure"
+                }
+              >
                 <span className="flex items-center gap-2 cursor-pointer">
                   <span className="text-2xl font-semibold text-white">
-                    {currentFormVersion?.Name || 'Contact Form'}
+                    {currentFormVersion?.Name || "Contact Form"}
                   </span>
                   <FaRegStar className="text-white text-base" />
                 </span>
@@ -1621,6 +1699,13 @@ function MainFormBuilder({
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
             <SharePage publishLink={publishLink} />
+          ) : showSubmission ? (
+            <Submissions
+              isSidebarOpen={isSidebarOpen}
+              formVersionId={formVersionId}
+              onStatsUpdate={updateSubmissionStats}
+              formId={formId}
+            />
           ) : showNotification ? (
             <NotificationPage
               currentFields={formVersions[0]?.Fields}

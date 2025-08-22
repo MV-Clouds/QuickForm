@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
-import JSZip from 'jszip';
-import { motion } from 'framer-motion';
+import React, { useState } from "react";
+import JSZip from "jszip";
+import { motion } from "framer-motion";
 
 const FileUpload = ({ acceptedFileTypes, setDesign }) => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [responseData, setResponseData] = useState(null);
-  const [base64String, setBase64String] = useState('');
+  const [base64String, setBase64String] = useState("");
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -22,31 +22,33 @@ const FileUpload = ({ acceptedFileTypes, setDesign }) => {
     e.preventDefault();
 
     if (!file) {
-      setMessage('Please select a file to upload.');
+      setMessage("Please select a file to upload.");
       return;
     }
 
     // Set uploading state to true before starting the file reader
     setUploading(true);
-    setMessage('Reading file...');
+    setMessage("Reading file...");
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
 
     reader.onload = async () => {
-      const base64String = reader.result.split(',')[1];
+      const base64String = reader.result.split(",")[1];
 
       setBase64String(base64String); // Store the base64 string for later use
-      setMessage('Uploading...');
+      setMessage("Uploading...");
 
       try {
-        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
+        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(
+          file.name
+        )}&fileType=${encodeURIComponent(file.type)}`;
 
         const response = await fetch(apiUrl, {
-          method: 'POST',
+          method: "POST",
           body: base64String,
           headers: {
-            'Content-Type': 'application/octet-stream',
+            "Content-Type": "application/octet-stream",
           },
         });
 
@@ -55,14 +57,14 @@ const FileUpload = ({ acceptedFileTypes, setDesign }) => {
         // Set the design with the file URL
         setDesign({ backgroundImage: data.fileUrl });
         if (response.ok) {
-          setMessage('File uploaded successfully!');
+          setMessage("File uploaded successfully!");
         } else {
           // Use the error message from the backend if available
-          setMessage(`Upload failed: ${data.message || 'Unknown error'}`);
+          setMessage(`Upload failed: ${data.message || "Unknown error"}`);
         }
       } catch (error) {
-        console.error('Error during upload:', error);
-        setMessage('An error occurred during upload.');
+        console.error("Error during upload:", error);
+        setMessage("An error occurred during upload.");
         setResponseData(null);
       } finally {
         // Set uploading state to false inside the async callback's finally block
@@ -71,17 +73,17 @@ const FileUpload = ({ acceptedFileTypes, setDesign }) => {
     };
 
     reader.onerror = (error) => {
-      console.error('Error reading file:', error);
-      setMessage('Error reading file.');
+      console.error("Error reading file:", error);
+      setMessage("Error reading file.");
       setUploading(false); // Also handle error case here
     };
   };
 
   // Framer Motion variants for animations
   const dropzoneVariants = {
-    initial: { scale: 1, borderColor: '#e5e7eb' },
-    hover: { scale: 1.02, borderColor: '#60a5fa' },
-    active: { scale: 0.98, borderColor: '#1d4ed8' }
+    initial: { scale: 1, borderColor: "#e5e7eb" },
+    hover: { scale: 1.02, borderColor: "#60a5fa" },
+    active: { scale: 0.98, borderColor: "#1d4ed8" },
   };
 
   const buttonVariants = {
@@ -113,23 +115,36 @@ const FileUpload = ({ acceptedFileTypes, setDesign }) => {
           onChange={handleFileChange}
           disabled={uploading}
         />
-        <svg className="w-12 h-12 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-4-4v-1a4 4 0 014-4h4l1.5-3a2 2 0 011.8-1H21a2 2 0 012 2v10a2 2 0 01-2 2H7z" />
+        <svg
+          className="w-12 h-12 mb-3 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M7 16a4 4 0 01-4-4v-1a4 4 0 014-4h4l1.5-3a2 2 0 011.8-1H21a2 2 0 012 2v10a2 2 0 01-2 2H7z"
+          />
         </svg>
         <span className="text-base text-center text-gray-500">
-          {file ? `Selected: ${file.name}` : "Drag & drop an image or click to select"}
+          {file
+            ? `Selected: ${file.name}`
+            : "Drag & drop an image or click to select"}
         </span>
       </motion.label>
-      
+
       <div className="flex w-full justify-center">
         <motion.button
           type="button"
           onClick={handleUpload}
           disabled={!file || uploading}
-          className={`login-button py-2 px-8 rounded-lg font-semibold text-white transition-colors duration-200 ease-in-out ${!file || uploading
-            ? "bg-blue-300 cursor-not-allowed"
-            : "bg-blue-600 hover:bg-blue-700"
-            }`}
+          className={`login-button py-2 px-8 rounded-lg font-semibold text-white transition-colors duration-200 ease-in-out ${
+            !file || uploading
+              ? "bg-blue-300 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
           variants={buttonVariants}
           whileHover="hover"
           whileTap="tap"
@@ -141,12 +156,23 @@ const FileUpload = ({ acceptedFileTypes, setDesign }) => {
                 fill="none"
                 viewBox="0 0 24 24"
                 animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
               >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v8z"
+                ></path>
               </motion.svg>
-              <span>{message || 'Uploading...'}</span>
+              <span>{message || "Uploading..."}</span>
             </div>
           ) : (
             "Upload"
@@ -159,10 +185,11 @@ const FileUpload = ({ acceptedFileTypes, setDesign }) => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className={`w-full text-center py-3 px-4 rounded-lg font-medium ${message.includes("success")
-            ? "bg-green-100 text-green-700"
-            : "bg-red-100 text-red-700"
-            }`}
+          className={`w-full text-center py-3 px-4 rounded-lg font-medium ${
+            message.includes("success")
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
+          }`}
         >
           {message}
         </motion.div>

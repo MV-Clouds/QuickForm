@@ -1,20 +1,24 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Login from './components/login-page/login';
-import CreateFormWizard from './components/create-form-wizard/createFormWizard';
-import Home from './components/create-form-wizard/home';
-import ProtectedRoute from './components/login-page/protectedRoute';
-import MainFormBuilder from './components/form-builder-with-versions/MainFormBuilder';
-import PublicFormViewer from './components/form-publish/PublicFormViewer';
-import Conditions from './components/conditions/Conditions';
-import { SalesforceDataProvider } from './components/Context/MetadataContext';
-import FormTemplate from './components/FormTemplate/MainTemplate';
-import { ChatBotProvider } from './components/form-builder-with-versions/ChatBotContext';
-import ChatBot from './components/chat-bot/chat-bot-new';
-import GuestPageD from './components/LandingPage/GuestPageD';
-import NotificationPage from './components/NotificationSettings/NotificationSettingsModal';
-import NotFound from './components/not-found/NotFound';
-import SharePage from './components/share-page/SharePage'; // adjust path as necessary
+import React from "react";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import Login from "./components/login-page/login";
+import CreateFormWizard from "./components/create-form-wizard/createFormWizard";
+import Home from "./components/create-form-wizard/home";
+import ProtectedRoute from "./components/login-page/protectedRoute";
+import MainFormBuilder from "./components/form-builder-with-versions/MainFormBuilder";
+import PublicFormViewer from "./components/form-publish/PublicFormViewer";
+import Conditions from "./components/conditions/Conditions";
+import { SalesforceDataProvider } from "./components/Context/MetadataContext";
+import FormTemplate from "./components/FormTemplate/MainTemplate";
+import { ChatBotProvider } from "./components/form-builder-with-versions/ChatBotContext";
+import ChatBot from "./components/chat-bot/chat-bot-new";
+import GuestPageD from "./components/LandingPage/GuestPageD";
+import NotificationPage from "./components/NotificationSettings/NotificationSettingsModal";
+import NotFound from "./components/not-found/NotFound";
+import SharePage from "./components/share-page/SharePage"; // adjust path as necessary
+import { ImportIcon } from "lucide-react";
+
+// Initialize ResizeObserver error suppression for RSuite components
+import "./utils/resizeObserverErrorSuppression";
 
 function App() {
   return (
@@ -27,7 +31,10 @@ function App() {
             <Routes>
               {/* Public route for login */}
               <Route path="/" element={<Login />} />
-              <Route path="/guest" element={<ProtectedRoute element={< GuestPageD />} />} />
+              <Route
+                path="/guest"
+                element={<ProtectedRoute element={<GuestPageD />} />}
+              />
               {/* Protected route for form creation wizard */}
               <Route
                 path="/wizard"
@@ -56,28 +63,56 @@ function App() {
                 path="/form-builder/:formVersionId"
                 element={<ProtectedRoute element={<MainFormBuilder />} />}
               />
-              <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
+              <Route
+                path="/public-form/:linkId"
+                element={<PublicFormViewer />}
+              />
               <Route
                 path="/conditions/:formVersionId"
-                element={<ProtectedRoute element={<MainFormBuilder showCondition/>} />}
+                element={
+                  <ProtectedRoute element={<MainFormBuilder showCondition />} />
+                }
               />
-               <Route
+              <Route
                 path="/notifications/:formVersionId"
-                element={<ProtectedRoute element={<MainFormBuilder showNotification />} />}
+                element={
+                  <ProtectedRoute
+                    element={<MainFormBuilder showNotification />}
+                  />
+                }
               />
               <Route
                 path="/mapping/:formVersionId"
-                element={<ProtectedRoute element={<MainFormBuilder showMapping />} />}
+                element={
+                  <ProtectedRoute element={<MainFormBuilder showMapping />} />
+                }
               />
-              <Route path='/thankyou/:formVersionId' element={<ProtectedRoute element = {<MainFormBuilder showThankYou />}/>} />
-              <Route path='/template' element={<ProtectedRoute element={<FormTemplate />}/>} />
-              <Route path="*" element={<ProtectedRoute element={<NotFound />} />} />
-               <Route 
+              <Route
+                path="/submissions/:formVersionId"
+                element={
+                  <ProtectedRoute
+                    element={<MainFormBuilder showSubmission />}
+                  />
+                }
+              />
+              <Route
+                path="/thankyou/:formVersionId"
+                element={
+                  <ProtectedRoute element={<MainFormBuilder showThankYou />} />
+                }
+              />
+              <Route
+                path="/template"
+                element={<ProtectedRoute element={<FormTemplate />} />}
+              />
+              <Route
+                path="*"
+                element={<ProtectedRoute element={<NotFound />} />}
+              />
+              <Route
                 path="/share/:formVersionId"
                 element={
-                  <ProtectedRoute element={
-                    <MainFormBuilder showShare />
-                  }/>
+                  <ProtectedRoute element={<MainFormBuilder showShare />} />
                 }
               />
             </Routes>

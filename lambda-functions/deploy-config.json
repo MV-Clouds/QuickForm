@@ -1,0 +1,19 @@
+{
+    "functionName": "getFormSubmissions",
+    "runtime": "nodejs18.x",
+    "handler": "getFormSubmissions.handler",
+    "timeout": 30,
+    "memorySize": 256,
+    "environment": {
+        "variables": {
+            "GET_ACCESS_TOKEN_URL": "https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/prod/getAccessToken",
+            "NODE_ENV": "production"
+        }
+    },
+    "description": "Fetches form submissions from Salesforce for QuickForm application",
+    "tags": {
+        "Project": "QuickForm",
+        "Environment": "Production",
+        "Function": "GetSubmissions"
+    }
+}

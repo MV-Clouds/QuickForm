@@ -1,0 +1,29 @@
+{
+    "name": "quickform-lambda-functions",
+    "version": "1.0.0",
+    "description": "Lambda functions for QuickForm application",
+    "type": "module",
+    "main": "getFormSubmissions.js",
+    "scripts": {
+        "test": "node -e \"console.log('Test runner not configured')\"",
+        "deploy": "echo 'Deploy script not configured'"
+    },
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.0.0",
+        "@aws-sdk/client-secrets-manager": "^3.0.0"
+    },
+    "devDependencies": {
+        "eslint": "^8.57.0"
+    },
+    "keywords": [
+        "aws",
+        "lambda",
+        "salesforce",
+        "quickform"
+    ],
+    "author": "QuickForm Team",
+    "license": "MIT",
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
