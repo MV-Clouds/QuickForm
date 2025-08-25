@@ -104,7 +104,7 @@ const ImageUploader = ({ defaultImage, onImageUpload, style }) => {
   const [image, setImage] = useState(defaultImage);
   const [isHovered, setIsHovered] = useState(false);
   const fileInputRef = React.useRef(null);
-
+    
   const handleFileChange = useCallback(async (e) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
