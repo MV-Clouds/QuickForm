@@ -29,7 +29,7 @@ import PaymentFieldRenderer from "./payment/PaymentFieldRenderer";
 
 const { Option } = Select;
 
-function PublicFormViewer() {
+function PublicFormViewer({ runPrefill = false }) {
   const { linkId } = useParams();
   const [formData, setFormData] = useState(null);
   const [formValues, setFormValues] = useState({});
@@ -97,6 +97,7 @@ function PublicFormViewer() {
       setUserId(userId);
       setAccessToken(token);
       setInstanceUrl(instanceUrl);
+      const startTime = Date.now();
 
       const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
         method: 'POST',
@@ -105,6 +106,7 @@ function PublicFormViewer() {
       });
 
       const data = await response.json();
+      console.log(`Form metadata fetched in ${Date.now() - startTime}ms`);
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch form');
       }
@@ -399,6 +401,7 @@ function PublicFormViewer() {
 
 
       const runPrefillForField = async (sfFieldId) => {
+        if(!runPrefill) return;
         // Step 1: Find prefills directly triggered by this blurred field (condition field)
         const directlyTriggered = prefills.filter(p =>
           (p.lookupFilters?.conditions || []).some(c => {
@@ -449,6 +452,7 @@ function PublicFormViewer() {
                         LIMIT 1`;
 
           try {
+            const startTime = Date.now();
             const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -461,6 +465,7 @@ function PublicFormViewer() {
               })
             });
             const data = await resp.json();
+            console.log(`Prefill query returned in ${Date.now() - startTime}ms`);
 
             if (data.record) {
               const updates = {};

@@ -141,7 +141,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
       useEffect(() => {
         if (open && btnRef.current && ref.current) {
           const btnRect = btnRef.current.getBoundingClientRect();
-          const dropdownHeight = 280; // px, estimate
+          const dropdownHeight = 300; // px, estimate
           const spaceBelow = window.innerHeight - btnRect.bottom;
           setDropUp(spaceBelow < dropdownHeight + 16); // 16px margin
         }
@@ -170,7 +170,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: dropUp ? 10 : -10, scale: 0.97 }}
                 transition={{ duration: 0.18 }}
-                className={`fixed right-[6%] z-[999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? "bottom-[20%]" : ''}`}
+                className={`absolute right-[10%] z-[999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? "bottom-[100%]" : ''}`}
                 style={{ boxShadow: '0 8px 32px 0 rgba(18, 3, 3, 0.12)12)' }}
               >
                 <button

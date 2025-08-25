@@ -544,7 +544,7 @@ console.log('Cloning ',cloningFormData);
             <div className="mt-5">
               {/* <AnimatePresence> */}
               <motion.div
-                style={{ padding: '26px 26px 0 26px' }}
+                style={{ padding: '8px 26px 0 26px' }}
                 key="datatable"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, y: 0 }}
