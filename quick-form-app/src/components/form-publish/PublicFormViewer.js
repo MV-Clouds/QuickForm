@@ -1045,6 +1045,31 @@ function PublicFormViewer() {
           }
         }
         break;
+      case "checkbox":
+        // Only validate minSelection if field is required or has selections
+        if (isRequired || (Array.isArray(value) && value.length > 0)) {
+          const selectedCount = Array.isArray(value) ? value.length : 0;
+          const minSelection = properties.minSelection || 0;
+
+          if (minSelection > 0 && selectedCount < minSelection) {
+            return `${fieldLabel}: Please select at least ${minSelection} option(s)`;
+          }
+        }
+        break;
+
+      case "dropdown":
+        if (properties.allowMultipleSelections) {
+          // Only validate minSelection if field is required or has selections
+          if (isRequired || (Array.isArray(value) && value.length > 0)) {
+            const selectedCount = Array.isArray(value) ? value.length : 0;
+            const minSelection = properties.minSelection || 0;
+
+            if (minSelection > 0 && selectedCount < minSelection) {
+              return `${fieldLabel}: Please select at least ${minSelection} option(s)`;
+            }
+          }
+        }
+        break;
 
       default:
         break;
@@ -2522,6 +2547,12 @@ function PublicFormViewer() {
 
       case 'checkbox':
         if (isHidden) return null;
+
+        const currentValues = Array.isArray(formValues[fieldId]) ? formValues[fieldId] : [];
+        const selectedCount = currentValues.length;
+        const minSelection = properties.minSelection || 0;
+        const maxSelection = properties.maxSelection || Infinity;
+
         return (
           <div className="mb-4">
             <label className={labelClass}>
@@ -2529,28 +2560,48 @@ function PublicFormViewer() {
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
             <div className="space-y-2">
-              {(properties.options || ['Option 1', 'Option 2']).map((option, idx) => (
-                <div key={idx} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id={`${fieldId}-${idx}`}
-                    checked={Array.isArray(formValues[fieldId]) && formValues[fieldId].includes(option)}
-                    onChange={(e) => {
-                      const newValue = e.target.checked
-                        ? [...(formValues[fieldId] || []), option]
-                        : (formValues[fieldId] || []).filter((opt) => opt !== option);
-                      handleChange(fieldId, newValue);
-                    }}
-                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    disabled={isDisabled}
-                  />
-                  <label htmlFor={`${fieldId}-${idx}`} className="ml-2 block text-sm text-gray-700">
-                    {option}
-                  </label>
-                </div>
-              ))}
+              {(properties.options || ['Option 1', 'Option 2']).map((option, idx) => {
+                const isChecked = currentValues.includes(option);
+                const isDisabledCheck = isDisabled ||
+                  (!isChecked && selectedCount >= maxSelection && maxSelection < Infinity);
+
+                return (
+                  <div key={idx} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={`${fieldId}-${idx}`}
+                      checked={Array.isArray(formValues[fieldId]) && formValues[fieldId].includes(option)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          // Add option if not exceeding max selection
+                          if (selectedCount < maxSelection || maxSelection === Infinity) {
+                            const newValue = [...currentValues, option];
+                            handleChange(fieldId, newValue);
+                          }
+                        } else {
+                          // Remove option
+                          const newValue = currentValues.filter((opt) => opt !== option);
+                          handleChange(fieldId, newValue);
+                        }
+                      }}
+                      className={`h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ${isDisabledCheck && !isChecked ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      disabled={isDisabledCheck}
+                    />
+                    <label htmlFor={`${fieldId}-${idx}`} className="ml-2 block text-sm text-gray-700">
+                      {option}
+                    </label>
+                  </div>
+                )
+              })}
             </div>
+
+             {/* Selection count and validation messages */}
+            <div className="mt-1 text-sm text-gray-500">
+              Selected: {selectedCount}
+              {(minSelection > 0 || maxSelection < Infinity) && ` of ${maxSelection < Infinity ? maxSelection : '∞'}`}
+            </div>
+
             {renderError()}
           </div>
         );
@@ -2602,9 +2653,19 @@ function PublicFormViewer() {
             <Select
               style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
-              onChange={val => handleChange(fieldId, val)}
-              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+onChange={(val) => {
+                // Validate selection limits for multiple selections
+                if (properties.allowMultipleSelections && Array.isArray(val)) {
+                  if (val.length <= properties.maxSelection) {
+                    handleChange(fieldId, val);
+                  }
+                } else {
+                  handleChange(fieldId, val);
+                }
+              }}              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               mode={properties.allowMultipleSelections ? 'multiple' : undefined}
+                            maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
+
               placeholder={properties.placeholder?.main || 'Select an option'}
               disabled={isDisabled}
               className={`w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
@@ -2613,6 +2674,14 @@ function PublicFormViewer() {
                 <Option key={option} value={option}>{option}</Option>
               ))}
             </Select>
+
+            {/* Validation for dropdown with multiple selections */}
+            {properties.allowMultipleSelections && (
+              <div className="mt-1 text-sm text-gray-500">
+                {`Select between ${properties.minSelection} and ${properties.maxSelection < Infinity ? properties.maxSelection : 'unlimited'} options`}
+              </div>
+            )}
+            
             {renderError()}
           </div>
         );

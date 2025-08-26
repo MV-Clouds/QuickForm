@@ -53,15 +53,15 @@ function FieldEditor({
   );
   const [ratingValues, setRatingValues] = useState(
     selectedField?.ratingValues ||
-      Array(selectedField?.ratingRange || 5)
-        .fill("")
-        .map((_, i) => `Rating ${i + 1}`)
+    Array(selectedField?.ratingRange || 5)
+      .fill("")
+      .map((_, i) => `Rating ${i + 1}`)
   );
   const [ratingEmojis, setRatingEmojis] = useState(
     selectedField?.ratingEmojis ||
-      Array(selectedField?.ratingRange || 5)
-        .fill("")
-        .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
+    Array(selectedField?.ratingRange || 5)
+      .fill("")
+      .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
   );
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
 
@@ -221,33 +221,33 @@ function FieldEditor({
   const [footerText, setFooterText] = useState(
     selectedFooter
       ? fields.find(
-          (f) =>
-            f.id ===
-            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-        )?.text ||
-          selectedFooter.buttonType.charAt(0).toUpperCase() +
-            selectedFooter.buttonType.slice(1)
+        (f) =>
+          f.id ===
+          `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
+      )?.text ||
+      selectedFooter.buttonType.charAt(0).toUpperCase() +
+      selectedFooter.buttonType.slice(1)
       : ""
   );
   const [footerBgColor, setFooterBgColor] = useState(
     selectedFooter
       ? fields.find(
-          (f) =>
-            f.id ===
-            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-        )?.bgColor ||
-          (selectedFooter.buttonType === "previous"
-            ? "bg-gray-600"
-            : "bg-blue-600")
+        (f) =>
+          f.id ===
+          `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
+      )?.bgColor ||
+      (selectedFooter.buttonType === "previous"
+        ? "bg-gray-600"
+        : "bg-blue-600")
       : ""
   );
   const [footerTextColor, setFooterTextColor] = useState(
     selectedFooter
       ? fields.find(
-          (f) =>
-            f.id ===
-            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-        )?.textColor || "white"
+        (f) =>
+          f.id ===
+          `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
+      )?.textColor || "white"
       : "white"
   );
 
@@ -384,7 +384,7 @@ function FieldEditor({
   );
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(
-    selectedField?.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'}
+    selectedField?.dropdownRelatedValues || { "Option 1": "Option 1", "Option 2": "Option 2", 'Option 3': 'Option 3' }
   );
 
   // NEW : Default value / Hidden Feature / Unique Name
@@ -405,24 +405,27 @@ function FieldEditor({
   const [columnCount, setColumnCount] = useState(
     selectedField?.columnCount || 1
   );
+  const [minSelection, setMinSelection] = useState(selectedField?.minSelection || 0);
+  const [maxSelection, setMaxSelection] = useState(selectedField?.maxSelection || 0);
+
 
   useEffect(() => {
-  if (
-    selectedField &&
-    selectedField.type === "scalerating" &&
-    (
-      !selectedField.rows ||
-      !selectedField.columns ||
-      !selectedField.inputType
-    )
-  ) {
-    onUpdateField(selectedField.id, {
-      rows: selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"],
-      columns: selectedField.columns || ["1", "2", "3", "4", "5"],
-      inputType: selectedField.inputType || "radio",
-    });
-  }
-}, [selectedField, onUpdateField]);
+    if (
+      selectedField &&
+      selectedField.type === "scalerating" &&
+      (
+        !selectedField.rows ||
+        !selectedField.columns ||
+        !selectedField.inputType
+      )
+    ) {
+      onUpdateField(selectedField.id, {
+        rows: selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"],
+        columns: selectedField.columns || ["1", "2", "3", "4", "5"],
+        inputType: selectedField.inputType || "radio",
+      });
+    }
+  }, [selectedField, onUpdateField]);
 
   useEffect(() => {
     if (selectedField) {
@@ -436,19 +439,21 @@ function FieldEditor({
       setRows(selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"]);
       setColumns(selectedField.columns || ["1", "2", "3", "4", "5"]);
       setOptions(selectedField.options || ["Option 1", "Option 2", "Option 3"]);
+      setMinSelection(selectedField.minSelection || 0);
+      setMaxSelection(selectedField.maxSelection || 0);
       setRatingType(selectedField.ratingType || "emoji");
       setRatingRange(selectedField.ratingRange || 5);
       setRatingValues(
         selectedField.ratingValues ||
-          Array(selectedField.ratingRange || 5)
-            .fill("")
-            .map((_, i) => `Rating ${i + 1}`)
+        Array(selectedField.ratingRange || 5)
+          .fill("")
+          .map((_, i) => `Rating ${i + 1}`)
       );
       setRatingEmojis(
         selectedField.ratingEmojis ||
-          Array(selectedField.ratingRange || 5)
-            .fill("")
-            .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
+        Array(selectedField.ratingRange || 5)
+          .fill("")
+          .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
       );
       setMaxChars(selectedField.maxChars || "");
       setAllowedDomains(selectedField.allowedDomains || "");
@@ -550,7 +555,7 @@ function FieldEditor({
         selectedField.allowMultipleSelections || false
       );
       setShuffleOptions(selectedField.shuffleOptions || false);
-      setDropdownRelatedValues(selectedField.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'});
+      setDropdownRelatedValues(selectedField.dropdownRelatedValues || { "Option 1": "Option 1", "Option 2": "Option 2", 'Option 3': 'Option 3' });
       // NEW: Set default value / Hidden Feature / Unique Name
       setDefaultValue(selectedField.defaultValue || "");
       setIsHidden(selectedField.isHidden || false);
@@ -1415,7 +1420,7 @@ function FieldEditor({
     "displaytext",
     "formcalculation",
   ];
-  
+
   // Field type checks
   const isPlaceholderSupported =
     selectedField && placeholderSupportedTypes.includes(selectedField.type);
@@ -1490,9 +1495,8 @@ function FieldEditor({
         <div className="flex border-b mx-4 mt-4 mb-4">
           <div className="relative">
             <button
-              className={`px-4 py-2 font-medium text-sm relative z-10 ${
-                activeTab === "settings" ? "text-gray-900" : "text-gray-500"
-              }`}
+              className={`px-4 py-2 font-medium text-sm relative z-10 ${activeTab === "settings" ? "text-gray-900" : "text-gray-500"
+                }`}
               onClick={() => setActiveTab("settings")}
             >
               Settings
@@ -1505,9 +1509,8 @@ function FieldEditor({
           {isFormCalculation && (
             <div className="relative">
               <button
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === "widget" ? "text-gray-900" : "text-gray-500"
-                }`}
+                className={`px-4 py-2 font-medium text-sm ${activeTab === "widget" ? "text-gray-900" : "text-gray-500"
+                  }`}
                 onClick={() => setActiveTab("widget")}
               >
                 Widget
@@ -2161,8 +2164,8 @@ function FieldEditor({
                               />
                               <input
                                 type="text"
-                                value={dropdownRelatedValues[opt] }
-                                defaultValue = {`Option ${idx + 1}`}
+                                value={dropdownRelatedValues[opt]}
+                                defaultValue={`Option ${idx + 1}`}
                                 onChange={(e) =>
                                   handleDropdownRelatedValueChange(
                                     opt,
@@ -2208,6 +2211,42 @@ function FieldEditor({
                           </div>
                         </div>
                       )}
+                    {isOptionsSupported && ["checkbox", "dropdown"].includes(selectedField.type) && (
+                      <div className="mb-4">
+                        <div className="flex gap-4 mt-2">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Min Selection</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={options.length}
+                              value={minSelection}
+                              onChange={e => {
+                                const value = Math.max(0, Math.min(options.length, Number(e.target.value)));
+                                setMinSelection(value);
+                                onUpdateField(selectedField.id, { minSelection: value });
+                              }}
+                              className="w-20 p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Max Selection</label>
+                            <input
+                              type="number"
+                              min={minSelection}
+                              max={options.length}
+                              value={maxSelection}
+                              onChange={e => {
+                                const value = Math.max(minSelection, Math.min(options.length, Number(e.target.value)));
+                                setMaxSelection(value);
+                                onUpdateField(selectedField.id, { maxSelection: value });
+                              }}
+                              className="w-20 p-2 border rounded"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {isScaleRating && (
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2378,11 +2417,10 @@ function FieldEditor({
                                 ratingType: "emoji",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "emoji"
+                            className={`text-2xl ${ratingType === "emoji"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             😀
                           </button>
@@ -2393,11 +2431,10 @@ function FieldEditor({
                                 ratingType: "star",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "star"
+                            className={`text-2xl ${ratingType === "star"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <AiOutlineStar />
                           </button>
@@ -2408,11 +2445,10 @@ function FieldEditor({
                                 ratingType: "heart",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "heart"
+                            className={`text-2xl ${ratingType === "heart"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <AiOutlineHeart />
                           </button>
@@ -2423,11 +2459,10 @@ function FieldEditor({
                                 ratingType: "bulb",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "bulb"
+                            className={`text-2xl ${ratingType === "bulb"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <FaRegLightbulb />
                           </button>
@@ -2438,11 +2473,10 @@ function FieldEditor({
                                 ratingType: "lightning",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "lightning"
+                            className={`text-2xl ${ratingType === "lightning"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <BiBoltCircle />
                           </button>
@@ -2989,13 +3023,13 @@ function FieldEditor({
                                 onChange={(e) =>
                                   isDateTime
                                     ? handleDatetimeRangeChange(
-                                        "start",
-                                        e.target.value
-                                      )
+                                      "start",
+                                      e.target.value
+                                    )
                                     : handleDateRangeChange(
-                                        "start",
-                                        e.target.value
-                                      )
+                                      "start",
+                                      e.target.value
+                                    )
                                 }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="Start date"
@@ -3008,13 +3042,13 @@ function FieldEditor({
                                 onChange={(e) =>
                                   isDateTime
                                     ? handleDatetimeRangeChange(
-                                        "end",
-                                        e.target.value
-                                      )
+                                      "end",
+                                      e.target.value
+                                    )
                                     : handleDateRangeChange(
-                                        "end",
-                                        e.target.value
-                                      )
+                                      "end",
+                                      e.target.value
+                                    )
                                 }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="End date"
@@ -3269,7 +3303,7 @@ function FieldEditor({
                                     enabled: e.target.checked,
                                     value: e.target.checked
                                       ? phoneSubFields.countryCode?.value ||
-                                        "US"
+                                      "US"
                                       : "",
                                   },
                                   phoneNumber: {
@@ -3281,10 +3315,10 @@ function FieldEditor({
                                     ...(e.target.checked
                                       ? {}
                                       : {
-                                          phoneMask:
-                                            phoneSubFields.phoneNumber
-                                              ?.phoneMask || "(999) 999-9999",
-                                        }),
+                                        phoneMask:
+                                          phoneSubFields.phoneNumber
+                                            ?.phoneMask || "(999) 999-9999",
+                                      }),
                                   },
                                 };
                                 setPhoneSubFields(newSubFields);
@@ -3497,9 +3531,8 @@ function FieldEditor({
                       type="text"
                       defaultValue={uniqueName}
                       onChange={handleUniqueNameChange}
-                      className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${
-                        uniqueNameError ? "border-red-500" : ""
-                      }`}
+                      className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? "border-red-500" : ""
+                        }`}
                       placeholder="{uniqueName}"
                       maxLength={50}
                     />
