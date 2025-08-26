@@ -606,9 +606,26 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <FaCut size={12} />
           </button>
           <button
-            onClick={handleCopy}
-            className="p-1 bg-gray-500 text-white rounded-full hover:bg-gray-600"
-            title="Copy Field"
+            onClick={
+              type === "paypal_payment"
+                ? (e) => {
+                    e.stopPropagation();
+                    alert(
+                      "Payment fields cannot be copied. Only one payment field is allowed per form."
+                    );
+                  }
+                : handleCopy
+            }
+            className={`p-1 rounded-full ${
+              type === "paypal_payment"
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-gray-500 text-white hover:bg-gray-600"
+            }`}
+            title={
+              type === "paypal_payment"
+                ? "Payment fields cannot be copied"
+                : "Copy Field"
+            }
           >
             <FaCopy size={12} />
           </button>
@@ -1888,6 +1905,98 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             )}
           </div>
         </div>
+      );
+
+      case "paypal_payment":
+      return (
+        <SelectionWrapper>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg
+                className="w-5 h-5 text-blue-600"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.028-.026.056-.052.08-.65 3.85-3.197 5.341-6.965 5.341h-2.312c-.228 0-.42.15-.472.374l-.718 4.54-.206 1.308-.144.911a.641.641 0 0 0 .633.74h3.94c.524 0 .968-.382 1.05-.9l.048-.302.718-4.54.048-.302c.082-.518.526-.9 1.05-.9h.662c3.606 0 6.426-1.462 7.25-5.69.343-1.77.133-3.253-.933-4.119z" />
+              </svg>
+              <span className="font-medium text-gray-700">
+                {subFields?.fieldLabel || "Payment Information"}
+              </span>
+            </div>
+
+            <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <div className="space-y-3">
+                <div className="text-gray-600">
+                  <svg
+                    className="w-8 h-8 mx-auto mb-2 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                    />
+                  </svg>
+                  <p className="text-sm font-medium">PayPal Payment Field</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {subFields?.paymentType === "subscription"
+                      ? "Subscription Payment"
+                      : subFields?.paymentType === "donation"
+                      ? "Donation Payment"
+                      : "One-time Payment"}
+                  </p>
+                </div>
+
+                {subFields?.amount?.type === "fixed" &&
+                  subFields?.amount?.value > 0 && (
+                    <div className="text-lg font-semibold text-gray-700">
+                      ${subFields.amount.value}{" "}
+                      {subFields?.amount?.currency || "USD"}
+                    </div>
+                  )}
+
+                {subFields?.amount?.type === "variable" && (
+                  <div className="text-sm text-gray-600">
+                    Variable amount
+                    {subFields?.amount?.minAmount &&
+                      subFields?.amount?.maxAmount &&
+                      ` ($${subFields.amount.minAmount} - $${subFields.amount.maxAmount})`}
+                  </div>
+                )}
+
+                <div className="flex justify-center gap-2 mt-3">
+                  {subFields?.paymentMethods?.paypal && (
+                    <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                      PayPal
+                    </div>
+                  )}
+                  {subFields?.paymentMethods?.cards && (
+                    <div className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
+                      Cards
+                    </div>
+                  )}
+                  {subFields?.paymentMethods?.venmo && (
+                    <div className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
+                      Venmo
+                    </div>
+                  )}
+                  {subFields?.paymentMethods?.googlePay && (
+                    <div className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
+                      Google Pay
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500 mt-2">
+                  Configure payment settings in the field editor
+                </p>
+              </div>
+            </div>
+          </div>
+        </SelectionWrapper>
       );
 
     default:

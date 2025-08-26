@@ -165,6 +165,18 @@ class FormPaymentProcessor {
         return await this.processDonationButton(field, formId, formVersionId);
       case "one_time":
         return await this.processOneTimePayment(field, formId, formVersionId);
+      case "product_wise":
+        return await this.processProductWisePayment(
+          field,
+          formId,
+          formVersionId
+        );
+      case "custom_amount":
+        return await this.processCustomAmountPayment(
+          field,
+          formId,
+          formVersionId
+        );
       default:
         throw new Error(`Unsupported payment type: ${subFields.paymentType}`);
     }
@@ -407,6 +419,48 @@ class FormPaymentProcessor {
   removeSubscription(fieldId, merchantId) {
     const registryKey = `${fieldId}-${merchantId}`;
     return this.planRegistry.delete(registryKey);
+  }
+
+  /**
+   * Process product-wise payment field
+   */
+  async processProductWisePayment(field, formId, formVersionId) {
+    const subFields = field.subFields || {};
+
+    // For product-wise payments, we don't need to create anything upfront
+    // The products are stored in the field configuration and used during payment
+    console.log(
+      `✅ Product-wise payment field processed for field: ${field.id}`
+    );
+
+    return {
+      success: true,
+      fieldId: field.id,
+      paymentType: "product_wise",
+      products: subFields.products || [],
+      message: "Product-wise payment field configured successfully",
+    };
+  }
+
+  /**
+   * Process custom amount payment field
+   */
+  async processCustomAmountPayment(field, formId, formVersionId) {
+    const subFields = field.subFields || {};
+
+    // For custom amount payments, we don't need to create anything upfront
+    // The amount configuration is stored in the field and used during payment
+    console.log(
+      `✅ Custom amount payment field processed for field: ${field.id}`
+    );
+
+    return {
+      success: true,
+      fieldId: field.id,
+      paymentType: "custom_amount",
+      amountConfig: subFields.amount || {},
+      message: "Custom amount payment field configured successfully",
+    };
   }
 }
 

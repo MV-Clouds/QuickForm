@@ -6,6 +6,7 @@ import {
   FaPlus,
   FaTrash,
   FaInfoCircle,
+  FaPlusCircle,
 } from "react-icons/fa";
 import { DEFAULT_SUBSCRIPTION_PLAN } from "../../../../../config";
 
@@ -39,6 +40,145 @@ const currencies = [
   "ZAR",
 ];
 
+/**
+ * TieredPricing Component
+ * Handles tiered pricing configuration for subscription plans
+ */
+const TieredPricing = ({
+  tiers,
+  onTierChange,
+  onAddTier,
+  onRemoveTier,
+  isEditing,
+  currency,
+  maxTiers = 10,
+  errorMsg,
+}) => {
+  // Handle tier ending quantity change and auto-calculate starting quantities
+  const handleEndingQuantityChange = (tierIndex, value) => {
+    // Update the ending quantity for this tier
+    onTierChange(tierIndex, "ending_quantity", value);
+
+    // Auto-calculate starting quantities for subsequent tiers
+    // This will be handled by the parent component's tier management logic
+  };
+  return (
+    <div className="space-y-3">
+      {tiers?.map((tier, idx) => {
+        const isLastTier = idx === tiers.length - 1;
+        // Calculate starting quantity based on previous tier's ending quantity
+        let startQty = 1;
+        if (idx > 0) {
+          const prevTier = tiers[idx - 1];
+          startQty = prevTier.ending_quantity
+            ? parseInt(prevTier.ending_quantity) + 1
+            : 1;
+        }
+
+        return (
+          <div
+            key={idx}
+            className="flex gap-2 items-center p-3 bg-gray-50 rounded-lg border"
+          >
+            <span className="text-sm font-medium text-gray-700 min-w-[100px]">
+              {`Tier ${idx + 1}: ${startQty}${
+                isLastTier
+                  ? "+"
+                  : tier.ending_quantity
+                  ? ` - ${tier.ending_quantity}`
+                  : "+"
+              }`}
+            </span>
+
+            <input
+              type="number"
+              placeholder={isLastTier ? "∞ (infinite)" : "End Qty"}
+              value={isLastTier ? "" : tier.ending_quantity || ""}
+              onChange={(e) => handleEndingQuantityChange(idx, e.target.value)}
+              className="px-3 py-2 w-24 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isEditing || isLastTier}
+              min={startQty}
+              title={
+                isLastTier
+                  ? "Last tier is automatically infinite"
+                  : `Enter ending quantity for this tier (minimum: ${startQty})`
+              }
+            />
+
+            <input
+              type="number"
+              placeholder="Price"
+              value={tier.price?.value || ""}
+              onChange={(e) =>
+                onTierChange(idx, "price", {
+                  ...tier.price,
+                  value: e.target.value,
+                })
+              }
+              className="px-3 py-2 w-24 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isEditing}
+              min="0"
+              step="0.01"
+            />
+
+            <span className="font-semibold text-gray-600">{currency}</span>
+
+            {!isEditing && tiers.length > 1 && (
+              <button
+                type="button"
+                onClick={() => onRemoveTier(idx)}
+                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                title="Remove this tier"
+              >
+                <FaTrash size={14} />
+              </button>
+            )}
+          </div>
+        );
+      })}
+
+      {!isEditing && (
+        <button
+          type="button"
+          onClick={onAddTier}
+          className="flex gap-2 items-center px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+          disabled={tiers.length >= maxTiers}
+        >
+          <FaPlusCircle size={14} />
+          Add Tier
+        </button>
+      )}
+
+      {errorMsg && (
+        <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg">
+          {errorMsg}
+        </div>
+      )}
+
+      <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+        <p>
+          • <strong>Tier Logic:</strong> First tier always starts at 1,
+          subsequent tiers start at previous tier's ending + 1
+        </p>
+        <p>
+          • <strong>Ending Quantities:</strong> Only ending quantities are
+          editable (except last tier which is infinite)
+        </p>
+        <p>
+          • <strong>Last Tier:</strong> Automatically extends to infinity (no
+          ending quantity needed)
+        </p>
+        <p>
+          • <strong>Pricing:</strong> Each tier must have a valid price per unit
+        </p>
+        <p>
+          • <strong>Limits:</strong> Max {maxTiers} tiers allowed
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const SubscriptionFormModal = ({
   isOpen,
   onClose,
@@ -51,6 +191,10 @@ const SubscriptionFormModal = ({
 
   // Track if we're in editing mode
   const isEditing = !!editingSubscription;
+
+  // Track tax configuration state
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const [initiallyHadTax, setInitiallyHadTax] = useState(false);
 
   // Initialize plan with default structure from config
   const [plan, setPlan] = useState({
@@ -102,12 +246,24 @@ const SubscriptionFormModal = ({
 
       console.log("🔍 Loaded plan data:", loadedPlan);
       setPlan(loadedPlan);
+
+      // Check if tax was initially configured
+      const hasTax =
+        loadedPlan.taxes &&
+        loadedPlan.taxes.percentage !== undefined &&
+        loadedPlan.taxes.percentage !== "0" &&
+        loadedPlan.taxes.percentage !== 0;
+
+      setInitiallyHadTax(hasTax);
+      setTaxEnabled(hasTax);
     } else {
       setPlan({
         ...DEFAULT_SUBSCRIPTION_PLAN,
         name: "",
         description: "",
       });
+      setInitiallyHadTax(false);
+      setTaxEnabled(false);
     }
   }, [editingSubscription, isOpen]);
 
@@ -290,7 +446,7 @@ const SubscriptionFormModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
       <div className="bg-white rounded-lg max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b">
@@ -1191,27 +1347,103 @@ const SubscriptionFormModal = ({
                 </select>
               </div>
 
+              {/* Tax Configuration */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tax Percentage (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  value={plan.taxes?.percentage || "0"}
-                  onChange={(e) => {
-                    setPlan((p) => ({
-                      ...p,
-                      taxes: {
-                        ...p.taxes,
-                        percentage: e.target.value,
-                      },
-                    }));
-                  }}
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Tax Configuration
+                  </label>
+                  {!isEditing && !initiallyHadTax && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={taxEnabled}
+                        onChange={(e) => {
+                          setTaxEnabled(e.target.checked);
+                          if (!e.target.checked) {
+                            setPlan((p) => ({
+                              ...p,
+                              taxes: {
+                                percentage: "0",
+                                inclusive: false,
+                              },
+                            }));
+                          }
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-600">Enable Tax</span>
+                    </label>
+                  )}
+                  {isEditing && !initiallyHadTax && (
+                    <span className="text-xs text-gray-500">
+                      Tax cannot be added to existing plans
+                    </span>
+                  )}
+                </div>
+
+                {(taxEnabled || initiallyHadTax) && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tax Percentage (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={plan.taxes?.percentage || "0"}
+                        onChange={(e) => {
+                          setPlan((p) => ({
+                            ...p,
+                            taxes: {
+                              ...p.taxes,
+                              percentage: e.target.value,
+                            },
+                          }));
+                        }}
+                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter tax percentage"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={plan.taxes?.inclusive || false}
+                          onChange={(e) => {
+                            setPlan((p) => ({
+                              ...p,
+                              taxes: {
+                                ...p.taxes,
+                                inclusive: e.target.checked,
+                              },
+                            }));
+                          }}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">
+                          Tax is inclusive in price
+                        </span>
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1 ml-6">
+                        {plan.taxes?.inclusive
+                          ? "Tax is included in the displayed price"
+                          : "Tax will be added to the displayed price"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {!taxEnabled && !initiallyHadTax && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-sm text-gray-600">
+                      Tax is not configured for this subscription plan.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1235,28 +1467,6 @@ const SubscriptionFormModal = ({
                 />
                 <span className="text-sm text-gray-700">
                   Automatically bill outstanding amounts
-                </span>
-              </label>
-            </div>
-
-            <div className="mt-2">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={plan.taxes?.inclusive || false}
-                  onChange={(e) => {
-                    setPlan((p) => ({
-                      ...p,
-                      taxes: {
-                        ...p.taxes,
-                        inclusive: e.target.checked,
-                      },
-                    }));
-                  }}
-                  className="mr-2"
-                />
-                <span className="text-sm text-gray-700">
-                  Tax is inclusive in price
                 </span>
               </label>
             </div>

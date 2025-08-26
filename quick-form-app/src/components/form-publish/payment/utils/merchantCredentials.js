@@ -25,20 +25,21 @@ export const fetchMerchantCredentials = async (merchantAccountId) => {
   }
 
   try {
-    const response = await fetch(
-      `${API_ENDPOINTS.MERCHANT_CREDENTIALS}/${merchantAccountId}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const response = await fetch(API_ENDPOINTS.PAYMENT_ONBOARDING_HANDLER_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "get-merchant-credentials",
+        merchantAccountId: merchantAccountId,
+      }),
+    });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        errorData.message ||
+        errorData.error ||
           `Failed to fetch merchant credentials: ${response.status} ${response.statusText}`
       );
     }
@@ -46,7 +47,7 @@ export const fetchMerchantCredentials = async (merchantAccountId) => {
     const data = await response.json();
 
     if (!data.success) {
-      throw new Error(data.message || "Failed to fetch merchant credentials");
+      throw new Error(data.error || "Failed to fetch merchant credentials");
     }
 
     console.log("✅ Successfully fetched merchant credentials");

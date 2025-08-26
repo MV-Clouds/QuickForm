@@ -17,8 +17,6 @@ import SubscriptionManagementModal from "./SubscriptionManagementModal";
 import { HelpTooltip, ContextualHelp } from "./PayPalFieldHelp";
 import { PaymentProvider, usePaymentContext } from "../../PaymentContext";
 import { usePaymentFieldState } from "../hooks/usePaymentFieldState";
-import { usePerformanceMonitor } from "../utils/performanceMonitor";
-import { usePaymentFieldValidation } from "../utils/paymentFieldValidator";
 
 /**
  * Refactored PayPal Field Editor with Centralized State Management
@@ -51,12 +49,6 @@ const PayPalFieldEditorTabsRefactored = ({
     fieldId
   );
 
-  // Performance monitoring
-  const performanceMonitor = usePerformanceMonitor("PayPalFieldEditorTabs");
-
-  // Validation utilities
-  const validator = usePaymentFieldValidation();
-
   // UI-only state (doesn't need to persist)
   const [activeTab, setActiveTab] = useState("account");
   const [expandedSections, setExpandedSections] = useState({
@@ -79,19 +71,15 @@ const PayPalFieldEditorTabsRefactored = ({
   });
 
   // Modal handlers
-  const handleOpenManager = useCallback(
-    (type) => {
-      console.log("🔍 Opening manager modal:", type);
-      performanceMonitor.trackModalOpen(type);
+  const handleOpenManager = useCallback((type) => {
+    console.log("🔍 Opening manager modal:", type);
 
-      if (type === "product") {
-        setShowProductModal(true);
-      } else if (type === "subscription") {
-        setShowSubscriptionModal(true);
-      }
-    },
-    [performanceMonitor]
-  );
+    if (type === "product") {
+      setShowProductModal(true);
+    } else if (type === "subscription") {
+      setShowSubscriptionModal(true);
+    }
+  }, []);
 
   // Toggle accordion sections
   const toggleSection = useCallback((section) => {
@@ -105,28 +93,23 @@ const PayPalFieldEditorTabsRefactored = ({
   const handleMerchantChange = useCallback(
     (merchantId) => {
       console.log("🔍 Merchant changed:", merchantId);
-      performanceMonitor.trackStateChange("UPDATE_MERCHANT", { merchantId });
       actions.updateMerchant(merchantId);
     },
-    [actions, performanceMonitor]
+    [actions]
   );
 
   const handlePaymentTypeChange = useCallback(
     (e) => {
       const newPaymentType = e.target.value;
       console.log("🔍 Payment type changed:", newPaymentType);
-      performanceMonitor.trackStateChange("UPDATE_PAYMENT_TYPE", {
-        paymentType: newPaymentType,
-      });
       actions.updatePaymentType(newPaymentType);
     },
-    [actions, performanceMonitor]
+    [actions]
   );
 
   const handleAmountConfigChange = useCallback(
     (updates) => {
       console.log("🔍 Amount config changed:", updates);
-      performanceMonitor.trackStateChange("UPDATE_AMOUNT_CONFIG", updates);
       actions.updateAmountConfig(updates);
     },
     [actions]
@@ -217,15 +200,6 @@ const PayPalFieldEditorTabsRefactored = ({
             ? new Date(state.lastUpdated).toLocaleTimeString()
             : "Never"}{" "}
           | Dirty: {state.isDirty ? "Yes" : "No"}
-          {(() => {
-            const validationResults = validator.validateState(state, "Header");
-            const summary = validator.getSummary(validationResults);
-            return summary.errors > 0
-              ? ` | ❌ ${summary.errors} errors`
-              : summary.warnings > 0
-              ? ` | ⚠️ ${summary.warnings} warnings`
-              : " | ✅ Valid";
-          })()}
         </div>
       </div>
 
@@ -236,11 +210,7 @@ const PayPalFieldEditorTabsRefactored = ({
           return (
             <button
               key={tab.id}
-              onClick={() => {
-                const previousTab = activeTab;
-                performanceMonitor.trackTabSwitch(previousTab, tab.id);
-                setActiveTab(tab.id);
-              }}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === tab.id
                   ? "text-blue-600 border-blue-600 bg-blue-50"
@@ -895,7 +865,7 @@ const AdvancedTab = React.memo(
 );
 
 // Wrapper component with PaymentProvider
-const PayPalFieldEditorTabs = ({
+const PayPalFieldEditorTabsRefactoredWrapper = ({
   selectedField,
   onUpdateField,
   userId,
@@ -913,4 +883,4 @@ const PayPalFieldEditorTabs = ({
   );
 };
 
-export default PayPalFieldEditorTabs;
+export default PayPalFieldEditorTabsRefactoredWrapper;

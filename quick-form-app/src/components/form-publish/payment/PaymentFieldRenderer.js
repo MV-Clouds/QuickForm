@@ -21,6 +21,7 @@ const PaymentFieldRenderer = ({
   linkData,
   onPaymentComplete,
   onPaymentError,
+  onPaymentRequirementChange, // New callback for payment requirements
   className = "",
   formValues = {}, // Add form values for validation
   validateForm, // Add form validation function
@@ -259,6 +260,7 @@ const PaymentFieldRenderer = ({
             onPaymentSuccess={handlePaymentSuccess}
             onPaymentError={handlePaymentError}
             onPaymentCancel={handlePaymentCancel}
+            onPaymentRequirementChange={onPaymentRequirementChange}
             isProduction={process.env.NODE_ENV === "production"}
             formValues={formValues}
             validateForm={validateForm}

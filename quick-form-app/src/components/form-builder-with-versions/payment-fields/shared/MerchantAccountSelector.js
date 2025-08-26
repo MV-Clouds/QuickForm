@@ -72,12 +72,29 @@ const MerchantAccountSelector = ({
         setAccounts(result.accounts);
         if (result.hasAccounts) {
           // Auto-select first account (Salesforce record Id) if none selected
+          // Only auto-select if no merchant is currently selected
           if (!selectedMerchantId && result.accounts?.length > 0) {
             const firstAccountId = result.accounts[0].Id;
+            console.log(
+              "🎯 Auto-selecting first merchant account:",
+              firstAccountId
+            );
             onMerchantChange(firstAccountId);
             // Also fetch capabilities using the PayPal merchant id from the account
             const firstPaypalMerchantId = result.accounts[0].Merchant_ID__c;
             fetchCapabilities(firstPaypalMerchantId);
+          } else if (selectedMerchantId) {
+            console.log(
+              "🎯 Merchant already selected, skipping auto-selection:",
+              selectedMerchantId
+            );
+            // If merchant is already selected, just fetch capabilities for the selected one
+            const selectedAccount = result.accounts?.find(
+              (acc) => acc.Id === selectedMerchantId
+            );
+            if (selectedAccount) {
+              fetchCapabilities(selectedAccount.Merchant_ID__c);
+            }
           }
           setNoAccountsWarning("");
         } else {

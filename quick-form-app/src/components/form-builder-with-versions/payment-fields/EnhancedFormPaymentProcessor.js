@@ -164,8 +164,10 @@ class EnhancedFormPaymentProcessor {
       return validation;
     }
 
-    // Check merchant selection
-    if (!subFields.merchantId) {
+    // Check merchant selection - support both merchantId and merchantAccountId
+    const merchantIdentifier =
+      subFields.merchantAccountId || subFields.merchantId;
+    if (!merchantIdentifier) {
       validation.isValid = false;
       validation.errors.push("Merchant account must be selected");
       return validation;
@@ -239,6 +241,18 @@ class EnhancedFormPaymentProcessor {
         return await this.processDonationButton(field, formId, formVersionId);
       case "one_time":
         return await this.processOneTimePayment(field, formId, formVersionId);
+      case "product_wise":
+        return await this.processProductWisePayment(
+          field,
+          formId,
+          formVersionId
+        );
+      case "custom_amount":
+        return await this.processCustomAmountPayment(
+          field,
+          formId,
+          formVersionId
+        );
       default:
         throw new Error(`Unsupported payment type: ${subFields.paymentType}`);
     }
@@ -250,7 +264,8 @@ class EnhancedFormPaymentProcessor {
   async processSubscription(field, formId, formVersionId) {
     const subFields = field.subFields || {};
     const provider = subFields.gateway || "paypal";
-    const currentMerchantId = subFields.merchantId;
+    const currentMerchantId =
+      subFields.merchantAccountId || subFields.merchantId;
     const previousMerchantId = subFields.previousMerchantId;
 
     // Create registry keys for current and previous merchants
@@ -363,7 +378,7 @@ class EnhancedFormPaymentProcessor {
     // Build correct payload structure based on PayPal integration
     const payload = {
       action: "create-subscription-plan",
-      merchantId: subFields.merchantId,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
       planData: {
         name: subscriptionConfig.name || `Form ${formId} Subscription`,
         description:
@@ -451,7 +466,7 @@ class EnhancedFormPaymentProcessor {
           productId: planData.productId,
           planName: planData.planName,
           status: planData.status,
-          merchantId: subFields.merchantId,
+          merchantId: subFields.merchantAccountId || subFields.merchantId,
           provider: subFields.gateway || "paypal",
         };
       } else {
@@ -473,7 +488,7 @@ class EnhancedFormPaymentProcessor {
     // Build update payload - PayPal allows limited updates
     const payload = {
       action: "update-subscription-plan",
-      merchantId: subFields.merchantId,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
       planId: existingPlanId,
       updateData: {
         description:
@@ -499,7 +514,7 @@ class EnhancedFormPaymentProcessor {
           planId: existingPlanId,
           planName: result.plan?.name || subscriptionConfig.name,
           status: result.plan?.status || "active",
-          merchantId: subFields.merchantId,
+          merchantId: subFields.merchantAccountId || subFields.merchantId,
           provider: subFields.gateway || "paypal",
         };
       } else {
@@ -527,7 +542,7 @@ class EnhancedFormPaymentProcessor {
     return {
       action: "donation_configured",
       fieldId: field.id,
-      merchantId: subFields.merchantId,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
       provider: subFields.gateway || "paypal",
     };
   }
@@ -548,7 +563,7 @@ class EnhancedFormPaymentProcessor {
     return {
       action: "donation_button_configured",
       fieldId: field.id,
-      merchantId: subFields.merchantId,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
       donationButtonId: subFields.donationButtonId,
       provider: subFields.gateway || "paypal",
     };
@@ -566,7 +581,7 @@ class EnhancedFormPaymentProcessor {
     return {
       action: "payment_configured",
       fieldId: field.id,
-      merchantId: subFields.merchantId,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
       provider: subFields.gateway || "paypal",
     };
   }
@@ -716,6 +731,44 @@ class EnhancedFormPaymentProcessor {
         this.merchantPlanMapping.delete(merchantKey);
       }
     }
+  }
+
+  /**
+   * Process product-wise payment field
+   */
+  async processProductWisePayment(field, formId, formVersionId) {
+    const subFields = field.subFields || {};
+
+    console.log(`💳 Processing product-wise payment for field ${field.id}`);
+
+    // For product-wise payments, we don't need to create anything upfront
+    // The products are stored in the field configuration and used during payment
+    return {
+      action: "product_wise_configured",
+      fieldId: field.id,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
+      products: subFields.products || [],
+      provider: subFields.gateway || "paypal",
+    };
+  }
+
+  /**
+   * Process custom amount payment field
+   */
+  async processCustomAmountPayment(field, formId, formVersionId) {
+    const subFields = field.subFields || {};
+
+    console.log(`💳 Processing custom amount payment for field ${field.id}`);
+
+    // For custom amount payments, we don't need to create anything upfront
+    // The amount configuration is stored in the field and used during payment
+    return {
+      action: "custom_amount_configured",
+      fieldId: field.id,
+      merchantId: subFields.merchantAccountId || subFields.merchantId,
+      amountConfig: subFields.amount || {},
+      provider: subFields.gateway || "paypal",
+    };
   }
 
   /**

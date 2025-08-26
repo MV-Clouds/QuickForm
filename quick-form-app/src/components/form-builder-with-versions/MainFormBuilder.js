@@ -796,6 +796,27 @@ function MainFormBuilder({
           };
         }
 
+        // Clean subFields to ensure no double-stringification
+        const cleanSubFields =
+          field.subFields || getDefaultSubFields(field.type) || {};
+
+        // For payment fields, ensure nested objects are properly handled
+        if (
+          field.type === "paypal_payment" &&
+          cleanSubFields.subscriptionConfig
+        ) {
+          // Ensure subscriptionConfig is an object, not a string
+          if (typeof cleanSubFields.subscriptionConfig === "string") {
+            try {
+              cleanSubFields.subscriptionConfig = JSON.parse(
+                cleanSubFields.subscriptionConfig
+              );
+            } catch (e) {
+              console.warn("Failed to parse subscriptionConfig:", e);
+            }
+          }
+        }
+
         // Handle regular fields
         const properties = {
           ...field,
@@ -879,7 +900,7 @@ function MainFormBuilder({
         }
       }
 
-       // Step 3: Process payment fields (create/update subscriptions) using enhanced processor
+      // Step 3: Process payment fields (create/update subscriptions) using enhanced processor
       console.log("💳 Processing payment fields with enhanced processor...");
       const paymentProcessing =
         await enhancedFormPaymentProcessor.processFormPayments(
@@ -903,7 +924,7 @@ function MainFormBuilder({
         );
       }
 
-        // Clear previousMerchantId from fields after successful processing
+      // Clear previousMerchantId from fields after successful processing
       const updatedFields = fields.map((field) => {
         if (
           field.type === "paypal_payment" &&
@@ -925,6 +946,7 @@ function MainFormBuilder({
         setFields(updatedFields);
       }
 
+      // Step 4: Continue with normal form save process
       const token = await fetchAccessToken(userId, instanceUrl);
       if (!token) throw new Error("Failed to obtain access token.");
       const { formVersion, formFields } = prepareFormData();
@@ -1089,6 +1111,10 @@ function MainFormBuilder({
         pattern: ".*",
         description: "Display-only section (no validation needed).",
       },
+      paypal_payment: {
+        pattern: ".*",
+        description: "PayPal payment field validation.",
+      },
       default: {
         pattern: ".*",
         description: "No specific validation rules.",
@@ -1169,6 +1195,34 @@ function MainFormBuilder({
           label: "Phone Number",
         },
       },
+      paypal_payment: {
+        fieldLabel: "Payment Information",
+        gateway: "paypal",
+        merchantId: null,
+        paymentType: "one_time",
+        amount: {
+          type: "fixed",
+          value: 0,
+          currency: "USD",
+          minAmount: null,
+          maxAmount: null,
+          suggestions: [],
+          allowCustomAmount: true,
+          products: [],
+        },
+        paymentMethods: {
+          paypal: true,
+          cards: true,
+          venmo: false,
+          googlePay: false,
+          payLater: false,
+        },
+        behavior: {
+          required: true,
+          collectBillingAddress: false,
+          collectShippingAddress: false,
+        },
+      },
       default: {},
     };
     return subFields[field] || subFields["default"];
@@ -1183,6 +1237,18 @@ function MainFormBuilder({
     sectionSide = null,
     newField = null
   ) => {
+    // Check if trying to add a payment field when one already exists
+    if (fieldType === "paypal_payment") {
+      const hasPaymentField = fields.some(
+        (field) => field.type === "paypal_payment"
+      );
+      if (hasPaymentField) {
+        alert(
+          "Only one payment field is allowed per form. Please remove the existing payment field first."
+        );
+        return;
+      }
+    }
     setHasChanges(true);
     let updatedFields = [...fields];
 

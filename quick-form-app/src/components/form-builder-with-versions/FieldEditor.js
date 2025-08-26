@@ -15,6 +15,7 @@ import EmojiPicker from "emoji-picker-react";
 import { getCountryList } from "./getCountries";
 import ToggleSwitch from "./ToggleSwitch";
 import { DatePicker } from "rsuite";
+import PaymentFieldEditor from "./payment-fields/PaymentFieldEditor";
 
 // FieldEditor component for editing form fields and footer buttons
 function FieldEditor({
@@ -25,7 +26,9 @@ function FieldEditor({
   onClose,
   fields,
   fieldsets,
-  onAddFieldsFromFieldset
+  onAddFieldsFromFieldset,
+  userId = null, // Add userId prop
+  formId = null, // Add formId prop
 }) {
   // State for common properties
   const [label, setLabel] = useState(selectedField?.label || "");
@@ -382,7 +385,11 @@ function FieldEditor({
   );
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(
-    selectedField?.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'}
+    selectedField?.dropdownRelatedValues || {
+      "Option 1": "Option 1",
+      "Option 2": "Option 2",
+      "Option 3": "Option 3",
+    }
   );
 
   // NEW : Default value / Hidden Feature / Unique Name
@@ -530,7 +537,13 @@ function FieldEditor({
         selectedField.allowMultipleSelections || false
       );
       setShuffleOptions(selectedField.shuffleOptions || false);
-      setDropdownRelatedValues(selectedField.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'});
+      setDropdownRelatedValues(
+        selectedField.dropdownRelatedValues || {
+          "Option 1": "Option 1",
+          "Option 2": "Option 2",
+          "Option 3": "Option 3",
+        }
+      );
       // NEW: Set default value / Hidden Feature / Unique Name
       setDefaultValue(selectedField.defaultValue || "");
       setIsHidden(selectedField.isHidden || false);
@@ -1243,7 +1256,11 @@ function FieldEditor({
         break;
       default:
         newOptions = ["Option 1", "Option 2", "Option 3"];
-        newRelatedValues = { "Option 1": "Option 1", "Option 2": "Option 2", "Option 3": "Option 3" };
+        newRelatedValues = {
+          "Option 1": "Option 1",
+          "Option 2": "Option 2",
+          "Option 3": "Option 3",
+        };
     }
     setOptions(newOptions);
     if (selectedField.type === "dropdown") {
@@ -1395,7 +1412,7 @@ function FieldEditor({
     "displaytext",
     "formcalculation",
   ];
-  
+
   // Field type checks
   const isPlaceholderSupported =
     selectedField && placeholderSupportedTypes.includes(selectedField.type);
@@ -1429,6 +1446,7 @@ function FieldEditor({
   const isShortTextSupported = selectedField?.type === "shorttext";
   const isDatetime = selectedField?.type === "datetime";
   const isMatrix = selectedField?.type === "matrix";
+  const isPayPalPayment = selectedField?.type === "paypal_payment";
 
   // Get dynamic country list
   const countries = getCountryList();
@@ -2141,8 +2159,8 @@ function FieldEditor({
                               />
                               <input
                                 type="text"
-                                value={dropdownRelatedValues[opt] }
-                                defaultValue = {`Option ${idx + 1}`}
+                                value={dropdownRelatedValues[opt]}
+                                defaultValue={`Option ${idx + 1}`}
                                 onChange={(e) =>
                                   handleDropdownRelatedValueChange(
                                     opt,
@@ -3495,6 +3513,16 @@ function FieldEditor({
                     )}
                   </div>
                 </div>
+              )}
+              {/* Payment Field Configuration */}
+              {isPayPalPayment && (
+                <PaymentFieldEditor
+                  selectedField={selectedField}
+                  onUpdateField={onUpdateField}
+                  className="mb-4"
+                  userId={userId}
+                  formId={formId}
+                />
               )}
             </div>
           </div>
