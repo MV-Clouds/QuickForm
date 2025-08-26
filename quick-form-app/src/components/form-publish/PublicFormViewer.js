@@ -36,7 +36,7 @@ function PublicFormViewer() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fetchError, setFetchError] = useState(null);
-  const [userId , setUserId ] = useState(null);
+  const [userId, setUserId] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [instanceUrl, setInstanceUrl] = useState(null);
   const [linkData, setLinkData] = useState(null);
@@ -61,69 +61,69 @@ function PublicFormViewer() {
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-   // Payment-related state
+  // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [hasPaymentField, setHasPaymentField] = useState(false);
 
   useEffect(() => {
-  const fetchFormData = async () => {
-    try {
-      let decrypted;
+    const fetchFormData = async () => {
       try {
-        decrypted = decrypt(linkId);
-      } catch (e) {
-        throw new Error(e.message || 'Invalid link format');
-      }
+        let decrypted;
+        try {
+          decrypted = decrypt(linkId);
+        } catch (e) {
+          throw new Error(e.message || 'Invalid link format');
+        }
 
-      const [userId, formId] = decrypted.split('$');
-      if (!userId || !formId) {
-        throw new Error('Invalid link data');
-      }
-      setLinkData({ userId, formId });
+        const [userId, formId] = decrypted.split('$');
+        if (!userId || !formId) {
+          throw new Error('Invalid link data');
+        }
+        setLinkData({ userId, formId });
 
-      const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
+        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        });
 
-      const tokenData = await tokenResponse.json();
-      if (!tokenResponse.ok || tokenData.error) {
-        throw new Error(tokenData.error || 'Failed to fetch access token');
-      }
-      const token = tokenData.access_token;
-      const instanceUrl = tokenData.instanceUrl;
-      setUserId(userId);
-      setAccessToken(token);
-      setInstanceUrl(instanceUrl);
+        const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || tokenData.error) {
+          throw new Error(tokenData.error || 'Failed to fetch access token');
+        }
+        const token = tokenData.access_token;
+        const instanceUrl = tokenData.instanceUrl;
+        setUserId(userId);
+        setAccessToken(token);
+        setInstanceUrl(instanceUrl);
 
-      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, formId }),
-      });
+        const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, formId }),
+        });
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch form');
-      }
-      const formVersion = data.formVersion;
-      let thankyouRecord = formVersion?.ThankYou;
-      setThankyouData(thankyouRecord);
-      setFormData(formVersion);
-      const localIdToSFId = {};
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch form');
+        }
+        const formVersion = data.formVersion;
+        let thankyouRecord = formVersion?.ThankYou;
+        setThankyouData(thankyouRecord);
+        setFormData(formVersion);
+        const localIdToSFId = {};
 
-      formVersion.Fields.forEach(field => {
-        const props = JSON.parse(field.Properties__c || '{}');
+        formVersion.Fields.forEach(field => {
+          const props = JSON.parse(field.Properties__c || '{}');
 
-        if (props.id && field.Id) {
-          // Base mapping
-          localIdToSFId[props.id] = field.Id;
-          // Handle subfields (including nested subfields)
-          if (props.subFields && typeof props.subFields === 'object') {
-            Object.entries(props.subFields).forEach(([subName, subField]) => {
-              // if (subField.id) {
+          if (props.id && field.Id) {
+            // Base mapping
+            localIdToSFId[props.id] = field.Id;
+            // Handle subfields (including nested subfields)
+            if (props.subFields && typeof props.subFields === 'object') {
+              Object.entries(props.subFields).forEach(([subName, subField]) => {
+                // if (subField.id) {
                 // For section subfields (leftField/rightField)
                 if (field.Field_Type__c === 'section') {
                   localIdToSFId[subField.id] = `${field.Id}_${subName}`;
@@ -140,159 +140,159 @@ function PublicFormViewer() {
                 else {
                   localIdToSFId[`${props.id}_${subName}`] = `${field.Id}_${subName}`;
                 }
-              // }
-            });
-          }
-        }
-      });
-      console.log('Local id ',localIdToSFId);
-      
-       // Parse Prefill array from formVersion.Prefills if available
-      if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
-        const parsedPrefills = formVersion.Prefills.map(p => {
-          let parsedData = {};
-          try {
-            parsedData = typeof p.Prefill_Data__c === 'string'
-              ? JSON.parse(p.Prefill_Data__c)
-              : p.Prefill_Data__c || {};
-          } catch (e) {
-            console.warn('Invalid Prefill_Data__c JSON', e);
-          }
-          return {
-            Id: p.Id,
-            Order__c: p.Order__c || 0,
-            ...parsedData
-          };
-        });
-        setPrefills(parsedPrefills);
-
-        // Build set of Salesforce field names that should trigger prefill
-        const deps = new Set();
-        parsedPrefills.forEach(prefill => {
-          (prefill.lookupFilters?.conditions || []).forEach(cond => {
-            if (cond.formField && localIdToSFId[cond.formField]) {
-              deps.add(localIdToSFId[cond.formField]); // store as SF id for runtime
+                // }
+              });
             }
-          });
-        });
-        setDependentFields(deps);
-      }
-
-      setLocalIdToSFId(localIdToSFId);
-      const parsedConditions = (formVersion.Conditions || []).map(c =>
-        c.Condition_Data__c ? (
-          typeof c.Condition_Data__c === 'string'
-            ? JSON.parse(c.Condition_Data__c)
-            : c.Condition_Data__c
-        ) : c
-      );
-      setFormConditions(parsedConditions);
-
-      const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId,
-          formVersionId: formVersion.Id,
-          instanceUrl,
-          accessToken: token,
-        }),
-      });
-
-      const mappingsData = await mappingsResponse.json();
-      if (!mappingsResponse.ok) {
-        throw new Error(mappingsData.error || 'Failed to fetch mappings');
-      }
-      setFormData((prev) => ({ ...prev, mappings: mappingsData.mappings }));
-
-      const initialValues = {};
-      const initialSignatures = {};
-      const initialFilePreviews = {};
-      const initialRatings = {};
-      const initialSelectedOptions = {};
-      const initialToggles = {};
-
-      formVersion.Fields.forEach((field) => {
-        const properties = JSON.parse(field.Properties__c || '{}');
-        const fieldType = field.Field_Type__c;
-
-        if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-          // Safely access subFields properties with defaults
-          initialValues[`${field.Id || properties.id}_countryCode`] =
-            properties.subFields?.countryCode?.value ?? 'US';
-          initialValues[field.Id || properties.id] =
-            properties.subFields?.phoneNumber?.value ?? '';
-        } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-          initialValues[field.Id || properties.id] = properties.defaultValue || [];
-        } else if (fieldType === 'datetime' || fieldType === 'date') {
-          initialValues[field.Id || properties.id] = properties.defaultValue || null;
-        } else if (fieldType === 'time') {
-          initialValues[field.Id || properties.id] = properties.defaultValue || '';
-        } else if (fieldType === 'scalerating') {
-          initialValues[field.Id || properties.id] = {};
-        } else {
-          initialValues[field.Id || properties.id] = properties.defaultValue || '';
-        }
-
-        initialSignatures[field.Id || properties.id] = null;
-        initialFilePreviews[field.Id || properties.id] = null;
-        initialRatings[field.Id || properties.id] = null;
-        initialSelectedOptions[field.Id || properties.id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
-        initialToggles[field.Id || properties.id] = false;
-      });
-
-      setFormValues(initialValues);
-      for (const [key, value] of searchParams.entries()) {
-        
-        if (key.startsWith('field-')) {
-          const fieldIdParam = key;
-          const sfId = localIdToSFId[fieldIdParam];
-          let fieldMeta;
-          let subFieldKey;
-          if (sfId?.includes('_')) {
-            // Split into parent Id and subfield key
-            const [parentId, key] = sfId.split('_');
-            subFieldKey = key;
-
-            // Find parent field
-            const parentField = formVersion.Fields.find(f => f.Id === parentId);
-
-            if (parentField) {
-              const props = JSON.parse(parentField.Properties__c || '{}');
-
-              const subFieldMeta = props.subFields ? props.subFields[subFieldKey] : null;
-
-              if (subFieldMeta) {
-                fieldMeta = subFieldMeta;
-              } else {
-                fieldMeta = parentField;
-              }
-            }
-
-          } else {
-            // Simple case: direct match
-            fieldMeta = formVersion.Fields.find(f => f.Id === sfId);
           }
-          
-          
-          if (fieldMeta) {
-            const props = JSON.parse(fieldMeta.Properties__c || '{}');
-            const fType = fieldMeta.Field_Type__c;
+        });
+        console.log('Local id ', localIdToSFId);
 
+        // Parse Prefill array from formVersion.Prefills if available
+        if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
+          const parsedPrefills = formVersion.Prefills.map(p => {
+            let parsedData = {};
             try {
-              let parsedValue = value;
+              parsedData = typeof p.Prefill_Data__c === 'string'
+                ? JSON.parse(p.Prefill_Data__c)
+                : p.Prefill_Data__c || {};
+            } catch (e) {
+              console.warn('Invalid Prefill_Data__c JSON', e);
+            }
+            return {
+              Id: p.Id,
+              Order__c: p.Order__c || 0,
+              ...parsedData
+            };
+          });
+          setPrefills(parsedPrefills);
 
-              switch (fType) {
-                case 'date':
-                  // if (!isNaN(Date.parse(value))) {
-                  //   // store in YYYY-MM-DD
-                  //   const d = new Date(value);
-                  //   parsedValue = d.toISOString().split('T')[0];
-                  // } else { throw new Error('Invalid date'); }
-                  const parts = value.split(/[-/]/);
+          // Build set of Salesforce field names that should trigger prefill
+          const deps = new Set();
+          parsedPrefills.forEach(prefill => {
+            (prefill.lookupFilters?.conditions || []).forEach(cond => {
+              if (cond.formField && localIdToSFId[cond.formField]) {
+                deps.add(localIdToSFId[cond.formField]); // store as SF id for runtime
+              }
+            });
+          });
+          setDependentFields(deps);
+        }
+
+        setLocalIdToSFId(localIdToSFId);
+        const parsedConditions = (formVersion.Conditions || []).map(c =>
+          c.Condition_Data__c ? (
+            typeof c.Condition_Data__c === 'string'
+              ? JSON.parse(c.Condition_Data__c)
+              : c.Condition_Data__c
+          ) : c
+        );
+        setFormConditions(parsedConditions);
+
+        const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId,
+            formVersionId: formVersion.Id,
+            instanceUrl,
+            accessToken: token,
+          }),
+        });
+
+        const mappingsData = await mappingsResponse.json();
+        if (!mappingsResponse.ok) {
+          throw new Error(mappingsData.error || 'Failed to fetch mappings');
+        }
+        setFormData((prev) => ({ ...prev, mappings: mappingsData.mappings }));
+
+        const initialValues = {};
+        const initialSignatures = {};
+        const initialFilePreviews = {};
+        const initialRatings = {};
+        const initialSelectedOptions = {};
+        const initialToggles = {};
+
+        formVersion.Fields.forEach((field) => {
+          const properties = JSON.parse(field.Properties__c || '{}');
+          const fieldType = field.Field_Type__c;
+
+          if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+            // Safely access subFields properties with defaults
+            initialValues[`${field.Id || properties.id}_countryCode`] =
+              properties.subFields?.countryCode?.value ?? 'US';
+            initialValues[field.Id || properties.id] =
+              properties.subFields?.phoneNumber?.value ?? '';
+          } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+            initialValues[field.Id || properties.id] = properties.defaultValue || [];
+          } else if (fieldType === 'datetime' || fieldType === 'date') {
+            initialValues[field.Id || properties.id] = properties.defaultValue || null;
+          } else if (fieldType === 'time') {
+            initialValues[field.Id || properties.id] = properties.defaultValue || '';
+          } else if (fieldType === 'scalerating') {
+            initialValues[field.Id || properties.id] = {};
+          } else {
+            initialValues[field.Id || properties.id] = properties.defaultValue || '';
+          }
+
+          initialSignatures[field.Id || properties.id] = null;
+          initialFilePreviews[field.Id || properties.id] = null;
+          initialRatings[field.Id || properties.id] = null;
+          initialSelectedOptions[field.Id || properties.id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
+          initialToggles[field.Id || properties.id] = false;
+        });
+
+        setFormValues(initialValues);
+        for (const [key, value] of searchParams.entries()) {
+
+          if (key.startsWith('field-')) {
+            const fieldIdParam = key;
+            const sfId = localIdToSFId[fieldIdParam];
+            let fieldMeta;
+            let subFieldKey;
+            if (sfId?.includes('_')) {
+              // Split into parent Id and subfield key
+              const [parentId, key] = sfId.split('_');
+              subFieldKey = key;
+
+              // Find parent field
+              const parentField = formVersion.Fields.find(f => f.Id === parentId);
+
+              if (parentField) {
+                const props = JSON.parse(parentField.Properties__c || '{}');
+
+                const subFieldMeta = props.subFields ? props.subFields[subFieldKey] : null;
+
+                if (subFieldMeta) {
+                  fieldMeta = subFieldMeta;
+                } else {
+                  fieldMeta = parentField;
+                }
+              }
+
+            } else {
+              // Simple case: direct match
+              fieldMeta = formVersion.Fields.find(f => f.Id === sfId);
+            }
+
+
+            if (fieldMeta) {
+              const props = JSON.parse(fieldMeta.Properties__c || '{}');
+              const fType = fieldMeta.Field_Type__c;
+
+              try {
+                let parsedValue = value;
+
+                switch (fType) {
+                  case 'date':
+                    // if (!isNaN(Date.parse(value))) {
+                    //   // store in YYYY-MM-DD
+                    //   const d = new Date(value);
+                    //   parsedValue = d.toISOString().split('T')[0];
+                    // } else { throw new Error('Invalid date'); }
+                    const parts = value.split(/[-/]/);
                     if (parts.length === 3) {
                       let day, month, year;
                       if (parts[0].length === 4) {
@@ -308,271 +308,272 @@ function PublicFormViewer() {
                         parsedValue = transformDate.toISOString().split('T')[0];
                       }
                     }
-                  break;
-                case 'datetime':
-                  if (!isNaN(Date.parse(value))) {
-                    const d = new Date(value);
-                    const yyyy = d.getFullYear();
-                    const mm = String(d.getMonth() + 1).padStart(2, '0');
-                    const dd = String(d.getDate()).padStart(2, '0');
-                    const hh = String(d.getHours()).padStart(2, '0');
-                    const mi = String(d.getMinutes()).padStart(2, '0');
-                    parsedValue = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
-                  } else { throw new Error('Invalid datetime'); }
-                  break;
-                case 'number':
-                case 'price':
-                  if (!isNaN(parseFloat(value))) {
-                    parsedValue = parseFloat(value);
-                  } else { throw new Error('Invalid number'); }
-                  break;
-                case 'checkbox':
-                  parsedValue = value.split(',').map(v => v.trim());
-                  break;
-                default:
-                  // leave as string for all other types
-                  parsedValue = value;
-              }
+                    break;
+                  case 'datetime':
+                    if (!isNaN(Date.parse(value))) {
+                      const d = new Date(value);
+                      const yyyy = d.getFullYear();
+                      const mm = String(d.getMonth() + 1).padStart(2, '0');
+                      const dd = String(d.getDate()).padStart(2, '0');
+                      const hh = String(d.getHours()).padStart(2, '0');
+                      const mi = String(d.getMinutes()).padStart(2, '0');
+                      parsedValue = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+                    } else { throw new Error('Invalid datetime'); }
+                    break;
+                  case 'number':
+                  case 'price':
+                    if (!isNaN(parseFloat(value))) {
+                      parsedValue = parseFloat(value);
+                    } else { throw new Error('Invalid number'); }
+                    break;
+                  case 'checkbox':
+                    parsedValue = value.split(',').map(v => v.trim());
+                    break;
+                  default:
+                    // leave as string for all other types
+                    parsedValue = value;
+                }
 
-              manualPrefills[sfId] = parsedValue;
-              
-            } catch (err) {
-              console.warn(`Invalid manual prefill for ${fieldIdParam}:`, err.message);
+                manualPrefills[sfId] = parsedValue;
+
+              } catch (err) {
+                console.warn(`Invalid manual prefill for ${fieldIdParam}:`, err.message);
+              }
             }
           }
         }
-      }
 
-      if (Object.keys(manualPrefills).length) {
-        
-        // Step 1: Set manual prefills
-        setFormValues(prev => ({ ...prev, ...manualPrefills }));
-        
-        // Step 2: Run dependent prefill AFTER state is updated
-        Object.keys(manualPrefills).forEach(sfId => {
-          setManualPrefillsState(manualPrefills);
-        });
-      }
+        if (Object.keys(manualPrefills).length) {
 
+          // Step 1: Set manual prefills
+          setFormValues(prev => ({ ...prev, ...manualPrefills }));
 
-      setSignatures(initialSignatures);
-      setFilePreviews(initialFilePreviews);
-      setSelectedRatings(initialRatings);
-      setSelectedOptions(initialSelectedOptions);
-      setToggles(initialToggles);
-
-      const pageMap = {};
-      formVersion.Fields.forEach((field) => {
-        const pageNum = field.Page_Number__c || 1;
-        if (!pageMap[pageNum]) {
-          pageMap[pageNum] = [];
+          // Step 2: Run dependent prefill AFTER state is updated
+          Object.keys(manualPrefills).forEach(sfId => {
+            setManualPrefillsState(manualPrefills);
+          });
         }
-        pageMap[pageNum].push(field);
-      });
 
-      const sortedPages = Object.keys(pageMap)
-        .sort((a, b) => Number(a) - Number(b))
-        .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
-      setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
-      setLoopCounters({});
-    } catch (error) {
-      console.error('Error fetching form:', error);
-      setFetchError(error.message || 'Failed to load form');
+
+        setSignatures(initialSignatures);
+        setFilePreviews(initialFilePreviews);
+        setSelectedRatings(initialRatings);
+        setSelectedOptions(initialSelectedOptions);
+        setToggles(initialToggles);
+
+        const pageMap = {};
+        formVersion.Fields.forEach((field) => {
+          const pageNum = field.Page_Number__c || 1;
+          if (!pageMap[pageNum]) {
+            pageMap[pageNum] = [];
+          }
+          pageMap[pageNum].push(field);
+        });
+
+        const sortedPages = Object.keys(pageMap)
+          .sort((a, b) => Number(a) - Number(b))
+          .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
+        setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
+        setLoopCounters({});
+      } catch (error) {
+        console.error('Error fetching form:', error);
+        setFetchError(error.message || 'Failed to load form');
+      }
+    };
+
+    if (linkId) {
+      fetchFormData();
     }
-  };
+  }, [linkId]);
 
-  if (linkId) {
-    fetchFormData();
-  }
-}, [linkId]);
-
-        useEffect(() => {
-        if (
-          prefills.length > 0 &&                      // prefills are loaded
-          Object.keys(manualPrefillsState).length > 0 // we have manual prefill keys
-        ) {
-          Object.keys(manualPrefillsState).forEach(sfId => {
-            runPrefillForField(sfId);
-          });
-        }
-      }, [prefills, manualPrefillsState]);
+  useEffect(() => {
+    if (
+      prefills.length > 0 &&                      // prefills are loaded
+      Object.keys(manualPrefillsState).length > 0 // we have manual prefill keys
+    ) {
+      Object.keys(manualPrefillsState).forEach(sfId => {
+        runPrefillForField(sfId);
+      });
+    }
+  }, [prefills, manualPrefillsState]);
 
 
-      const runPrefillForField = async (sfFieldId) => {
-        // Step 1: Find prefills directly triggered by this blurred field (condition field)
-        const directlyTriggered = prefills.filter(p =>
-          (p.lookupFilters?.conditions || []).some(c => {
-            const formFieldId = localIdToSFId[c.formField] || c.formField;
-            return formFieldId === sfFieldId ||
-                  formFieldId.startsWith(`${sfFieldId}_`) || // Check for subfields
-                  sfFieldId.startsWith(`${formFieldId}_`);   // Check if this is a subfield of the condition
-          })
-        );
+  const runPrefillForField = async (sfFieldId) => {
+    // Step 1: Find prefills directly triggered by this blurred field (condition field)
+    const directlyTriggered = prefills.filter(p =>
+      (p.lookupFilters?.conditions || []).some(c => {
+        const formFieldId = localIdToSFId[c.formField] || c.formField;
+        return formFieldId === sfFieldId ||
+          formFieldId.startsWith(`${sfFieldId}_`) || // Check for subfields
+          sfFieldId.startsWith(`${formFieldId}_`);   // Check if this is a subfield of the condition
+      })
+    );
 
-        // If none triggered, stop early
-        if (directlyTriggered.length === 0) return;
+    // If none triggered, stop early
+    if (directlyTriggered.length === 0) return;
 
-        // Find the set of target runtime fields from the directly triggered prefills
-        const triggeredTargetFields = new Set();
-        directlyTriggered.forEach(p => {
-          Object.keys(p.fieldMappings || {}).forEach(localId => {
-            const runtimeId = localIdToSFId[localId];
-            if (runtimeId) triggeredTargetFields.add(runtimeId);
-          });
-        });
+    // Find the set of target runtime fields from the directly triggered prefills
+    const triggeredTargetFields = new Set();
+    directlyTriggered.forEach(p => {
+      Object.keys(p.fieldMappings || {}).forEach(localId => {
+        const runtimeId = localIdToSFId[localId];
+        if (runtimeId) triggeredTargetFields.add(runtimeId);
+      });
+    });
 
-        // Step 1b: Now include any prefill whose target field overlaps with the triggered target fields
-        const triggeredPrefills = prefills.filter(p =>
-          Object.keys(p.fieldMappings || {}).some(localId => {
-            const runtimeId = localIdToSFId[localId];
-            return runtimeId && triggeredTargetFields.has(runtimeId);
-          })
-        ).sort((a, b) => (a.Order__c || 0) - (b.Order__c || 0));
+    // Step 1b: Now include any prefill whose target field overlaps with the triggered target fields
+    const triggeredPrefills = prefills.filter(p =>
+      Object.keys(p.fieldMappings || {}).some(localId => {
+        const runtimeId = localIdToSFId[localId];
+        return runtimeId && triggeredTargetFields.has(runtimeId);
+      })
+    ).sort((a, b) => (a.Order__c || 0) - (b.Order__c || 0));
 
 
-        // Step 3: Filter prefills into groups based on target overlap
-        // Here we just reuse triggeredPrefills sorted by priority Order__c
-        const updatedFields = new Set();
-        for (const prefill of triggeredPrefills) {
-          // Skip if ALL its target fields are already updated in this run
-          const prefillTargets = Object.keys(prefill.fieldMappings || {})
-            .map(localId => localIdToSFId[localId])
-            .filter(Boolean);
-          const allUpdated = prefillTargets.every(fId => updatedFields.has(fId));
-          if (allUpdated) continue;
+    // Step 3: Filter prefills into groups based on target overlap
+    // Here we just reuse triggeredPrefills sorted by priority Order__c
+    const updatedFields = new Set();
+    for (const prefill of triggeredPrefills) {
+      // Skip if ALL its target fields are already updated in this run
+      const prefillTargets = Object.keys(prefill.fieldMappings || {})
+        .map(localId => localIdToSFId[localId])
+        .filter(Boolean);
+      const allUpdated = prefillTargets.every(fId => updatedFields.has(fId));
+      if (allUpdated) continue;
 
-          const where = buildWhereFromPrefill(prefill.lookupFilters, prefill.objectFields || []);
-          const soql = `SELECT ${Object.values(prefill.fieldMappings).join(', ')}
+      const where = buildWhereFromPrefill(prefill.lookupFilters, prefill.objectFields || []);
+      const soql = `SELECT ${Object.values(prefill.fieldMappings).join(', ')}
                         FROM ${prefill.selectedObject}
                         ${where ? 'WHERE ' + where : ''}
                         ${prefill.sortBy?.field ? `ORDER BY ${prefill.sortBy.field} ${prefill.sortBy.order || 'ASC'}` : ''}
                         LIMIT 1`;
 
-          try {
-            const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId,
-                accessToken,
-                soql,
-                requestType: 'salesforceQuery',
-                multipleRecordAction: prefill.multipleRecordAction
-              })
-            });
-            const data = await resp.json();
+      try {
+        const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            accessToken,
+            soql,
+            requestType: 'salesforceQuery',
+            multipleRecordAction: prefill.multipleRecordAction
+          })
+        });
+        const data = await resp.json();
 
-            if (data.record) {
-              const updates = {};
-              Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
-                const runtimeFieldId = localIdToSFId[localId];
-                if (runtimeFieldId && !updatedFields.has(runtimeFieldId) && data.record[sfName] !== undefined) {
-                  updates[runtimeFieldId] = data.record[sfName];
-                  updatedFields.add(runtimeFieldId); // mark as final for this trigger round
-                  Object.keys(localIdToSFId).forEach(key => {
-                  if (key.startsWith(`${localId}_`)) {
-                    const subRuntimeId = localIdToSFId[key];
-                    const subSfName = `${sfName}_${key.split('_').pop()}`;
-                    if (data.record[subSfName] !== undefined) {
-                      updates[subRuntimeId] = data.record[subSfName];
-                      updatedFields.add(subRuntimeId);
-                    }
-                  }});
+        if (data.record) {
+          const updates = {};
+          Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
+            const runtimeFieldId = localIdToSFId[localId];
+            if (runtimeFieldId && !updatedFields.has(runtimeFieldId) && data.record[sfName] !== undefined) {
+              updates[runtimeFieldId] = data.record[sfName];
+              updatedFields.add(runtimeFieldId); // mark as final for this trigger round
+              Object.keys(localIdToSFId).forEach(key => {
+                if (key.startsWith(`${localId}_`)) {
+                  const subRuntimeId = localIdToSFId[key];
+                  const subSfName = `${sfName}_${key.split('_').pop()}`;
+                  if (data.record[subSfName] !== undefined) {
+                    updates[subRuntimeId] = data.record[subSfName];
+                    updatedFields.add(subRuntimeId);
+                  }
                 }
               });
-
-              if (Object.keys(updates).length > 0) {
-                setFormValues(prev => ({ ...prev, ...updates }));
-              }
             }
-          } catch (err) {
-            console.error('Prefill failed:', err);
+          });
+
+          if (Object.keys(updates).length > 0) {
+            setFormValues(prev => ({ ...prev, ...updates }));
           }
         }
-      };
+      } catch (err) {
+        console.error('Prefill failed:', err);
+      }
+    }
+  };
 
 
 
-      const formatValForSOQL = (val, sfType) => {
-        if (val === null || val === undefined || val === '') {
-          return 'null';
-        }
+  const formatValForSOQL = (val, sfType) => {
+    if (val === null || val === undefined || val === '') {
+      return 'null';
+    }
 
-        const numericTypes = ['int', 'double', 'currency', 'percent', 'integer', 'long'];
-        const dateTypes = ['date', 'datetime', 'time'];
+    const numericTypes = ['int', 'double', 'currency', 'percent', 'integer', 'long'];
+    const dateTypes = ['date', 'datetime', 'time'];
 
-        // If type is numeric or similar, return as-is without quotes
-        if (numericTypes.includes(sfType)) {
-          return val;
-        }
-        // If date/datetime, return as-is without quotes (Salesforce accepts date strings unquoted)
-        if (dateTypes.includes(sfType)) {
-          return val;
-        }
-        // Otherwise treat as string - escape single quotes and quote value
-        const escaped = String(val).replace(/'/g, "\\'");
-        return `'${escaped}'`;
-      };
+    // If type is numeric or similar, return as-is without quotes
+    if (numericTypes.includes(sfType)) {
+      return val;
+    }
+    // If date/datetime, return as-is without quotes (Salesforce accepts date strings unquoted)
+    if (dateTypes.includes(sfType)) {
+      return val;
+    }
+    // Otherwise treat as string - escape single quotes and quote value
+    const escaped = String(val).replace(/'/g, "\\'");
+    return `'${escaped}'`;
+  };
 
-      const buildWhereFromPrefill = (lookupFilters, objectFields) => {
-        if (!lookupFilters?.conditions?.length) return '';
-        const condMap = {};
+  const buildWhereFromPrefill = (lookupFilters, objectFields) => {
+    if (!lookupFilters?.conditions?.length) return '';
+    const condMap = {};
 
-        lookupFilters.conditions.forEach((cond, idx) => {
-          const sfId = localIdToSFId[cond.formField];
-          let val = formValues[sfId];
-          const sfFieldType = objectFields.find(f => f.name === cond.objectField)?.type;
+    lookupFilters.conditions.forEach((cond, idx) => {
+      const sfId = localIdToSFId[cond.formField];
+      let val = formValues[sfId];
+      const sfFieldType = objectFields.find(f => f.name === cond.objectField)?.type;
 
-          let clause = '';
+      let clause = '';
 
-          switch (cond.operator) {
-            case 'equals':
-              clause = `${cond.objectField} = ${formatValForSOQL(val, sfFieldType)}`;
-              break;
-            case '!=':
-              clause = `${cond.objectField} != ${formatValForSOQL(val, sfFieldType)}`;
-              break;
-            case 'greater than':
-              clause = `${cond.objectField} > ${formatValForSOQL(val, sfFieldType)}`;
-              break;
-            case 'greater than or equal to':
-              clause = `${cond.objectField} >= ${formatValForSOQL(val, sfFieldType)}`;
-              break;
-            case 'less than':
-              clause = `${cond.objectField} < ${formatValForSOQL(val, sfFieldType)}`;
-              break;
-            case 'less than or equal to':
-              clause = `${cond.objectField} <= ${formatValForSOQL(val, sfFieldType)}`;
-              break;
-            case 'contains':
-              clause = `${cond.objectField} LIKE '%${val ?? ''}%'`;
-              break;
-            case 'startsWith':
-              clause = `${cond.objectField} LIKE '${val ?? ''}%'`;
-              break;
-            case 'endsWith':
-              clause = `${cond.objectField} LIKE '%${val ?? ''}'`;
-              break;
-            case 'is null':
-              clause = `${cond.objectField} = null`;
-              break;
-            case 'is not null':
-              clause = `${cond.objectField} != null`;
-              break;
-            default:
-              clause = 'TRUE';
-              break;
-          }
+      switch (cond.operator) {
+        case 'equals':
+          clause = `${cond.objectField} = ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case '!=':
+          clause = `${cond.objectField} != ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'greater than':
+          clause = `${cond.objectField} > ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'greater than or equal to':
+          clause = `${cond.objectField} >= ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'less than':
+          clause = `${cond.objectField} < ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'less than or equal to':
+          clause = `${cond.objectField} <= ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'contains':
+          clause = `${cond.objectField} LIKE '%${val ?? ''}%'`;
+          break;
+        case 'startsWith':
+          clause = `${cond.objectField} LIKE '${val ?? ''}%'`;
+          break;
+        case 'endsWith':
+          clause = `${cond.objectField} LIKE '%${val ?? ''}'`;
+          break;
+        case 'is null':
+          clause = `${cond.objectField} = null`;
+          break;
+        case 'is not null':
+          clause = `${cond.objectField} != null`;
+          break;
+        default:
+          clause = 'TRUE';
+          break;
+      }
 
-          condMap[(idx + 1).toString()] = clause;
-        });
+      condMap[(idx + 1).toString()] = clause;
+    });
 
-        if (lookupFilters.logicType === 'Custom' && lookupFilters.logicExpression) {
-          return lookupFilters.logicExpression.replace(/\d+/g, n => condMap[n] || 'TRUE');
-        }
-        const glue = lookupFilters.logicType || 'AND';
-        return Object.values(condMap).filter(Boolean).join(` ${glue} `);
-      };
+    if (lookupFilters.logicType === 'Custom' && lookupFilters.logicExpression) {
+      return lookupFilters.logicExpression.replace(/\d+/g, n => condMap[n] || 'TRUE');
+    }
+    const glue = lookupFilters.logicType || 'AND';
+    return Object.values(condMap).filter(Boolean).join(` ${glue} `);
+  };
 
 
   const handleChange = (fieldId, value, isFile = false) => {
@@ -647,7 +648,7 @@ function PublicFormViewer() {
     }
   };
 
-   // Handle payment completion - UPDATED FLOW
+  // Handle payment completion - UPDATED FLOW
   const handlePaymentComplete = (paymentData) => {
   };
 
@@ -674,7 +675,7 @@ function PublicFormViewer() {
           const leftError = validateSingleField(
             properties.subFields.leftField,
             formValues[properties.subFields.leftField.id],
-            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
           if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
@@ -682,12 +683,12 @@ function PublicFormViewer() {
           const rightError = validateSingleField(
             properties.subFields.rightField,
             formValues[properties.subFields.rightField.id],
-            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
           if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
         }
       } else {
-        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }});
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } });
         if (error) newErrors[field.Id || properties.id] = error;
       }
     });
@@ -858,7 +859,7 @@ function PublicFormViewer() {
   // };
 
   // Utility: Validation for a single field (returns an error message string if invalid, or null if valid)
-  const validateSingleField = (field, value, allValues, {signaturesObj, uiState} = {}) => {
+  const validateSingleField = (field, value, allValues, { signaturesObj, uiState } = {}) => {
     let properties = {};
     if (field.Properties__c) {
       properties = typeof field.Properties__c === "string"
@@ -884,7 +885,7 @@ function PublicFormViewer() {
     const isRequired = properties.isRequired || uiState?.[properties.id || field.Id || field.id]?.required || false;
     // Required logic (handles most types including special cases)
     if (
-      isRequired && 
+      isRequired &&
       fieldType !== "address" &&
       fieldType !== "fullname" &&
       fieldType !== "phone" && (
@@ -1010,14 +1011,14 @@ function PublicFormViewer() {
                 ? subConfig?.visiblesubFields !== false
                 : subConfig?.visible !== false)
             ) {
-              
+
               const subValue = allValues[`${field.id || field.Id || properties.id}_${subfield}`] || '';
               if (!subValue || (typeof subValue === "string" && subValue.trim() === "")) {
                 missingFields.push(subConfig?.label || subfield);
               }
             }
           }
-          
+
           if (missingFields.length > 0) {
             // Return generic message or list missing fields
             return `Please fill out all the fields in Address`; // Or: `Please fill out: ${missingFields.join(", ")}`
@@ -1044,7 +1045,7 @@ function PublicFormViewer() {
           }
         }
         break;
-      
+
       default:
         break;
     }
@@ -1054,89 +1055,89 @@ function PublicFormViewer() {
 
   // In handleSubmit function
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
-    return;
-  }
+    e.preventDefault();
+    if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
+      return;
+    }
 
-  setIsSubmitting(true);
-  try {
-    const visiblePageIds = new Set(getVisiblePages(formValues).map(arr => `page_${arr[0].Page_Number__c}`));
+    setIsSubmitting(true);
+    try {
+      const visiblePageIds = new Set(getVisiblePages(formValues).map(arr => `page_${arr[0].Page_Number__c}`));
 
-    // Filter out fields that belong to hidden pages
-    const filteredFormValues = {};
-    Object.keys(formValues).forEach(key => {
-      // Find field's page number from formData.Fields
-      const field = formData.Fields.find(f => (f.Id === key || (JSON.parse(f.Properties__c || '{}').id === key)));
-      if (!field) {
-        filteredFormValues[key] = formValues[key]; // Keep if field metadata not found (safer fallback)
-      } else {
-        const fieldPageId = `page_${field.Page_Number__c || 1}`;
-        if (visiblePageIds.has(fieldPageId)) {
-          filteredFormValues[key] = formValues[key];
+      // Filter out fields that belong to hidden pages
+      const filteredFormValues = {};
+      Object.keys(formValues).forEach(key => {
+        // Find field's page number from formData.Fields
+        const field = formData.Fields.find(f => (f.Id === key || (JSON.parse(f.Properties__c || '{}').id === key)));
+        if (!field) {
+          filteredFormValues[key] = formValues[key]; // Keep if field metadata not found (safer fallback)
+        } else {
+          const fieldPageId = `page_${field.Page_Number__c || 1}`;
+          if (visiblePageIds.has(fieldPageId)) {
+            filteredFormValues[key] = formValues[key];
+          }
         }
-      }
-    });
-    const submissionData = {};
-    const filesToUpload = {};
+      });
+      const submissionData = {};
+      const filesToUpload = {};
 
-    const loopPageKeys = pages
-    .map(arr => {
-      const pageArr = arr;
-      const pageId = `page_${pageArr[0]?.Page_Number__c}`;
-      const loopCond = getLoopConditionForPage(pageArr, filteredFormValues);
-      return loopCond ? pageId : null;
-    })
-    .filter(Boolean);
-
-    const loopFieldsByPage = {};
-    loopPageKeys.forEach(pageId => {
-      // Get all fields on this page (including section subfields etc)
-      loopFieldsByPage[pageId] = pages.find(arr => `page_${arr[0]?.Page_Number__c}` === pageId)
-        .map(f => {
-          const properties = typeof f.Properties__c === "string" ? JSON.parse(f.Properties__c || "{}") : (f.Properties__c || {});
-          // Collect main field and subfields (e.g. for fullname, address)
-          let fieldIds = [f.Id || properties.id];
-          if (f.Field_Type__c === "phone" && properties.subFields?.countryCode?.enabled) {
-            fieldIds.push(`${f.Id || properties.id}_countryCode`);
-          }
-          if (f.Field_Type__c === "fullname" && properties.subFields) {
-            fieldIds = fieldIds.concat(
-              ["salutation", "first", "last"].map(sub => `${f.Id || properties.id}_${sub}`)
-            );
-          }
-          if (f.Field_Type__c === "address" && properties.subFields) {
-            fieldIds = fieldIds.concat(
-              ["street", "city", "state", "country", "postal"].map(sub => `${f.Id || properties.id}_${sub}`)
-            );
-          }
-          return fieldIds;
+      const loopPageKeys = pages
+        .map(arr => {
+          const pageArr = arr;
+          const pageId = `page_${pageArr[0]?.Page_Number__c}`;
+          const loopCond = getLoopConditionForPage(pageArr, filteredFormValues);
+          return loopCond ? pageId : null;
         })
-        .flat();
-    });
+        .filter(Boolean);
 
-    // Move answers of loop pages from root to loop array
-    loopPageKeys.forEach(loopKey => {
-      const loopArray = filteredFormValues[`${loopKey}_loop`];
-      if (!Array.isArray(loopArray)) return;
-      // Each element of the loop is a set of values for this page's fields
-      submissionData[`${loopKey}_loop`] = loopArray.map(ansSet => {
-        // Each ansSet is a map of (fieldId: value) only for that loop round.
-        // For consistency, also copy any subfields for e.g. phone, fullname, address.
-        const obj = {};
-        loopFieldsByPage[loopKey].forEach(fid => {
-          if (ansSet[fid] !== undefined) obj[fid] = ansSet[fid];
+      const loopFieldsByPage = {};
+      loopPageKeys.forEach(pageId => {
+        // Get all fields on this page (including section subfields etc)
+        loopFieldsByPage[pageId] = pages.find(arr => `page_${arr[0]?.Page_Number__c}` === pageId)
+          .map(f => {
+            const properties = typeof f.Properties__c === "string" ? JSON.parse(f.Properties__c || "{}") : (f.Properties__c || {});
+            // Collect main field and subfields (e.g. for fullname, address)
+            let fieldIds = [f.Id || properties.id];
+            if (f.Field_Type__c === "phone" && properties.subFields?.countryCode?.enabled) {
+              fieldIds.push(`${f.Id || properties.id}_countryCode`);
+            }
+            if (f.Field_Type__c === "fullname" && properties.subFields) {
+              fieldIds = fieldIds.concat(
+                ["salutation", "first", "last"].map(sub => `${f.Id || properties.id}_${sub}`)
+              );
+            }
+            if (f.Field_Type__c === "address" && properties.subFields) {
+              fieldIds = fieldIds.concat(
+                ["street", "city", "state", "country", "postal"].map(sub => `${f.Id || properties.id}_${sub}`)
+              );
+            }
+            return fieldIds;
+          })
+          .flat();
+      });
+
+      // Move answers of loop pages from root to loop array
+      loopPageKeys.forEach(loopKey => {
+        const loopArray = filteredFormValues[`${loopKey}_loop`];
+        if (!Array.isArray(loopArray)) return;
+        // Each element of the loop is a set of values for this page's fields
+        submissionData[`${loopKey}_loop`] = loopArray.map(ansSet => {
+          // Each ansSet is a map of (fieldId: value) only for that loop round.
+          // For consistency, also copy any subfields for e.g. phone, fullname, address.
+          const obj = {};
+          loopFieldsByPage[loopKey].forEach(fid => {
+            if (ansSet[fid] !== undefined) obj[fid] = ansSet[fid];
+          });
+          return obj;
         });
-        return obj;
+        // Remove these fields from root: do not store latest loop round separately
+        loopFieldsByPage[loopKey].forEach(fid => {
+          if (submissionData[fid] !== undefined) delete submissionData[fid];
+          if (submissionData[`${fid}_countryCode`] !== undefined) delete submissionData[`${fid}_countryCode`];
+        });
       });
-      // Remove these fields from root: do not store latest loop round separately
-      loopFieldsByPage[loopKey].forEach(fid => {
-        if (submissionData[fid] !== undefined) delete submissionData[fid];
-        if (submissionData[`${fid}_countryCode`] !== undefined) delete submissionData[`${fid}_countryCode`];
-      });
-    });
 
-     // Add payment data to submission if payment was completed
+      // Add payment data to submission if payment was completed
       if (paymentCompleted && paymentData) {
         console.log(
           "💳 Including payment data in form submission:",
@@ -1156,119 +1157,119 @@ function PublicFormViewer() {
         };
       }
 
-    for (const key of Object.keys(filteredFormValues)) {
-      const field = formData.Fields.find((f) => f.Id === key);
-      const fieldType = field?.Field_Type__c;
-      const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
+      for (const key of Object.keys(filteredFormValues)) {
+        const field = formData.Fields.find((f) => f.Id === key);
+        const fieldType = field?.Field_Type__c;
+        const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
-      if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
-        filesToUpload[key] = filteredFormValues[key];
-        submissionData[key] = filteredFormValues[key].name;
-      } else if (fieldType === 'signature' && signatures[key]) {
-        const signatureBlob = await (await fetch(signatures[key])).blob();
-        const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-        filesToUpload[key] = signatureFile;
-        submissionData[key] = `${key}.png`;
-      } else if (fieldType === 'phone' && !key.endsWith('_countryCode')) {
-        // Handle phone fields
-        if (properties.subFields?.countryCode?.enabled) {
-          const countryCode = filteredFormValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
-          const phoneNumber = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
-          try {
-            const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
-            if (phoneObj && phoneObj.isValid()) {
-              // Combine country code and phone number in E.164 format
-              submissionData[key] = phoneObj.format('E.164');
-            } else {
-              // If invalid, store the raw phone number
+        if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
+          filesToUpload[key] = filteredFormValues[key];
+          submissionData[key] = filteredFormValues[key].name;
+        } else if (fieldType === 'signature' && signatures[key]) {
+          const signatureBlob = await (await fetch(signatures[key])).blob();
+          const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
+          filesToUpload[key] = signatureFile;
+          submissionData[key] = `${key}.png`;
+        } else if (fieldType === 'phone' && !key.endsWith('_countryCode')) {
+          // Handle phone fields
+          if (properties.subFields?.countryCode?.enabled) {
+            const countryCode = filteredFormValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
+            const phoneNumber = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
+            try {
+              const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
+              if (phoneObj && phoneObj.isValid()) {
+                // Combine country code and phone number in E.164 format
+                submissionData[key] = phoneObj.format('E.164');
+              } else {
+                // If invalid, store the raw phone number
+                submissionData[key] = phoneNumber;
+                console.warn(`Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`);
+              }
+              // Include country code separately for formatter reference
+              submissionData[`${key}_countryCode`] = countryCode;
+            } catch (error) {
               submissionData[key] = phoneNumber;
-              console.warn(`Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`);
+              submissionData[`${key}_countryCode`] = countryCode;
+              console.warn(`Error parsing phone number for ${key}: ${error.message}`);
             }
-            // Include country code separately for formatter reference
-            submissionData[`${key}_countryCode`] = countryCode;
-          } catch (error) {
-            submissionData[key] = phoneNumber;
-            submissionData[`${key}_countryCode`] = countryCode;
-            console.warn(`Error parsing phone number for ${key}: ${error.message}`);
+          } else {
+            // For phone fields without country code subfield, clean to digits
+            submissionData[key] = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
           }
+        } else if (key.endsWith('_countryCode')) {
+          // Country code is already handled above
+          continue;
         } else {
-          // For phone fields without country code subfield, clean to digits
-          submissionData[key] = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
+          submissionData[key] = filteredFormValues[key];
         }
-      } else if (key.endsWith('_countryCode')) {
-        // Country code is already handled above
-        continue;
-      } else {
-        submissionData[key] = filteredFormValues[key];
       }
-    }
 
-    const uploadToS3 = async (file) => {
-    const reader = new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result.split(',')[1]);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
+      const uploadToS3 = async (file) => {
+        const reader = new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result.split(',')[1]);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
 
-    const base64String = await reader;
+        const base64String = await reader;
 
-    const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
+        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      body: base64String,
-      headers: { 'Content-Type': 'application/octet-stream' }
-    });
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          body: base64String,
+          headers: { 'Content-Type': 'application/octet-stream' }
+        });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.message || 'Upload to S3 failed');
-    }
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.message || 'Upload to S3 failed');
+        }
 
-    const data = await response.json();
-    return data.fileUrl;  // S3 URL
-  };
+        const data = await response.json();
+        return data.fileUrl;  // S3 URL
+      };
 
-  // Upload all files and assign URLs into submissionData
-  for (const [key, file] of Object.entries(filesToUpload)) {
-    try {
-      const s3Url = await uploadToS3(file);
-      submissionData[key] = s3Url;
-    } catch (uploadErr) {
-      console.error(`Failed to upload ${key}`, uploadErr);
-      setIsSubmitting(false);
-      return;  // stop submission on error or handle as needed
-    }
-  }
+      // Upload all files and assign URLs into submissionData
+      for (const [key, file] of Object.entries(filesToUpload)) {
+        try {
+          const s3Url = await uploadToS3(file);
+          submissionData[key] = s3Url;
+        } catch (uploadErr) {
+          console.error(`Failed to upload ${key}`, uploadErr);
+          setIsSubmitting(false);
+          return;  // stop submission on error or handle as needed
+        }
+      }
 
-    const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        userId: linkData.userId,
-        submissionData: {
-          formId: formData.Form__c,
-          formVersionId: formData.Id,
-          data: submissionData,
-          signatures: signatures,
+      const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
         },
-      }),
-    });
+        body: JSON.stringify({
+          userId: linkData.userId,
+          submissionData: {
+            formId: formData.Form__c,
+            formVersionId: formData.Id,
+            data: submissionData,
+            signatures: signatures,
+          },
+        }),
+      });
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to submit form');
-    }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit form');
+      }
 
-    const submissionId = data.submissionId;
+      const submissionId = data.submissionId;
 
-    const updatedSubmissionData = { ...submissionData };
+      const updatedSubmissionData = { ...submissionData };
 
-    // Show success message based on whether payment was involved
+      // Show success message based on whether payment was involved
       if (paymentCompleted && paymentData) {
         alert(
           `🎉 Thank you! Your payment of ${paymentData.currency} ${paymentData.amount} has been processed successfully and your form has been submitted!`
@@ -1277,127 +1278,127 @@ function PublicFormViewer() {
         alert("Form submitted successfully!");
       }
 
-    const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        userId: linkData.userId,
-        instanceUrl,
-        formVersionId: formData.Id,
-        formData: updatedSubmissionData,
-        nodes: formData.mappings,
-      }),
-    });
+      const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: linkData.userId,
+          instanceUrl,
+          formVersionId: formData.Id,
+          formData: updatedSubmissionData,
+          nodes: formData.mappings,
+        }),
+      });
 
-    const flowData = await flowResponse.json();
-    if (!flowResponse.ok) {
-      const newErrors = {};
-      if (flowData.results) {
-        Object.entries(flowData.results).forEach(([nodeId, result]) => {
-          if (result.error) {
-            const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-            if (mapping?.Formatter_Config__c) {
-              const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-              let fieldId = formatterConfig.inputField;
-              if (fieldId.includes('_phoneNumber')) {
-                fieldId = fieldId.replace('_phoneNumber', '');
+      const flowData = await flowResponse.json();
+      if (!flowResponse.ok) {
+        const newErrors = {};
+        if (flowData.results) {
+          Object.entries(flowData.results).forEach(([nodeId, result]) => {
+            if (result.error) {
+              const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+              if (mapping?.Formatter_Config__c) {
+                const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
+                let fieldId = formatterConfig.inputField;
+                if (fieldId.includes('_phoneNumber')) {
+                  fieldId = fieldId.replace('_phoneNumber', '');
+                }
+                newErrors[fieldId] = result.error;
               }
-              newErrors[fieldId] = result.error;
             }
+          });
+          if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            throw new Error('Form submission completed but flow execution had errors');
           }
-        });
-        if (Object.keys(newErrors).length > 0) {
-          setErrors(newErrors);
-          throw new Error('Form submission completed but flow execution had errors');
         }
+        throw new Error(flowData.error || 'Failed to execute flow');
       }
-      throw new Error(flowData.error || 'Failed to execute flow');
-    }
 
-    alert('Form submitted and flow executed successfully!');
+      alert('Form submitted and flow executed successfully!');
 
-    // Set to show thank you page
+      // Set to show thank you page
       setThankyouData(formData?.ThankYou || null);
-      console.log('formdata =>' , formData)
-      console.log('thankyouData =>' , formData?.ThankYou)
+      console.log('formdata =>', formData)
+      console.log('thankyouData =>', formData?.ThankYou)
       setIsSubmitted(true);
 
-    const initialValues = {};
-    let hasPayment = false;
+      const initialValues = {};
+      let hasPayment = false;
 
-    formData.Fields.forEach((field) => {
-      const properties = JSON.parse(field.Properties__c || '{}');
-      const fieldType = field.Field_Type__c;
+      formData.Fields.forEach((field) => {
+        const properties = JSON.parse(field.Properties__c || '{}');
+        const fieldType = field.Field_Type__c;
 
-       // Check for payment fields
+        // Check for payment fields
         if (fieldType === "paypal_payment") {
           hasPayment = true;
         }
 
-      if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-        initialValues[`${field.Id || properties.id}_countryCode`] = properties.subFields.countryCode.value || 'US';
-        initialValues[field.Id || properties.id] = '';
-      } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-        initialValues[field.Id || properties.id] = [];
-      } else if (fieldType === 'datetime' || fieldType === 'date') {
-        initialValues[field.Id || properties.id] = null;
-      } else if (fieldType === 'scalerating') {
-        initialValues[field.Id || properties.id] = {};
-      } else if (fieldType === "paypal_payment") {
+        if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+          initialValues[`${field.Id || properties.id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+          initialValues[field.Id || properties.id] = '';
+        } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+          initialValues[field.Id || properties.id] = [];
+        } else if (fieldType === 'datetime' || fieldType === 'date') {
+          initialValues[field.Id || properties.id] = null;
+        } else if (fieldType === 'scalerating') {
+          initialValues[field.Id || properties.id] = {};
+        } else if (fieldType === "paypal_payment") {
           // Payment fields don't need initial values
           initialValues[field.Id || properties.id] = null;
         } else {
-        initialValues[field.Id || properties.id] = '';
-      }
-    });
+          initialValues[field.Id || properties.id] = '';
+        }
+      });
 
-    setHasPaymentField(hasPayment);
-    setFormValues(initialValues);
-    setErrors({});
-    setSignatures({});
-    setFilePreviews({});
-    setSelectedRatings({});
-    setSelectedOptions({});
-    setToggles({});
-    setCurrentPage(0);
-  } catch (error) {
-    // if (error.message.includes('INVALID_JWT_FORMAT')) {
-    //   let decrypted;
-    //   try {
-    //     decrypted = decrypt(linkId);
-    //   } catch (e) {
-    //     throw new Error(e.message || 'Invalid link format');
-    //   }
+      setHasPaymentField(hasPayment);
+      setFormValues(initialValues);
+      setErrors({});
+      setSignatures({});
+      setFilePreviews({});
+      setSelectedRatings({});
+      setSelectedOptions({});
+      setToggles({});
+      setCurrentPage(0);
+    } catch (error) {
+      // if (error.message.includes('INVALID_JWT_FORMAT')) {
+      //   let decrypted;
+      //   try {
+      //     decrypted = decrypt(linkId);
+      //   } catch (e) {
+      //     throw new Error(e.message || 'Invalid link format');
+      //   }
 
-    //   const [userId, formId] = decrypted.split('$');
-    //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ userId }),
-    //   });
+      //   const [userId, formId] = decrypted.split('$');
+      //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ userId }),
+      //   });
 
-    //   const tokenData = await tokenResponse.json();
-    //   if (!tokenResponse.ok || tokenData.error) {
-    //     throw new Error(tokenData.error || 'Failed to fetch access token');
-    //   }
-    //   const token = tokenData.access_token;
-    //   setAccessToken(token);
-    //   handleSubmit(e);
-    // } else {
-    //   console.error('Error submitting form:', error);
-    //   setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
-    // }
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+      //   const tokenData = await tokenResponse.json();
+      //   if (!tokenResponse.ok || tokenData.error) {
+      //     throw new Error(tokenData.error || 'Failed to fetch access token');
+      //   }
+      //   const token = tokenData.access_token;
+      //   setAccessToken(token);
+      //   handleSubmit(e);
+      // } else {
+      //   console.error('Error submitting form:', error);
+      //   setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
+      // }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const evaluateCondition = (condition, values, loopArrayKey = null) => {
     if (!condition) return false;
-    
+
     // Helper for getting a field value, including from loop arrays
     function getValueForField(fieldId) {
       // Try direct value
@@ -1490,7 +1491,7 @@ function PublicFormViewer() {
     // "Loop" handled in navigation logic below
     return visiblePages;
   };
-  
+
   const getFieldAllowedOptions = (fieldId, formValues) => {
     let allowed = null;
     formConditions.filter(c => c.type === 'dependent' && (localIdToSFId[c.dependentField] || c.dependentField) === fieldId).forEach(cond => {
@@ -1527,22 +1528,22 @@ function PublicFormViewer() {
     return state;
   };
   const getNextPageIndex = (currentIdx, formValues) => {
-  // Evaluate for "skip to"
-  let idx = currentIdx;
-  // NOTE: skip conditions ONLY apply on current page
-  const skipConditions = formConditions
-    .filter(c => c.type === 'skip_hide_page' && c.sourcePage === `page_${pages[currentIdx][0].Page_Number__c}` && c.thenAction === 'skip to');
-  for (const cond of skipConditions) {
-    if (evaluateCondition(cond, formValues)) {
-      // Find index of the targetPage
-      const targetIdx = pages.findIndex(
-        arr => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
-      );
-      if (targetIdx !== -1) return targetIdx;
+    // Evaluate for "skip to"
+    let idx = currentIdx;
+    // NOTE: skip conditions ONLY apply on current page
+    const skipConditions = formConditions
+      .filter(c => c.type === 'skip_hide_page' && c.sourcePage === `page_${pages[currentIdx][0].Page_Number__c}` && c.thenAction === 'skip to');
+    for (const cond of skipConditions) {
+      if (evaluateCondition(cond, formValues)) {
+        // Find index of the targetPage
+        const targetIdx = pages.findIndex(
+          arr => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
+        );
+        if (targetIdx !== -1) return targetIdx;
+      }
     }
-  }
-  // Normal next, just +1 for visible pages
-  const visible = getVisiblePages(formValues);
+    // Normal next, just +1 for visible pages
+    const visible = getVisiblePages(formValues);
     const myId = `page_${pages[currentIdx][0].Page_Number__c}`;
     const idxInVisible = visible.findIndex(arr => `page_${arr[0].Page_Number__c}` === myId);
     if (idxInVisible !== -1 && idxInVisible < visible.length - 1) {
@@ -1590,7 +1591,7 @@ function PublicFormViewer() {
         }));
       }
     }
-  // eslint-disable-next-line
+    // eslint-disable-next-line
   }, [currentPage, pages, formValues]);
 
 
@@ -1607,11 +1608,11 @@ function PublicFormViewer() {
         pageArr.forEach(field => toRemove.push(field.Id || field.id));
       }
     });
-    
+
   }, [currentPage, formConditions]);
 
   const getLoopConditionForPage = (pageArr, values) => {
-    if(!pageArr) return null;
+    if (!pageArr) return null;
     const pageId = `page_${pageArr[0]?.Page_Number__c}`;
     const cond = formConditions.find(
       c => c.type === 'skip_hide_page' && c.thenAction === 'loop'
@@ -1638,7 +1639,7 @@ function PublicFormViewer() {
           const leftError = validateSingleField(
             properties.subFields.leftField,
             formValues[properties.subFields.leftField.id],
-            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
           if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
@@ -1646,12 +1647,12 @@ function PublicFormViewer() {
           const rightError = validateSingleField(
             properties.subFields.rightField,
             formValues[properties.subFields.rightField.id],
-            formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }}
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
           if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
         }
       } else {
-        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, {signaturesObj: signatures, uiState: { [fieldId]: currentState }});
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } });
         if (error) newErrors[field.Id || properties.id] = error;
       }
     });
@@ -1672,7 +1673,7 @@ function PublicFormViewer() {
 
       if (isLoopPage) {
         // Save answers for this loop instance
-        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
         // Save current iteration answers including subfields
         const loopValues = {};
         pageFields.forEach(f => {
@@ -1701,11 +1702,11 @@ function PublicFormViewer() {
           }));
           // Load next iteration answers into formValues or clear if none saved
           setFormValues(prevFormValues => {
-            
+
             const nextIterationVals = newAnswers[currentLoopState.index + 1] || {};
-            const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+            const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
             const updatedFormValues = { ...prevFormValues };
-            
+
             // Clear the loop page fields and their subfields in formValues
             pageFields.forEach(f => {
               delete updatedFormValues[f];
@@ -1713,10 +1714,10 @@ function PublicFormViewer() {
                 if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
               });
             });
-            
+
             // Overwrite with next iteration values
             Object.assign(updatedFormValues, nextIterationVals);
-            
+
             return updatedFormValues;
           });
 
@@ -1757,7 +1758,7 @@ function PublicFormViewer() {
   const handlePreviousPage = () => {
     if (isLoopPage && currentLoopState.index > 0) {
       // Save current iteration answers before going back
-      const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+      const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
       const loopValues = {};
       pageFields.forEach(f => {
         loopValues[f] = formValues[f];
@@ -1783,9 +1784,9 @@ function PublicFormViewer() {
       // Load previous iteration answers (or empty)
       setFormValues(prevFormValues => {
         const prevIterationVals = newAnswers[currentLoopState.index - 1] || {};
-        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
         const updatedFormValues = { ...prevFormValues };
-        
+
         // Clear the loop page fields and their subfields in formValues
         pageFields.forEach(f => {
           delete updatedFormValues[f];
@@ -1793,17 +1794,17 @@ function PublicFormViewer() {
             if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
           });
         });
-        
+
         // Overwrite with previous iteration values
         Object.assign(updatedFormValues, prevIterationVals);
-        
+
         return updatedFormValues;
       });
 
     } else {
       // Normal page back, save current iteration first if loop page
       if (isLoopPage) {
-        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
         const loopValues = {};
         pageFields.forEach(f => {
           loopValues[f] = formValues[f];
@@ -1830,7 +1831,7 @@ function PublicFormViewer() {
         if (newLoopState && newLoopState.count > 0) {
           setFormValues(prevFormValues => {
             const iterationVals = newLoopState.answers[newLoopState.index] || {};
-            const pageFields = (pages[prevIdx] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c||'{}').id));
+            const pageFields = (pages[prevIdx] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
             const updatedFormValues = { ...prevFormValues };
 
             // Clear the loop page fields and their subfields in formValues
@@ -1855,7 +1856,7 @@ function PublicFormViewer() {
   const calculateFormCalculation = (field) => {
     const properties = JSON.parse(field.Properties__c || "{}");
     if (!properties.formula) return null;
-  
+
     // Create a mapping of unique keys to Salesforce IDs for referenced fields
     const fieldIdMap = {};
     (properties.fieldReferences || []).forEach(refId => {
@@ -1869,16 +1870,16 @@ function PublicFormViewer() {
         fieldIdMap[refId] = refId;
       }
     });
-  
+
     // Create a values object that maps the references to their actual values
     const referencedValues = {};
     Object.entries(fieldIdMap).forEach(([refKey, sfId]) => {
       // Check if this field has subfields in the form values
-      const hasSubfields = Object.keys(formValues).some(key => 
-        key.startsWith(`${sfId}_`) && 
+      const hasSubfields = Object.keys(formValues).some(key =>
+        key.startsWith(`${sfId}_`) &&
         key !== sfId // Exclude the main field itself
       );
-  
+
       if (hasSubfields) {
         // For fields with subfields, collect all subfield values
         const subfieldValues = [];
@@ -1887,10 +1888,10 @@ function PublicFormViewer() {
             subfieldValues.push(formValues[key]);
           }
         });
-        
+
         // Join subfield values with space for the main field reference
         referencedValues[refKey] = subfieldValues.join(' ').trim();
-        
+
         // Also include individual subfields in case they're referenced directly
         Object.keys(formValues).forEach(key => {
           if (key.startsWith(`${sfId}_`)) {
@@ -1902,22 +1903,22 @@ function PublicFormViewer() {
         referencedValues[refKey] = formValues[sfId];
       }
     });
-  
+
     console.log(properties.formula);
-    
-    
+
+
     // Evaluate the formula using the mapped values
     const result = evaluateFormula(
       properties.formula,
       referencedValues,
       properties.fieldReferences || []
     );
-    
+
     // Handle decimal places if specified
     if (typeof result === 'number' && properties.decimalPlaces !== undefined) {
       return Number(result.toFixed(properties.decimalPlaces));
     }
-  
+
     return result;
   };
 
@@ -1926,9 +1927,9 @@ function PublicFormViewer() {
   }
 
   if (isSubmitted && thankyouData) {
-      return <ThankYouPage thankYouData={thankyouData} />;
-    }
-    
+    return <ThankYouPage thankYouData={thankyouData} />;
+  }
+
   if (!formData) {
     return <div className="text-center p-4">Loading form...</div>;
   }
@@ -1972,11 +1973,11 @@ function PublicFormViewer() {
     };
 
     const labelAlignmentClass =
-    labelAlignment === 'center'
-      ? 'text-center'
-      : labelAlignment === 'right'
-      ? 'text-right'
-      : 'text-left';
+      labelAlignment === 'center'
+        ? 'text-center'
+        : labelAlignment === 'right'
+          ? 'text-right'
+          : 'text-left';
     const labelClass = `block text-sm font-medium mb-1 ${labelAlignmentClass} ${hasError ? 'text-red-600' : 'text-gray-700'}`;
 
     const renderLabel = () => (
@@ -2097,20 +2098,20 @@ function PublicFormViewer() {
                   toolbar: isDisabled
                     ? false
                     : [
-                        ['bold', 'italic', 'underline', 'strike'],
-                        ['blockquote', 'code-block'],
-                        [{ header: 1 }, { header: 2 }],
-                        [{ list: 'ordered' }, { list: 'bullet' }],
-                        [{ script: 'sub' }, { script: 'super' }],
-                        [{ indent: '-1' }, { indent: '+1' }],
-                        [{ direction: 'rtl' }],
-                        [{ size: ['small', false, 'large', 'huge'] }],
-                        [{ header: [1, 2, 3, 4, 5, 6, false] }],
-                        [{ color: [] }, { background: [] }],
-                        [{ font: [] }],
-                        [{ align: [] }],
-                        ['clean'],
-                      ],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      ['blockquote', 'code-block'],
+                      [{ header: 1 }, { header: 2 }],
+                      [{ list: 'ordered' }, { list: 'bullet' }],
+                      [{ script: 'sub' }, { script: 'super' }],
+                      [{ indent: '-1' }, { indent: '+1' }],
+                      [{ direction: 'rtl' }],
+                      [{ size: ['small', false, 'large', 'huge'] }],
+                      [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                      [{ color: [] }, { background: [] }],
+                      [{ font: [] }],
+                      [{ align: [] }],
+                      ['clean'],
+                    ],
                 }}
               />
             ) : (
@@ -2133,11 +2134,11 @@ function PublicFormViewer() {
       case 'number':
         if (isHidden) return null;
         const containerClass =
-        labelAlignment === 'center'
-          ? 'text-center'
-          : labelAlignment === 'right'
-          ? 'text-right'
-          : 'text-left';
+          labelAlignment === 'center'
+            ? 'text-center'
+            : labelAlignment === 'right'
+              ? 'text-right'
+              : 'text-left';
         return (
           <div className={`mb-4 ${containerClass}`}>
             {renderLabel()}
@@ -2360,17 +2361,17 @@ function PublicFormViewer() {
                 placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
               />
-            ): (
-                <input
-                  type="text"
-                  {...commonProps}
-                  value={formValues[fieldId] || ''}
-                  onChange={(e) => handleChange(fieldId, e.target.value)}
-                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
-                  placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
-                  disabled={isDisabled}
-                />
-              )
+            ) : (
+              <input
+                type="text"
+                {...commonProps}
+                value={formValues[fieldId] || ''}
+                onChange={(e) => handleChange(fieldId, e.target.value)}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
+                disabled={isDisabled}
+              />
+            )
             }
             {renderError()}
           </div>
@@ -2446,7 +2447,7 @@ function PublicFormViewer() {
             <DatePicker
               format={
                 properties.dateFormat && properties.timeFormat
-                  ? `${properties.dateFormat.replace(/\//g, properties.dateSeparator || '-') } ${properties.timeFormat === 'hh:mm a' ? 'hh:mm a' : 'HH:mm'}`
+                  ? `${properties.dateFormat.replace(/\//g, properties.dateSeparator || '-')} ${properties.timeFormat === 'hh:mm a' ? 'hh:mm a' : 'HH:mm'}`
                   : 'yyyy-MM-dd HH:mm'
               }
               value={formValues[fieldId] ? new Date(formValues[fieldId]) : null}
@@ -2948,11 +2949,10 @@ function PublicFormViewer() {
         if (isHidden) return null;
         return (
           <div className="mb-6">
-            <h2 className={`text-2xl font-bold text-gray-800 ${
-              properties.alignment === 'left' ? 'text-left' : 
-              properties.alignment === 'right' ? 'text-right' : 
-              'text-center'
-            }`}>
+            <h2 className={`text-2xl font-bold text-gray-800 ${properties.alignment === 'left' ? 'text-left' :
+              properties.alignment === 'right' ? 'text-right' :
+                'text-center'
+              }`}>
               {properties.heading || 'Form Header'}
             </h2>
           </div>
@@ -3032,7 +3032,7 @@ function PublicFormViewer() {
         );
 
       case 'scalerating':
-      if (isHidden) return null;
+        if (isHidden) return null;
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -3082,36 +3082,36 @@ function PublicFormViewer() {
         if (isHidden) return null;
         return <hr className="border-gray-300 my-4" />;
 
-       case "formcalculation":
-              if (isHidden) return null;
-               // Get calculation result
-                const calculationResult = calculateFormCalculation(field);
-                let formattedValue = calculationResult;
-                
-                // Handle decimal places if specified
-                if (typeof calculationResult === 'number' && properties.decimalPlaces !== undefined) {
-                  formattedValue = Number(calculationResult.toFixed(properties.decimalPlaces));
-                }
-      
-              return (
-                <div className="mb-4">
-                  {renderLabel()}
-                  {helpText && (
-                    <Tooltip title={helpText}>
-                      <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
-                    </Tooltip>
-                  )}
-                  <input
-                    type="text"
-                    {...commonProps}
-                    value={formattedValue ?? ''}
-                    readOnly={properties?.isReadOnly !== false} 
-                    className={`w-full p-2 border rounded-md ${hasError ? "border-red-500" : "border-gray-300"
-                      }`}
-                  />
-                  {renderError()}
-                </div>
-              );
+      case "formcalculation":
+        if (isHidden) return null;
+        // Get calculation result
+        const calculationResult = calculateFormCalculation(field);
+        let formattedValue = calculationResult;
+
+        // Handle decimal places if specified
+        if (typeof calculationResult === 'number' && properties.decimalPlaces !== undefined) {
+          formattedValue = Number(calculationResult.toFixed(properties.decimalPlaces));
+        }
+
+        return (
+          <div className="mb-4">
+            {renderLabel()}
+            {helpText && (
+              <Tooltip title={helpText}>
+                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+              </Tooltip>
+            )}
+            <input
+              type="text"
+              {...commonProps}
+              value={formattedValue ?? ''}
+              readOnly={properties?.isReadOnly !== false}
+              className={`w-full p-2 border rounded-md ${hasError ? "border-red-500" : "border-gray-300"
+                }`}
+            />
+            {renderError()}
+          </div>
+        );
       case 'link':
         if (isHidden) return null;
         return (
@@ -3136,24 +3136,24 @@ function PublicFormViewer() {
 
       case 'section':
         if (isHidden) return null;
-        
+
         // Parse the subFields from properties
-          const leftFieldProps = properties.subFields?.leftField;
-          const rightFieldProps = properties.subFields?.rightField;
+        const leftFieldProps = properties.subFields?.leftField;
+        const rightFieldProps = properties.subFields?.rightField;
 
-          // Find the actual field objects from formData.Fields
-          const leftField = formData.Fields.find(f => f.Id === leftFieldProps?.id);
-          const rightField = formData.Fields.find(f => f.Id === rightFieldProps?.id);
+        // Find the actual field objects from formData.Fields
+        const leftField = formData.Fields.find(f => f.Id === leftFieldProps?.id);
+        const rightField = formData.Fields.find(f => f.Id === rightFieldProps?.id);
 
-          const normalizedLeftField = leftField ? { 
-            ...leftField, 
-            Id: leftField.Id || leftField.id 
-          } : null;
+        const normalizedLeftField = leftField ? {
+          ...leftField,
+          Id: leftField.Id || leftField.id
+        } : null;
 
-          const normalizedRightField = rightField ? { 
-            ...rightField, 
-            Id: rightField.Id || rightField.id 
-          } : null;
+        const normalizedRightField = rightField ? {
+          ...rightField,
+          Id: rightField.Id || rightField.id
+        } : null;
 
         // If fields aren't found in formData.Fields, create mock field objects
         const createFieldFromProps = (fieldProps) => {
@@ -3220,71 +3220,69 @@ function PublicFormViewer() {
   };
   const visiblePages = getVisiblePages(formValues);
   return (
-  <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
-    <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
-    <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
-      <div className="page">
-        {pages[currentPage]?.map((field) => (
-          <div key={field.Unique_Key__c}>{renderField(field)}</div>
-        ))}
-      </div>
+    <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
+      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
+        <div className="page">
+          {pages[currentPage]?.map((field) => (
+            <div key={field.Unique_Key__c}>{renderField(field)}</div>
+          ))}
+        </div>
 
-      <div className="flex justify-between mt-6">
-        {/* Show Previous button only if more than one page */}
-        {pages.length > 1 ? (
-          <button
-            type="button"
-            onClick={handlePreviousPage}
-            disabled={currentPage === 0}
-            className={`py-2 px-4 rounded-md font-medium transition ${
-              currentPage === 0
+        <div className="flex justify-between mt-6">
+          {/* Show Previous button only if more than one page */}
+          {pages.length > 1 ? (
+            <button
+              type="button"
+              onClick={handlePreviousPage}
+              disabled={currentPage === 0}
+              className={`py-2 px-4 rounded-md font-medium transition ${currentPage === 0
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            aria-label="Previous Page"
-          >
-            Previous
-          </button>
-        ) : ''}
+                }`}
+              aria-label="Previous Page"
+            >
+              Previous
+            </button>
+          ) : ''}
 
-        <span className="text-gray-600">
-          Page {visiblePages.findIndex(arr => arr === pages[currentPage]) + 1} of {visiblePages.length}
-        </span>
+          <span className="text-gray-600">
+            Page {visiblePages.findIndex(arr => arr === pages[currentPage]) + 1} of {visiblePages.length}
+          </span>
 
-        {/* Show Next or Submit button */}
-        {currentPage < pages.length - 1 ? (
-          <button
-            type="button"
-            onClick={handleNextPage}
-            className="py-2 px-4 rounded-md font-medium transition bg-blue-600 text-white hover:bg-blue-700"
-            aria-label="Next Page"
-          >
-            Next
-          </button>
-        ) : // On last page: show Submit button only if no payment field OR payment is completed
-          !hasPaymentField || paymentCompleted ? (
+          {/* Show Next or Submit button */}
+          {currentPage < pages.length - 1 ? (
             <button
-              type="submit"
-              disabled={isSubmitting || !accessToken}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                isSubmitting || !accessToken
+              type="button"
+              onClick={handleNextPage}
+              className="py-2 px-4 rounded-md font-medium transition bg-blue-600 text-white hover:bg-blue-700"
+              aria-label="Next Page"
+            >
+              Next
+            </button>
+          ) : // On last page: show Submit button only if no payment field OR payment is completed
+            !hasPaymentField || paymentCompleted ? (
+              <button
+                type="submit"
+                disabled={isSubmitting || !accessToken}
+                className={`py-2 px-4 rounded-md font-medium transition ${isSubmitting || !accessToken
                   ? "opacity-50 cursor-not-allowed"
                   : "bg-green-600 hover:bg-green-700 text-white"
-              }`}
-              aria-label="Submit Form"
-            >
-              {isSubmitting
-                ? "Submitting..."
-                : paymentCompleted
-                ? "Complete Submission"
-                : "Submit"}
-            </button>
-          ) : (
-            // If has payment field and payment not completed, show instruction
-            <div className="text-center py-2 px-4 text-gray-600 text-sm">
-              Complete payment above to submit the form
-            </div>
-          )}
+                  }`}
+                aria-label="Submit Form"
+              >
+                {isSubmitting
+                  ? "Submitting..."
+                  : paymentCompleted
+                    ? "Complete Submission"
+                    : "Submit"}
+              </button>
+            ) : (
+              // If has payment field and payment not completed, show instruction
+              <div className="text-center py-2 px-4 text-gray-600 text-sm">
+                Complete payment above to submit the form
+              </div>
+            )}
         </div>
       </form>
     </div>

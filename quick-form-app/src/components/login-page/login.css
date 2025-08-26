@@ -14,6 +14,9 @@
   --text-dark: #0B0A0A;
   --text-light: #ffffff;
   --border-color: #E4E7EC;
+  --tag-bg-draft-color: #008AB0;
+  --tag-bg-publish-color: #01c23e;
+  --tag-bg-locked-color: #dd7d00;
   --shadow: 0px 4px 30px rgba(33, 33, 52, 0.1);
 }
 
@@ -315,6 +318,16 @@
   color: #a0a0a0 !important;
   font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
   font-weight: 500;
+}
+
+.ant-tag.draft {
+  background: var(--tag-bg-draft-color) !important;
+}
+.ant-tag.publish {
+  background: var(--tag-bg-publish-color) !important;
+}
+.ant-tag.locked {
+  background: var(--tag-bg-locked-color) !important;
 }
 
 @keyframes waveEffect {

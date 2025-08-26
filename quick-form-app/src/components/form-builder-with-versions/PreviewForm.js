@@ -2305,7 +2305,7 @@ const alignmentStyles = {
   center: 'flex flex-col items-center gap-1 w-full',
 };
 
-function PreviewForm({ formVersion, formFields, formConditions = [], prefills = {} }) {
+function PreviewForm({ formVersion, formFields, formConditions = [], prefills = [] }) {
   // State variables
   const [formValues, setFormValues] = useState({});
   const [errors, setErrors] = useState({});
@@ -2322,7 +2322,13 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
   const [localIdToSFId, setLocalIdToSFId] = useState({});
   const [loopCounters, setLoopCounters] = useState({});
   const [dependentFields, setDependentFields] = useState(new Set());
+  const manualPrefills = {};
+  const [manualPrefillsState, setManualPrefillsState] = useState({});
 
+  console.log(
+    "Rendering PreviewForm with props:",
+    { formVersion, formFields, formConditions, prefills }
+  );
 
   // Initialize form data when component mounts or props change
   React.useEffect(() => {
@@ -2401,7 +2407,109 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
         initialToggles[fieldId] = false;
       });
 
-      setFormValues(initialValues);
+      // MANUAL PREFILL LOGIC - Add this section
+      // Process URL parameters for manual prefills
+      const searchParams = new URLSearchParams(window.location.search);
+      for (const [key, value] of searchParams.entries()) {
+        if (key.startsWith('field-')) {
+          const fieldIdParam = key;
+          const sfId = localIdMapping[fieldIdParam];
+          let fieldMeta;
+          let subFieldKey;
+
+          if (sfId?.includes('_')) {
+            // Split into parent Id and subfield key
+            const [parentId, key] = sfId.split('_');
+            subFieldKey = key;
+
+            // Find parent field
+            const parentField = formFields.find(f => f.Id === parentId);
+
+            if (parentField) {
+              const props = JSON.parse(parentField.Properties__c || '{}');
+              const subFieldMeta = props.subFields ? props.subFields[subFieldKey] : null;
+
+              if (subFieldMeta) {
+                fieldMeta = subFieldMeta;
+              } else {
+                fieldMeta = parentField;
+              }
+            }
+          } else {
+            // Simple case: direct match
+            fieldMeta = formFields.find(f => f.Id === sfId);
+          }
+
+          if (fieldMeta) {
+            const props = typeof fieldMeta.Properties__c === 'string'
+              ? JSON.parse(fieldMeta.Properties__c || '{}')
+              : fieldMeta.Properties__c || {};
+            const fType = fieldMeta.Field_Type__c;
+
+            try {
+              let parsedValue = value;
+
+              switch (fType) {
+                case 'date':
+                  const parts = value.split(/[-/]/);
+                  if (parts.length === 3) {
+                    let day, month, year;
+                    if (parts[0].length === 4) {
+                      [year, month, day] = parts.map(p => parseInt(p, 10));
+                    } else if (parts[2].length === 4) {
+                      [day, month, year] = parts.map(p => parseInt(p, 10));
+                    }
+                    if (year && month && day) {
+                      const d = `${year.toString().padStart(4, '0')}-${month
+                        .toString()
+                        .padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                      const transformDate = new Date(d);
+                      parsedValue = transformDate.toISOString().split('T')[0];
+                    }
+                  }
+                  break;
+                case 'datetime':
+                  if (!isNaN(Date.parse(value))) {
+                    const d = new Date(value);
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const hh = String(d.getHours()).padStart(2, '0');
+                    const mi = String(d.getMinutes()).padStart(2, '0');
+                    parsedValue = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+                  } else {
+                    throw new Error('Invalid datetime');
+                  }
+                  break;
+                case 'number':
+                case 'price':
+                  if (!isNaN(parseFloat(value))) {
+                    parsedValue = parseFloat(value);
+                  } else {
+                    throw new Error('Invalid number');
+                  }
+                  break;
+                case 'checkbox':
+                  parsedValue = value.split(',').map(v => v.trim());
+                  break;
+                default:
+                  // leave as string for all other types
+                  parsedValue = value;
+              }
+
+              manualPrefills[sfId] = parsedValue;
+
+            } catch (err) {
+              console.warn(`Invalid manual prefill for ${fieldIdParam}:`, err.message);
+            }
+          }
+        }
+      }
+
+      // Apply manual prefills to initial values
+      const valuesWithPrefills = { ...initialValues, ...manualPrefills };
+
+      setFormValues(valuesWithPrefills);
       setSignatures(initialSignatures);
       setFilePreviews(initialFilePreviews);
       setSelectedRatings(initialRatings);
@@ -2410,21 +2518,21 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
       setLocalIdToSFId(localIdMapping);
 
       // Build set of Salesforce field names that should trigger prefill
-        const deps = new Set();
-        prefills.forEach(prefill => {
-          (prefill.lookupFilters?.conditions || []).forEach(cond => {
-            if (cond.formField && localIdToSFId[cond.formField]) {
-              deps.add(localIdToSFId[cond.formField]); // store as SF id for runtime
-            }
-          });
+      const deps = new Set();
+      prefills.forEach(prefill => {
+        (prefill.lookupFilters?.conditions || []).forEach(cond => {
+          if (cond.formField && localIdMapping[cond.formField]) {
+            deps.add(localIdMapping[cond.formField]); // store as SF id for runtime
+          }
         });
-        setDependentFields(deps);
+      });
+      setDependentFields(deps);
 
       console.log("Local ID to SF ID mapping:", localIdMapping);
       console.log("Dependent fields for prefills:", deps);
       console.log('prefills:', prefills);
-      
-        
+      console.log('Manual prefills applied:', manualPrefills);
+
       // Setup pages
       const pageMap = {};
       formFields.forEach((field) => {
@@ -2440,8 +2548,222 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
         .sort((a, b) => Number(a) - Number(b))
         .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
       setPages(sortedPages.length > 0 ? sortedPages : [formFields]);
+
+      // Set manual prefills state for dependent prefills
+      if (Object.keys(manualPrefills).length > 0) {
+        setManualPrefillsState(manualPrefills);
+      }
     }
-  }, [formFields, formVersion]);
+  }, [formFields, formVersion, prefills]); // Add prefills to dependencies
+
+  useEffect(() => {
+    if (
+      prefills.length > 0 &&                      // prefills are loaded
+      Object.keys(manualPrefillsState).length > 0 // we have manual prefill keys
+    ) {
+      Object.keys(manualPrefillsState).forEach(sfId => {
+        runPrefillForField(sfId);
+      });
+    }
+  }, [prefills, manualPrefillsState]);
+
+  const runPrefillForField = async (sfFieldId) => {
+
+    // Step 1: Find prefills directly triggered by this blurred field (condition field)
+    const directlyTriggered = prefills.filter(p =>
+      (p.lookupFilters?.conditions || []).some(c => {
+        const formFieldId = localIdToSFId[c.formField] || c.formField;
+        return formFieldId === sfFieldId ||
+          formFieldId.startsWith(`${sfFieldId}_`) || // Check for subfields
+          sfFieldId.startsWith(`${formFieldId}_`);   // Check if this is a subfield of the condition
+      })
+    );
+
+    // If none triggered, stop early
+    if (directlyTriggered.length === 0) return;
+
+    // Find the set of target runtime fields from the directly triggered prefills
+    const triggeredTargetFields = new Set();
+    directlyTriggered.forEach(p => {
+      Object.keys(p.fieldMappings || {}).forEach(localId => {
+        const runtimeId = localIdToSFId[localId];
+        if (runtimeId) triggeredTargetFields.add(runtimeId);
+      });
+    });
+
+    // Step 1b: Now include any prefill whose target field overlaps with the triggered target fields
+    const triggeredPrefills = prefills.filter(p =>
+      Object.keys(p.fieldMappings || {}).some(localId => {
+        const runtimeId = localIdToSFId[localId];
+        return runtimeId && triggeredTargetFields.has(runtimeId);
+      })
+    ).sort((a, b) => (a.Order__c || 0) - (b.Order__c || 0));
+
+
+    // Step 3: Filter prefills into groups based on target overlap
+    // Here we just reuse triggeredPrefills sorted by priority Order__c
+    const updatedFields = new Set();
+    for (const prefill of triggeredPrefills) {
+      // Skip if ALL its target fields are already updated in this run
+      const prefillTargets = Object.keys(prefill.fieldMappings || {})
+        .map(localId => localIdToSFId[localId])
+        .filter(Boolean);
+      const allUpdated = prefillTargets.every(fId => updatedFields.has(fId));
+      if (allUpdated) continue;
+
+      const where = buildWhereFromPrefill(prefill.lookupFilters, prefill.objectFields || []);
+      const soql = `SELECT ${Object.values(prefill.fieldMappings).join(', ')}
+                        FROM ${prefill.selectedObject}
+                        ${where ? 'WHERE ' + where : ''}
+                        ${prefill.sortBy?.field ? `ORDER BY ${prefill.sortBy.field} ${prefill.sortBy.order || 'ASC'}` : ''}
+                        LIMIT 1`;
+
+      try {
+        const userId = sessionStorage.getItem('userId');
+        const instanceUrl = sessionStorage.getItem('instanceUrl');
+
+        const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId,
+            instanceUrl,
+          }),
+        });
+
+        const tokenData = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to fetch access token");
+        }
+        const accessToken = tokenData.access_token;
+
+        console.log('Executing prefill SOQL:', soql);
+
+        const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            accessToken,
+            soql,
+            requestType: 'salesforceQuery',
+            multipleRecordAction: prefill.multipleRecordAction
+          })
+        });
+        const data = await resp.json();
+
+        if (data.record) {
+          const updates = {};
+          Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
+            const runtimeFieldId = localIdToSFId[localId];
+            if (runtimeFieldId && !updatedFields.has(runtimeFieldId) && data.record[sfName] !== undefined) {
+              updates[runtimeFieldId] = data.record[sfName];
+              updatedFields.add(runtimeFieldId); // mark as final for this trigger round
+              Object.keys(localIdToSFId).forEach(key => {
+                if (key.startsWith(`${localId}_`)) {
+                  const subRuntimeId = localIdToSFId[key];
+                  const subSfName = `${sfName}_${key.split('_').pop()}`;
+                  if (data.record[subSfName] !== undefined) {
+                    updates[subRuntimeId] = data.record[subSfName];
+                    updatedFields.add(subRuntimeId);
+                  }
+                }
+              });
+            }
+          });
+
+          if (Object.keys(updates).length > 0) {
+            setFormValues(prev => ({ ...prev, ...updates }));
+          }
+        }
+      } catch (err) {
+        console.error('Prefill failed:', err);
+      }
+    }
+  };
+
+  const buildWhereFromPrefill = (lookupFilters, objectFields) => {
+    if (!lookupFilters?.conditions?.length) return '';
+    const condMap = {};
+
+    lookupFilters.conditions.forEach((cond, idx) => {
+      const sfId = localIdToSFId[cond.formField];
+      let val = formValues[sfId];
+      const sfFieldType = objectFields.find(f => f.name === cond.objectField)?.type;
+
+      let clause = '';
+
+      switch (cond.operator) {
+        case 'equals':
+          clause = `${cond.objectField} = ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case '!=':
+          clause = `${cond.objectField} != ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'greater than':
+          clause = `${cond.objectField} > ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'greater than or equal to':
+          clause = `${cond.objectField} >= ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'less than':
+          clause = `${cond.objectField} < ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'less than or equal to':
+          clause = `${cond.objectField} <= ${formatValForSOQL(val, sfFieldType)}`;
+          break;
+        case 'contains':
+          clause = `${cond.objectField} LIKE '%${val ?? ''}%'`;
+          break;
+        case 'startsWith':
+          clause = `${cond.objectField} LIKE '${val ?? ''}%'`;
+          break;
+        case 'endsWith':
+          clause = `${cond.objectField} LIKE '%${val ?? ''}'`;
+          break;
+        case 'is null':
+          clause = `${cond.objectField} = null`;
+          break;
+        case 'is not null':
+          clause = `${cond.objectField} != null`;
+          break;
+        default:
+          clause = 'TRUE';
+          break;
+      }
+
+      condMap[(idx + 1).toString()] = clause;
+    });
+
+    if (lookupFilters.logicType === 'Custom' && lookupFilters.logicExpression) {
+      return lookupFilters.logicExpression.replace(/\d+/g, n => condMap[n] || 'TRUE');
+    }
+    const glue = lookupFilters.logicType || 'AND';
+    return Object.values(condMap).filter(Boolean).join(` ${glue} `);
+  };
+
+  const formatValForSOQL = (val, sfType) => {
+    if (val === null || val === undefined || val === '') {
+      return 'null';
+    }
+
+    const numericTypes = ['int', 'double', 'currency', 'percent', 'integer', 'long'];
+    const dateTypes = ['date', 'datetime', 'time'];
+
+    // If type is numeric or similar, return as-is without quotes
+    if (numericTypes.includes(sfType)) {
+      return val;
+    }
+    // If date/datetime, return as-is without quotes (Salesforce accepts date strings unquoted)
+    if (dateTypes.includes(sfType)) {
+      return val;
+    }
+    // Otherwise treat as string - escape single quotes and quote value
+    const escaped = String(val).replace(/'/g, "\\'");
+    return `'${escaped}'`;
+  };
 
   const handleChange = (fieldId, value, isFile = false) => {
     setFormValues((prev) => ({ ...prev, [fieldId]: isFile ? value : value }));
@@ -3329,6 +3651,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   mask={mask}
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                   placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
@@ -3352,6 +3676,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 placeholder={properties.placeholder?.main || ''}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                 maxLength={properties.shortTextMaxChars}
                 disabled={isDisabled}
               />
@@ -3376,6 +3702,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   mask={mask}
                   value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                   placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
@@ -3397,6 +3725,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
               <ReactQuill
                 theme="snow"
                 value={formValues[fieldId] || ''}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                 onChange={(value) => handleChange(fieldId, value)}
                 readOnly={isDisabled}
                 placeholder={properties.placeholder?.main || ''}
@@ -3425,6 +3755,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 {...commonProps}
                 rows="4"
                 value={formValues[fieldId] || ''}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.longTextMaxChars}
@@ -3451,6 +3783,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 <InputMask
                   mask={mask}
                   value={formValues[fieldId] || ''}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                   onChange={(e) => handleChange(fieldId, e.target.value)}
                   placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
@@ -3474,6 +3808,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 type="number"
                 {...commonProps}
                 value={formValues[fieldId] || ''}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 placeholder={properties.placeholder?.main || ''}
                 min={properties.numberValueLimits?.min}
@@ -3503,6 +3839,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   <InputMask
                     mask={mask}
                     value={formValues[fieldId] || ''}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                     onChange={(e) => handleChange(fieldId, e.target.value)}
                     placeholder={properties.placeholder?.main || ''}
                     disabled={isDisabled}
@@ -3528,6 +3866,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   {...commonProps}
                   step="0.01"
                   value={formValues[fieldId] || ''}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                   onChange={(e) => handleChange(fieldId, e.target.value)}
                   placeholder={properties.placeholder?.main || ''}
                   min={properties.priceLimits?.min}
@@ -3555,6 +3895,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
               type="email"
               {...commonProps}
               value={formValues[fieldId] || ''}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
               onChange={(e) => handleChange(fieldId, e.target.value)}
               placeholder={properties.placeholder?.main || 'example@domain.com'}
               maxLength={properties.maxChars}
@@ -3571,6 +3913,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   {...commonProps}
                   id={`${fieldId}_confirmation`}
                   value={formValues[`${fieldId}_confirmation`] || ''}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                   onChange={(e) => handleChange(`${fieldId}_confirmation`, e.target.value)}
                   placeholder="Confirm email"
                 />
@@ -3609,6 +3953,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                       handleChange(`${fieldId}_countryCode`, newCountryCode);
                       handleChange(fieldId, '');
                     }}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                     inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                     buttonClass="border rounded p-1 bg-white"
                     dropdownClass="border rounded max-h-64 overflow-y-auto"
@@ -3627,6 +3973,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                     type="text"
                     {...commonProps}
                     value={formValues[fieldId] || ''}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                     onChange={(e) => handleChange(fieldId, e.target.value)}
                     placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                     disabled={isDisabled}
@@ -3638,6 +3986,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
               <InputMask
                 mask={phoneMask}
                 value={formValues[fieldId] || ''}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
@@ -3648,6 +3998,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 type="text"
                 {...commonProps}
                 value={formValues[fieldId] || ''}
+
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
                 placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
@@ -3682,6 +4034,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   handleChange(fieldId, null);
                 }
               }}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
               placeholder={properties.placeholder?.main || 'Select date'}
               className="w-full"
               disabled={isDisabled}
@@ -3715,6 +4069,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   : 'yyyy-MM-dd HH:mm'
               }
               value={formValues[fieldId] ? new Date(formValues[fieldId]) : null}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
               onChange={(date) => {
                 if (date) {
                   const year = date.getFullYear();
@@ -3746,7 +4102,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
       case 'time':
         if (isHidden) return null;
         return (
-           <div className={`mb-4 ${alignmentClass}`}>
+          <div className={`mb-4 ${alignmentClass}`}>
             {renderLabel()}
             {helpText && (
               <Tooltip title={helpText}>
@@ -3756,6 +4112,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
             <DatePicker
               format={properties.timeFormat || 'HH:mm'}
               value={formValues[fieldId] ? new Date(`1970-01-01T${formValues[fieldId]}`) : null}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
               onChange={(date) => {
                 if (date) {
                   const hours = String(date.getHours()).padStart(2, '0');
@@ -3785,7 +4143,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
       case 'checkbox':
         if (isHidden) return null;
         return (
-           <div className={`mb-4 ${alignmentClass}`}>
+          <div className={`mb-4 ${alignmentClass}`}>
             <label className={labelClass}>
               {fieldLabel}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -3797,6 +4155,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                     type="checkbox"
                     id={`${fieldId}-${idx}`}
                     checked={Array.isArray(formValues[fieldId]) && formValues[fieldId].includes(option)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                     onChange={(e) => {
                       const newValue = e.target.checked
                         ? [...(formValues[fieldId] || []), option]
@@ -3820,7 +4180,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
       case 'radio':
         if (isHidden) return null;
         return (
-           <div className={`mb-4 ${alignmentClass}`}>
+          <div className={`mb-4 ${alignmentClass}`}>
             <label className={labelClass}>
               {fieldLabel}
               {isRequired && <span className="text-red-500 ml-1">*</span>}
@@ -3834,6 +4194,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                     name={fieldId}
                     value={option}
                     checked={formValues[fieldId] === option}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                     onChange={(e) => handleChange(fieldId, e.target.value)}
 
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
@@ -3864,6 +4226,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
             <Select
               style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
               onChange={val => handleChange(fieldId, val)}
               mode={properties.allowMultipleSelections ? 'multiple' : undefined}
               placeholder={properties.placeholder?.main || 'Select an option'}
@@ -4004,6 +4368,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 <input
                   type="checkbox"
                   checked={toggles[fieldId] || false}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                   onChange={(e) => handleToggleChange(fieldId, e.target.checked)}
 
                   className="sr-only peer"
@@ -4021,7 +4387,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
       case 'fullname':
         if (isHidden) return null;
         return (
-<div className={`mb-4 ${alignmentClass}`}>
+          <div className={`mb-4 ${alignmentClass}`}>
             {renderLabel()}
             {helpText && (
               <Tooltip title={helpText}>
@@ -4033,6 +4399,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 <Select
                   style={{ width: '33%' }}
                   value={formValues[`${fieldId}_salutation`] || properties.subFields.salutation.placeholder}
+                  onBlur={() => dependentFields.has(`${fieldId}_salutation`) && runPrefillForField(`${fieldId}_salutation`)}
+
                   onChange={(value) => handleChange(`${fieldId}_salutation`, value)}
                   disabled={isDisabled}
                   className="w-1/5"
@@ -4047,6 +4415,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 type="text"
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                 value={formValues[`${fieldId}_firstName`] || ''}
+                onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
+
                 onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
                 placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
                 disabled={isDisabled}
@@ -4055,6 +4425,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                 type="text"
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                 value={formValues[`${fieldId}_lastName`] || ''}
+                onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
+
                 onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
                 placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
                 disabled={isDisabled}
@@ -4082,6 +4454,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                     type="text"
                     className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                     value={formValues[`${fieldId}_street`] || ''}
+                    onBlur={() => dependentFields.has(`${fieldId}_street`) && runPrefillForField(`${fieldId}_street`)}
+
                     onChange={(e) => handleChange(`${fieldId}_street`, e.target.value)}
                     placeholder={properties.placeholder?.street || 'Street Address'}
                     disabled={isDisabled}
@@ -4096,6 +4470,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                       type="text"
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_city`] || ''}
+                      onBlur={() => dependentFields.has(`${fieldId}_city`) && runPrefillForField(`${fieldId}_city`)}
+
                       onChange={(e) => handleChange(`${fieldId}_city`, e.target.value)}
                       placeholder={properties.placeholder?.city || 'City'}
                       disabled={isDisabled}
@@ -4109,6 +4485,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                       type="text"
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_state`] || ''}
+                      onBlur={() => dependentFields.has(`${fieldId}_state`) && runPrefillForField(`${fieldId}_state`)}
+
                       onChange={(e) => handleChange(`${fieldId}_state`, e.target.value)}
                       placeholder={properties.placeholder?.state || 'State'}
                       disabled={isDisabled}
@@ -4124,6 +4502,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                       type="text"
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_country`] || ''}
+                      onBlur={() => dependentFields.has(`${fieldId}_country`) && runPrefillForField(`${fieldId}_country`)}
+
                       onChange={(e) => handleChange(`${fieldId}_country`, e.target.value)}
                       placeholder={properties.placeholder?.country || 'Country'}
                       disabled={isDisabled}
@@ -4137,6 +4517,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                       type="text"
                       className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                       value={formValues[`${fieldId}_postal`] || ''}
+                      onBlur={() => dependentFields.has(`${fieldId}_postal`) && runPrefillForField(`${fieldId}_postal`)}
+
                       onChange={(e) => handleChange(`${fieldId}_postal`, e.target.value)}
                       placeholder={properties.placeholder?.postal || 'Postal Code'}
                       disabled={isDisabled}
@@ -4152,7 +4534,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
       case 'signature':
         if (isHidden) return null;
         return (
-          <div className={`mb-4 flex flex-col items-start ${alignmentClass}`}> 
+          <div className={`mb-4 flex flex-col items-start ${alignmentClass}`}>
             {renderLabel()}
             {helpText && (
               <Tooltip title={helpText}>
@@ -4204,6 +4586,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                   id={fieldId}
                   checked={formValues[fieldId] || false}
                   onChange={(e) => handleChange(fieldId, e.target.checked)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
 
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   disabled={isDisabled}
@@ -4303,6 +4686,7 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                     key={option.value}
                     type="button"
                     onClick={() => handleRatingChange(fieldId, option.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
 
                     disabled={isDisabled}
                     className={`text-2xl ${selectedRatings[fieldId] === option.value ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 focus:outline-none`}
@@ -4361,6 +4745,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
                           name={`${fieldId}_row_${rowIdx}`}
                           value={col}
                           checked={formValues[fieldId]?.[row] === col}
+                          onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
                           onChange={() => {
                             const newValue = { ...formValues[fieldId], [row]: col };
                             handleChange(fieldId, newValue);
@@ -4426,6 +4812,8 @@ function PreviewForm({ formVersion, formFields, formConditions = [], prefills = 
               type="url"
               {...commonProps}
               value={formValues[fieldId] || ''}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+
               onChange={(e) => handleChange(fieldId, e.target.value)}
               placeholder={properties.placeholder?.main || 'https://example.com'}
             />
