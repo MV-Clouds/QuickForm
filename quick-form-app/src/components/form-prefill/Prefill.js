@@ -277,7 +277,9 @@ const Prefill = () => {
       if (!response.ok) throw new Error('Failed to fetch object fields');
 
       const data = await response.json();
-      console.log('Fields: ',data.fields);
+      if(data.newAccessToken){
+        setAccessToken(data.newAccessToken);
+      }
       
       setObjectFieldsCache((prev) => ({
         ...prev,
@@ -389,7 +391,7 @@ const Prefill = () => {
     const updatedTwo = { ...prefillList[secondIdx], Order__c: direction === 'up' ? index + 1 : index + 1 };
 
     try {
-      await fetch(process.env.REACT_APP_SAVE_PREFILL, {
+      const resp1 = await fetch(process.env.REACT_APP_SAVE_PREFILL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
@@ -400,8 +402,12 @@ const Prefill = () => {
           prefillId: updatedOne.Id
         })
       });
+      const res1 = await resp1.json();
+      if(res1.newAccessToken){
+        setAccessToken(res1.newAccessToken);
+      }
 
-      await fetch(process.env.REACT_APP_SAVE_PREFILL, {
+      const resp2 = await fetch(process.env.REACT_APP_SAVE_PREFILL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
@@ -412,6 +418,10 @@ const Prefill = () => {
           prefillId: updatedTwo.Id
         })
       });
+      const res2 = await resp2.json();
+      if(res2.newAccessToken){
+        setAccessToken(res2.newAccessToken);
+      }
 
       message.success('Order updated successfully');
     } catch (err) {
@@ -435,8 +445,11 @@ const Prefill = () => {
           prefillId: prefill.Id
         })
       });
-
+      const data = await resp.json();
       if (!resp.ok) throw new Error(await resp.text());
+      if(data.newAccessToken){
+        setAccessToken(data.newAccessToken);
+      }
       message.success('Prefill deleted successfully');
       fetchMetadataAndPrefills(formVersionId);
     } catch (e) {
@@ -640,7 +653,10 @@ const Prefill = () => {
           prefillId: prefill.Id || null,
         }),
       });
-
+      const res = await resp.json();
+      if(res.newAccessToken){
+        setAccessToken(res.newAccessToken);
+      }
       if (!resp.ok) {
         const errText = await resp.text();
         throw new Error(errText || 'Failed to save prefill');

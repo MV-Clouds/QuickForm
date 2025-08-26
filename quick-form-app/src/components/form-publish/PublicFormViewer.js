@@ -208,6 +208,9 @@ function PublicFormViewer({ runPrefill = false }) {
       if (!mappingsResponse.ok) {
         throw new Error(mappingsData.error || 'Failed to fetch mappings');
       }
+      if(mappingsData.newAccessToken){
+        setAccessToken(mappingsData.newAccessToken);
+      }
       setFormData((prev) => ({ ...prev, mappings: mappingsData.mappings }));
 
       const initialValues = {};
@@ -465,6 +468,10 @@ function PublicFormViewer({ runPrefill = false }) {
               })
             });
             const data = await resp.json();
+
+            if(data.newAccessToken){
+              setAccessToken(data.newAccessToken);
+            }
             console.log(`Prefill query returned in ${Date.now() - startTime}ms`);
 
             if (data.record) {

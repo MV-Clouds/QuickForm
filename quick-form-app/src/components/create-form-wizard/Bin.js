@@ -117,6 +117,10 @@ const DeletedFormsPage = ({ token }) => {
       } else {
         console.log('Restore successful', { formId, response: data });
       }
+      const res = await response.json();
+      if(res.newAccessToken){
+        token = res.newAccessToken;
+      }
     } catch (err) {
       console.error('Exception during restore', { formId, error: err });
     } finally {
