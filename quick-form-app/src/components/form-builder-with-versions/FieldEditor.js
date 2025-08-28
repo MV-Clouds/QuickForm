@@ -15,6 +15,7 @@ import EmojiPicker from "emoji-picker-react";
 import { getCountryList } from "./getCountries";
 import ToggleSwitch from "./ToggleSwitch";
 import { DatePicker } from "rsuite";
+import { ColorPicker } from "antd";
 
 // FieldEditor component for editing form fields and footer buttons
 function FieldEditor({
@@ -25,7 +26,9 @@ function FieldEditor({
   onClose,
   fields,
   fieldsets,
-  onAddFieldsFromFieldset
+  onAddFieldsFromFieldset,
+  footerConfigs,
+  setFooterConfigs
 }) {
   // State for common properties
   const [label, setLabel] = useState(selectedField?.label || "");
@@ -214,42 +217,6 @@ function FieldEditor({
     selectedField?.showHelpText || false
   );
   const [helpText, setHelpText] = useState(selectedField?.helpText || "");
-
-  // State for header and footer properties
-  // const [headerText, setHeaderText] = useState('Form');
-  // const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
-  const [footerText, setFooterText] = useState(
-    selectedFooter
-      ? fields.find(
-        (f) =>
-          f.id ===
-          `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-      )?.text ||
-      selectedFooter.buttonType.charAt(0).toUpperCase() +
-      selectedFooter.buttonType.slice(1)
-      : ""
-  );
-  const [footerBgColor, setFooterBgColor] = useState(
-    selectedFooter
-      ? fields.find(
-        (f) =>
-          f.id ===
-          `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-      )?.bgColor ||
-      (selectedFooter.buttonType === "previous"
-        ? "bg-gray-600"
-        : "bg-blue-600")
-      : ""
-  );
-  const [footerTextColor, setFooterTextColor] = useState(
-    selectedFooter
-      ? fields.find(
-        (f) =>
-          f.id ===
-          `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-      )?.textColor || "white"
-      : "white"
-  );
 
   // State for terms-specific properties
   const [makeAsLink, setMakeAsLink] = useState(
@@ -578,9 +545,6 @@ function FieldEditor({
       } else {
         setPredefinedOptionSet("");
       }
-    }
-    if (selectedFooter) {
-      setFooterText(selectedFooter.text || "");
     }
   }, [selectedField, selectedFooter, fields]);
 
@@ -1039,30 +1003,6 @@ function FieldEditor({
     setHeadingAlignment(e.target.value);
     onUpdateField(selectedField.id, { alignment: e.target.value });
   };
-  const handleFooterTextChange = (e) => {
-    setFooterText(e.target.value);
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onUpdateField(footerId, { text: e.target.value });
-  };
-
-  const handleFooterBgColorChange = (e) => {
-    setFooterBgColor(e.target.value);
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onUpdateField(footerId, { bgColor: e.target.value });
-  };
-
-  const handleFooterTextColorChange = (e) => {
-    setFooterTextColor(e.target.value);
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onUpdateField(footerId, { textColor: e.target.value });
-  };
-
-  const handleDeleteFooter = () => {
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onDeleteField(footerId);
-    onClose();
-  };
-
   // Toggle expandable sections (allow multiple sections to be open)
   const toggleSection = (section) => {
     setExpandedSections((prev) =>
@@ -1457,6 +1397,83 @@ function FieldEditor({
 
   // Get dynamic country list
   const countries = getCountryList();
+   let footerEditor = null;
+   
+  if (
+    selectedFooter &&
+    typeof selectedFooter.pageIndex === "number"
+  ) {
+    const pageIndex = selectedFooter.pageIndex;
+    const pageBreakCount = fields.filter(f => f.type === 'pagebreak').length;
+    const buttons = [];
+    if (pageIndex > 0) buttons.push("previous");
+    if (pageIndex < pageBreakCount) buttons.push("next");
+    if (pageIndex === pageBreakCount) buttons.push("submit");
+
+    footerEditor = (
+      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+        <h3 className="font-semibold mb-2">Footer Configuration (Page {pageIndex + 1})</h3>
+        {buttons.map(buttonType => (
+          <div key={buttonType} className="mb-4">
+            <label className="block text-sm font-medium mb-1">{buttonType.charAt(0).toUpperCase() + buttonType.slice(1)} Button Text</label>
+            <input
+              type="text"
+              value={footerConfigs[pageIndex]?.[buttonType]?.text || ""}
+              onChange={e =>
+                setFooterConfigs(prev => ({
+                  ...prev,
+                  [pageIndex]: {
+                    ...prev[pageIndex],
+                    [buttonType]: {
+                      ...prev[pageIndex]?.[buttonType],
+                      text: e.target.value
+                    }
+                  }
+                }))
+              }
+              className="w-full p-2 border rounded mb-2"
+              placeholder={`Enter ${buttonType} button text`}
+            />
+            <label className="block text-sm font-medium mb-1">Background Color</label>
+            <input
+              type="color"
+              value={footerConfigs[pageIndex]?.[buttonType]?.bgColor || "#6B7280"}
+              onChange={e =>
+                setFooterConfigs(prev => ({
+                  ...prev,
+                  [pageIndex]: {
+                    ...prev[pageIndex],
+                    [buttonType]: {
+                      ...prev[pageIndex]?.[buttonType],
+                      bgColor: e.target.value
+                    }
+                  }
+                }))
+              }
+              className="mb-2"
+            />
+            <label className="block text-sm font-medium mb-1">Text Color</label>
+            <input
+              type="color"
+              value={footerConfigs[pageIndex]?.[buttonType]?.textColor || "#FFFFFF"}
+              onChange={e =>
+                setFooterConfigs(prev => ({
+                  ...prev,
+                  [pageIndex]: {
+                    ...prev[pageIndex],
+                    [buttonType]: {
+                      ...prev[pageIndex]?.[buttonType],
+                      textColor: e.target.value
+                    }
+                  }
+                }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="custom-builder-card">
@@ -3552,72 +3569,49 @@ function FieldEditor({
             </div>
           </div>
         )}
+{/* 
+         {activeTab === "settings" && (selectedFooter.buttonType==null) && (
+    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+      <h3 className="font-semibold mb-2">Footer Configuration</h3>
+      <div className="mb-2">
+        <label className="block text-sm font-medium mb-1">Footer Text</label>
+        <input
+          type="text"
+          value={footerConfigs.text}
+          onChange={handleFooterButtonTextChange}
+          className="w-full p-2 border rounded"
+          placeholder="Enter footer text"
+        />
+      </div>
+      <div className="mb-2">
+        <label className="block text-sm font-medium mb-1">Footer Alignment</label>
+        <select
+          value={footerConfigs.alignment}
+          onChange={handleFooterAlignmentChange}
+          className="w-full p-2 border rounded"
+        >
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+          <option value="split">Split (for 2 buttons)</option>
+        </select>
+      </div>
+      <div className="mb-2 flex gap-4 items-center">
+        <label className="block text-sm font-medium mb-1">Button Background</label>
+        <ColorPicker
+          value={footerConfigs.buttonBg}
+          onChange={handleFooterButtonBgChange}
+        />
+        <label className="block text-sm font-medium mb-1">Button Text Color</label>
+        <ColorPicker
+          value={footerConfigs.buttonTextColor}
+          onChange={handleFooterButtonTextColorChange}
+        />
+      </div>
+    </div>
+  )} */}
 
-        {activeTab === "settings" && selectedFooter && (
-          <div className="px-4 pb-4">
-            <div className="mb-4">
-              <button
-                className="flex justify-between w-full p-3 bg-gray-50 hover:bg-gray-100 rounded-lg items-center transition-colors duration-200 border border-gray-200"
-                onClick={() => toggleSection("footer")}
-              >
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Footer Button Properties
-                </h3>
-                {expandedSections.includes("footer") ? (
-                  <FaChevronUp className="text-gray-600" />
-                ) : (
-                  <FaChevronDown className="text-gray-600" />
-                )}
-              </button>
-              {expandedSections.includes("footer") && (
-                <div className="p-4 mt-1 bg-gray-50 rounded-b-lg">
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Button Text
-                    </label>
-                    <input
-                      type="text"
-                      value={footerText}
-                      onChange={handleFooterTextChange}
-                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      placeholder="Enter button text"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Background Color
-                    </label>
-                    <input
-                      type="color"
-                      value={footerBgColor}
-                      onChange={handleFooterBgColorChange}
-                      className="w-full p-2 border rounded-lg bg-white text-gray-800"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Text Color
-                    </label>
-                    <input
-                      type="color"
-                      value={footerTextColor}
-                      onChange={handleFooterTextColorChange}
-                      className="w-full p-2 border rounded-lg bg-white text-gray-800"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <button
-                      onClick={handleDeleteFooter}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                    >
-                      Delete Footer Button
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+  {footerEditor}
 
         {activeTab === "widget" && isFormCalculation && (
           <div className="px-4 py-2 bg-gray-50 rounded-b-lg">

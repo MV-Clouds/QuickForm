@@ -340,6 +340,9 @@ function MainFormBuilder({
   const [saveError, setSaveError] = useState(null);
   const fields = fieldsState.present;
 
+ const [footerConfigs, setFooterConfigs] = useState({});
+
+
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
       const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
@@ -935,6 +938,7 @@ function MainFormBuilder({
         };
       })
     );
+    
 
     return { formVersion, formFields };
   };
@@ -1925,6 +1929,8 @@ function MainFormBuilder({
                       onUndo={undo}
                       onRedo={redo}
                       isSidebarOpen={isSidebarOpen}
+                       footerConfigs={footerConfigs}
+  setFooterConfigs={setFooterConfigs}
                     />
                   )}
                 </div>
@@ -1952,6 +1958,8 @@ function MainFormBuilder({
                               setShowSidebar(true);
                             }}
                             fields={fields}
+                              footerConfigs={footerConfigs}
+  setFooterConfigs={setFooterConfigs}
                           />
                         )}
                       </div>

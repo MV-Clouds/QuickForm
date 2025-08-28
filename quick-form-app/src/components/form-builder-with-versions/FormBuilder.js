@@ -28,6 +28,8 @@ function FormBuilder({
   onMovePageUp,
   onMovePageDown,
   isSidebarOpen = true,
+  footerConfigs,
+  setFooterConfigs
 }) {
   const fieldsContainerRef = useRef(null);
   const pageRefs = useRef([]);
@@ -116,8 +118,8 @@ function FormBuilder({
       if (dropIndex !== null) {
         console.log('Inserting fieldset at index:', dropIndex);
         console.log('New fields:', newFields);
-        
-        
+
+
         onDrop(null, pageIndex, dropIndex, null, sectionId, sectionSide, newFields);
       } else {
         onDrop(null, pageIndex, null, null, sectionId, sectionSide, newFields);
@@ -182,7 +184,7 @@ function FormBuilder({
     }
   };
 
-   const handleFieldClick = (fieldId, sectionSide = null) => {
+  const handleFieldClick = (fieldId, sectionSide = null) => {
     const field = fields.find((field) => field.id === fieldId);
     // Don't auto-select divider, pagebreak, or section fields
     if (field && ['divider', 'pagebreak'].includes(field.type)) {
@@ -191,7 +193,7 @@ function FormBuilder({
     if (field?.type === 'section' && sectionSide === null) {
       return;
     }
-    
+
     setSelectedFieldId(fieldId);
     setSelectedSectionSide(sectionSide);
     setSelectedFooter(null);
@@ -411,8 +413,8 @@ function FormBuilder({
                             clipboard={clipboard}
                             handlePaste={() => handlePaste(pageIndex, index + 1, null, null)}
                             selectedTheme={selectedTheme}
-                            selectedFieldId={selectedFieldId}         
-                            selectedSectionSide={selectedSectionSide} 
+                            selectedFieldId={selectedFieldId}
+                            selectedSectionSide={selectedSectionSide}
 
                           />
                         </div>
@@ -422,35 +424,58 @@ function FormBuilder({
                 </div>
               </main>
 
-              {/* Navigation buttons for each page */}
-              <footer className="flex justify-center gap-4 items-center p-4">
+              <footer
+                className="flex justify-center gap-4 items-center p-4"
+                onClick={() => setSelectedFooter({ pageIndex })} // Only pageIndex, no buttonType
+              >
+                {/* Buttons */}
                 {pageIndex > 0 && (
                   <button
                     type="button"
-                    className={`px-6 py-2 rounded-lg ${selectedTheme?.buttonBg || 'bg-gray-600'} ${selectedTheme?.buttonText || 'text-white'} hover:opacity-90`}
-                    onClick={() => handleFooterClick(pageIndex, 'previous')}
+                    style={{
+                      background: footerConfigs[pageIndex]?.previous?.bgColor || "#6B7280",
+                      color: footerConfigs[pageIndex]?.previous?.textColor || "#FFFFFF"
+                    }}
+                    className="px-6 py-2 rounded-lg hover:opacity-90"
+                    onClick={e => {
+                      e.stopPropagation();
+                      // Navigation only, do not setSelectedFooter here
+                      handleFooterClick(pageIndex, 'previous');
+                    }}
                   >
-                    Previous
+                    {footerConfigs[pageIndex]?.previous?.text || 'Previous'}
                   </button>
                 )}
                 {pageIndex < pages.length - 1 && (
                   <button
                     type="button"
-                    className={`px-6 py-2 rounded-lg ${selectedTheme?.buttonBg || 'bg-blue-600'} ${selectedTheme?.buttonText || 'text-white'} hover:opacity-90`}
-                    onClick={() => handleFooterClick(pageIndex, 'next')}
+                    style={{
+                      background: footerConfigs[pageIndex]?.next?.bgColor || "#3B82F6",
+                      color: footerConfigs[pageIndex]?.next?.textColor || "#FFFFFF"
+                    }}
+                    className="px-6 py-2 rounded-lg hover:opacity-90"
+                    onClick={e => {
+                      e.stopPropagation();
+                      handleFooterClick(pageIndex, 'next');
+                    }}
                   >
-                    Next
+                    {footerConfigs[pageIndex]?.next?.text || 'Next'}
                   </button>
                 )}
                 {pageIndex === pages.length - 1 && (
                   <button
                     type="button"
-                    className={`px-6 py-2 rounded-lg ${selectedTheme?.buttonBg || 'bg-blue-600'} ${selectedTheme?.buttonText || 'text-white'} hover:opacity-90`}
-                    onClick={() => {
+                    style={{
+                      background: footerConfigs[pageIndex]?.submit?.bgColor || "#3B82F6",
+                      color: footerConfigs[pageIndex]?.submit?.textColor || "#FFFFFF"
+                    }}
+                    className="px-6 py-2 rounded-lg hover:opacity-90"
+                    onClick={e => {
+                      e.stopPropagation();
                       handleFooterClick(pageIndex, 'submit');
                     }}
                   >
-                    Submit
+                    {footerConfigs[pageIndex]?.submit?.text || 'Submit'}
                   </button>
                 )}
               </footer>
@@ -477,11 +502,11 @@ function FormBuilder({
       </div>
 
       {/* Page Navigation Footer */}
-      <div 
+      <div
         className="bottom-bar"
         style={{
-          width: `calc(75vw - ${isSidebarOpen ? '14.3rem' : '5.3rem'})`, 
-          left: isSidebarOpen ? '17.56rem' : '5.56rem' 
+          width: `calc(75vw - ${isSidebarOpen ? '14.3rem' : '5.3rem'})`,
+          left: isSidebarOpen ? '17.56rem' : '5.56rem'
         }}
       >
         <div className="page-nav flex items-center gap-2">
@@ -571,7 +596,7 @@ function FormBuilder({
         </div>
       </div>
 
-      
+
     </div>
   );
 }
