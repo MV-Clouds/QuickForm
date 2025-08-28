@@ -10,7 +10,7 @@ import { useSalesforceData } from '../Context/MetadataContext';
 const Sidebar = ({ onDragStart }) => {
   const actions = ["Create/Update", "Find"];
   const utilities = ["Formatter", "Filter", "Path", "Loop"];
-  const integrations = ["Google Sheet"]; // Add Google Sheet Integration
+  const integrations = ["Google Sheet" , 'FindGoogleSheet']; // Add Google Sheet Integration
 
   return (
     <motion.div
@@ -373,7 +373,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         return false;
       }
     } else if (node.data.action === "Find" || node.data.action === "Filter") {
-      if (!nodeMapping.salesforceObject || !nodeMapping.conditions || nodeMapping.conditions.length === 0) {
+      if ( !nodeMapping.conditions || nodeMapping.conditions.length === 0) {
         showToast(`No Salesforce object or complete conditions defined for node ${node.data.displayLabel}.`);
         return false;
       }
@@ -631,15 +631,24 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         order,
         formVersionId,
       };
-      if(actionType === 'Google Sheet'){ 
+      if (actionType === 'Google Sheet' ) {  
         mappingData.selectedSheetName = nodeMapping.selectedSheetName || '';
         mappingData.spreadsheetId = nodeMapping.spreadsheetId || '';
         mappingData.sheetConditions = nodeMapping.sheetConditions || [];
-        mappingData.conditionsLogic = nodeMapping.conditionsLogic || 'AND'; // Add this line
-        mappingData.sheetcustomLogic = nodeMapping.sheetcustomLogic || ''; // Add this line
+        mappingData.conditionsLogic = nodeMapping.conditionsLogic || 'AND';
+        mappingData.sheetcustomLogic = nodeMapping.sheetcustomLogic || '';
         mappingData.updateMultiple = nodeMapping.updateMultiple || false;
+      }else if( actionType === 'FindGoogleSheet'){
+        mappingData.findSheetConditions = nodeMapping.findSheetConditions || [];
+        mappingData.googleSheetReturnLimit = nodeMapping.googleSheetReturnLimit || '';
+        mappingData.googleSheetSortField = nodeMapping.googleSheetSortField || '';
+        mappingData.googleSheetSortOrder = nodeMapping.googleSheetSortOrder || 'ASC';
+        mappingData.updateMultiple = nodeMapping.updateMultiple || false;
+        mappingData.findNodeName = nodeMapping.findNodeName || '';
+        mappingData.spreadsheetId = nodeMapping.spreadsheetId || '';
+        mappingData.sheetColumns = nodeMapping.sheetColumns || []; // Add columns to mappingData
       }
-
+      
       allMappings.push(mappingData);
     }
 
@@ -798,7 +807,10 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
             sheetConditions : mapping.sheetConditions || [],
             conditionsLogic: mapping.conditionsLogic || 'AND', // Add this
             sheetcustomLogic: mapping.sheetcustomLogic || '', // Add this
-            updateMultiple : mapping.updateMultiple || false
+            updateMultiple : mapping.updateMultiple || false,
+            googleSheetReturnLimit: mapping.googleSheetReturnLimit || '',
+            googleSheetSortField: mapping.googleSheetSortField || '',
+            googleSheetSortOrder: mapping.googleSheetSortOrder || 'ASC'
           };
         });
 
@@ -946,7 +958,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                   </ReactFlowProvider>
                 </div>
 
-                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition" , 'Google Sheet'].includes(selectedNode.data.action) && (
+                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition" , 'Google Sheet' , 'FindGoogleSheet'].includes(selectedNode.data.action) && (
                   <ActionPanel
                     nodeId={selectedNode.id}
                     nodeType={selectedNode.data.action}

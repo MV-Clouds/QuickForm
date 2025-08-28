@@ -647,8 +647,28 @@ function MainFormBuilder({
       setCurrentFormVersion(formVersion);
       const formFields = formVersion.Fields || [];
 
+      // Process footer fields into footerConfigs
+      const footerConfigsFromDB = {};
+      
+      formFields.forEach((field) => {
+        if (field.Field_Type__c === "footer") {
+          try {
+            const properties = JSON.parse(field.Properties__c || "{}");
+            if (properties.pageIndex !== undefined) {
+              footerConfigsFromDB[properties.pageIndex] = properties.subFields || {};
+            }
+          } catch (e) {
+            console.warn(`Failed to parse footer properties for field ${field.Unique_Key__c}:`, e);
+          }
+        }
+      });
+      
+      setFooterConfigs(footerConfigsFromDB);
+
       const pages = {};
       formFields.forEach((field) => {
+        if (field.Field_Type__c === "footer") return;
+        
         const pageNumber = field.Page_Number__c || 1;
         if (!pages[pageNumber]) {
           pages[pageNumber] = [];
@@ -842,6 +862,35 @@ function MainFormBuilder({
       pages.push({ fields: currentPage, pageNumber });
     }
 
+    // Create footer fields from footerConfigs
+  const footerFields = Object.entries(footerConfigs).map(([pageIndexStr, config]) => {
+    const pageIndex = parseInt(pageIndexStr);
+    const pageNumber = pageIndex + 1; // Convert 0-indexed to 1-indexed
+    
+    const footerId = `footer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const footerProperties = {
+      id: footerId,
+      type: "footer",
+      label: "Footer",
+      alignment: "center",
+      pageIndex: pageIndex,
+      subFields: config,
+      isHidden: false
+    };
+
+    return {
+      Name: "Footer",
+      Field_Type__c: "footer",
+      Page_Number__c: pageNumber,
+      Order_Number__c: 999, // Place at the end of the page
+      Properties__c: JSON.stringify(footerProperties),
+      Unique_Key__c: footerId,
+      isHidden__c: false,
+      Default_Value__c: null
+    };
+  });
+
     const formVersion = {
       Name: currentFormVersion?.Name || formName || "Contact Form",
       Description__c: "",
@@ -940,7 +989,7 @@ function MainFormBuilder({
     );
     
 
-    return { formVersion, formFields };
+    return { formVersion, formFields: [...formFields, ...footerFields]};
   };
 
   const saveFormToSalesforce = async () => {

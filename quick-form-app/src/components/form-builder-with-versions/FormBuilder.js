@@ -425,60 +425,67 @@ function FormBuilder({
               </main>
 
               <footer
-                className="flex justify-center gap-4 items-center p-4"
-                onClick={() => setSelectedFooter({ pageIndex })} // Only pageIndex, no buttonType
-              >
-                {/* Buttons */}
-                {pageIndex > 0 && (
-                  <button
-                    type="button"
-                    style={{
-                      background: footerConfigs[pageIndex]?.previous?.bgColor || "#6B7280",
-                      color: footerConfigs[pageIndex]?.previous?.textColor || "#FFFFFF"
-                    }}
-                    className="px-6 py-2 rounded-lg hover:opacity-90"
-                    onClick={e => {
-                      e.stopPropagation();
-                      // Navigation only, do not setSelectedFooter here
-                      handleFooterClick(pageIndex, 'previous');
-                    }}
-                  >
-                    {footerConfigs[pageIndex]?.previous?.text || 'Previous'}
-                  </button>
-                )}
-                {pageIndex < pages.length - 1 && (
-                  <button
-                    type="button"
-                    style={{
-                      background: footerConfigs[pageIndex]?.next?.bgColor || "#3B82F6",
-                      color: footerConfigs[pageIndex]?.next?.textColor || "#FFFFFF"
-                    }}
-                    className="px-6 py-2 rounded-lg hover:opacity-90"
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleFooterClick(pageIndex, 'next');
-                    }}
-                  >
-                    {footerConfigs[pageIndex]?.next?.text || 'Next'}
-                  </button>
-                )}
-                {pageIndex === pages.length - 1 && (
-                  <button
-                    type="button"
-                    style={{
-                      background: footerConfigs[pageIndex]?.submit?.bgColor || "#3B82F6",
-                      color: footerConfigs[pageIndex]?.submit?.textColor || "#FFFFFF"
-                    }}
-                    className="px-6 py-2 rounded-lg hover:opacity-90"
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleFooterClick(pageIndex, 'submit');
-                    }}
-                  >
-                    {footerConfigs[pageIndex]?.submit?.text || 'Submit'}
-                  </button>
-                )}
-              </footer>
+  className="flex justify-center gap-4 items-center p-4"
+  onClick={() => {
+    setSelectedFooter({ 
+      pageIndex, 
+      config: footerConfigs[pageIndex] || {} 
+    });
+    setSelectedFieldId(null);
+    setSelectedSectionSide(null);
+    setShowSidebar(false);
+  }}
+>
+  {/* Buttons */}
+  {pageIndex > 0 && (
+    <button
+      type="button"
+      style={{
+        background: footerConfigs[pageIndex]?.previous?.bgColor || "#6B7280",
+        color: footerConfigs[pageIndex]?.previous?.textColor || "#FFFFFF"
+      }}
+      className="px-6 py-2 rounded-lg hover:opacity-90"
+      onClick={e => {
+        e.stopPropagation();
+        handleFooterClick(pageIndex, 'previous');
+      }}
+    >
+      {footerConfigs[pageIndex]?.previous?.text || 'Previous'}
+    </button>
+  )}
+  {pageIndex < pages.length - 1 && (
+    <button
+      type="button"
+      style={{
+        background: footerConfigs[pageIndex]?.next?.bgColor || "#3B82F6",
+        color: footerConfigs[pageIndex]?.next?.textColor || "#FFFFFF"
+      }}
+      className="px-6 py-2 rounded-lg hover:opacity-90"
+      onClick={e => {
+        e.stopPropagation();
+        handleFooterClick(pageIndex, 'next');
+      }}
+    >
+      {footerConfigs[pageIndex]?.next?.text || 'Next'}
+    </button>
+  )}
+  {pageIndex === pages.length - 1 && (
+    <button
+      type="button"
+      style={{
+        background: footerConfigs[pageIndex]?.submit?.bgColor || "#3B82F6",
+        color: footerConfigs[pageIndex]?.submit?.textColor || "#FFFFFF"
+      }}
+      className="px-6 py-2 rounded-lg hover:opacity-90"
+      onClick={e => {
+        e.stopPropagation();
+        handleFooterClick(pageIndex, 'submit');
+      }}
+    >
+      {footerConfigs[pageIndex]?.submit?.text || 'Submit'}
+    </button>
+  )}
+</footer>
             </div>
             {/* Add Page divider */}
             <div className="add-page-divider">
