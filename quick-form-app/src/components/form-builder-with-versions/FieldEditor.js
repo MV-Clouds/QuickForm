@@ -44,8 +44,10 @@ function FieldEditor({
 
   // State for additional properties (field-specific)
   const [options, setOptions] = useState(selectedField?.options || []);
-  const [rows, setRows] = useState(selectedField?.rows || []);
-  const [columns, setColumns] = useState(selectedField?.columns || []);
+  const [rows, setRows] = useState(selectedField?.rows || ["Criteria 1", "Criteria 2", "Criteria 3"]);
+  const [columns, setColumns] = useState(selectedField?.columns || ["1", "2", "3", "4", "5"]);
+
+  // State for rating-specific properties
   const [ratingType, setRatingType] = useState(
     selectedField?.ratingType || "emoji"
   );
@@ -385,11 +387,7 @@ function FieldEditor({
   );
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(
-    selectedField?.dropdownRelatedValues || {
-      "Option 1": "Option 1",
-      "Option 2": "Option 2",
-      "Option 3": "Option 3",
-    }
+    selectedField?.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'}
   );
 
   // NEW : Default value / Hidden Feature / Unique Name
@@ -410,6 +408,24 @@ function FieldEditor({
   const [columnCount, setColumnCount] = useState(
     selectedField?.columnCount || 1
   );
+
+  useEffect(() => {
+  if (
+    selectedField &&
+    selectedField.type === "scalerating" &&
+    (
+      !selectedField.rows ||
+      !selectedField.columns ||
+      !selectedField.inputType
+    )
+  ) {
+    onUpdateField(selectedField.id, {
+      rows: selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"],
+      columns: selectedField.columns || ["1", "2", "3", "4", "5"],
+      inputType: selectedField.inputType || "radio",
+    });
+  }
+}, [selectedField, onUpdateField]);
 
   useEffect(() => {
     if (selectedField) {
@@ -2159,8 +2175,8 @@ function FieldEditor({
                               />
                               <input
                                 type="text"
-                                value={dropdownRelatedValues[opt]}
-                                defaultValue={`Option ${idx + 1}`}
+                                value={dropdownRelatedValues[opt] }
+                                defaultValue = {`Option ${idx + 1}`}
                                 onChange={(e) =>
                                   handleDropdownRelatedValueChange(
                                     opt,

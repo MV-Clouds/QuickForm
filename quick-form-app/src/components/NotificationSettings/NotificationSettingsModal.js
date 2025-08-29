@@ -127,6 +127,9 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
+      if(res.newAccessToken){
+        setToken(res.newAccessToken);
+      }
 
       return res.message || 'Saved successfully';
     } catch (error) {
@@ -177,6 +180,9 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
       });
       if (!response.ok) {
         throw new Error('Failed to delete notification');
+      }
+      if(response.newAccessToken){
+        setToken(response.newAccessToken);
       }
       return await response.json();
     } catch (error) {

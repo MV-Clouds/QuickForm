@@ -494,6 +494,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       const data = await resp.json();
       console.log('PATCH response =>', data);
       if (!resp.ok) throw new Error(data.error || 'Failed to update fieldset');
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
 
       setSuccess('Fieldset updated successfully!');
       setModalOpen(false);
@@ -527,6 +530,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
         }),
       });
       const data = await resp.json();
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
       console.log('Deletion => ', data);
       fetchMetadata(userId, instanceUrl);
     } catch (error) {
@@ -569,6 +575,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       const data = await resp.json();
       console.log('Response from Lambda==> ', data)
       if (!resp.ok) throw new Error(data.error || 'Failed to create fieldset');
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
 
       setSuccess('Fieldset created successfully!');
       setModalOpen(false);

@@ -47,7 +47,7 @@
   font-size: 1rem;
   min-width: 40px;
   min-height: 40px;
-  transition: background-position 0.8s ease;
+  transition: background-position 0.6s ease;
   cursor: pointer;
 }
 
@@ -290,7 +290,6 @@
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(228, 231, 236, 0.5);
-  margin-top: 1.1rem;
   /* Tailwind's mt-4 */
   box-shadow:
     0 2px 2px rgba(0, 0, 0, 0),
@@ -424,4 +423,79 @@
   overflow-y: auto;
   max-height: calc(100vh - 120px);
   padding-bottom: 15rem; /* Add some padding at bottom */
+}
+
+/* PreviewForm.css */
+
+/* Fade out/in animation */
+.fade-out {
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.4,0,0.2,1);
+  pointer-events: none;
+}
+.fade-in {
+  opacity: 1;
+  transition: opacity 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Slide out to left for sidebar */
+.slide-out-left {
+  transform: translateX(-100%);
+  opacity: 0;
+  transition: transform 0.6s, opacity 0.6s;
+  pointer-events: none;
+}
+.slide-in-left {
+  transform: translateX(0);
+  opacity: 1;
+  transition: transform 0.6s, opacity 0.6s;
+}
+
+/* Slide up for builder */
+.slide-up {
+  transform: translateY(-30px);
+  opacity: 0;
+  transition: transform 0.6s, opacity 0.6s;
+  pointer-events: none;
+}
+.slide-down {
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform 0.6s, opacity 0.6s;
+}
+
+/* Preview overlay animation */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+.preview-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.6s;
+}
+
+.slide-in-right {
+  transform: translateX(0);
+  opacity: 1;
+  transition: transform 0.6s, opacity 0.6s;
+}
+.slide-out-right {
+  transform: translateX(100%);
+  opacity: 0;
+  transition: transform 0.6s, opacity 0.6s;
+  pointer-events: none;
+}
+
+.preview-div{
+    z-index: 10;
+    /* padding-top: 20rem; */
+    /* padding-bottom: 20rem; */
+    height: 100%;
+    overflow: scroll;
 }

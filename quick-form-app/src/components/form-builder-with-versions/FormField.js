@@ -1355,7 +1355,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
               justifyContent: field?.imageAlign || 'center',
             }}>
               <ImageUploader
-                defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "/images/quickform-only-logo.png"}
+                defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "https://quickform-images.s3.us-east-1.amazonaws.com/quickform-only-logo.png"}
                 onImageUpload={(newDesign) => {
                   setImageDesign(newDesign);
                   if (onUpdateField) {

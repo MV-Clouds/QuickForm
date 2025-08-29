@@ -58,6 +58,10 @@ function App() {
               />
               <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
               <Route
+                path="/public-form/prefill/:linkId"
+                element={<PublicFormViewer runPrefill={true} />}
+              />
+              <Route
                 path="/conditions/:formVersionId"
                 element={<ProtectedRoute element={<MainFormBuilder showCondition/>} />}
               />

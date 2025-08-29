@@ -279,6 +279,9 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       }
 
       const data = await response.json();
+      if(data.newAccessToken){
+        setToken(data.newAccessToken);
+      }
       return data;
     } catch (error) {
       showToast(`Failed to fetch fields: ${error.message}`, 'error');
@@ -675,7 +678,9 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Failed to save configurations: ${response.status}`);
-
+      if(data.newAccessToken){
+        setToken(data.newAccessToken);
+      }
       if (data.success) {
         const updatedMappings = { ...mappings };
         allMappings.forEach((mapping, index) => {
