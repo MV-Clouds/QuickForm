@@ -436,8 +436,11 @@ const PayPalPaymentProvider = ({
   const createOrder = useCallback(
     async (data, actions) => {
       console.log("🎬 createOrder function called with data:", data);
-      console.log("🎬 createOrder actions available:", Object.keys(actions || {}));
-      
+      console.log(
+        "🎬 createOrder actions available:",
+        Object.keys(actions || {})
+      );
+
       try {
         setIsProcessing(true);
         console.log("🔄 Setting processing state to true");
@@ -634,7 +637,11 @@ const PayPalPaymentProvider = ({
         }
 
         console.log("✅ Payment initiated:", result.data);
-        const orderId = result.data?.orderId || result.data?.id || result.orderId || result.id;
+        const orderId =
+          result.data?.orderId ||
+          result.data?.id ||
+          result.orderId ||
+          result.id;
 
         if (!orderId) {
           console.error("❌ Missing order ID in response:", result);
@@ -692,7 +699,7 @@ const PayPalPaymentProvider = ({
       let planId = null;
       let itemNumber = null;
       let requestBody = null;
-      
+
       // Reuse the initiation flow to create a subscription via backend, then return subscription ID
       try {
         setIsProcessing(true);
@@ -760,21 +767,31 @@ const PayPalPaymentProvider = ({
         });
         const json = await resp.json();
         console.log("📥 Subscription response:", { status: resp.status, json });
-        
+
         if (!resp.ok || !json.success) {
-          const errorMsg = json.error || json.message || `HTTP ${resp.status}: Failed to initiate subscription`;
+          const errorMsg =
+            json.error ||
+            json.message ||
+            `HTTP ${resp.status}: Failed to initiate subscription`;
           console.error("❌ Subscription failed:", errorMsg);
           throw new Error(errorMsg);
         }
 
         // Extract subscription ID - handle different response formats
-        const subscriptionId = json.data?.subscriptionId || json.data?.id || json.subscriptionId || json.id;
+        const subscriptionId =
+          json.data?.subscriptionId ||
+          json.data?.id ||
+          json.subscriptionId ||
+          json.id;
         if (!subscriptionId) {
           console.error("❌ Missing subscription ID in response:", json);
           throw new Error("Subscription ID not received from server");
         }
 
-        console.log("🆔 Returning subscription ID to PayPal SDK:", subscriptionId);
+        console.log(
+          "🆔 Returning subscription ID to PayPal SDK:",
+          subscriptionId
+        );
         // The PayPal Buttons expects returning a subscription id string
         return subscriptionId;
       } catch (err) {
@@ -786,14 +803,14 @@ const PayPalPaymentProvider = ({
           itemNumber: itemNumber,
           merchantId: merchantCredentials?.merchantId || accountIdentifier,
         });
-        
+
         setStatusMessage({
           type: "error",
           message: "Subscription initiation failed",
           details: err.message || "Unknown error occurred",
         });
         setIsProcessing(false);
-        
+
         // Re-throw error to let PayPal SDK know the operation failed
         throw err;
       }
@@ -843,10 +860,16 @@ const PayPalPaymentProvider = ({
         });
 
         const result = await response.json();
-        console.log("📥 Capture response:", { status: response.status, result });
+        console.log("📥 Capture response:", {
+          status: response.status,
+          result,
+        });
 
         if (!response.ok || !result.success) {
-          const errorMsg = result.error || result.message || `HTTP ${response.status}: Failed to capture payment`;
+          const errorMsg =
+            result.error ||
+            result.message ||
+            `HTTP ${response.status}: Failed to capture payment`;
           console.error("❌ Capture failed:", errorMsg);
           throw new Error(errorMsg);
         }
@@ -940,7 +963,7 @@ const PayPalPaymentProvider = ({
         }
 
         onPaymentSuccess?.(paymentData);
-        
+
         // Return success to PayPal SDK to complete the flow
         return paymentData;
       } catch (error) {
@@ -951,14 +974,14 @@ const PayPalPaymentProvider = ({
           orderID: data?.orderID,
           merchantId: merchantCredentials?.merchantId || accountIdentifier,
         });
-        
+
         setStatusMessage({
           type: "error",
           message: "Payment capture failed",
           details: error.message || "Unknown error occurred",
         });
         onPaymentError?.(error);
-        
+
         // Re-throw error to let PayPal SDK know the operation failed
         throw error;
       } finally {

@@ -29,10 +29,10 @@ const SimplePayPalButton = ({
     style,
   });
 
-  const buttonProps = createSubscription 
-    ? { createSubscription } 
+  const buttonProps = createSubscription
+    ? { createSubscription }
     : { createOrder };
-  
+
   console.log("🎛️ Using button props:", buttonProps);
   return (
     <PayPalButtons

@@ -235,7 +235,8 @@ const GooglePayIntegration = ({
         }
 
         // Extract orderId - handle both response formats
-        const orderId = orderData.data?.orderId || orderData.orderId || orderData.id;
+        const orderId =
+          orderData.data?.orderId || orderData.orderId || orderData.id;
         if (!orderId) {
           throw new Error("Order ID not received from server");
         }
@@ -273,11 +274,9 @@ const GooglePayIntegration = ({
           }
         } else if (confirmResponse.status === "PAYER_ACTION_REQUIRED") {
           // Handle 3D Secure authentication
-          await window.paypal
-            .Googlepay()
-            .initiatePayerAction({
-              orderId: orderId,
-            });
+          await window.paypal.Googlepay().initiatePayerAction({
+            orderId: orderId,
+          });
 
           // Retry capture after successful 3DS authentication
           const captureResponse = await fetch(
@@ -310,7 +309,8 @@ const GooglePayIntegration = ({
         }
       } catch (error) {
         console.error("❌ Process payment error:", error);
-        const errorMessage = error?.message || error?.toString() || "Unknown payment error";
+        const errorMessage =
+          error?.message || error?.toString() || "Unknown payment error";
         return {
           transactionState: "ERROR",
           error: {
@@ -340,13 +340,15 @@ const GooglePayIntegration = ({
             resolve({ transactionState: "SUCCESS" });
           } else {
             console.error("❌ Google Pay payment failed:", result);
-            const errorMessage = result?.error?.message || result?.error || "Payment failed";
+            const errorMessage =
+              result?.error?.message || result?.error || "Payment failed";
             onError && onError(errorMessage);
             resolve({ transactionState: "ERROR" });
           }
         } catch (error) {
           console.error("❌ Payment processing error:", error);
-          const errorMessage = error?.message || error?.toString() || "Payment processing failed";
+          const errorMessage =
+            error?.message || error?.toString() || "Payment processing failed";
           onError && onError(errorMessage);
           resolve({ transactionState: "ERROR" });
         }
