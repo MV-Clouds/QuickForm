@@ -365,7 +365,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, han
             </div>
 
             {/* Body Rows */}
-            <div className="flex flex-col space-y-4 pb-2">
+            <div className="container-class flex flex-col space-y-4 pb-2">
               <AnimatePresence>
                 {paginatedData.length ? (
                   table.getRowModel().rows.map((row, i) => (

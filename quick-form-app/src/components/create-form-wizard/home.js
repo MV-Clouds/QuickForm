@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormName from './FormName';
 import Datatable from '../Datatable/ShowPage';
@@ -42,6 +42,56 @@ const Home = () => {
   const [cloningFormData, setCloningFormData] = useState(null); 
   const [isCloneFormNameOpen, setIsCloneFormNameOpen] = useState(false);
   const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
+  const formSyncChannel = new BroadcastChannel('form-sync');
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    formSyncChannel.onmessage = (event) => {
+      if (event.data.type === 'formDeleted' && event.data.formId) {
+        // Fetch updated formRecords when a form was deleted in another tab
+        fetchSalesforceData(userId, instanceUrl);
+      }
+    };
+
+    // const ws = new WebSocket(`wss://m47cwjfu3f.execute-api.us-east-1.amazonaws.com/production?userId=${encodeURIComponent(userId)}`);
+
+    // ws.onopen = () => {
+    //   console.log('WebSocket connected');
+    // };
+
+    // ws.onmessage = (event) => {
+    //   try {
+    //     const data = JSON.parse(event.data);
+    //     if (data.type === 'formDeleted' && data.formId) {
+    //       // refresh form data on receiving delete message from other devices
+    //       fetchSalesforceData(userId, instanceUrl);
+    //     }
+    //   } catch (e) {
+    //     console.warn('Invalid WS message:', e);
+    //   }
+    // };
+
+    // ws.onclose = () => {
+    //   console.log('WebSocket closed');
+    //   wsRef.current = null;
+    // };
+
+    // ws.onerror = (error) => {
+    //   console.error('WebSocket error', error);
+    // };
+
+    // wsRef.current = ws;
+
+    // Clean up listener on unmount
+    return () => {
+      formSyncChannel.close();
+      // if (wsRef.current) {
+      //   wsRef.current.close();
+      // }
+    };
+  }, [fetchSalesforceData, userId, instanceUrl]);
+
 
   const handleCloneForm = (form) => {
   // Find published version or draft version to clone
@@ -243,6 +293,18 @@ console.log('Cloning ',cloningFormData);
       if(data.newAccessToken){
         settoken(data.newAccessToken);
       }
+      // if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        
+      //   wsRef.current.send(JSON.stringify(
+      //     {
+      //     action:'sendmessage',
+      //     type: 'formDeleted',
+      //     formId,
+      //     userId,
+      //   }));
+      // }
+      // Broadcast deletion event to other tabs
+      formSyncChannel.postMessage({ type: 'formDeleted', formId });
     } catch (error) {
       console.error('Error deleting form:', error);
     } finally {

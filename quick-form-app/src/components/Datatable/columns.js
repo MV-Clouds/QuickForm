@@ -113,6 +113,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
       const [dropUp, setDropUp] = useState(false);
       const ref = useRef();
       const btnRef = useRef();
+      const [dropdownPos , setDropdownPos] = useState({ top: 0, left: 0 });
 
       // Close popup on outside click or ESC
       useEffect(() => {
@@ -141,9 +142,12 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
       useEffect(() => {
         if (open && btnRef.current && ref.current) {
           const btnRect = btnRef.current.getBoundingClientRect();
-          const dropdownHeight = 300; // px, estimate
-          const spaceBelow = window.innerHeight - btnRect.bottom;
-          setDropUp(spaceBelow < dropdownHeight + 16); // 16px margin
+          const dropdownHeight = 140; // px, estimate
+          
+          setDropdownPos({
+            left: btnRect.left - 160,
+            top: window.innerHeight - btnRect.bottom < dropdownHeight + 16 ? btnRect.top - dropdownHeight - 8 : btnRect.bottom + 8,
+          });
         }
       }, [open]);
 
@@ -170,8 +174,8 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: dropUp ? 10 : -10, scale: 0.97 }}
                 transition={{ duration: 0.18 }}
-                className={`absolute right-[10%] z-[999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? "bottom-[100%]" : ''}`}
-                style={{ boxShadow: '0 8px 32px 0 rgba(18, 3, 3, 0.12)12)' }}
+                className={`w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col`}
+                style={{ boxShadow: '0 8px 32px 0 rgba(18, 3, 3, 0.12)12)', position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, zIndex: 1000 }}
               >
                 <button
                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-800 font-medium transition-colors"
