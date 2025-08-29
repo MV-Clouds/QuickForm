@@ -166,6 +166,9 @@ const ThankYouPageBuilder = ({ formVersionId }) => {
       const data = await response.json();
       console.log('response text ' , data)
       if (response.ok) {
+        if(data.newAccessToken){
+          setToken(data.newAccessToken);
+        }
         setLoading(false)
         console.log('Thank You page created successfully:', data);
       } else {

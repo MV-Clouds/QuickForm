@@ -198,6 +198,9 @@ function openGoogleOAuthPopup(
 
           if (!res.ok) throw new Error("Backend exchange failed");
           const tokens = await res.json();
+          if (tokens.newAccessToken) {
+            token = tokens.newAccessToken;
+          }
           console.log("tokens", tokens);
           popup.close();
           onSuccess && onSuccess(tokens); // ✅ single success call
@@ -245,17 +248,23 @@ const Integrations = ({ token }) => {
   // Whether PayPal is considered connected is now handled inside PayPalIntegrationPanel when opened.
   // ✅ Helper function to call backend
   const fetchIntegrations = useCallback(async () => {
+    const userId = sessionStorage.getItem("userId");
     try {
       const res = await fetch(
         `https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth?instanceUrl=${encodeURIComponent(
           instanceUrl
-        )}&sfToken=${encodeURIComponent(token)}`,
+        )}&sfToken=${encodeURIComponent(token)}&sfuserId=${encodeURIComponent(
+          userId
+        )}`,
         { method: "GET" }
       );
       if (!res.ok) {
         throw new Error(`Failed to fetch: ${res.status}`);
       }
       const data = await res.json();
+      if (data.newAccessToken) {
+        token = data.newAccessToken;
+      }
       console.log("Repsonse data", data);
       // Salesforce-like response mapping
       // Assume data.records is returned from Lambda
@@ -314,6 +323,7 @@ const Integrations = ({ token }) => {
     }
   }, [instanceUrl, token]);
   async function deleteGoogleCredential(recordId, instanceUrl, sfToken) {
+    const userId = sessionStorage.getItem("userId");
     if (!recordId || !instanceUrl || !sfToken) {
       throw new Error("Missing required parameters");
     }
@@ -325,6 +335,7 @@ const Integrations = ({ token }) => {
     url.searchParams.append("recordId", recordId);
     url.searchParams.append("instanceUrl", instanceUrl);
     url.searchParams.append("sfToken", sfToken);
+    url.searchParams.append("sfuserId", userId);
 
     const response = await fetch(url.toString(), {
       method: "DELETE",
@@ -335,6 +346,9 @@ const Integrations = ({ token }) => {
 
     if (response.ok) {
       const result = await response.json();
+      if (result.newAccessToken) {
+        token = result.newAccessToken;
+      }
       return result; // e.g. { success: true, message: "..."}
     } else {
       const errorText = await response.text();
@@ -367,6 +381,7 @@ const Integrations = ({ token }) => {
       setConnecting(true);
       setAwsError("");
       try {
+        const userId = sessionStorage.getItem('userId');
         const response = await fetch(
           "https://pm8ylpazok.execute-api.us-east-1.amazonaws.com/auth",
           {
@@ -376,6 +391,7 @@ const Integrations = ({ token }) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
+              userId,
               instanceUrl,
               accessKey: awsAccessKey,
               secretKey: awsSecretKey,
@@ -384,6 +400,9 @@ const Integrations = ({ token }) => {
           }
         );
         const res = await response.json();
+        if(res.newAccessToken){
+            token = res.newAccessToken;
+        }
         if (response.ok) {
           // status 200
           setAwsConnected(true);
@@ -432,6 +451,7 @@ const Integrations = ({ token }) => {
       setConnecting(true);
       setTwilioError("");
       try {
+        const salesforceUserId = sessionStorage.getItem('userId');
         const salesforceInstanceUrl = sessionStorage.getItem("instanceUrl");
         const salesforceAccessToken = token;
 
@@ -444,6 +464,7 @@ const Integrations = ({ token }) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
+              salesforceUserId,
               accountSid: twilioSid,
               authToken: twilioAuthToken,
               connectionName: twilioConnectionName,
@@ -452,6 +473,11 @@ const Integrations = ({ token }) => {
             }),
           }
         );
+
+        const res = await response.json();
+        if(res.newAccessToken){
+            token = res.newAccessToken;
+        }
 
         if (response.ok) {
           // status 200

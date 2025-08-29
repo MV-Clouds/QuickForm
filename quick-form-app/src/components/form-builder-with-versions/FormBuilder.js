@@ -114,6 +114,10 @@ function FormBuilder({
 
       // Insert the new fields at the correct dropIndex
       if (dropIndex !== null) {
+        console.log('Inserting fieldset at index:', dropIndex);
+        console.log('New fields:', newFields);
+        
+        
         onDrop(null, pageIndex, dropIndex, null, sectionId, sectionSide, newFields);
       } else {
         onDrop(null, pageIndex, null, null, sectionId, sectionSide, newFields);

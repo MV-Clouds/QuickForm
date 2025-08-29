@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import './SharePage.css';
 import { QRCodeCanvas } from "qrcode.react";
@@ -18,10 +18,20 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
   const [qrHover, setQrHover] = useState(false);
   const [twitterHover, setTwitterHover] = useState(false);
   const [selectedTab, setSelectedTab] = useState('html'); // or 'css'
+  const [linkTab, setLinkTab] = useState('publish');
+  const [currentLink, setCurrentLink] = useState(publishLink);
+
+  useEffect(() => {
+    setCurrentLink(
+      linkTab === 'publish'
+        ? publishLink
+        : publishLink.replace('/public-form/', '/public-form/prefill/')
+    );
+  }, [linkTab, publishLink]);
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(publishLink);
+      await navigator.clipboard.writeText(currentLink);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
@@ -31,7 +41,7 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
 
   const handleCopyEmbed = async () => {
     try {
-      const textToCopy = selectedTab === 'html' ? embedHtmlCode(publishLink) : embedCssCode;
+      const textToCopy = selectedTab === 'html' ? embedHtmlCode(currentLink) : embedCssCode;
       await navigator.clipboard.writeText(textToCopy);
       setCopiedEmbed(true);
       setTimeout(() => setCopiedEmbed(false), 2000);
@@ -42,32 +52,32 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
 
   const shareOnTwitter = () => {
     const text = encodeURIComponent('Check out this form!');
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const twitterUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
     openCenteredPopup(twitterUrl, 'Share on Twitter', 600, 600);
   };
 
   const shareOnFacebook = () => {
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
     openCenteredPopup(facebookUrl, 'Share on Facebook', 600, 600);
   };
 
   const shareOnLinkedIn = () => {
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${url}`;
     openCenteredPopup(linkedInUrl, 'Share on LinkedIn', 600, 600);
   };
 
   const shareOnWhatsApp = () => {
-    const text = encodeURIComponent(`Check out this form! ${publishLink}`);
+    const text = encodeURIComponent(`Check out this form! ${currentLink}`);
     const whatsappUrl = `https://wa.me/?text=${text}`;
     openCenteredPopup(whatsappUrl, 'Share on WhatsApp', 600, 600);
   };
 
   const shareOnReddit = () => {
     const title = encodeURIComponent('Check out this form!');
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const redditUrl = `https://www.reddit.com/submit?url=${url}&title=${title}`;
     openCenteredPopup(redditUrl, 'Share on Reddit', 600, 600);
   };
@@ -136,9 +146,9 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
     }
   };
 
-  const embedHtmlCode = (publishLink) => `<div class="custom-form-wrapper">
+  const embedHtmlCode = (currentLink) => `<div class="custom-form-wrapper">
   <iframe
-    src="${publishLink}"
+    src="${currentLink}"
     class="custom-form-iframe"
     allowfullscreen
     title="Shared Form"
@@ -201,15 +211,40 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
         {/* Share Link Section */}
         <div className="share-section">
             <div className="share-label">Form Link</div>
+            <div className="tabs">
+                {['publish', 'prefill'].map(tab => (
+                  <motion.button
+                    key={tab}
+                    type="button"
+                    onClick={() => setLinkTab(tab)}
+                    initial={false}
+                    animate={linkTab === tab ? "selected" : "rest"}
+                    whileHover="hover"
+                    variants={{
+                      rest: { background: 'transparent', color: '#0B0A0A', fontWeight: 500, borderBottom: '2px solid #E4E7EC' },
+                      selected: { background: 'linear-gradient(0deg, rgba(0, 138, 176, 0.12) 0%, rgba(143, 220, 241, 0) 100%)', color: '#0B0A0A', fontWeight: 700, borderBottom: '2px solid #028AB0' },
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 15
+                    }}
+                    className="tab-button"
+                  >
+                    {tab === 'publish' ? 'Publish' : 'Prefill'}
+                  </motion.button>
+                ))}
+              </div>
             <div className="share-row">
-            <input className="share-input" readOnly value={publishLink} />
+
+            <input className="share-input" readOnly value={currentLink} />
             <motion.div className="open-link"
               whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             >
               <motion.button
                 className="open-link-button"
-                onClick={() => window.open(publishLink, '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open(currentLink, '_blank', 'noopener,noreferrer')}
                 aria-label="Open public link"
                 type="button"
                 whileTap={{ scale: 0.95 }}
@@ -489,7 +524,7 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
                 key={selectedTab}
                 className="share-embed-code"
                 rows={4}
-                value={selectedTab === 'html' ? embedHtmlCode(publishLink) : embedCssCode}
+                value={selectedTab === 'html' ? embedHtmlCode(currentLink) : embedCssCode}
                 readOnly
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -547,7 +582,7 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
               <div className="form-container qr-modal-content">
                 <QRCodeCanvas
                   id="share-qr-canvas"
-                  value={publishLink}
+                  value={currentLink}
                   size={300}
                   includeMargin
                   className="qr-canvas"

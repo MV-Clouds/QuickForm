@@ -55,6 +55,9 @@ const FolderCard = ({
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete folder');
       }
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
       refreshData(userId , instanceUrl);
     } catch (error) {
       console.error('Error deleting folder:', error);
@@ -94,6 +97,9 @@ const FolderCard = ({
       console.log('Response=>' , data)
       if (!response.ok) {
         throw new Error(data.error || 'Failed to move folder');
+      }
+      if(data.newAccessToken){
+        token = data.newAccessToken;
       }
       refreshData(userId,instanceUrl);
     } catch (error) {

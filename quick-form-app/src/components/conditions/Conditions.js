@@ -653,6 +653,9 @@ const Conditions = ({ formVersionId }) => {
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to save condition');
+      if(data.newAccessToken){
+        setToken(data.newAccessToken);
+      }
 
       setConditions((prev) =>
         conditionId
@@ -830,7 +833,11 @@ const Conditions = ({ formVersionId }) => {
         }),
       });
 
+      const data = await response.json();
       if (!response.ok) throw new Error('Failed to delete condition');
+      if(data.newAccessToken) {
+        setToken(data.newAccessToken);
+      }
       setConditions(conditions.filter((c) => c.Id !== conditionId));
       setEdges((prevEdges) => {
         const updatedEdges = prevEdges.map((edge) => {
