@@ -35,7 +35,7 @@ const ActionPanel = ({
   const isFilterNode = nodeType === "Filter";
   const isConditionNode = nodeType === "Condition";
   const isGoogleSheet = nodeType === 'Google Sheet'
-
+  const isFindGoogleSheet = nodeType === 'FindGoogleSheet'
   // const [selectedObject, setSelectedObject] = useState("");
   const selectedObject = mappings[nodeId]?.salesforceObject || "";
 
@@ -74,6 +74,18 @@ const ActionPanel = ({
   const instanceUrl = sessionStorage.getItem('instanceUrl');
   const userId = sessionStorage.getItem('userId');
   const [updateMultiple, setUpdateMultiple] = useState(false); // New state variable
+  const [findsortField , setfindsortfield] = useState('')
+  const [findsortOrder , setfindsortOrder] = useState('ASC');
+  const [findreturnLimit , setfindreturnLimit] = useState("");
+  const [findSheetConditions, setFindSheetConditions] = useState([]); // New state for FindGoogleSheet conditions
+  const [findConditionsLogic, setFindConditionsLogic] = useState('AND'); // New state for FindGoogleSheet conditions logic
+  const [findSheetCustomLogic, setFindSheetCustomLogic] = useState(''); // New state for FindGoogleSheet custom logic
+  const [findNodeName, setFindNodeName] = useState(''); // New state for FindGoogleSheet name
+  const [findSpreadsheetId, setFindSpreadsheetId] = useState(''); // New state for FindGoogleSheet spreadsheetId
+  const [findSelectedSheetName, setFindSelectedSheetName] = useState(''); // New state for FindGoogleSheet selectedSheetName
+  const [findUpdateMultiple, setFindUpdateMultiple] = useState(false); // New state for FindGoogleSheet updateMultiple
+  const [findGoogleSheetColumns, setFindGoogleSheetColumns] = useState([]); // New state for FindGoogleSheet columns
+
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
     double: ["number", "price"],
@@ -116,8 +128,8 @@ const ActionPanel = ({
     setSheetName(nodeMapping?.selectedSheetName || "");
     setSpreadsheetId(nodeMapping?.spreadsheetId || "")
     setsheetConditions(nodeMapping?.sheetConditions || []);
-    setConditionsLogic(nodeMapping?.conditionsLogic || 'AND'); // Add this line
-    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || ''); // Add this line
+    setConditionsLogic(nodeMapping?.conditionsLogic || 'AND');
+    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || ''); 
     const loopConfig = nodeMapping.loopConfig || {};
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
@@ -142,7 +154,7 @@ const ActionPanel = ({
     });
 
     const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
-      .filter((node) => node.data.action === "Find")
+      .filter((node) => node.data.action === "Find" || node.data.action === 'FindGoogleSheet')
       .map((node) => node.id);
 
     // Handle loop collection
@@ -158,6 +170,22 @@ const ActionPanel = ({
       }
     }
     setUpdateMultiple(nodeMapping.updateMultiple || false); // Initialize updateMultiple
+    // Initialize FindGoogleSheet specific states
+    setfindreturnLimit(nodeMapping.googleSheetReturnLimit || "");
+    setfindsortOrder(nodeMapping.googleSheetSortOrder || "ASC");
+    setfindsortfield(nodeMapping.googleSheetSortField || "");
+    setFindSheetConditions(nodeMapping.findSheetConditions || []);
+    setFindConditionsLogic(nodeMapping.logicType || "AND");
+    setFindSheetCustomLogic(nodeMapping.customLogic || "");
+    setFindNodeName(nodeMapping.findNodeName || "");
+    setFindSpreadsheetId(nodeMapping.spreadsheetId || "");
+    setFindSelectedSheetName(nodeMapping.selectedSheetName || "");
+    setFindUpdateMultiple(nodeMapping.updateMultiple || false);
+    setFindGoogleSheetColumns(nodeMapping.columns || []); // Initialize FindGoogleSheet columns
+
+    // setfindreturnLimit(nodeMapping.findreturnLimit);
+    // setfindsortOrder(nodeMapping.findsortOrder);
+    // setfindsortfield(nodeMapping.findsortField);
   }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
@@ -394,20 +422,52 @@ const ActionPanel = ({
     { value: "Fallback", label: "Fallback" },
   ];
   const handleSave = (spreadsheetId = null) => {
-    setMappings((prev) => ({
-      ...prev,
-      [nodeId]: {
-        ...prev[nodeId],
-        selectedSheetName : sheetName,
-        fieldMappings,
-        spreadsheetId,
-        conditions : sheetConditions,
-        customLogic : sheetcustomLogic,
-        sheetConditions : sheetConditions,
-        conditionsLogic : conditionsLogic,
-        sheetcustomLogic : sheetcustomLogic
-      },
-    }));
+    if (isGoogleSheet) {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          selectedSheetName: sheetName,
+          fieldMappings,
+          spreadsheetId,
+          sheetConditions,
+          conditionsLogic,
+          sheetcustomLogic,
+          updateMultiple,
+          googleSheetReturnLimit: returnLimit, // Note: using general returnLimit here
+          googleSheetSortField: sortField,     // Note: using general sortField here
+          googleSheetSortOrder: sortOrder,     // Note: using general sortOrder here
+        },
+      }));
+    } else if (isFindGoogleSheet) {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          findNodeName: findNodeName,
+          selectedSheetName: findSelectedSheetName, // Using specific state
+          spreadsheetId: findSpreadsheetId, // Using specific state
+          findSheetConditions: findSheetConditions, // Using specific state
+          findConditionsLogic: findConditionsLogic, // Using specific state
+          findSheetCustomLogic: findSheetCustomLogic, // Using specific state
+          findUpdateMultiple: findUpdateMultiple, // Using specific state
+          googleSheetReturnLimit: findreturnLimit, // Using specific state
+          googleSheetSortField: findsortField, // Using specific state
+          googleSheetSortOrder: findsortOrder, // Using specific state
+          columns : findGoogleSheetColumns
+        },
+      }));
+    } else {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          returnLimit,
+          sortField,
+          sortOrder,
+        },
+      }));
+    }
     onClose();
   };
 
@@ -637,7 +697,7 @@ const ActionPanel = ({
   };
 
   const collectionOptions = getAncestorNodes(nodeId, edges, nodes)
-    .filter((node) => node.data.action === "Find")
+    .filter((node) => node.data.action === "Find" || node.data.action === 'FindGoogleSheet')
     .map((node) => ({
       value: node.id,
       label: `${node.data.label}`,
@@ -653,15 +713,15 @@ const ActionPanel = ({
     }
 
     // For Filter nodes, validate that we have an object from the Find node
-    if (isFilterNode && !selectedObject) {
-      setSaveError("The selected Find node does not have a Salesforce object configured.");
-      return;
-    }
+    // if (isFilterNode && !selectedObject) {
+    //   setSaveError("The selected Find node does not have a Salesforce object configured.");
+    //   return;
+    // }
 
-    if ((isCreateUpdateNode || isFindNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
-      setSaveError("Please select a Salesforce object.");
-      return;
-    }
+    // if ((isCreateUpdateNode || isFindNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
+    //   setSaveError("Please select a Salesforce object.");
+    //   return;
+    // }
 
     // Check if required fields are mapped
     if (isCreateUpdateNode && selectedObject) {
@@ -1039,13 +1099,46 @@ const ActionPanel = ({
 
   const renderConditions = (conditionType = "conditions", isExit = false) => {
     const conditionsList = isExit ? exitConditions : conditions;
-
+     // Helper function to get field options based on node type and loop collection
+    const getFieldOptionsForConditions = () => {
+      if (isExit && isLoopNode && loopCollection) {
+        const loopCollectionNode = nodes.find(node => node.id === loopCollection);
+        console.log('loop node' , loopCollectionNode)
+        if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
+          const googleSheetNodeMapping = mappings[loopCollection] || {};
+          console.log('sheet', googleSheetNodeMapping)
+          return (googleSheetNodeMapping.sheetColumns).map(col => ({ value: col, label: col }));
+        }
+      }
+      // New logic for Filter node conditions
+    if (isFilterNode && selectedFindNode) {
+        const findNode = nodes.find(node => node.id === selectedFindNode);
+        if (findNode && findNode.data.action === 'FindGoogleSheet') {
+          const googleSheetNodeMapping = mappings[selectedFindNode] || {};
+          return (googleSheetNodeMapping.sheetColumns || []).map(col => ({ value: col, label: col }));
+        }
+      }
+      return fieldOptions; // Default to Salesforce field options
+    };
     // Helper function to get operators for a condition
     const getOperatorsForCondition = (conditionIndex) => {
       if (isExit) {
         return operatorGroups.default; // For exit conditions, use default operators
       }
-
+      if (isExit && isLoopNode && loopCollection) {
+         const loopCollectionNode = nodes.find(node => node.id === loopCollection);
+         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
+           // For Google Sheet columns, assume string operators for now
+          return operatorGroups.text;
+         }
+       }
+         // New logic for Filter node conditions
+    if (isFilterNode && selectedFindNode) {
+        const findNode = nodes.find(node => node.id === selectedFindNode);
+        if (findNode && findNode.data.action === 'FindGoogleSheet') {
+          return operatorGroups.text;
+        }
+      }
       const condition = conditionsList[conditionIndex];
       if (!condition.field || !selectedObject) {
         return operatorGroups.default;
@@ -1135,13 +1228,13 @@ const ActionPanel = ({
               <div className="col-span-5">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Field</label>
                 <Select
-                  value={
-                    fieldOptions.find((opt) => opt.value === condition.field)
+                    value={
+                    getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
                       ? {
-                        ...fieldOptions.find((opt) => opt.value === condition.field),
-                        label: isExit && currentItemVariableName
-                          ? `${currentItemVariableName}.${fieldOptions.find((opt) => opt.value === condition.field).label}`
-                          : fieldOptions.find((opt) => opt.value === condition.field).label
+                        ...getFieldOptionsForConditions().find((opt) => opt.value === condition.field),
+                        label: isExit && currentItemVariableName && getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
+                          ? `${currentItemVariableName}.${getFieldOptionsForConditions().find((opt) => opt.value === condition.field).label}`
+                          : getFieldOptionsForConditions().find((opt) => opt.value === condition.field)?.label
                       }
                       : null
                   }
@@ -1155,11 +1248,11 @@ const ActionPanel = ({
                   }
                   options={
                     isExit && currentItemVariableName
-                      ? fieldOptions.map((opt) => ({
+                      ? getFieldOptionsForConditions().map((opt) => ({
                         ...opt,
                         label: `${currentItemVariableName}.${opt.label}`,
                       }))
-                      : fieldOptions
+                      : getFieldOptionsForConditions()
                   }
                   placeholder="Select Field"
                   styles={{
@@ -1178,7 +1271,7 @@ const ActionPanel = ({
                       zIndex: 9999,
                     }),
                   }}
-                  isDisabled={!selectedObject}
+                  isDisabled={!getFieldOptionsForConditions().length}
                   isClearable
                   classNamePrefix="select"
                 />
@@ -1316,8 +1409,56 @@ const ActionPanel = ({
             exit={{ x: 300, opacity: 0 }}
           >
           <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
-            sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple}/>
+            sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns}/>
           </motion.div>
+        )}
+        {isFindGoogleSheet && (
+          <motion.div
+          className=""
+          initial={{ x: 300, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 300, opacity: 0 }}
+        >
+          <GoogleSheetFindPanel
+                onSave={(config) => {
+                console.log(mappings[nodeId] , 'insave')
+                setFindSelectedSheetName(config.selectedSheetName); // Use new state
+                setFindSpreadsheetId(config.spreadsheetId); // Use new state
+                setFindSheetConditions(config.findSheetConditions); // Use new state
+                setFindConditionsLogic(config.logicType); // Use new state
+                setFindGoogleSheetColumns(config.columns || []); // Update parent state with columns
+                setFindSheetCustomLogic(config.customLogic); // Use new state
+                setfindreturnLimit(config.googleSheetReturnLimit);
+                setfindsortfield(config.googleSheetSortField); // Corrected this line
+                setfindsortOrder(config.googleSheetSortOrder); // Corrected this line
+                setFindNodeName(config.findNodeName); // Use new state
+                setFindUpdateMultiple(config.updateMultiple); // Use new state
+                setFindGoogleSheetColumns(config.sheetColumns)
+                // ✅ Persist unified config
+                setMappings(prev => ({
+                  ...prev,
+                  [nodeId]: {
+                    ...prev[nodeId],
+                    findNodeName: config.findNodeName,
+                    selectedSheetName: config.selectedSheetName,
+                    spreadsheetId: config.spreadsheetId,
+                    findSheetConditions: config.findSheetConditions,
+                    updateMultiple: config.updateMultiple,
+                    googleSheetReturnLimit: config.googleSheetReturnLimit,
+                    googleSheetSortOrder: config.googleSheetSortOrder,
+                    googleSheetSortField : config.googleSheetSortField,
+                    logicType : config.logicType,
+                    customLogic : config.customLogic,
+                    sheetColumns : config.sheetColumns
+                  }
+                }));
+              }}
+              initialConfig={mappings[nodeId]}
+          userId={userId}
+          instanceUrl={instanceUrl} 
+          token={sfToken}  
+          sheetsApiUrl={'https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch'}/>
+        </motion.div>
         )}
         <div className="space-y-6">
           {(isPathNode || isConditionNode) && (
@@ -1398,7 +1539,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {(isFilterNode || (pathOption == 'Rules') || isLoopNode) && (
+          {(isFilterNode || (isConditionNode && pathOption == 'Rules') || isLoopNode) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1556,7 +1697,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {(isFindNode || isFilterNode || (pathOption == 'Rules')) && (
+          {(isFindNode || isFilterNode || (isConditionNode &&  pathOption == 'Rules')) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2822,7 +2963,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
   );
 };
 
-const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave , sheetconditions , setsheetConditions , instanceUrl , userId,sfToken ,conditionsLogic , setConditionsLogic ,sheetcustomLogic , setsheetCustomLogic ,spreadsheetId , setSpreadsheetId , updateMultiple , setUpdateMultiple}) => {
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave , sheetconditions , setsheetConditions , instanceUrl , userId,sfToken ,conditionsLogic , setConditionsLogic ,sheetcustomLogic , setsheetCustomLogic ,spreadsheetId , setSpreadsheetId , updateMultiple , setUpdateMultiple , setFindGoogleSheetColumns}) => {
   const [error, setError] = useState("");
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -2882,6 +3023,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
           if (selected) {
             setSheetName(selected.spreadsheetName);
             setSelectedColumns(selected.columns || []);
+            setFindGoogleSheetColumns(selected.columns[0])
             if (selected.columns[0]) {
               const newMappings = selected.columns[0].map(col => ({
                 column: col,
@@ -3136,6 +3278,206 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
         <Button onClick={handleSave} type="primary">Save</Button>
       </div>
     </div>
+  );
+};
+
+const GoogleSheetFindPanel = ({
+  instanceUrl, userId, token,
+  sheetsApiUrl, // API endpoint for list of sheets
+  onSave, // callback with config
+  initialConfig // { spreadsheetId, sheetName, columnMappings, conditions, returnLimit, sortField, sortOrder }
+}) => {
+  const [spreadsheets, setSpreadsheets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [spreadsheetId, setSpreadsheetId] = useState(initialConfig?.spreadsheetId || "");
+  const [sheetName, setSheetName] = useState(initialConfig?.sheetName || "");
+  const [columns, setColumns] = useState(initialConfig?.columns || []);
+  const [columnMappings, setColumnMappings] = useState(initialConfig?.columnMappings || []);
+  const [findconditions, setConditions] = useState(initialConfig?.conditions || []);
+  const [findlogicType, setLogicType] = useState(initialConfig?.logicType || "AND");
+  const [findcustomLogic, setCustomLogic] = useState(initialConfig?.customLogic || "");
+  const [findreturnLimit, setReturnLimit] = useState(initialConfig?.googleSheetReturnLimit || "");
+  const [findsortField, setSortField] = useState(initialConfig?.googleSheetSortField || "");
+  const [findsortOrder, setSortOrder] = useState(initialConfig?.googleSheetSortOrder || "ASC");
+  const [findupdateMultiple , setupdateMultiple] = useState(initialConfig?.updateMultiple);
+  const [error, setError] = useState("");
+  const [findname , setfindname] = useState(initialConfig?.findNodeName || "Default")
+  // Fetch spreadsheets on mount or when dependencies change
+  useEffect(() => {
+    if (!instanceUrl || !userId || !token || !sheetsApiUrl) return;
+    const url = new URL(sheetsApiUrl);
+    url.searchParams.append("instanceUrl", instanceUrl);
+    url.searchParams.append("sfToken", token);
+    url.searchParams.append("userId", userId);
+    setLoading(true);
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        setSpreadsheets(data.spreadsheets || []);
+      })
+      .catch(err => {
+        setError("Failed to fetch Google Sheets: " + err.message);
+      })
+      .finally(() => setLoading(false));
+  }, [instanceUrl, userId, token, sheetsApiUrl]);
+
+  // When spreadsheet is selected, populate sheetName and columns
+  useEffect(() => {
+    if (!spreadsheetId) {
+      setSheetName("");
+      setColumns([]);
+      return;
+    }
+    const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+    if (selected) {
+      setSheetName(selected.spreadsheetName);
+      setColumns(selected.columns[0] || []);
+    }
+  }, [spreadsheetId, spreadsheets]);
+
+  // Column options for selects
+  const columnOptions = columns.map(col => ({
+    value: col,
+    label: col
+  }));
+
+  // Validation and save handler
+  const handleSave = () => {
+    if (!spreadsheetId || !sheetName) {
+      setError("Please select a Google Sheet.");
+      return;
+    }
+    if (findreturnLimit && (isNaN(findreturnLimit) || findreturnLimit < 1 || findreturnLimit > 100)) {
+      setError("Return Limit must be a number between 1 and 100.");
+      return;
+    }
+    if (findsortField && !columns.includes(findsortField)) {
+      setError("Sort field must correspond to a column in the selected sheet.");
+      return;
+    }
+    // You can add more validations as needed
+
+    const config = {
+      findNodeName: findname,                  // name entered by user
+      selectedSheetName: sheetName,            // sheet display name
+      findSheetConditions: findconditions ,   // array of conditions
+      updateMultiple: findupdateMultiple , // boolean flag
+      googleSheetReturnLimit: findreturnLimit ,    // limit on rows
+      googleSheetSortOrder: findsortOrder,       // field/column to sort by
+      googleSheetSortField : findsortField,
+      spreadsheetId,
+      logicType : findlogicType,
+      customLogic : findcustomLogic,
+      sheetColumns : columns
+    };
+    console.log(config)
+    onSave(config);
+    // Hand off to parent handler for storage (e.g., ActionPanel)
+    message.success("FindGoogleSheet configuration saved!");
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 60 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white p-6 rounded-xl border border-gray-200 shadow-xl w-full max-w-lg"
+    >
+      {/* Sheet selection */}
+      <div className="mb-4">
+      <motion.div layout className="mb-4">
+        <label className="font-medium block mb-1">Name : </label>
+        <Input type="text" onChange={(e) => setfindname(e.target.value)} placeholder="Enter Name.." value={findname}/>
+        </motion.div>
+        <label className="font-medium mb-2 block">Select Google Sheet</label>
+        {loading ? (
+          <Spin />
+        ) : (
+          <Select
+            value={spreadsheetId ? { value: spreadsheetId, label: sheetName } : null}
+            onChange={opt => setSpreadsheetId(opt?.value || "")}
+            options={spreadsheets.map(s => ({ value: s.spreadsheetId, label: s.spreadsheetName }))}
+            placeholder="Choose Google Sheet"
+            isClearable
+          />
+        )}
+        {error && !spreadsheetId && (
+          <div className="text-red-500 mt-1">{error}</div>
+        )}
+      </div>
+
+      {/* Conditions Panel placeholder */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
+        <label className="font-medium mb-2 block">Find Conditions</label>
+        <ConditionsPanel columns={columns} conditions={findconditions} setConditions={setConditions}
+         logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
+         {columns.length === 0 && (
+         <motion.div
+           initial={{ opacity: 0, y: 10 }}
+           animate={{ opacity: 1, y: 0 }}
+           exit={{ opacity: 0, y: 10 }}
+           className="text-gray-400 text-sm flex items-center gap-2 py-2"
+         >
+           <span>🔎</span>
+           <span>No columns available. Select a Google Sheet to begin.</span>
+         </motion.div>
+         )}
+      </motion.div>
+
+      {/* Return Limit */}
+      <motion.div layout className="mb-4">
+        <label className="font-medium block mb-1">Return Limit (max 100)</label>
+        <Input
+          type="number"
+          value={findreturnLimit}
+          min={1} max={100}
+          onChange={e => setReturnLimit(e.target.value)}
+          placeholder="Optional"
+        />
+      </motion.div>
+
+      {/* Sort Records */}
+      <motion.div layout className="mb-4">
+        <label className="font-medium block mb-1">Sort Records</label>
+        <div className="flex gap-3">
+          <Select
+            value={findsortField ? { value: findsortField, label: findsortField } : null}
+            onChange={opt => setSortField(opt?.value || "")}
+            options={columnOptions}
+            isClearable
+            placeholder="Sort Field"
+          />
+          <AntSelect
+            value={{ value: findsortOrder, label: findsortOrder === "ASC" ? "Ascending" : "Descending" }}
+            onChange={opt => setSortOrder(opt)}
+            options={[
+              { value: "ASC", label: "Ascending" },
+              { value: "DESC", label: "Descending" }
+            ]}
+            placeholder="Sort Order"
+          />
+        </div>
+      </motion.div>
+
+      {/* Error Message */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="text-red-500 bg-red-50 p-2 rounded mb-4"
+          >
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button type="primary" onClick={handleSave}>Save Find Config</Button>
+      </div>
+    </motion.div>
   );
 };
 

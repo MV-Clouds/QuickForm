@@ -102,12 +102,11 @@ function MainFormBuilder({
   showSubmission
 }) {
   // const { formVersionId } = useParams();
-  const { Fieldset: fieldsets } = useSalesforceData();
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
     urlFormVersionId || location.state?.formVersionId || null;
-  const { refreshData, formRecords: sfFormRecords } = useSalesforceData();
+  const { refreshData, formRecords: sfFormRecords , Fieldset: fieldsets , googleData } = useSalesforceData();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -546,7 +545,7 @@ const [formConditions, setFormConditions] = useState([]);
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
-      await refreshData();
+      refreshData();
     } catch (error) {
       console.error("There was a problem with the fetch operation:", error);
     }
@@ -1924,6 +1923,8 @@ useEffect(() => {
               <NotificationPage
                 currentFields={formVersions[0]?.Fields}
                 sendNotificationData={sendNotificationData}
+                GoogleData = {googleData}
+                formRecords = {sfFormRecords}
               />
             ) : showMapping ? (
               <MappingFields />

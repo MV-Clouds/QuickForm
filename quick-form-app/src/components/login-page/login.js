@@ -31,7 +31,7 @@ const Login = () => {
     if (!url) return false;
     const trimmedUrl = url.trim();
     return (
-       trimmedUrl.startsWith('https://') &&
+      !trimmedUrl.startsWith('https://') &&
       trimmedUrl.endsWith('.my.salesforce.com') &&
       trimmedUrl.length > '.my.salesforce.com'.length
     );
@@ -39,9 +39,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    sessionStorage.setItem('isLoggedIn', 'true');
-    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    // sessionStorage.setItem('isLoggedIn', 'true');
+    // sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
+    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {

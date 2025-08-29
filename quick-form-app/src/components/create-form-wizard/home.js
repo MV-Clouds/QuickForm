@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormName from './FormName';
 import Datatable from '../Datatable/ShowPage';
@@ -22,7 +22,9 @@ const Home = () => {
     error: contextError,
     fetchSalesforceData,
     userProfile,
-    Fieldset
+    Fieldset,
+    Folders,
+    googleData
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -489,7 +491,7 @@ console.log('Cloning ',cloningFormData);
       />
       <div className={`flex-1 transition-all  duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         {selectedNav === 'integration' ? (
-          <Integrations token={token} />
+          <Integrations token={token} GoogleData ={googleData} />
         ) : selectedNav === 'folders' ? (
           <div className=' flex flex-col'>
             {/* <RecentFilesSlider
@@ -504,6 +506,10 @@ console.log('Cloning ',cloningFormData);
               onEditForm={handleEditForm}
               onDeleteForm={handleDeleteForm}
               onToggleStatus={handleToggleStatus}
+              SFfolders={Folders}
+              token={token}
+              fetchSalesforceData={fetchSalesforceData}
+              isLoading ={contextLoading} 
             />
           </div>
         ) : selectedNav === 'fieldset' ? (

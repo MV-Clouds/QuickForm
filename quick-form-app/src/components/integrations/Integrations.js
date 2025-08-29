@@ -250,14 +250,7 @@ const Integrations = ({ token }) => {
   const fetchIntegrations = useCallback(async () => {
     const userId = sessionStorage.getItem("userId");
     try {
-      const res = await fetch(
-        `https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth?instanceUrl=${encodeURIComponent(
-          instanceUrl
-        )}&sfToken=${encodeURIComponent(token)}&sfuserId=${encodeURIComponent(
-          userId
-        )}`,
-        { method: "GET" }
-      );
+      const res = await fetch(`https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth?instanceUrl=${encodeURIComponent(instanceUrl)}&sfToken=${encodeURIComponent(token)}&sfuserId=${encodeURIComponent(userId)}`, { method: "GET" });
       if (!res.ok) {
         throw new Error(`Failed to fetch: ${res.status}`);
       }
