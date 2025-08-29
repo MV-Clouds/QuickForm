@@ -333,116 +333,101 @@ async function initiateOrder(
 ) {
   const accessToken = await getPayPalAccessTokenForGatewayMerchant(merchantId);
 
-  // Enhanced description for donations
-  const enhancedDescription = isDonation
-    ? `Donation: ${description || "General Donation"}`
-    : description;
+  // Build items and totals if products array is provided
+  const hasProducts = Array.isArray(products) && products.length > 0;
+  const currencyCode = currency || "USD";
+
+  // Zero-decimal currency handling (per PayPal docs)
+  const ZERO_DECIMAL = new Set(["JPY", "HUF", "TWD"]);
+  const isZeroDecimal = (code) => ZERO_DECIMAL.has(String(code).toUpperCase());
+  const formatAmount = (code, val) => {
+    const num = Number(val || 0);
+    return isZeroDecimal(code) ? String(Math.round(num)) : num.toFixed(2);
+  };
+
+  let items = [];
+  let itemsTotal = 0;
+  if (hasProducts) {
+    items = products.map((p) => {
+      const qty = Number(p.quantity || 1);
+      const total = Number(p.amount || 0);
+      const unit = qty > 0 ? total / qty : total;
+      itemsTotal += total;
+      return {
+        name: p.name || "Item",
+        quantity: String(qty),
+        unit_amount: {
+          currency_code: currencyCode,
+          value: formatAmount(currencyCode, unit),
+        },
+        ...(p.sku && { sku: String(p.sku) }),
+        ...(p.description && { description: p.description }),
+        // Category heuristics: physical if shipping address present
+        category: shippingAddress ? "PHYSICAL_GOODS" : "DIGITAL_GOODS",
+      };
+    });
+  }
+
+  // Single purchase unit per PayPal docs; include breakdown when items exist
+  const purchaseUnit = {
+    invoice_id: isDonation ? `DON-${itemNumber}` : String(itemNumber),
+    custom_id: String(itemNumber),
+    ...(description && { description }),
+    payee: { merchant_id: merchantId },
+    amount: hasProducts
+      ? {
+          currency_code: currencyCode,
+          value: formatAmount(currencyCode, itemsTotal),
+          breakdown: {
+            item_total: {
+              currency_code: currencyCode,
+              value: formatAmount(currencyCode, itemsTotal),
+            },
+          },
+        }
+      : {
+          currency_code: currencyCode,
+          value: formatAmount(currencyCode, amount),
+        },
+    ...(hasProducts && { items }),
+    ...(shippingAddress && {
+      shipping: {
+        name: { full_name: shippingAddress.name.full_name },
+        address: {
+          address_line_1: shippingAddress.address.address_line_1,
+          address_line_2: shippingAddress.address.address_line_2,
+          admin_area_2: shippingAddress.address.admin_area_2,
+          admin_area_1: shippingAddress.address.admin_area_1,
+          postal_code: shippingAddress.address.postal_code,
+          country_code: shippingAddress.address.country_code,
+        },
+      },
+    }),
+  };
+
+  // Donation-specific soft descriptor
+  if (isDonation) {
+    purchaseUnit.soft_descriptor = "DONATION";
+  }
 
   const payload = {
     intent: "CAPTURE",
-    purchase_units:
-      products.length > 0
-        ? products.map((p) => {
-            const itemTotal = p.amount.toFixed(2); // Sum of unit_amount * quantity
-            return {
-              reference_id: `${p.productId}-${itemNumber}`, // Unique reference_id for each purchase_unit
-              amount: {
-                currency_code: currency || "USD",
-                value: itemTotal,
-                breakdown: {
-                  item_total: {
-                    currency_code: currency || "USD",
-                    value: itemTotal,
-                  },
-                },
-              },
-              payee: {
-                merchant_id: merchantId,
-              },
-              description: p.name,
-              custom_id: p.productId,
-              items: [
-                {
-                  name: p.name,
-                  quantity: p.quantity.toString(),
-                  unit_amount: {
-                    currency_code: currency || "USD",
-                    value: (p.amount / p.quantity).toFixed(2),
-                  },
-                },
-              ],
-              ...(shippingAddress && {
-                shipping: {
-                  name: { full_name: shippingAddress.name.full_name },
-                  address: {
-                    address_line_1: shippingAddress.address.address_line_1,
-                    address_line_2: shippingAddress.address.address_line_2,
-                    admin_area_2: shippingAddress.address.admin_area_2,
-                    admin_area_1: shippingAddress.address.admin_area_1,
-                    postal_code: shippingAddress.address.postal_code,
-                    country_code: shippingAddress.address.country_code,
-                  },
-                },
-              }),
-            };
-          })
-        : [
-            {
-              amount: {
-                currency_code: currency || "USD",
-                value: amount.toFixed(2),
-              },
-              payee: {
-                merchant_id: merchantId,
-              },
-              description: isDonation
-                ? `Donation${
-                    donorInfo?.message ? ": " + donorInfo.message : ""
-                  }`
-                : description || undefined,
-              custom_id: itemNumber,
-              // Add donation-specific metadata
-              ...(isDonation && {
-                soft_descriptor: "DONATION",
-                invoice_id: `DON-${itemNumber}`,
-                ...(donorInfo &&
-                  !donorInfo.isAnonymous && {
-                    payee: {
-                      merchant_id: merchantId,
-                      email_address: donorInfo.email || undefined,
-                    },
-                  }),
-              }),
-              ...(shippingAddress && {
-                shipping: {
-                  name: { full_name: shippingAddress.name.full_name },
-                  address: {
-                    address_line_1: shippingAddress.address.address_line_1,
-                    address_line_2: shippingAddress.address.address_line_2,
-                    admin_area_2: shippingAddress.address.admin_area_2,
-                    admin_area_1: shippingAddress.address.admin_area_1,
-                    postal_code: shippingAddress.address.postal_code,
-                    country_code: shippingAddress.address.country_code,
-                  },
-                },
-              }),
-            },
-          ],
-    application_context: {
-      return_url: returnUrl,
-      cancel_url: cancelUrl,
-      brand_name: isDonation ? "Donation Portal" : "Test Payment App",
-      locale: "en-US",
-      shipping_preference: shippingAddress
-        ? "SET_PROVIDED_ADDRESS"
-        : "NO_SHIPPING",
-      ...(isDonation && {
-        landing_page: "BILLING",
-        payment_method: {
-          payer_selected: "PAYPAL",
-          payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED",
+    purchase_units: [purchaseUnit],
+    payment_source: {
+      paypal: {
+        experience_context: {
+          payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
+          landing_page: "LOGIN",
+          shipping_preference: shippingAddress
+            ? "SET_PROVIDED_ADDRESS"
+            : "GET_FROM_FILE",
+          user_action: "PAY_NOW",
+          return_url: returnUrl,
+          cancel_url: cancelUrl,
+          brand_name: isDonation ? "Donation Portal" : "QuickForm Checkout",
+          locale: "en-US",
         },
-      }),
+      },
     },
   };
 
@@ -465,9 +450,12 @@ async function initiateOrder(
     throw new Error(data.message || "Failed to create PayPal order");
   }
   console.log("PayPal order created:", data.id);
+  const approvalUrl =
+    data.links?.find((link) => link.rel === "payer-action")?.href ||
+    data.links?.find((link) => link.rel === "approve")?.href;
   return {
     orderId: data.id,
-    approvalUrl: data.links.find((link) => link.rel === "approve")?.href,
+    approvalUrl,
   };
 }
 
@@ -494,16 +482,12 @@ async function initiateSubscription(
     payee: {
       merchant_id: merchantId,
     },
-    subscriber: {
-      name: { given_name: "Test", surname: "User" },
-      email_address: "testuser@example.com",
-    },
     application_context: {
-      brand_name: "Test Payment App",
+      brand_name: "QuickForm Subscriptions",
       locale: "en-US",
       shipping_preference: "NO_SHIPPING",
+      user_action: "SUBSCRIBE_NOW",
       payment_method: {
-        payer_selected: "PAYPAL",
         payee_preferred: "IMMEDIATE_PAYMENT_REQUIRED",
       },
       return_url: returnUrl || "https://example.com/return",

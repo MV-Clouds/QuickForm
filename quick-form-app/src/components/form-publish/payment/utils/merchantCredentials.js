@@ -25,7 +25,7 @@ export const fetchMerchantCredentials = async (merchantAccountId) => {
   }
 
   try {
-    const response = await fetch(API_ENDPOINTS.PAYMENT_ONBOARDING_HANDLER_API, {
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

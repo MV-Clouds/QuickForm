@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { decrypt } from "../form-builder-with-versions/crypto";
 import { DatePicker } from "rsuite";
 import "rsuite/dist/rsuite.min.css";
@@ -42,28 +42,26 @@ function PublicFormViewer() {
   const [signatures, setSignatures] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
   const [selectedRatings, setSelectedRatings] = useState({});
-  const [selectedOptions, setSelectedOptions] = useState({});
-  const [isDropdownOpen, setIsDropdownOpen] = useState({});
+  // const [selectedOptions, setSelectedOptions] = useState({});
+  // const [isDropdownOpen] = useState({});
   const [toggles, setToggles] = useState({});
   const signatureRefs = useRef({});
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState([]);
   const [formConditions, setFormConditions] = useState([]);
   const [loopCounters, setLoopCounters] = useState({});
-  const [loopInput, setLoopInput] = useState("");
+  // const [loopInput, setLoopInput] = useState("");
   const [localIdToSFId, setLocalIdToSFId] = useState({});
   const [prefills, setPrefills] = useState([]);
   const [dependentFields, setDependentFields] = useState(new Set());
-  const searchParams = new URLSearchParams(window.location.search);
-  const manualPrefills = {};
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [requiresPayment, setRequiresPayment] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
-  const [hasPaymentField, setHasPaymentField] = useState(false);
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -271,6 +269,8 @@ function PublicFormViewer() {
         });
 
         setFormValues(initialValues);
+        const searchParams = new URLSearchParams(window.location.search);
+        const manualPrefills = {};
         for (const [key, value] of searchParams.entries()) {
           if (key.startsWith("field-")) {
             const fieldIdParam = key;
@@ -306,7 +306,6 @@ function PublicFormViewer() {
             }
 
             if (fieldMeta) {
-              const props = JSON.parse(fieldMeta.Properties__c || "{}");
               const fType = fieldMeta.Field_Type__c;
 
               try {
@@ -391,7 +390,6 @@ function PublicFormViewer() {
         setSignatures(initialSignatures);
         setFilePreviews(initialFilePreviews);
         setSelectedRatings(initialRatings);
-        setSelectedOptions(initialSelectedOptions);
         setToggles(initialToggles);
 
         const pageMap = {};
@@ -432,6 +430,7 @@ function PublicFormViewer() {
         runPrefillForField(sfId);
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefills, manualPrefillsState]);
 
   const runPrefillForField = async (sfFieldId) => {
@@ -688,21 +687,21 @@ function PublicFormViewer() {
     handleChange(fieldId, checked);
   };
 
-  const handleOptionToggle = (fieldId, option, allowMultiple) => {
-    setSelectedOptions((prev) => {
-      let newOptions;
-      if (allowMultiple) {
-        newOptions = prev[fieldId].includes(option)
-          ? prev[fieldId].filter((opt) => opt !== option)
-          : [...prev[fieldId], option];
-      } else {
-        newOptions = option;
-        setIsDropdownOpen((prev) => ({ ...prev, [fieldId]: false }));
-      }
-      handleChange(fieldId, newOptions);
-      return { ...prev, [fieldId]: newOptions };
-    });
-  };
+  // const handleOptionToggle = (fieldId, option, allowMultiple) => {
+  //   setSelectedOptions((prev) => {
+  //     let newOptions;
+  //     if (allowMultiple) {
+  //       newOptions = prev[fieldId].includes(option)
+  //         ? prev[fieldId].filter((opt) => opt !== option)
+  //         : [...prev[fieldId], option];
+  //     } else {
+  //       newOptions = option;
+  //       setIsDropdownOpen((prev) => ({ ...prev, [fieldId]: false }));
+  //     }
+  //     handleChange(fieldId, newOptions);
+  //     return { ...prev, [fieldId]: newOptions };
+  //   });
+  // };
 
   const handleFileChange = (fieldId, e, fieldType) => {
     const files = e.target.files;
@@ -1628,7 +1627,7 @@ function PublicFormViewer() {
         throw new Error(data.error || "Failed to submit form");
       }
 
-      const submissionId = data.submissionId;
+      // const submissionId = data.submissionId;
 
       const updatedSubmissionData = { ...submissionData };
 
@@ -1696,16 +1695,10 @@ function PublicFormViewer() {
       setIsSubmitted(true);
 
       const initialValues = {};
-      let hasPayment = false;
 
       formData.Fields.forEach((field) => {
         const properties = JSON.parse(field.Properties__c || "{}");
         const fieldType = field.Field_Type__c;
-
-        // Check for payment fields
-        if (fieldType === "paypal_payment") {
-          hasPayment = true;
-        }
 
         if (
           fieldType === "phone" &&
@@ -1723,21 +1716,16 @@ function PublicFormViewer() {
           initialValues[field.Id || properties.id] = null;
         } else if (fieldType === "scalerating") {
           initialValues[field.Id || properties.id] = {};
-        } else if (fieldType === "paypal_payment") {
-          // Payment fields don't need initial values
-          initialValues[field.Id || properties.id] = null;
         } else {
           initialValues[field.Id || properties.id] = "";
         }
       });
 
-      setHasPaymentField(hasPayment);
       setFormValues(initialValues);
       setErrors({});
       setSignatures({});
       setFilePreviews({});
       setSelectedRatings({});
-      setSelectedOptions({});
       setToggles({});
       setCurrentPage(0);
     } catch (error) {
@@ -1770,139 +1758,145 @@ function PublicFormViewer() {
     }
   };
 
-  const evaluateCondition = (condition, values, loopArrayKey = null) => {
-    if (!condition) return false;
+  const evaluateCondition = React.useCallback(
+    (condition, values, loopArrayKey = null) => {
+      if (!condition) return false;
 
-    // Helper for getting a field value, including from loop arrays
-    function getValueForField(fieldId) {
-      // Try direct value
-      const plainValue = values[localIdToSFId[fieldId] || fieldId];
-      if (plainValue !== undefined) return plainValue;
+      // Helper for getting a field value, including from loop arrays
+      function getValueForField(fieldId) {
+        // Try direct value
+        const plainValue = values[localIdToSFId[fieldId] || fieldId];
+        if (plainValue !== undefined) return plainValue;
 
-      // Search all page_x_loop keys for this field in any iteration if not found
-      const loopVals = Object.keys(values)
-        .filter((key) => key.endsWith("_loop") && Array.isArray(values[key]))
-        .flatMap((loopKey) =>
-          values[loopKey]
-            .map((iteration) => iteration[localIdToSFId[fieldId] || fieldId])
-            .filter((v) => v !== undefined)
-        );
-      // If found in any loop, return the array (for some/any logic)
-      if (loopVals.length) return loopVals;
-      return undefined;
-    }
+        // Search all page_x_loop keys for this field in any iteration if not found
+        const loopVals = Object.keys(values)
+          .filter((key) => key.endsWith("_loop") && Array.isArray(values[key]))
+          .flatMap((loopKey) =>
+            values[loopKey]
+              .map((iteration) => iteration[localIdToSFId[fieldId] || fieldId])
+              .filter((v) => v !== undefined)
+          );
+        // If found in any loop, return the array (for some/any logic)
+        if (loopVals.length) return loopVals;
+        return undefined;
+      }
 
-    // Evaluate each subcondition
-    const condBools = (condition.conditions || []).map((cond) => {
-      let val = getValueForField(cond.ifField);
-      // If val is an array (loop), match any iteration meeting the condition
-      if (Array.isArray(val)) {
-        return val.some((itVal) => {
+      // Evaluate each subcondition
+      const condBools = (condition.conditions || []).map((cond) => {
+        let val = getValueForField(cond.ifField);
+        // If val is an array (loop), match any iteration meeting the condition
+        if (Array.isArray(val)) {
+          return val.some((itVal) => {
+            switch (cond.operator) {
+              case "equals":
+                return itVal === cond.value;
+              case "not equals":
+                return itVal !== cond.value;
+              case "contains":
+                return (itVal || "")
+                  .toLowerCase()
+                  .includes((cond.value || "").toLowerCase());
+              case "does not contain":
+                return !(itVal || "")
+                  .toLowerCase()
+                  .includes((cond.value || "").toLowerCase());
+              case "greater than":
+                return Number(itVal) > Number(cond.value);
+              case "greater than or equal to":
+                return Number(itVal) >= Number(cond.value);
+              case "smaller than":
+                return Number(itVal) < Number(cond.value);
+              case "smaller than or equal to":
+                return Number(itVal) <= Number(cond.value);
+              case "is null":
+                return itVal == null || itVal === "";
+              case "is not null":
+                return itVal != null && itVal !== "";
+              default:
+                return false;
+            }
+          });
+        } else {
+          // Not a loop field
           switch (cond.operator) {
             case "equals":
-              return itVal === cond.value;
+              return val === cond.value;
             case "not equals":
-              return itVal !== cond.value;
+              return val !== cond.value;
             case "contains":
-              return (itVal || "")
+              return (val || "")
                 .toLowerCase()
                 .includes((cond.value || "").toLowerCase());
             case "does not contain":
-              return !(itVal || "")
+              return !(val || "")
                 .toLowerCase()
                 .includes((cond.value || "").toLowerCase());
             case "greater than":
-              return Number(itVal) > Number(cond.value);
+              return Number(val) > Number(cond.value);
             case "greater than or equal to":
-              return Number(itVal) >= Number(cond.value);
+              return Number(val) >= Number(cond.value);
             case "smaller than":
-              return Number(itVal) < Number(cond.value);
+              return Number(val) < Number(cond.value);
             case "smaller than or equal to":
-              return Number(itVal) <= Number(cond.value);
+              return Number(val) <= Number(cond.value);
             case "is null":
-              return itVal == null || itVal === "";
+              return val == null || val === "";
             case "is not null":
-              return itVal != null && itVal !== "";
+              return val != null && val !== "";
             default:
               return false;
           }
+        }
+      });
+
+      // Logic handling (unchanged)
+      if (condition.logic === "Custom" && condition.logicExpression) {
+        let expr = condition.logicExpression;
+        condBools.forEach((v, idx) => {
+          expr = expr.replace(
+            new RegExp(`\\b${idx + 1}\\b`, "g"),
+            v ? "true" : "false"
+          );
         });
-      } else {
-        // Not a loop field
-        switch (cond.operator) {
-          case "equals":
-            return val === cond.value;
-          case "not equals":
-            return val !== cond.value;
-          case "contains":
-            return (val || "")
-              .toLowerCase()
-              .includes((cond.value || "").toLowerCase());
-          case "does not contain":
-            return !(val || "")
-              .toLowerCase()
-              .includes((cond.value || "").toLowerCase());
-          case "greater than":
-            return Number(val) > Number(cond.value);
-          case "greater than or equal to":
-            return Number(val) >= Number(cond.value);
-          case "smaller than":
-            return Number(val) < Number(cond.value);
-          case "smaller than or equal to":
-            return Number(val) <= Number(cond.value);
-          case "is null":
-            return val == null || val === "";
-          case "is not null":
-            return val != null && val !== "";
-          default:
-            return false;
+        try {
+          expr = expr
+            .replace(/\bAND\b/gi, "&&")
+            .replace(/\bOR\b/gi, "||")
+            .replace(/[^truefals()&|! ]/gi, "");
+          // eslint-disable-next-line no-eval
+          return eval(expr);
+        } catch {
+          return false;
         }
       }
-    });
+      if (condition.logic === "OR") return condBools.some(Boolean);
+      return condBools.every(Boolean);
+    },
+    [localIdToSFId]
+  );
 
-    // Logic handling (unchanged)
-    if (condition.logic === "Custom" && condition.logicExpression) {
-      let expr = condition.logicExpression;
-      condBools.forEach((v, idx) => {
-        expr = expr.replace(
-          new RegExp(`\\b${idx + 1}\\b`, "g"),
-          v ? "true" : "false"
-        );
-      });
-      try {
-        expr = expr
-          .replace(/\bAND\b/gi, "&&")
-          .replace(/\bOR\b/gi, "||")
-          .replace(/[^truefals()&|! ]/gi, "");
-        // eslint-disable-next-line no-eval
-        return eval(expr);
-      } catch {
-        return false;
-      }
-    }
-    if (condition.logic === "OR") return condBools.some(Boolean);
-    return condBools.every(Boolean);
-  };
-
-  const getVisiblePages = (formValues) => {
-    let visiblePages = [...pages];
-    // Hide logic
-    formConditions
-      .filter((c) => c.type === "skip_hide_page" && c.thenAction === "hide")
-      .forEach((condition) => {
-        if (evaluateCondition(condition, formValues)) {
-          (condition.targetPage || []).forEach((pid) => {
-            visiblePages = visiblePages.filter((pageArr) =>
-              pageArr[0]?.Page_Number__c
-                ? `page_${pageArr[0].Page_Number__c}` !== pid
-                : true
-            );
-          });
-        }
-      });
-    // "Loop" handled in navigation logic below
-    return visiblePages;
-  };
+  const getVisiblePages = React.useCallback(
+    (formValues) => {
+      let visiblePages = [...pages];
+      // Hide logic
+      formConditions
+        .filter((c) => c.type === "skip_hide_page" && c.thenAction === "hide")
+        .forEach((condition) => {
+          if (evaluateCondition(condition, formValues)) {
+            (condition.targetPage || []).forEach((pid) => {
+              visiblePages = visiblePages.filter((pageArr) =>
+                pageArr[0]?.Page_Number__c
+                  ? `page_${pageArr[0].Page_Number__c}` !== pid
+                  : true
+              );
+            });
+          }
+        });
+      // "Loop" handled in navigation logic below
+      return visiblePages;
+    },
+    [pages, formConditions, evaluateCondition]
+  );
 
   const getFieldAllowedOptions = (fieldId, formValues) => {
     let allowed = null;
@@ -1951,7 +1945,6 @@ function PublicFormViewer() {
   };
   const getNextPageIndex = (currentIdx, formValues) => {
     // Evaluate for "skip to"
-    let idx = currentIdx;
     // NOTE: skip conditions ONLY apply on current page
     const skipConditions = formConditions.filter(
       (c) =>
@@ -2047,7 +2040,7 @@ function PublicFormViewer() {
         pageArr.forEach((field) => toRemove.push(field.Id || field.id));
       }
     });
-  }, [currentPage, formConditions]);
+  }, [currentPage, formConditions, formValues, getVisiblePages, pages]);
 
   const getLoopConditionForPage = (pageArr, values) => {
     if (!pageArr) return null;
@@ -2428,7 +2421,7 @@ function PublicFormViewer() {
     index: 0,
     answers: [],
   };
-  const inLoop = isLoopPage && currentLoopState.count > 0;
+  // const inLoop = isLoopPage && currentLoopState.count > 0;
   function convertUserMaskToInputMask(mask) {
     if (!mask) return "";
     return mask.replace(/@/g, "a").replace(/#/g, "9");
@@ -2491,8 +2484,8 @@ function PublicFormViewer() {
         </p>
       );
 
-    const renderHelpText = () =>
-      helpText && <p className="text-gray-500 text-sm mt-1">{helpText}</p>;
+    // const renderHelpText = () =>
+    //   helpText && <p className="text-gray-500 text-sm mt-1">{helpText}</p>;
 
     switch (fieldType) {
       case "shorttext":
@@ -4044,7 +4037,7 @@ function PublicFormViewer() {
           </div>
         );
 
-       case "paypal_payment":
+      case "paypal_payment":
         if (properties.isHidden) return null;
 
         return (
@@ -4055,29 +4048,27 @@ function PublicFormViewer() {
               onPaymentComplete={handlePaymentComplete}
               onPaymentError={handlePaymentError}
               onPaymentRequirementChange={({
-                requiresPayment,
-                paymentCompleted,
+                requiresPayment: req,
+                paymentCompleted: paid,
                 hideSubmitButton,
                 autoSubmit,
               }) => {
                 console.log("🔍 Payment requirement change:", {
-                  requiresPayment,
-                  paymentCompleted,
+                  requiresPayment: req,
+                  paymentCompleted: paid,
                   hideSubmitButton,
                   autoSubmit,
                 });
 
-                // Handle payment requirement changes
-                if (autoSubmit && paymentCompleted) {
-                  console.log(
-                    "Auto-submitting form after payment completion"
-                  );
-                  // Auto-submit the form when payment is completed
+                setRequiresPayment(!!req);
+                setPaymentCompleted(!!paid);
+
+                if (autoSubmit && paid) {
+                  console.log("Auto-submitting form after payment completion");
                   setTimeout(() => {
                     handleSubmit(new Event("submit"));
-                  }, 1000); // Give user time to see success message
+                  }, 1000);
                 }
-                // The submit button visibility is already handled by existing logic
               }}
               isLastPage={currentPage === pages.length - 1}
               validateForm={validateForm}
@@ -4087,7 +4078,7 @@ function PublicFormViewer() {
             {renderError()}
           </div>
         );
-      
+
       default:
         return null;
     }
@@ -4143,8 +4134,8 @@ function PublicFormViewer() {
             >
               Next
             </button>
-          ) : // On last page: show Submit button only if no payment field OR payment is completed
-          !hasPaymentField || paymentCompleted ? (
+          ) : // On last page: show Submit button only if payment not required OR payment is completed
+          !requiresPayment || paymentCompleted ? (
             <button
               type="submit"
               disabled={isSubmitting || !accessToken}

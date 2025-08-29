@@ -4,7 +4,6 @@ import {
   FaCog,
   FaCreditCard,
   FaReceipt,
-  FaHeart,
   FaCheckCircle,
   FaExclamationTriangle,
   FaSpinner,
@@ -19,6 +18,13 @@ import { PaymentProvider, usePaymentContext } from "../../PaymentContext";
 import { usePaymentFieldState } from "../hooks/usePaymentFieldState";
 import { usePerformanceMonitor } from "../utils/performanceMonitor";
 import { usePaymentFieldValidation } from "../utils/paymentFieldValidator";
+import {
+  getSupportedCurrencies,
+  formatCurrencyLabel,
+  isZeroDecimal,
+  isInCountryOnly,
+} from "../../../../../utils/paypalCurrencies";
+
 
 /**
  * Refactored PayPal Field Editor with Centralized State Management
@@ -68,6 +74,7 @@ const PayPalFieldEditorTabsRefactored = ({
   // Modal state
   const [showProductModal, setShowProductModal] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  // Currency options are sourced locally; no network call for now
 
   // Debug logging
   console.log("🔍 PayPalFieldEditorTabsRefactored render:", {
@@ -129,7 +136,7 @@ const PayPalFieldEditorTabsRefactored = ({
       performanceMonitor.trackStateChange("UPDATE_AMOUNT_CONFIG", updates);
       actions.updateAmountConfig(updates);
     },
-    [actions]
+    [actions, performanceMonitor]
   );
 
   const handlePaymentMethodChange = useCallback(
@@ -501,7 +508,17 @@ const ConfigurationTab = React.memo(
                 </div>
                 <button
                   onClick={() => onOpenManager("product")}
-                  className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors shadow-md hover:shadow-lg"
+                  disabled={!state.selectedMerchantId}
+                  title={
+                    !state.selectedMerchantId
+                      ? "Select a merchant account first"
+                      : undefined
+                  }
+                  className={`px-6 py-3 text-white text-sm font-medium rounded-lg transition-colors shadow-md ${
+                    !state.selectedMerchantId
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700 hover:shadow-lg"
+                  }`}
                 >
                   Manage Products
                 </button>
@@ -564,12 +581,14 @@ const ConfigurationTab = React.memo(
                   </div>
                   <input
                     type="number"
-                    step="0.01"
-                    min="0"
+                    step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
+                    min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.value || ""}
                     onChange={(e) =>
                       onAmountConfigChange({
-                        value: parseFloat(e.target.value) || 0,
+                        value: isZeroDecimal(state.amount.currency)
+                          ? parseInt(e.target.value || 0, 10)
+                          : parseFloat(e.target.value) || 0,
                       })
                     }
                     className="w-full pl-8 pr-16 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
@@ -587,25 +606,7 @@ const ConfigurationTab = React.memo(
                   for your product or service.
                 </p>
 
-                {/* Currency selector for static amount */}
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-blue-700 mb-1">
-                    Currency
-                  </label>
-                  <select
-                    value={state.amount.currency}
-                    onChange={(e) =>
-                      onAmountConfigChange({ currency: e.target.value })
-                    }
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="USD">USD - US Dollar</option>
-                    <option value="EUR">EUR - Euro</option>
-                    <option value="GBP">GBP - British Pound</option>
-                    <option value="CAD">CAD - Canadian Dollar</option>
-                    <option value="AUD">AUD - Australian Dollar</option>
-                  </select>
-                </div>
+                {/* Currency is configured once below; duplicate selector removed */}
               </div>
             )}
 
@@ -617,11 +618,15 @@ const ConfigurationTab = React.memo(
                   </label>
                   <input
                     type="number"
-                    step="0.01"
-                    min="0"
+                    step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
+                    min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.minAmount}
                     onChange={(e) =>
-                      onAmountConfigChange({ minAmount: e.target.value })
+                      onAmountConfigChange({
+                        minAmount: isZeroDecimal(state.amount.currency)
+                          ? parseInt(e.target.value || 0, 10)
+                          : e.target.value,
+                      })
                     }
                     className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0.00"
@@ -633,11 +638,15 @@ const ConfigurationTab = React.memo(
                   </label>
                   <input
                     type="number"
-                    step="0.01"
-                    min="0"
+                    step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
+                    min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.maxAmount}
                     onChange={(e) =>
-                      onAmountConfigChange({ maxAmount: e.target.value })
+                      onAmountConfigChange({
+                        maxAmount: isZeroDecimal(state.amount.currency)
+                          ? parseInt(e.target.value || 0, 10)
+                          : e.target.value,
+                      })
                     }
                     className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="1000.00"
@@ -657,12 +666,69 @@ const ConfigurationTab = React.memo(
                 }
                 className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-                <option value="CAD">CAD</option>
-                <option value="AUD">AUD</option>
+                {getSupportedCurrencies().map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {formatCurrencyLabel(c)}
+                  </option>
+                ))}
               </select>
+              {isInCountryOnly(state.amount.currency) && (
+                <p className="text-xs text-amber-700 mt-1">
+                  Note: {state.amount.currency} is supported only for merchants
+                  in-country.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Configuration */}
+      {state.paymentType === "subscription" && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <FaReceipt className="text-purple-600" />
+            <div>
+              <h4 className="font-medium text-gray-900">Subscriptions</h4>
+              <p className="text-sm text-gray-600">
+                Create and manage subscription plans for this form
+              </p>
+            </div>
+          </div>
+
+          <div className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <FaReceipt className="text-purple-600 text-lg" />
+                <div>
+                  <span className="text-sm font-semibold text-purple-800">
+                    Subscription Management
+                  </span>
+                  <p className="text-xs text-purple-700">
+                    Add, edit, import, and manage subscription plans
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => onOpenManager("subscription")}
+                disabled={!state.selectedMerchantId}
+                title={
+                  !state.selectedMerchantId
+                    ? "Select a merchant account first"
+                    : undefined
+                }
+                className={`px-6 py-3 text-white text-sm font-medium rounded-lg transition-colors shadow-md ${
+                  !state.selectedMerchantId
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-purple-600 hover:bg-purple-700 hover:shadow-lg"
+                }`}
+              >
+                Manage Subscriptions
+              </button>
+            </div>
+            <div className="text-xs text-purple-800">
+              Click "Manage Subscriptions" to create plans, set billing cycles,
+              prices, and import existing PayPal plans
             </div>
           </div>
         </div>

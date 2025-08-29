@@ -45,7 +45,7 @@ const PayPalImportModal = ({
         selectedMerchantId
       );
 
-      const response = await fetch(API_ENDPOINTS.PRODUCT_API, {
+      const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

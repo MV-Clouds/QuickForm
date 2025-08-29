@@ -83,14 +83,48 @@ export class PaymentFieldValidator {
           }
         }
 
-        const validCurrencies = ["USD", "EUR", "GBP", "CAD", "AUD"];
-        if (!validCurrencies.includes(state.amount.currency)) {
-          results.push({
-            type: "warning",
-            field: "amount.currency",
-            message: `Unsupported currency: ${state.amount.currency}`,
-            context,
-          });
+        // Currency and zero-decimal validation
+        try {
+          const {
+            getSupportedCurrencies,
+          } = require("../../../../../utils/paypalCurrencies");
+          const list = getSupportedCurrencies();
+          const validCurrencies = list.map((c) => c.code);
+          const selectedCurrency = list.find(
+            (c) => c.code === state.amount.currency
+          );
+          if (!validCurrencies.includes(state.amount.currency)) {
+            results.push({
+              type: "warning",
+              field: "amount.currency",
+              message: `Unsupported currency: ${state.amount.currency}`,
+              context,
+            });
+          }
+          if (selectedCurrency?.zeroDecimal) {
+            const valuesToCheck = [];
+            if (state.amount.type === "static")
+              valuesToCheck.push(state.amount.value);
+            if (state.amount.type === "variable")
+              valuesToCheck.push(
+                state.amount.minAmount,
+                state.amount.maxAmount
+              );
+            valuesToCheck
+              .filter((v) => v !== undefined && v !== null && v !== "")
+              .forEach((v) => {
+                if (Number(v) % 1 !== 0) {
+                  results.push({
+                    type: "error",
+                    field: "amount",
+                    message: `${state.amount.currency} doesn't support decimals; use whole numbers`,
+                    context,
+                  });
+                }
+              });
+          }
+        } catch (_) {
+          // ignore dynamic currency checks failure
         }
       }
 
@@ -229,6 +263,9 @@ export class PaymentFieldValidator {
             });
           }
           break;
+        default:
+          // Unknown payment type - no specific checks
+          break;
       }
 
       // Validate payment methods structure
@@ -358,7 +395,11 @@ export class PaymentFieldValidator {
       }
 
       // Validate currency
-      const validCurrencies = ["USD", "EUR", "GBP", "CAD", "AUD"];
+      // Use centralized PayPal currency list
+      const {
+        getSupportedCurrencies,
+      } = require("../../../../../utils/paypalCurrencies");
+      const validCurrencies = getSupportedCurrencies().map((c) => c.code);
       if (
         paymentData.currency &&
         !validCurrencies.includes(paymentData.currency)

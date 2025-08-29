@@ -1,23 +1,18 @@
 import React, { useState, useCallback, useEffect, useMemo } from "react";
-import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
+import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import {
   formatCurrency,
   generateItemNumber,
-  getPaymentButtonLabel,
-  getPaymentButtonColor,
-  getPayPalSDKOptions,
   createPaymentUrls,
 } from "../utils/paymentHelpers";
 import { validatePaymentAmount } from "../utils/paymentValidation";
 import PaymentStatusCallout from "../components/PaymentStatusCallout";
-import PayPalCardPayment from "../components/PayPalCardPayment";
-import GooglePayIntegration from "../components/GooglePayIntegration";
+import PaymentContent from "../components/PaymentContent";
 import PayPalDonateButton from "../components/PayPalDonateButton";
 import { API_ENDPOINTS } from "../../../../config";
 import {
   fetchMerchantCredentialsWithCache,
   validateMerchantCredentials,
-  getProviderCredentials,
   handleCredentialError,
 } from "../utils/merchantCredentials";
 
@@ -29,30 +24,6 @@ const PRODUCTION_CLIENT_ID = "YOUR_PRODUCTION_CLIENT_ID";
 // Fallback helper functions in case they're missing
 const fallbackGenerateItemNumber = (fieldId, formId) =>
   `PAY-${fieldId}-${Date.now()}`;
-const fallbackGetPaymentButtonLabel = (paymentType) => {
-  // ONLY 4 ALLOWED PayPal labels: "paypal", "checkout", "buynow", "pay"
-  switch (paymentType) {
-    case "donation":
-    case "donation_button":
-      return "paypal"; // Changed from "donate" to "paypal"
-    case "subscription":
-      return "paypal"; // Changed from "subscribe" to "paypal"
-    case "product_wise":
-      return "buynow";
-    case "custom_amount":
-      return "pay";
-    default:
-      return "checkout";
-  }
-};
-const fallbackGetPaymentButtonColor = (paymentType) => {
-  switch (paymentType) {
-    case "donation":
-      return "blue";
-    default:
-      return "gold";
-  }
-};
 const fallbackFormatCurrency = (amount, currency = "USD") =>
   `${currency} ${amount}`;
 
@@ -83,13 +54,16 @@ const PayPalPaymentProvider = ({
   const [statusMessage, setStatusMessage] = useState(null);
   const [currentItemNumber, setCurrentItemNumber] = useState("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
-  const [formValidationPassed, setFormValidationPassed] = useState(false);
+  // const [formValidationPassed, setFormValidationPassed] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedSubscription, setSelectedSubscription] = useState(null);
 
   // Merchant credentials state
   const [merchantCredentials, setMerchantCredentials] = useState(null);
   const [credentialsLoading, setCredentialsLoading] = useState(false);
   const [credentialsError, setCredentialsError] = useState(null);
+  // Payment completion state
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
 
   // Extract field configuration - Handle nested subFields structure
   const subFields = fieldConfig.subFields || fieldConfig;
@@ -118,24 +92,27 @@ const PayPalPaymentProvider = ({
 
   // Fetch merchant credentials securely
   useEffect(() => {
+    console.log("PaymentContent type:", typeof PaymentContent);
     const fetchCredentials = async () => {
+      console.log("🔄 Fetching merchant credentials effect triggered");
+      console.log("🔍 Account identifier:", accountIdentifier);
       if (!accountIdentifier) {
         setCredentialsError("No merchant account identifier provided");
         return;
       }
 
       // If accountIdentifier looks like a direct merchant ID (legacy), use it directly
-      const salesforceIdPattern = /^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/;
-      if (!salesforceIdPattern.test(accountIdentifier)) {
-        console.log("🔄 Using legacy direct merchant ID:", accountIdentifier);
-        setMerchantCredentials({
-          provider: "paypal",
-          merchantId: accountIdentifier,
-          environment: isProduction ? "production" : "sandbox",
-          isActive: true,
-        });
-        return;
-      }
+      // const salesforceIdPattern = /^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/;
+      // if (!salesforceIdPattern.test(accountIdentifier)) {
+      //   console.log("🔄 Using legacy direct merchant ID:", accountIdentifier);
+      //   setMerchantCredentials({
+      //     provider: "paypal",
+      //     merchantId: accountIdentifier,
+      //     environment: isProduction ? "production" : "sandbox",
+      //     isActive: true,
+      //   });
+      //   return;
+      // }
 
       // Fetch credentials from Salesforce custom setting
       setCredentialsLoading(true);
@@ -156,14 +133,50 @@ const PayPalPaymentProvider = ({
           );
         }
 
-        const credentials = credentialsResponse.credentials;
+        // Normalize credentials shape from API to expected provider structure
+        const raw = credentialsResponse.credentials || credentialsResponse;
+        const normalized = (() => {
+          const c = raw || {};
+          const nested = c.credentials || {};
+          const paypal = c.paypal || nested.paypal || {};
+          const provider = (
+            c.provider ||
+            nested.provider ||
+            paypal.provider ||
+            "paypal"
+          ).toLowerCase();
+          const merchantId =
+            c.merchantId || nested.merchantId || paypal.merchantId || null;
+          const environment =
+            c.environment ||
+            nested.environment ||
+            paypal.environment ||
+            (isProduction ? "production" : "sandbox");
+          const isActive =
+            typeof c.isActive === "boolean"
+              ? c.isActive
+              : typeof nested.isActive === "boolean"
+              ? nested.isActive
+              : true;
+          const capabilities =
+            c.capabilities ||
+            nested.capabilities ||
+            paypal.capabilities ||
+            credentialsResponse.metadata?.capabilities ||
+            {};
+          return { provider, merchantId, environment, isActive, capabilities };
+        })();
 
-        if (!validateMerchantCredentials(credentials)) {
+        if (!validateMerchantCredentials(normalized)) {
+          console.error(
+            "❌ Invalid merchant credentials payload received:",
+            credentialsResponse
+          );
           throw new Error("Invalid merchant credentials received");
         }
 
-        console.log("✅ Successfully fetched merchant credentials");
-        setMerchantCredentials(credentials);
+        console.log("✅ Successfully fetched merchant credentials", normalized);
+        setMerchantCredentials(normalized);
       } catch (error) {
         console.error("❌ Error fetching merchant credentials:", error);
         const errorResponse = handleCredentialError(error);
@@ -172,41 +185,9 @@ const PayPalPaymentProvider = ({
         setCredentialsLoading(false);
       }
     };
-
+    console.log("🔄 Triggering credentials fetch effect:");
     fetchCredentials();
   }, [accountIdentifier, isProduction]);
-
-  // Generate PayPal SDK options - Fixed implementation
-  const sdkOptions = useMemo(() => {
-    const clientId = isProduction ? PRODUCTION_CLIENT_ID : SANDBOX_CLIENT_ID;
-
-    // Build funding options based on merchant capabilities - FIXED SDK validation
-    const enabledFunding = [];
-    if (merchantCapabilities.venmo) enabledFunding.push("venmo");
-    if (merchantCapabilities.cards) enabledFunding.push("card");
-    if (merchantCapabilities.payLater) enabledFunding.push("paylater");
-    // Note: Google Pay is handled separately, not in enable-funding
-
-    return {
-      "client-id": clientId,
-      "merchant-id": merchantCredentials?.merchantId || accountIdentifier,
-      currency: amountConfig.currency || "USD",
-      components: "buttons,card-fields,funding-eligibility,googlepay", // Include Google Pay
-      vault: paymentType === "subscription" ? "true" : "false",
-      intent: paymentType === "subscription" ? "subscription" : "capture",
-      ...(enabledFunding.length > 0 && {
-        "enable-funding": enabledFunding.join(","),
-      }),
-      "disable-funding": "credit", // Encourage alternative payment methods
-    };
-  }, [
-    merchantCredentials,
-    accountIdentifier,
-    merchantCapabilities,
-    paymentType,
-    amountConfig.currency,
-    isProduction,
-  ]);
 
   // Initialize payment amount based on configuration
   useEffect(() => {
@@ -216,9 +197,6 @@ const PayPalPaymentProvider = ({
       setPaymentAmount(amountConfig.value?.toString() || "");
     }
   }, [paymentType, amountConfig]);
-
-  // Payment completion state
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
 
   // Notify parent form about payment requirements
   useEffect(() => {
@@ -234,14 +212,63 @@ const PayPalPaymentProvider = ({
     }
   }, [paymentType, isLastPage, paymentCompleted, onPaymentRequirementChange]);
 
+  // Auto-select payment method if only one is available
+  useEffect(() => {
+    const availableMethods = getAvailablePaymentMethods();
+    if (availableMethods.length === 1 && !selectedPaymentMethod) {
+      setSelectedPaymentMethod(availableMethods[0].id);
+      console.log("🔍 Auto-selected payment method:", availableMethods[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subFields.paymentMethods, merchantCapabilities, selectedPaymentMethod]);
+
+  // Generate PayPal SDK options - avoid null merchant-id in options
+  const sdkOptions = useMemo(() => {
+    const clientId = isProduction ? PRODUCTION_CLIENT_ID : SANDBOX_CLIENT_ID;
+
+    // Build funding options based on merchant capabilities - FIXED SDK validation
+    const enabledFunding = [];
+    if (merchantCapabilities.venmo) enabledFunding.push("venmo");
+    if (merchantCapabilities.cards) enabledFunding.push("card");
+    if (merchantCapabilities.payLater) enabledFunding.push("paylater");
+    // Note: Google Pay is handled separately, not in enable-funding
+
+    const options = {
+      "client-id": clientId,
+      currency: amountConfig.currency || "USD",
+      components: "buttons,card-fields,funding-eligibility,googlepay", // Include Google Pay
+      vault: paymentType === "subscription" ? "true" : "false",
+      intent: paymentType === "subscription" ? "subscription" : "capture",
+      ...(enabledFunding.length > 0 && {
+        "enable-funding": enabledFunding.join(","),
+      }),
+      "disable-funding": "credit", // Encourage alternative payment methods
+    };
+
+    const effectiveMerchantId =
+      merchantCredentials?.merchantId || accountIdentifier;
+    if (effectiveMerchantId) {
+      options["merchant-id"] = effectiveMerchantId;
+    }
+
+    return options;
+  }, [
+    merchantCredentials,
+    accountIdentifier,
+    merchantCapabilities,
+    paymentType,
+    amountConfig.currency,
+    isProduction,
+  ]);
+
   // Only check form validation when needed, not continuously
   const checkFormValidation = useCallback(() => {
     if (validateForm) {
       const isValid = validateForm();
-      setFormValidationPassed(isValid);
+      // setFormValidationPassed(isValid);
       return isValid;
     }
-    setFormValidationPassed(true);
+    // setFormValidationPassed(true);
     return true;
   }, [validateForm]);
 
@@ -323,15 +350,6 @@ const PayPalPaymentProvider = ({
     return methods;
   };
 
-  // Auto-select payment method if only one is available
-  useEffect(() => {
-    const availableMethods = getAvailablePaymentMethods();
-    if (availableMethods.length === 1 && !selectedPaymentMethod) {
-      setSelectedPaymentMethod(availableMethods[0].id);
-      console.log("🔍 Auto-selected payment method:", availableMethods[0].id);
-    }
-  }, [subFields.paymentMethods, merchantCapabilities, selectedPaymentMethod]);
-
   // Handle amount input change
   const handleAmountChange = useCallback(
     (value) => {
@@ -347,6 +365,26 @@ const PayPalPaymentProvider = ({
     },
     [amountConfig]
   );
+
+  // Handle product selection
+  const handleProductSelection = useCallback((product) => {
+    setSelectedProduct(product);
+    if (product && product.price) {
+      setPaymentAmount(product.price.toString());
+      setAmountError("");
+    }
+    console.log("🛍️ Product selected:", product);
+  }, []);
+
+  // Handle subscription selection
+  const handleSubscriptionSelection = useCallback((subscription) => {
+    setSelectedSubscription(subscription);
+    if (subscription && subscription.price) {
+      setPaymentAmount(subscription.price.toString());
+      setAmountError("");
+    }
+    console.log("📅 Subscription selected:", subscription);
+  }, []);
 
   // Check if payment input is ready (not form validation)
   const isPaymentInputReady = () => {
@@ -397,8 +435,12 @@ const PayPalPaymentProvider = ({
   // Create PayPal order
   const createOrder = useCallback(
     async (data, actions) => {
+      console.log("🎬 createOrder function called with data:", data);
+      console.log("🎬 createOrder actions available:", Object.keys(actions || {}));
+      
       try {
         setIsProcessing(true);
+        console.log("🔄 Setting processing state to true");
 
         // Validate form before starting payment - CRITICAL STEP
         console.log("🔍 Validating form before payment...");
@@ -580,13 +622,41 @@ const PayPalPaymentProvider = ({
         const result = await response.json();
 
         if (!response.ok || !result.success) {
-          throw new Error(result.error || "Failed to initiate payment");
+          const errorMsg =
+            result.error ||
+            `HTTP ${response.status}: Failed to initiate payment`;
+          console.error("❌ Payment API error:", {
+            status: response.status,
+            result,
+            errorMsg,
+          });
+          throw new Error(errorMsg);
         }
 
         console.log("✅ Payment initiated:", result.data);
-        return result.data.orderId;
+        const orderId = result.data?.orderId || result.data?.id || result.orderId || result.id;
+
+        if (!orderId) {
+          console.error("❌ Missing order ID in response:", result);
+          throw new Error(
+            "Order ID not received from payment service. Please try again."
+          );
+        }
+
+        console.log("🆔 Returning order ID to PayPal SDK:", orderId);
+        setIsProcessing(false);
+        console.log("🔄 Setting processing state to false");
+        return orderId;
       } catch (error) {
         console.error("❌ Payment initiation error:", error);
+        console.error("❌ Full error details:", {
+          message: error.message,
+          stack: error.stack,
+          paymentType,
+          merchantId: merchantCredentials?.merchantId || accountIdentifier,
+          amount: paymentAmount,
+          currency: amountConfig.currency,
+        });
         setStatusMessage({
           type: "error",
           message: "Payment initiation failed",
@@ -597,15 +667,147 @@ const PayPalPaymentProvider = ({
       }
     },
     [
-      validateForm,
       onPaymentStart,
       fieldConfig,
       formId,
       paymentType,
-      merchantCredentials?.merchantId || accountIdentifier,
       paymentAmount,
       amountConfig,
       donationButtonId,
+      checkFormValidation,
+      credentialsError,
+      credentialsLoading,
+      currentItemNumber,
+      formValues,
+      merchantCredentials,
+      subFields,
+      accountIdentifier,
+    ]
+  );
+
+  // For subscription intent, PayPal Buttons require a createSubscription callback
+  const createSubscription = useCallback(
+    async (data, actions) => {
+      // Initialize variables in outer scope for error handling
+      let planId = null;
+      let itemNumber = null;
+      let requestBody = null;
+      
+      // Reuse the initiation flow to create a subscription via backend, then return subscription ID
+      try {
+        setIsProcessing(true);
+
+        // Validate form inputs
+        if (!checkFormValidation()) {
+          setStatusMessage({
+            type: "error",
+            message: "Please complete all required fields",
+            details:
+              "All required fields must be filled before processing payment.",
+          });
+          setIsProcessing(false);
+          return;
+        }
+
+        // Reuse current item number if present; otherwise generate a new one
+        itemNumber = currentItemNumber;
+        if (!itemNumber) {
+          const fieldId =
+            fieldConfig.id || fieldConfig.fieldId || "payment-field";
+          itemNumber = (generateItemNumber || fallbackGenerateItemNumber)(
+            fieldId,
+            formId
+          );
+          setCurrentItemNumber(itemNumber);
+        }
+
+        // Resolve subscription plan from selection or config
+        const planFromSelection =
+          selectedSubscription ||
+          subFields.subscriptions?.find(
+            (s) => currentItemNumber && currentItemNumber.includes(s.id)
+          );
+        planId =
+          planFromSelection?.planId ||
+          subFields.planId ||
+          subFields.subscriptions?.[0]?.planId;
+        if (!planId) {
+          throw new Error("Subscription plan is not selected or configured");
+        }
+
+        const paymentUrls = createPaymentUrls(
+          formId,
+          fieldConfig.id || "payment-field"
+        );
+
+        requestBody = {
+          action: "initiate-payment",
+          merchantId: merchantCredentials?.merchantId || accountIdentifier,
+          paymentType: "subscription",
+          planId,
+          itemNumber,
+          returnUrl: paymentUrls.returnUrl,
+          cancelUrl: paymentUrls.cancelUrl,
+          currency: amountConfig.currency || "USD",
+        };
+
+        console.log("📤 Sending subscription request:", requestBody);
+
+        const resp = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
+        const json = await resp.json();
+        console.log("📥 Subscription response:", { status: resp.status, json });
+        
+        if (!resp.ok || !json.success) {
+          const errorMsg = json.error || json.message || `HTTP ${resp.status}: Failed to initiate subscription`;
+          console.error("❌ Subscription failed:", errorMsg);
+          throw new Error(errorMsg);
+        }
+
+        // Extract subscription ID - handle different response formats
+        const subscriptionId = json.data?.subscriptionId || json.data?.id || json.subscriptionId || json.id;
+        if (!subscriptionId) {
+          console.error("❌ Missing subscription ID in response:", json);
+          throw new Error("Subscription ID not received from server");
+        }
+
+        console.log("🆔 Returning subscription ID to PayPal SDK:", subscriptionId);
+        // The PayPal Buttons expects returning a subscription id string
+        return subscriptionId;
+      } catch (err) {
+        console.error("❌ Subscription initiation error:", err);
+        console.error("❌ Error details:", {
+          message: err.message,
+          stack: err.stack,
+          planId: planId,
+          itemNumber: itemNumber,
+          merchantId: merchantCredentials?.merchantId || accountIdentifier,
+        });
+        
+        setStatusMessage({
+          type: "error",
+          message: "Subscription initiation failed",
+          details: err.message || "Unknown error occurred",
+        });
+        setIsProcessing(false);
+        
+        // Re-throw error to let PayPal SDK know the operation failed
+        throw err;
+      }
+    },
+    [
+      checkFormValidation,
+      fieldConfig,
+      formId,
+      subFields,
+      selectedSubscription,
+      amountConfig,
+      merchantCredentials,
+      accountIdentifier,
+      currentItemNumber,
     ]
   );
 
@@ -614,6 +816,12 @@ const PayPalPaymentProvider = ({
     async (data, actions) => {
       try {
         setIsProcessing(true);
+        console.log("🔄 Processing payment approval with data:", data);
+
+        // Validate orderID from PayPal
+        if (!data.orderID) {
+          throw new Error("Order ID is missing from PayPal approval data");
+        }
 
         // Capture payment
         const captureRequest = {
@@ -624,6 +832,8 @@ const PayPalPaymentProvider = ({
           itemNumber: currentItemNumber,
         };
 
+        console.log("📤 Sending capture request:", captureRequest);
+
         const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
           method: "POST",
           headers: {
@@ -633,9 +843,12 @@ const PayPalPaymentProvider = ({
         });
 
         const result = await response.json();
+        console.log("📥 Capture response:", { status: response.status, result });
 
         if (!response.ok || !result.success) {
-          throw new Error(result.error || "Failed to capture payment");
+          const errorMsg = result.error || result.message || `HTTP ${response.status}: Failed to capture payment`;
+          console.error("❌ Capture failed:", errorMsg);
+          throw new Error(errorMsg);
         }
 
         // Success!
@@ -727,20 +940,33 @@ const PayPalPaymentProvider = ({
         }
 
         onPaymentSuccess?.(paymentData);
+        
+        // Return success to PayPal SDK to complete the flow
+        return paymentData;
       } catch (error) {
         console.error("❌ Payment capture error:", error);
+        console.error("❌ Error details:", {
+          message: error.message,
+          stack: error.stack,
+          orderID: data?.orderID,
+          merchantId: merchantCredentials?.merchantId || accountIdentifier,
+        });
+        
         setStatusMessage({
           type: "error",
           message: "Payment capture failed",
-          details: error.message,
+          details: error.message || "Unknown error occurred",
         });
         onPaymentError?.(error);
+        
+        // Re-throw error to let PayPal SDK know the operation failed
+        throw error;
       } finally {
         setIsProcessing(false);
       }
     },
     [
-      merchantId,
+      accountIdentifier,
       paymentType,
       currentItemNumber,
       paymentAmount,
@@ -748,6 +974,13 @@ const PayPalPaymentProvider = ({
       selectedPaymentMethod,
       onPaymentSuccess,
       onPaymentError,
+      fieldConfig.id,
+      fieldConfig.fieldId,
+      selectedProduct,
+      subFields.behavior,
+      subFields.paymentMethods,
+      onPaymentRequirementChange,
+      merchantCredentials?.merchantId,
     ]
   );
 
@@ -780,74 +1013,6 @@ const PayPalPaymentProvider = ({
     },
     [onPaymentError]
   );
-
-  // Render amount input for variable payments
-  const renderAmountInput = () => {
-    // Don't show amount input for product_wise payments - amount is determined by product selection
-    if (
-      paymentType === "donation_button" ||
-      paymentType === "product_wise" ||
-      (paymentType === "custom_amount" && amountConfig.type === "static")
-    ) {
-      return null;
-    }
-
-    return (
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {paymentType === "donation" ? "Donation Amount" : "Payment Amount"}
-          <span className="text-red-500 ml-1">*</span>
-        </label>
-
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <span className="text-gray-500 sm:text-sm">$</span>
-          </div>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={paymentAmount}
-            onChange={(e) => handleAmountChange(e.target.value)}
-            className={`
-              block w-full pl-7 pr-12 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500
-              ${amountError ? "border-red-500" : "border-gray-300"}
-            `}
-            placeholder="0.00"
-            disabled={isProcessing}
-          />
-          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <span className="text-gray-500 sm:text-sm">
-              {amountConfig.currency || "USD"}
-            </span>
-          </div>
-        </div>
-
-        {amountError && (
-          <p className="text-red-500 text-sm mt-1">{amountError}</p>
-        )}
-
-        {/* Amount limits info */}
-        {(amountConfig.minAmount || amountConfig.maxAmount) && (
-          <p className="text-gray-500 text-sm mt-1">
-            {amountConfig.minAmount && amountConfig.maxAmount
-              ? `Amount must be between ${(
-                  formatCurrency || fallbackFormatCurrency
-                )(amountConfig.minAmount)} and ${(
-                  formatCurrency || fallbackFormatCurrency
-                )(amountConfig.maxAmount)}`
-              : amountConfig.minAmount
-              ? `Minimum amount: ${(formatCurrency || fallbackFormatCurrency)(
-                  amountConfig.minAmount
-                )}`
-              : `Maximum amount: ${(formatCurrency || fallbackFormatCurrency)(
-                  amountConfig.maxAmount
-                )}`}
-          </p>
-        )}
-      </div>
-    );
-  };
 
   // Render payment method selection
   const renderPaymentMethodSelection = () => {
@@ -905,6 +1070,7 @@ const PayPalPaymentProvider = ({
   };
 
   // Render product selection for product_wise payment type
+  // eslint-disable-next-line no-unused-vars
   const renderProductSelection = () => {
     const products = subFields.products || [];
 
@@ -1011,6 +1177,7 @@ const PayPalPaymentProvider = ({
   };
 
   // Render subscription selection for subscription payment type
+  // eslint-disable-next-line no-unused-vars
   const renderSubscriptionSelection = () => {
     const subscriptions = subFields.subscriptions || [];
 
@@ -1089,6 +1256,7 @@ const PayPalPaymentProvider = ({
   };
 
   // Render donation button for donation_button payment type
+  // eslint-disable-next-line no-unused-vars
   const renderDonationButton = () => {
     if (!donationButtonId) {
       return (
@@ -1183,6 +1351,19 @@ const PayPalPaymentProvider = ({
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // No merchant identifier configured
+  if (!accountIdentifier) {
+    return (
+      <div className={`paypal-payment-provider ${className}`}>
+        <PaymentStatusCallout
+          type="error"
+          title="Payment Configuration Error"
+          message="No merchant account is configured for this payment field."
+        />
       </div>
     );
   }
@@ -1289,141 +1470,33 @@ const PayPalPaymentProvider = ({
           </div>
         )}
 
-        {/* Product Selection - Show on all pages for product_wise */}
-        {paymentType === "product_wise" && renderProductSelection()}
+        {/* Payment Content - Unified content rendering */}
+        <PaymentContent
+          paymentMethod={selectedPaymentMethod}
+          paymentType={paymentType}
+          subFields={subFields}
+          paymentAmount={paymentAmount}
+          amountError={amountError}
+          selectedProduct={selectedProduct}
+          selectedSubscription={selectedSubscription}
+          onAmountChange={handleAmountChange}
+          onProductSelection={handleProductSelection}
+          onSubscriptionSelection={handleSubscriptionSelection}
+          createOrder={createOrder}
+          // Provide createSubscription for subscription flows so SDK uses correct callback
+          createSubscription={
+            paymentType === "subscription" ? createSubscription : undefined
+          }
+          onApprove={onApprove}
+          onCancel={onCancel}
+          onError={onError}
+          isPaymentButtonReady={isPaymentButtonReady()}
+          isProcessing={isProcessing}
+          merchantCredentials={merchantCredentials}
+        />
 
-        {/* Subscription Selection - Show on all pages for subscription */}
-        {paymentType === "subscription" && renderSubscriptionSelection()}
-
-        {/* Donation Button with ID - Show on all pages */}
-        {paymentType === "donation_button" && renderDonationButton()}
-
-        {/* Step 1: Amount Input (if needed) - ONLY ON LAST PAGE */}
-        {isLastPage && renderAmountInput()}
-
-        {/* Step 2: Payment Method Selection */}
+        {/* Payment Method Selection */}
         {renderPaymentMethodSelection()}
-
-        {/* Payment Buttons Section - Unified to prevent double rendering */}
-        {(isPaymentButtonReady() ||
-          ((paymentType === "subscription" || paymentType === "product_wise") &&
-            !isLastPage)) && (
-          <div className="payment-button-container mt-6">
-            {/* Show preview message for subscriptions and products on non-last pages */}
-            {(paymentType === "subscription" ||
-              paymentType === "product_wise") &&
-              !isLastPage && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-blue-800 text-sm">
-                    <strong>
-                      Payment will be processed on the final page.
-                    </strong>
-                    {paymentAmount &&
-                      ` Amount: ${(formatCurrency || fallbackFormatCurrency)(
-                        parseFloat(paymentAmount),
-                        amountConfig.currency || "USD"
-                      )}`}
-                  </p>
-                </div>
-              )}
-
-            {/* Ready to pay indicator - only on last page when payment is ready */}
-            {isPaymentButtonReady() && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center">
-                  <span className="text-green-600 mr-2">✅</span>
-                  <span className="text-green-700 font-medium">
-                    Ready to Pay with{" "}
-                    {
-                      getAvailablePaymentMethods().find(
-                        (m) => m.id === selectedPaymentMethod
-                      )?.name
-                    }
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Payment buttons - only render when actually ready */}
-            {isPaymentButtonReady() && (
-              <>
-                {selectedPaymentMethod === "paypal" && (
-                  <PayPalButtons
-                    style={{
-                      layout: "vertical",
-                      color: (
-                        getPaymentButtonColor || fallbackGetPaymentButtonColor
-                      )(paymentType),
-                      shape: "rect",
-                      label: (
-                        getPaymentButtonLabel || fallbackGetPaymentButtonLabel
-                      )(paymentType)?.toLowerCase(),
-                      tagline: false,
-                      height: paymentType === "donation" ? 55 : 40,
-                    }}
-                    disabled={isProcessing || !!amountError}
-                    createOrder={createOrder}
-                    onApprove={onApprove}
-                    onCancel={onCancel}
-                    onError={onError}
-                  />
-                )}
-
-                {selectedPaymentMethod === "venmo" && (
-                  <PayPalButtons
-                    fundingSource="venmo"
-                    style={{
-                      layout: "horizontal",
-                      color: "blue",
-                      shape: "rect",
-                      label: "pay",
-                      height: 48,
-                      tagline: false,
-                    }}
-                    disabled={isProcessing || !!amountError}
-                    createOrder={createOrder}
-                    onApprove={onApprove}
-                    onCancel={onCancel}
-                    onError={onError}
-                  />
-                )}
-
-                {selectedPaymentMethod === "card" && (
-                  <PayPalCardPayment
-                    createOrderHandler={createOrder}
-                    onApproveOrder={onApprove}
-                    onSuccess={(data) => {
-                      console.log("💳 Card payment successful:", data);
-                    }}
-                    onError={onError}
-                    onCancel={onCancel}
-                    amount={parseFloat(paymentAmount) || 0}
-                    currency={amountConfig.currency || "USD"}
-                    disabled={isProcessing || !!amountError}
-                  />
-                )}
-
-                {selectedPaymentMethod === "googlepay" && (
-                  <GooglePayIntegration
-                    merchantId={
-                      merchantCredentials?.merchantId || accountIdentifier
-                    }
-                    amount={parseFloat(paymentAmount) || 0}
-                    currency={amountConfig.currency || "USD"}
-                    isProduction={isProduction}
-                    merchantCapabilities={merchantCapabilities}
-                    createOrderHandler={createOrder}
-                    onApproveOrder={onApprove}
-                    onSuccess={(data) => {
-                      console.log("🟢 Google Pay payment successful:", data);
-                    }}
-                    onError={onError}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        )}
 
         {/* Processing Overlay */}
         {isProcessing && (

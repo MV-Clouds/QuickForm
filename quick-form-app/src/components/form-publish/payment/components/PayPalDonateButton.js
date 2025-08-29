@@ -234,7 +234,7 @@ const PayPalDonateButton = ({
 
       // Send donation data to backend for processing
       try {
-        const response = await fetch(API_ENDPOINTS.PAYMENT_API, {
+        const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

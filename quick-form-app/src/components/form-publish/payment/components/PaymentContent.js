@@ -1,1 +1,211 @@
-import React from \"react\";\nimport { PayPalButtons } from \"@paypal/react-paypal-js\";\nimport PayPalCardPayment from \"./PayPalCardPayment\";\nimport GooglePayIntegration from \"./GooglePayIntegration\";\nimport PayPalDonateButton from \"./PayPalDonateButton\";\nimport ProductSelection from \"./ProductSelection\";\nimport SubscriptionSelection from \"./SubscriptionSelection\";\nimport AmountInput from \"./AmountInput\";\nimport { \n  formatCurrency, \n  getPaymentButtonLabel, \n  getPaymentButtonColor \n} from \"../utils/paymentHelpers\";\n\n/**\n * Payment Content Component\n * Renders the appropriate payment interface based on selected payment method\n */\nconst PaymentContent = ({\n  paymentMethod,\n  paymentType,\n  subFields,\n  paymentAmount,\n  amountError,\n  selectedProduct,\n  selectedSubscription,\n  onAmountChange,\n  onProductSelection,\n  onSubscriptionSelection,\n  createOrder,\n  onApprove,\n  onCancel,\n  onError,\n  isPaymentButtonReady,\n  isProcessing,\n  merchantCredentials,\n}) => {\n  const currency = subFields.amount?.currency || \"USD\";\n\n  // Render payment type specific content (product/subscription/amount selection)\n  const renderPaymentTypeContent = () => {\n    switch (paymentType) {\n      case \"product_wise\":\n        return (\n          <ProductSelection\n            products={subFields.products || []}\n            selectedProduct={selectedProduct}\n            onProductSelection={onProductSelection}\n            currency={currency}\n          />\n        );\n      \n      case \"subscription\":\n        return (\n          <SubscriptionSelection\n            subscriptions={subFields.subscriptions || []}\n            selectedSubscription={selectedSubscription}\n            onSubscriptionSelection={onSubscriptionSelection}\n            currency={currency}\n          />\n        );\n      \n      case \"custom_amount\":\n      case \"donation\":\n        return (\n          <AmountInput\n            paymentAmount={paymentAmount}\n            amountError={amountError}\n            onAmountChange={onAmountChange}\n            amountConfig={subFields.amount || {}}\n            paymentType={paymentType}\n          />\n        );\n      \n      case \"donation_button\":\n        return (\n          <PayPalDonateButton\n            donationButtonId={subFields.donationButtonId}\n            onPaymentSuccess={onApprove}\n            onPaymentError={onError}\n          />\n        );\n      \n      default:\n        return null;\n    }\n  };\n\n  // Render payment total summary\n  const renderPaymentSummary = () => {\n    if (paymentType === \"donation_button\" || !paymentAmount) {\n      return null;\n    }\n\n    return (\n      <div className=\"mb-6\">\n        <div className=\"bg-gray-50 rounded-lg p-4 border\">\n          <div className=\"flex justify-between items-center\">\n            <span className=\"font-medium text-gray-900\">Total Amount:</span>\n            <span className=\"text-xl font-bold text-gray-900\">\n              {formatCurrency(paymentAmount, currency)}\n            </span>\n          </div>\n          {selectedProduct && (\n            <div className=\"mt-2 text-sm text-gray-600\">\n              Product: {selectedProduct.name}\n            </div>\n          )}\n          {selectedSubscription && (\n            <div className=\"mt-2 text-sm text-gray-600\">\n              Subscription: {selectedSubscription.name}\n            </div>\n          )}\n        </div>\n      </div>\n    );\n  };\n\n  // Render payment method specific interface\n  const renderPaymentInterface = () => {\n    if (paymentType === \"donation_button\") {\n      return null; // Donation button handles its own interface\n    }\n\n    if (!isPaymentButtonReady) {\n      return (\n        <div className=\"mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg\">\n          <p className=\"text-yellow-800 text-sm\">\n            {!paymentAmount ? \"Please select a product or enter an amount to continue.\" :\n             !selectedProduct && paymentType === \"product_wise\" ? \"Please select a product to continue.\" :\n             !selectedSubscription && paymentType === \"subscription\" ? \"Please select a subscription to continue.\" :\n             \"Please complete the form to enable payment.\"}\n          </p>\n        </div>\n      );\n    }\n\n    switch (paymentMethod) {\n      case \"paypal\":\n        return (\n          <div className=\"mt-6\">\n            <PayPalButtons\n              createOrder={createOrder}\n              onApprove={onApprove}\n              onCancel={onCancel}\n              onError={onError}\n              disabled={isProcessing}\n              style={{\n                layout: \"vertical\",\n                color: getPaymentButtonColor(paymentType),\n                shape: \"rect\",\n                label: getPaymentButtonLabel(paymentType),\n                height: 50,\n              }}\n            />\n          </div>\n        );\n      \n      case \"card\":\n        return (\n          <div className=\"mt-6\">\n            <PayPalCardPayment\n              amount={paymentAmount}\n              currency={currency}\n              onPaymentSuccess={onApprove}\n              onPaymentError={onError}\n              disabled={isProcessing}\n              merchantCredentials={merchantCredentials}\n            />\n          </div>\n        );\n      \n      case \"googlepay\":\n        return (\n          <div className=\"mt-6\">\n            <GooglePayIntegration\n              amount={paymentAmount}\n              currency={currency}\n              onPaymentSuccess={onApprove}\n              onPaymentError={onError}\n              disabled={isProcessing}\n              merchantCredentials={merchantCredentials}\n            />\n          </div>\n        );\n      \n      default:\n        return (\n          <div className=\"mt-6 p-4 bg-red-50 border border-red-200 rounded-lg\">\n            <p className=\"text-red-800 text-sm\">\n              Unsupported payment method: {paymentMethod}\n            </p>\n          </div>\n        );\n    }\n  };\n\n  return (\n    <div className=\"payment-content\">\n      {/* Payment type specific content */}\n      {renderPaymentTypeContent()}\n      \n      {/* Payment summary */}\n      {renderPaymentSummary()}\n      \n      {/* Payment interface */}\n      {renderPaymentInterface()}\n    </div>\n  );\n};\n\nexport default PaymentContent;
+import React, { useEffect } from "react";
+import SimplePayPalButton from "./SimplePayPalButton";
+import AmountInput from "./AmountInput";
+import ProductSelection from "./ProductSelection";
+import SubscriptionSelection from "./SubscriptionSelection";
+import PayPalCardPayment from "./PayPalCardPayment";
+import GooglePayIntegration from "./GooglePayIntegration";
+
+/**
+ * Payment Content Component
+ * Renders the appropriate payment interface based on selected payment method
+ */
+const PaymentContent = ({
+  paymentMethod,
+  paymentType,
+  subFields,
+  paymentAmount,
+  amountError,
+  selectedProduct,
+  selectedSubscription,
+  onAmountChange,
+  onProductSelection,
+  onSubscriptionSelection,
+  createOrder,
+  createSubscription,
+  onApprove,
+  onCancel,
+  onError,
+  isPaymentButtonReady,
+  isProcessing,
+  merchantCredentials,
+}) => {
+  useEffect(() => {
+    console.log("SimplePayPalButton type:", typeof SimplePayPalButton);
+    console.log("PayPalCardPayment type:", typeof PayPalCardPayment);
+    console.log("GooglePayIntegration type:", typeof GooglePayIntegration);
+    console.log("SubscriptionSelection type:", typeof SubscriptionSelection);
+    console.log("AmountInput type:", typeof AmountInput);
+    console.log("ProductSelection type:", typeof ProductSelection);
+  });
+  // Render content based on payment type
+  const renderPaymentTypeContent = () => {
+    switch (paymentType) {
+      case "product_wise":
+        return (
+          <ProductSelection
+            products={subFields?.products || []}
+            selectedProduct={selectedProduct}
+            onProductSelection={onProductSelection}
+            currency={subFields?.currency || "USD"}
+          />
+        );
+
+      case "subscription":
+        return (
+          <SubscriptionSelection
+            subscriptions={subFields?.subscriptions || []}
+            selectedSubscription={selectedSubscription}
+            onSubscriptionSelection={onSubscriptionSelection}
+            currency={subFields?.currency || "USD"}
+          />
+        );
+
+      case "custom_amount":
+      default:
+        return (
+          <AmountInput
+            amount={paymentAmount}
+            onAmountChange={onAmountChange}
+            error={amountError}
+            currency={subFields?.currency || "USD"}
+            suggestedAmounts={subFields?.suggestedAmounts || []}
+            placeholder={subFields?.placeholder || "Enter amount"}
+          />
+        );
+    }
+  };
+
+  // Render payment interface based on selected method
+  const renderPaymentInterface = () => {
+    if (!paymentMethod) return null;
+
+    switch (paymentMethod) {
+      case "paypal":
+        return (
+          <div className="mt-6">
+            <SimplePayPalButton
+              createOrder={createOrder}
+              createSubscription={
+                paymentType === "subscription" ? createSubscription : undefined
+              }
+              onApprove={onApprove}
+              onCancel={onCancel}
+              onError={onError}
+              disabled={!isPaymentButtonReady || isProcessing}
+              style={{
+                shape: "rect",
+                color: "blue",
+                layout: "vertical",
+                label: "paypal",
+              }}
+            />
+          </div>
+        );
+
+      case "card":
+        return (
+          <div className="mt-6">
+            <PayPalCardPayment
+              createOrderHandler={createOrder}
+              onApproveOrder={onApprove}
+              onSuccess={onApprove}
+              onError={onError}
+              disabled={!isPaymentButtonReady || isProcessing}
+              merchantCredentials={merchantCredentials}
+            />
+          </div>
+        );
+
+      case "googlepay":
+        return (
+          <GooglePayIntegration
+            merchantId={merchantCredentials?.merchantId}
+            merchantCapabilities={merchantCredentials?.capabilities}
+            amount={paymentAmount}
+            currency={subFields?.currency || "USD"}
+            onSuccess={onApprove}
+            onError={onError}
+            isProduction={false} // Or pass dynamically
+            createOrderHandler={createOrder} // Pass for dynamic order creation
+            onApproveOrder={onApprove} // Pass for dynamic approval
+            disabled={!isPaymentButtonReady || isProcessing}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Show payment summary
+  const renderPaymentSummary = () => {
+    let amount = 0;
+    let description = "";
+
+    if (paymentType === "product_wise" && selectedProduct) {
+      amount = selectedProduct.price || 0;
+      description = selectedProduct.name || "Selected Product";
+    } else if (paymentType === "subscription" && selectedSubscription) {
+      amount = selectedSubscription.price || 0;
+      description = `${selectedSubscription.name} - ${selectedSubscription.billingPeriod}`;
+    } else if (paymentType === "custom_amount" && paymentAmount) {
+      amount = parseFloat(paymentAmount) || 0;
+      description = "Custom Amount";
+    }
+
+    if (amount > 0) {
+      return (
+        <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{description}</p>
+              <p className="text-xs text-gray-600">
+                Payment via{" "}
+                {paymentMethod === "paypal"
+                  ? "PayPal"
+                  : paymentMethod === "card"
+                  ? "Credit/Debit Card"
+                  : "Google Pay"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-gray-900">
+                ${amount.toFixed(2)}
+              </p>
+              <p className="text-xs text-gray-600 uppercase">
+                {subFields?.currency || "USD"}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="payment-content">
+      {/* Payment Type Content */}
+      {renderPaymentTypeContent()}
+
+      {/* Payment Summary */}
+      {renderPaymentSummary()}
+
+      {/* Payment Interface */}
+      {renderPaymentInterface()}
+
+      {/* Processing State */}
+      {isProcessing && (
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <p className="text-blue-800 text-sm">Processing your payment...</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PaymentContent;

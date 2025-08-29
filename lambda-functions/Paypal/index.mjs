@@ -8,9 +8,9 @@
  */
 
 // Import existing lambda handlers
-import { handler as onboardingHandler } from "./paymentOnboardinghandler.js";
-import { handler as gatewayHandler } from "./paymentGatewayHandler.js";
-import { handler as productHandler } from "./productSubscriptionHandler.js";
+import { handler as onboardingHandler } from "./paymentOnboardinghandler.mjs";
+import { handler as gatewayHandler } from "./paymentGatewayHandler.mjs";
+import { handler as productHandler } from "./productSubscriptionHandler.mjs";
 
 /**
  * Main Payment Handler - Routes requests to existing lambda functions
@@ -61,6 +61,7 @@ export const handler = async (event) => {
       "complete-onboarding",
       "get-merchant-status",
       "list-accounts",
+      "get-merchant-credentials", // New action for secure credential fetching
     ];
 
     // Product and Subscription Management Actions
@@ -96,6 +97,13 @@ export const handler = async (event) => {
       "list-transactions",
       "handle-donation-complete",
       "process-donation",
+      // Status and monitoring actions
+      "check-account-status",
+      "refresh-capabilities",
+      "validate-connection",
+      "get-health-score",
+      "batch-check-accounts",
+      "get-account-metrics",
     ];
 
     // Route to Onboarding Handler
