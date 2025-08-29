@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormName from './FormName';
 import Datatable from '../Datatable/ShowPage';
@@ -22,7 +22,9 @@ const Home = () => {
     error: contextError,
     fetchSalesforceData,
     userProfile,
-    Fieldset
+    Fieldset,
+    Folders,
+    googleData
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -42,7 +44,45 @@ const Home = () => {
   const [cloningFormData, setCloningFormData] = useState(null); 
   const [isCloneFormNameOpen, setIsCloneFormNameOpen] = useState(false);
   const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
-
+  const wsRef = useRef(null);
+  useEffect(() => {
+    const userId = sessionStorage.getItem('userId');
+    // formSyncChannel.onmessage = (event) => {
+    //   if (event.data.type === 'formDeleted' && event.data.formId) {
+    //     // Fetch updated formRecords when a form was deleted in another tab
+    //     fetchSalesforceData(userId, instanceUrl);
+    //   }
+    // };
+    // const ws = new WebSocket(`wss://m47cwjfu3f.execute-api.us-east-1.amazonaws.com/production?userId=${encodeURIComponent(userId)}`);
+    // ws.onopen = () => {
+    //   console.log('WebSocket connected');
+    // };
+    // ws.onmessage = (event) => {
+    //   try {
+    //     console.log('Here on message')
+    //     const data = JSON.parse(event.data);
+    //     if (data.type === 'formDeleted' && data.formId) {
+    //       // refresh form data on receiving delete message from other devices
+    //       fetchSalesforceData(userId, instanceUrl);
+    //     }
+    //   } catch (e) {
+    //     console.warn('Invalid WS message:', e);
+    //   }
+    // };
+    // ws.onclose = () => {
+    //   console.log('WebSocket closed');
+    //   wsRef.current = null;
+    // };
+    // ws.onerror = (error) => {
+    //   console.error('WebSocket error', error);
+    // };
+    // wsRef.current = ws;
+    // Clean up listener on unmount
+    // return () => {
+    //   // formSyncChannel.close();
+    //   // ws.close();
+    // };
+  }, [fetchSalesforceData, userId, instanceUrl]);
   const handleCloneForm = (form) => {
   // Find published version or draft version to clone
     const versionToClone = form.FormVersions.find(v => v.Stage__c === 'Publish') 
@@ -242,6 +282,14 @@ console.log('Cloning ',cloningFormData);
     } finally {
       fetchSalesforceData(sessionStorage.getItem('userId'), sessionStorage.getItem('instanceUrl'));
     }
+    // if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    //   wsRef.current.send(JSON.stringify({
+    //     action: 'sendmessage',
+    //     type: 'formDeleted',
+    //     formId,
+    //     userId,
+    //   }));
+    // }
   };
   const handleOptionSelect = (option) => {
     setIsModalOpen(false);
@@ -476,7 +524,7 @@ console.log('Cloning ',cloningFormData);
       />
       <div className={`flex-1 transition-all  duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         {selectedNav === 'integration' ? (
-          <Integrations token={token} />
+          <Integrations token={token} GoogleData ={googleData} />
         ) : selectedNav === 'folders' ? (
           <div className=' flex flex-col'>
             {/* <RecentFilesSlider
@@ -491,6 +539,10 @@ console.log('Cloning ',cloningFormData);
               onEditForm={handleEditForm}
               onDeleteForm={handleDeleteForm}
               onToggleStatus={handleToggleStatus}
+              SFfolders={Folders}
+              token={token}
+              fetchSalesforceData={fetchSalesforceData}
+              isLoading ={contextLoading} 
             />
           </div>
         ) : selectedNav === 'fieldset' ? (

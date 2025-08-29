@@ -4,8 +4,8 @@ import { EmailTab } from './Components/EmailTab.js';
 import { DigestEmailTab } from './Components/DigestEmailTab.js';
 import { useParams } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
-const NotificationSettings = ({ currentFields , sendNotificationData}) => {
-  const { formRecords, refreshData } = useSalesforceData();
+const NotificationSettings = ({ currentFields , sendNotificationData , GoogleData , formRecords}) => {
+  const {  refreshData } = useSalesforceData();
   const [activeTab, setActiveTab] = useState(null);
   const [rules, setRules] = useState();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -36,17 +36,17 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
       setLoading(false)
     }
   }
-  const fetchAllData = async () => {
+  const fetchAllData =  () => {
     setLoading(true);
     if(formRecords.length === 0) {
-      await refreshData();
+      refreshData();
     }
     try {
       let cleanData;
       if (formRecords.length > 0) {
-        console.log('notifydata', formRecords.filter(form => form.Id === formId))
+        // console.log('notifydata', formRecords.filter(form => form.Id === formId))
         const rec = formRecords.filter(form => form.Id === formId)[0]?.Notifications
-        console.log('rec', rec)
+        // console.log('rec', rec)
         cleanData = rec?.map((field) => {
           return {
             id: field.Id,
@@ -55,11 +55,12 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
             status: field.Status__c,
             createdDate: new Date(field.LastModifiedDate).toLocaleDateString('en-GB'),
             body: field.Body__c,
-            receipents: field.Receipe__c
+            receipents: field.Receipe__c,
+            gmailAccount : field.Gmail__c || ''
           }
         });
       }
-      console.log('cleanData', cleanData)
+      // console.log('cleanData', cleanData)
       setRules(cleanData); // Assuming setRules is a function to update the state with the fetched rules
     } catch (error) {
       console.error('Error fetching rules:', error);
@@ -84,7 +85,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
       if (!response.ok || tokenData.error) {
         throw new Error(tokenData.error || 'Failed to fetch access token');
       }
-      console.log('tokenData', tokenData);
+      // console.log('tokenData', tokenData);
     } catch {
       console.error('Error fetching access token');
     }
@@ -103,6 +104,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
       }
     };
     // Call the async function to start the data fetching process
+    console.log('googleData' , GoogleData)
     fetchDataAsync();
     fetchFormId();
     fetchAllData()
@@ -111,15 +113,16 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
 
   const updateNotificationData = async (payload) => {
     try {
+      
       const response = await fetch('https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify', {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ notificationId: payload.Id ? payload.Id : editingRuleId, updatedData:  payload.Id ? { ...payload, Id: undefined } : payload , instanceUrl, userId }),
+        body: JSON.stringify({ notificationId: payload.Id ? payload.Id : editingRuleId, updatedData:  payload.Id ? { ...payload, Id: undefined } : payload   , instanceUrl, userId , Form__c : formId}),
       });
-      console.log('response', response);
+      // console.log('response', response);
 
       const res = await response.json()
       console.log('Response from lambda ==> ', res);
@@ -132,18 +135,18 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
     } catch (error) {
       console.error('There was a problem with the fetch operation:', error);
     } finally {
-      // fetchAllData(true);
       refreshData();
+      fetchAllData();
     }
   };
 
   //Handle Status Change
   const handleStatusChange = async (id) => {
     try {
-      console.log('Status changed for rule ==> ', id);
+      // console.log('Status changed for rule ==> ', id);
 
       const data = rules.find(r => r.id === id);
-      console.log('Data ==>', data);
+      // console.log('Data ==>', data);
 
       const payload = {
         Title__c: data.title || '',
@@ -156,7 +159,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
       console.log('Updating status ==>', payload);
 
       if (id) {
-        console.log('updating');
+        // console.log('updating');
 
         const res = await updateNotificationData(payload)
         console.log('Updated ', res);
@@ -229,7 +232,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData}) => {
                   sendNotificationData={sendNotificationData}
                   updateNotificationData={updateNotificationData}
                   formFieldsData={currentFields}
-
+                  GoogleData = {GoogleData}
                 />
               )}
               {activeTab === 'digest' && (

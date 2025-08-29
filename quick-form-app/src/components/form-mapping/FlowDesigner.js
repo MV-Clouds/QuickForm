@@ -61,6 +61,8 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       case "Formatter":
       case "Filter": 
       case "Path": return "🔧";
+      case "Google Sheet" : return "✉";
+      case "FindGoogleSheet" : return "📝";
       default: return "📋";
     }
   };
@@ -701,6 +703,12 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
                 conditionsLogic: 'AND', // Initialize
                 sheetcustomLogic: '', // Initialize
                 ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),  
+              } : {},
+              ...(type === "integration" && action === 'FindGoogleSheet') ? {   
+                googleSheetReturnLimit: 0, // New
+                googleSheetSortField: '',     // New
+                googleSheetSortOrder: 'ASC',
+                columns: []
               } : {}
         },
         draggable: true,
@@ -716,6 +724,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
 
   const onNodeClick = useCallback(
     (event, node) => {
+      console.log('Node' , node)
       if (node.id !== "start") {
         const hasIncomingEdge = edges.some((edge) => edge.target === node.id);
         if (!hasIncomingEdge) {
@@ -723,7 +732,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           return;
         }
       }
-      if (["Create/Update", "Find", "Filter", "Condition", "Path", "Loop", "Formatter" , 'Google Sheet'].includes(node.data.action)) {
+      if (["Create/Update", "Find", "Filter", "Condition", "Path", "Loop", "Formatter" , 'Google Sheet' ,'FindGoogleSheet'].includes(node.data.action)) {
         setSelectedNode(node);
       }
     },

@@ -132,7 +132,7 @@ const Integrations = ({ token }) => {
      // ✅ Helper function to call backend
     const fetchIntegrations = async () => {
         try {
-        const res = await fetch(`https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth?instanceUrl=${encodeURIComponent(instanceUrl)}&sfToken=${encodeURIComponent(token)}`, { method: "GET" });
+        const res = await fetch(`https://40npk4h6n3.execute-api.us-east-1.amazonaws.com/auth?instanceUrl=${encodeURIComponent(instanceUrl)}&sfToken=${encodeURIComponent(token)}&sfuserId=${encodeURIComponent(userId)}`, { method: "GET" });
         if (!res.ok) {
             throw new Error(`Failed to fetch: ${res.status}`);
         }
