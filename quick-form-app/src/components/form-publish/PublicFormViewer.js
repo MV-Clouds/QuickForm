@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { decrypt } from "../form-builder-with-versions/crypto";
 import { DatePicker } from "rsuite";
 import "rsuite/dist/rsuite.min.css";
@@ -23,7 +23,8 @@ import {
 import { Select, Tooltip } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
-import { evaluateFormula } from "./FormulaEvaluator";
+import { evaluateFormula } from './FormulaEvaluator';
+// import PaymentFieldRenderer from "./PaymentFieldRenderer";
 import PaymentFieldRenderer from "./payment/PaymentFieldRenderer";
 
 const { Option } = Select;
@@ -42,26 +43,28 @@ function PublicFormViewer({ runPrefill = false }) {
   const [signatures, setSignatures] = useState({});
   const [filePreviews, setFilePreviews] = useState({});
   const [selectedRatings, setSelectedRatings] = useState({});
-  // const [selectedOptions, setSelectedOptions] = useState({});
-  // const [isDropdownOpen] = useState({});
+  const [selectedOptions, setSelectedOptions] = useState({});
+  const [isDropdownOpen, setIsDropdownOpen] = useState({});
   const [toggles, setToggles] = useState({});
   const signatureRefs = useRef({});
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState([]);
   const [formConditions, setFormConditions] = useState([]);
   const [loopCounters, setLoopCounters] = useState({});
-  // const [loopInput, setLoopInput] = useState("");
+  const [loopInput, setLoopInput] = useState('');
   const [localIdToSFId, setLocalIdToSFId] = useState({});
   const [prefills, setPrefills] = useState([]);
   const [dependentFields, setDependentFields] = useState(new Set());
+  const searchParams = new URLSearchParams(window.location.search);
+  const manualPrefills = {};
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
-  const [requiresPayment, setRequiresPayment] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
+  const [hasPaymentField, setHasPaymentField] = useState(false);
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -70,45 +73,40 @@ function PublicFormViewer({ runPrefill = false }) {
         try {
           decrypted = decrypt(linkId);
         } catch (e) {
-          throw new Error(e.message || "Invalid link format");
+          throw new Error(e.message || 'Invalid link format');
         }
 
-        const [userId, formId] = decrypted.split("$");
+        const [userId, formId] = decrypted.split('$');
         if (!userId || !formId) {
-          throw new Error("Invalid link data");
+          throw new Error('Invalid link data');
         }
         setLinkData({ userId, formId });
 
-        const tokenResponse = await fetch(
-          process.env.REACT_APP_GET_ACCESS_TOKEN_URL,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId }),
-          }
-        );
+        const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        });
 
         const tokenData = await tokenResponse.json();
         if (!tokenResponse.ok || tokenData.error) {
-          throw new Error(tokenData.error || "Failed to fetch access token");
+          throw new Error(tokenData.error || 'Failed to fetch access token');
         }
         const token = tokenData.access_token;
         const instanceUrl = tokenData.instanceUrl;
         setUserId(userId);
         setAccessToken(token);
         setInstanceUrl(instanceUrl);
-        const startTime = Date.now();
 
         const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, formId }),
         });
 
         const data = await response.json();
-        console.log(`Form metadata fetched in ${Date.now() - startTime}ms`);
         if (!response.ok) {
-          throw new Error(data.error || "Failed to fetch form");
+          throw new Error(data.error || 'Failed to fetch form');
         }
         const formVersion = data.formVersion;
         let thankyouRecord = formVersion?.ThankYou;
@@ -116,70 +114,62 @@ function PublicFormViewer({ runPrefill = false }) {
         setFormData(formVersion);
         const localIdToSFId = {};
 
-        formVersion.Fields.forEach((field) => {
-          const props = JSON.parse(field.Properties__c || "{}");
+        formVersion.Fields.forEach(field => {
+          const props = JSON.parse(field.Properties__c || '{}');
 
           if (props.id && field.Id) {
             // Base mapping
             localIdToSFId[props.id] = field.Id;
             // Handle subfields (including nested subfields)
-            if (props.subFields && typeof props.subFields === "object") {
+            if (props.subFields && typeof props.subFields === 'object') {
               Object.entries(props.subFields).forEach(([subName, subField]) => {
                 // if (subField.id) {
                 // For section subfields (leftField/rightField)
-                if (field.Field_Type__c === "section") {
+                if (field.Field_Type__c === 'section') {
                   localIdToSFId[subField.id] = `${field.Id}_${subName}`;
                   // Handle nested subfields (like fullname subfields)
                   if (subField.subFields) {
-                    Object.entries(subField.subFields).forEach(
-                      ([nestedName, nestedField]) => {
-                        if (nestedField.value !== undefined) {
-                          // Check if it's a subfield config
-                          localIdToSFId[
-                            `${subField.id}_${nestedName}`
-                          ] = `${field.Id}_${subName}_${nestedName}`;
-                        }
+                    Object.entries(subField.subFields).forEach(([nestedName, nestedField]) => {
+                      if (nestedField.value !== undefined) { // Check if it's a subfield config
+                        localIdToSFId[`${subField.id}_${nestedName}`] = `${field.Id}_${subName}_${nestedName}`;
                       }
-                    );
+                    });
                   }
                 }
                 // For other field types with subfields (like address)
                 else {
-                  localIdToSFId[
-                    `${props.id}_${subName}`
-                  ] = `${field.Id}_${subName}`;
+                  localIdToSFId[`${props.id}_${subName}`] = `${field.Id}_${subName}`;
                 }
                 // }
               });
             }
           }
         });
-        console.log("Local id ", localIdToSFId);
+        console.log('Local id ', localIdToSFId);
 
         // Parse Prefill array from formVersion.Prefills if available
         if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
-          const parsedPrefills = formVersion.Prefills.map((p) => {
+          const parsedPrefills = formVersion.Prefills.map(p => {
             let parsedData = {};
             try {
-              parsedData =
-                typeof p.Prefill_Data__c === "string"
-                  ? JSON.parse(p.Prefill_Data__c)
-                  : p.Prefill_Data__c || {};
+              parsedData = typeof p.Prefill_Data__c === 'string'
+                ? JSON.parse(p.Prefill_Data__c)
+                : p.Prefill_Data__c || {};
             } catch (e) {
-              console.warn("Invalid Prefill_Data__c JSON", e);
+              console.warn('Invalid Prefill_Data__c JSON', e);
             }
             return {
               Id: p.Id,
               Order__c: p.Order__c || 0,
-              ...parsedData,
+              ...parsedData
             };
           });
           setPrefills(parsedPrefills);
 
           // Build set of Salesforce field names that should trigger prefill
           const deps = new Set();
-          parsedPrefills.forEach((prefill) => {
-            (prefill.lookupFilters?.conditions || []).forEach((cond) => {
+          parsedPrefills.forEach(prefill => {
+            (prefill.lookupFilters?.conditions || []).forEach(cond => {
               if (cond.formField && localIdToSFId[cond.formField]) {
                 deps.add(localIdToSFId[cond.formField]); // store as SF id for runtime
               }
@@ -189,31 +179,28 @@ function PublicFormViewer({ runPrefill = false }) {
         }
 
         setLocalIdToSFId(localIdToSFId);
-        const parsedConditions = (formVersion.Conditions || []).map((c) =>
-          c.Condition_Data__c
-            ? typeof c.Condition_Data__c === "string"
+        const parsedConditions = (formVersion.Conditions || []).map(c =>
+          c.Condition_Data__c ? (
+            typeof c.Condition_Data__c === 'string'
               ? JSON.parse(c.Condition_Data__c)
               : c.Condition_Data__c
-            : c
+          ) : c
         );
         setFormConditions(parsedConditions);
 
-        const mappingsResponse = await fetch(
-          process.env.REACT_APP_FETCH_MAPPINGS_URL,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              userId,
-              formVersionId: formVersion.Id,
-              instanceUrl,
-              accessToken: token,
-            }),
-          }
-        );
+        const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userId,
+            formVersionId: formVersion.Id,
+            instanceUrl,
+            accessToken: token,
+          }),
+        });
 
         const mappingsData = await mappingsResponse.json();
         if (!mappingsResponse.ok) {
@@ -232,44 +219,31 @@ function PublicFormViewer({ runPrefill = false }) {
         const initialToggles = {};
 
         formVersion.Fields.forEach((field) => {
-          const properties = JSON.parse(field.Properties__c || "{}");
+          const properties = JSON.parse(field.Properties__c || '{}');
           const fieldType = field.Field_Type__c;
 
-          if (
-            fieldType === "phone" &&
-            properties.subFields?.countryCode?.enabled
-          ) {
+          if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
             // Safely access subFields properties with defaults
             initialValues[`${field.Id || properties.id}_countryCode`] =
-              properties.subFields?.countryCode?.value ?? "US";
+              properties.subFields?.countryCode?.value ?? 'US';
             initialValues[field.Id || properties.id] =
-              properties.subFields?.phoneNumber?.value ?? "";
-          } else if (
-            fieldType === "checkbox" ||
-            (fieldType === "dropdown" && properties.allowMultipleSelections)
-          ) {
-            initialValues[field.Id || properties.id] =
-              properties.defaultValue || [];
-          } else if (fieldType === "datetime" || fieldType === "date") {
-            initialValues[field.Id || properties.id] =
-              properties.defaultValue || null;
-          } else if (fieldType === "time") {
-            initialValues[field.Id || properties.id] =
-              properties.defaultValue || "";
-          } else if (fieldType === "scalerating") {
+              properties.subFields?.phoneNumber?.value ?? '';
+          } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
+            initialValues[field.Id || properties.id] = properties.defaultValue || [];
+          } else if (fieldType === 'datetime' || fieldType === 'date') {
+            initialValues[field.Id || properties.id] = properties.defaultValue || null;
+          } else if (fieldType === 'time') {
+            initialValues[field.Id || properties.id] = properties.defaultValue || '';
+          } else if (fieldType === 'scalerating') {
             initialValues[field.Id || properties.id] = {};
           } else {
-            initialValues[field.Id || properties.id] =
-              properties.defaultValue || "";
+            initialValues[field.Id || properties.id] = properties.defaultValue || '';
           }
 
           initialSignatures[field.Id || properties.id] = null;
           initialFilePreviews[field.Id || properties.id] = null;
           initialRatings[field.Id || properties.id] = null;
-          initialSelectedOptions[field.Id || properties.id] =
-            fieldType === "dropdown" && properties.allowMultipleSelections
-              ? []
-              : "";
+          initialSelectedOptions[field.Id || properties.id] = fieldType === 'dropdown' && properties.allowMultipleSelections ? [] : '';
           initialToggles[field.Id || properties.id] = false;
         });
 
@@ -277,27 +251,24 @@ function PublicFormViewer({ runPrefill = false }) {
         const searchParams = new URLSearchParams(window.location.search);
         const manualPrefills = {};
         for (const [key, value] of searchParams.entries()) {
-          if (key.startsWith("field-")) {
+
+          if (key.startsWith('field-')) {
             const fieldIdParam = key;
             const sfId = localIdToSFId[fieldIdParam];
             let fieldMeta;
             let subFieldKey;
-            if (sfId?.includes("_")) {
+            if (sfId?.includes('_')) {
               // Split into parent Id and subfield key
-              const [parentId, key] = sfId.split("_");
+              const [parentId, key] = sfId.split('_');
               subFieldKey = key;
 
               // Find parent field
-              const parentField = formVersion.Fields.find(
-                (f) => f.Id === parentId
-              );
+              const parentField = formVersion.Fields.find(f => f.Id === parentId);
 
               if (parentField) {
-                const props = JSON.parse(parentField.Properties__c || "{}");
+                const props = JSON.parse(parentField.Properties__c || '{}');
 
-                const subFieldMeta = props.subFields
-                  ? props.subFields[subFieldKey]
-                  : null;
+                const subFieldMeta = props.subFields ? props.subFields[subFieldKey] : null;
 
                 if (subFieldMeta) {
                   fieldMeta = subFieldMeta;
@@ -305,19 +276,22 @@ function PublicFormViewer({ runPrefill = false }) {
                   fieldMeta = parentField;
                 }
               }
+
             } else {
               // Simple case: direct match
-              fieldMeta = formVersion.Fields.find((f) => f.Id === sfId);
+              fieldMeta = formVersion.Fields.find(f => f.Id === sfId);
             }
 
+
             if (fieldMeta) {
+              const props = JSON.parse(fieldMeta.Properties__c || '{}');
               const fType = fieldMeta.Field_Type__c;
 
               try {
                 let parsedValue = value;
 
                 switch (fType) {
-                  case "date":
+                  case 'date':
                     // if (!isNaN(Date.parse(value))) {
                     //   // store in YYYY-MM-DD
                     //   const d = new Date(value);
@@ -327,44 +301,38 @@ function PublicFormViewer({ runPrefill = false }) {
                     if (parts.length === 3) {
                       let day, month, year;
                       if (parts[0].length === 4) {
-                        [year, month, day] = parts.map((p) => parseInt(p, 10));
+                        [year, month, day] = parts.map(p => parseInt(p, 10));
                       } else if (parts[2].length === 4) {
-                        [day, month, year] = parts.map((p) => parseInt(p, 10));
+                        [day, month, year] = parts.map(p => parseInt(p, 10));
                       }
                       if (year && month && day) {
-                        const d = `${year.toString().padStart(4, "0")}-${month
+                        const d = `${year.toString().padStart(4, '0')}-${month
                           .toString()
-                          .padStart(2, "0")}-${day
-                          .toString()
-                          .padStart(2, "0")}`;
+                          .padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
                         const transformDate = new Date(d);
-                        parsedValue = transformDate.toISOString().split("T")[0];
+                        parsedValue = transformDate.toISOString().split('T')[0];
                       }
                     }
                     break;
-                  case "datetime":
+                  case 'datetime':
                     if (!isNaN(Date.parse(value))) {
                       const d = new Date(value);
                       const yyyy = d.getFullYear();
-                      const mm = String(d.getMonth() + 1).padStart(2, "0");
-                      const dd = String(d.getDate()).padStart(2, "0");
-                      const hh = String(d.getHours()).padStart(2, "0");
-                      const mi = String(d.getMinutes()).padStart(2, "0");
+                      const mm = String(d.getMonth() + 1).padStart(2, '0');
+                      const dd = String(d.getDate()).padStart(2, '0');
+                      const hh = String(d.getHours()).padStart(2, '0');
+                      const mi = String(d.getMinutes()).padStart(2, '0');
                       parsedValue = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
-                    } else {
-                      throw new Error("Invalid datetime");
-                    }
+                    } else { throw new Error('Invalid datetime'); }
                     break;
-                  case "number":
-                  case "price":
+                  case 'number':
+                  case 'price':
                     if (!isNaN(parseFloat(value))) {
                       parsedValue = parseFloat(value);
-                    } else {
-                      throw new Error("Invalid number");
-                    }
+                    } else { throw new Error('Invalid number'); }
                     break;
-                  case "checkbox":
-                    parsedValue = value.split(",").map((v) => v.trim());
+                  case 'checkbox':
+                    parsedValue = value.split(',').map(v => v.trim());
                     break;
                   default:
                     // leave as string for all other types
@@ -372,29 +340,30 @@ function PublicFormViewer({ runPrefill = false }) {
                 }
 
                 manualPrefills[sfId] = parsedValue;
+
               } catch (err) {
-                console.warn(
-                  `Invalid manual prefill for ${fieldIdParam}:`,
-                  err.message
-                );
+                console.warn(`Invalid manual prefill for ${fieldIdParam}:`, err.message);
               }
             }
           }
         }
 
         if (Object.keys(manualPrefills).length) {
+
           // Step 1: Set manual prefills
-          setFormValues((prev) => ({ ...prev, ...manualPrefills }));
+          setFormValues(prev => ({ ...prev, ...manualPrefills }));
 
           // Step 2: Run dependent prefill AFTER state is updated
-          Object.keys(manualPrefills).forEach((sfId) => {
+          Object.keys(manualPrefills).forEach(sfId => {
             setManualPrefillsState(manualPrefills);
           });
         }
 
+
         setSignatures(initialSignatures);
         setFilePreviews(initialFilePreviews);
         setSelectedRatings(initialRatings);
+        setSelectedOptions(initialSelectedOptions);
         setToggles(initialToggles);
 
         const pageMap = {};
@@ -408,16 +377,12 @@ function PublicFormViewer({ runPrefill = false }) {
 
         const sortedPages = Object.keys(pageMap)
           .sort((a, b) => Number(a) - Number(b))
-          .map((pageNum) =>
-            pageMap[pageNum].sort(
-              (a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)
-            )
-          );
+          .map((pageNum) => pageMap[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0)));
         setPages(sortedPages.length > 0 ? sortedPages : [formVersion.Fields]);
         setLoopCounters({});
       } catch (error) {
-        console.error("Error fetching form:", error);
-        setFetchError(error.message || "Failed to load form");
+        console.error('Error fetching form:', error);
+        setFetchError(error.message || 'Failed to load form');
       }
     };
 
@@ -428,27 +393,26 @@ function PublicFormViewer({ runPrefill = false }) {
 
   useEffect(() => {
     if (
-      prefills.length > 0 && // prefills are loaded
+      prefills.length > 0 &&                      // prefills are loaded
       Object.keys(manualPrefillsState).length > 0 // we have manual prefill keys
     ) {
-      Object.keys(manualPrefillsState).forEach((sfId) => {
+      Object.keys(manualPrefillsState).forEach(sfId => {
         runPrefillForField(sfId);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefills, manualPrefillsState]);
 
+
   const runPrefillForField = async (sfFieldId) => {
     if (!runPrefill) return;
     // Step 1: Find prefills directly triggered by this blurred field (condition field)
-    const directlyTriggered = prefills.filter((p) =>
-      (p.lookupFilters?.conditions || []).some((c) => {
+    const directlyTriggered = prefills.filter(p =>
+      (p.lookupFilters?.conditions || []).some(c => {
         const formFieldId = localIdToSFId[c.formField] || c.formField;
-        return (
-          formFieldId === sfFieldId ||
+        return formFieldId === sfFieldId ||
           formFieldId.startsWith(`${sfFieldId}_`) || // Check for subfields
-          sfFieldId.startsWith(`${formFieldId}_`)
-        ); // Check if this is a subfield of the condition
+          sfFieldId.startsWith(`${formFieldId}_`);   // Check if this is a subfield of the condition
       })
     );
 
@@ -457,22 +421,21 @@ function PublicFormViewer({ runPrefill = false }) {
 
     // Find the set of target runtime fields from the directly triggered prefills
     const triggeredTargetFields = new Set();
-    directlyTriggered.forEach((p) => {
-      Object.keys(p.fieldMappings || {}).forEach((localId) => {
+    directlyTriggered.forEach(p => {
+      Object.keys(p.fieldMappings || {}).forEach(localId => {
         const runtimeId = localIdToSFId[localId];
         if (runtimeId) triggeredTargetFields.add(runtimeId);
       });
     });
 
     // Step 1b: Now include any prefill whose target field overlaps with the triggered target fields
-    const triggeredPrefills = prefills
-      .filter((p) =>
-        Object.keys(p.fieldMappings || {}).some((localId) => {
-          const runtimeId = localIdToSFId[localId];
-          return runtimeId && triggeredTargetFields.has(runtimeId);
-        })
-      )
-      .sort((a, b) => (a.Order__c || 0) - (b.Order__c || 0));
+    const triggeredPrefills = prefills.filter(p =>
+      Object.keys(p.fieldMappings || {}).some(localId => {
+        const runtimeId = localIdToSFId[localId];
+        return runtimeId && triggeredTargetFields.has(runtimeId);
+      })
+    ).sort((a, b) => (a.Order__c || 0) - (b.Order__c || 0));
+
 
     // Step 3: Filter prefills into groups based on target overlap
     // Here we just reuse triggeredPrefills sorted by priority Order__c
@@ -480,39 +443,30 @@ function PublicFormViewer({ runPrefill = false }) {
     for (const prefill of triggeredPrefills) {
       // Skip if ALL its target fields are already updated in this run
       const prefillTargets = Object.keys(prefill.fieldMappings || {})
-        .map((localId) => localIdToSFId[localId])
+        .map(localId => localIdToSFId[localId])
         .filter(Boolean);
-      const allUpdated = prefillTargets.every((fId) => updatedFields.has(fId));
+      const allUpdated = prefillTargets.every(fId => updatedFields.has(fId));
       if (allUpdated) continue;
 
-      const where = buildWhereFromPrefill(
-        prefill.lookupFilters,
-        prefill.objectFields || []
-      );
-      const soql = `SELECT ${Object.values(prefill.fieldMappings).join(", ")}
+      const where = buildWhereFromPrefill(prefill.lookupFilters, prefill.objectFields || []);
+      const soql = `SELECT ${Object.values(prefill.fieldMappings).join(', ')}
                         FROM ${prefill.selectedObject}
-                        ${where ? "WHERE " + where : ""}
-                        ${
-                          prefill.sortBy?.field
-                            ? `ORDER BY ${prefill.sortBy.field} ${
-                                prefill.sortBy.order || "ASC"
-                              }`
-                            : ""
-                        }
+                        ${where ? 'WHERE ' + where : ''}
+                        ${prefill.sortBy?.field ? `ORDER BY ${prefill.sortBy.field} ${prefill.sortBy.order || 'ASC'}` : ''}
                         LIMIT 1`;
 
       try {
         const startTime = Date.now();
         const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId,
             accessToken,
             soql,
-            requestType: "salesforceQuery",
-            multipleRecordAction: prefill.multipleRecordAction,
-          }),
+            requestType: 'salesforceQuery',
+            multipleRecordAction: prefill.multipleRecordAction
+          })
         });
         const data = await resp.json();
         if (data.newAccessToken) {
@@ -523,17 +477,13 @@ function PublicFormViewer({ runPrefill = false }) {
           const updates = {};
           Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
             const runtimeFieldId = localIdToSFId[localId];
-            if (
-              runtimeFieldId &&
-              !updatedFields.has(runtimeFieldId) &&
-              data.record[sfName] !== undefined
-            ) {
+            if (runtimeFieldId && !updatedFields.has(runtimeFieldId) && data.record[sfName] !== undefined) {
               updates[runtimeFieldId] = data.record[sfName];
               updatedFields.add(runtimeFieldId); // mark as final for this trigger round
-              Object.keys(localIdToSFId).forEach((key) => {
+              Object.keys(localIdToSFId).forEach(key => {
                 if (key.startsWith(`${localId}_`)) {
                   const subRuntimeId = localIdToSFId[key];
-                  const subSfName = `${sfName}_${key.split("_").pop()}`;
+                  const subSfName = `${sfName}_${key.split('_').pop()}`;
                   if (data.record[subSfName] !== undefined) {
                     updates[subRuntimeId] = data.record[subSfName];
                     updatedFields.add(subRuntimeId);
@@ -544,29 +494,24 @@ function PublicFormViewer({ runPrefill = false }) {
           });
 
           if (Object.keys(updates).length > 0) {
-            setFormValues((prev) => ({ ...prev, ...updates }));
+            setFormValues(prev => ({ ...prev, ...updates }));
           }
         }
       } catch (err) {
-        console.error("Prefill failed:", err);
+        console.error('Prefill failed:', err);
       }
     }
   };
 
+
+
   const formatValForSOQL = (val, sfType) => {
-    if (val === null || val === undefined || val === "") {
-      return "null";
+    if (val === null || val === undefined || val === '') {
+      return 'null';
     }
 
-    const numericTypes = [
-      "int",
-      "double",
-      "currency",
-      "percent",
-      "integer",
-      "long",
-    ];
-    const dateTypes = ["date", "datetime", "time"];
+    const numericTypes = ['int', 'double', 'currency', 'percent', 'integer', 'long'];
+    const dateTypes = ['date', 'datetime', 'time'];
 
     // If type is numeric or similar, return as-is without quotes
     if (numericTypes.includes(sfType)) {
@@ -582,87 +527,65 @@ function PublicFormViewer({ runPrefill = false }) {
   };
 
   const buildWhereFromPrefill = (lookupFilters, objectFields) => {
-    if (!lookupFilters?.conditions?.length) return "";
+    if (!lookupFilters?.conditions?.length) return '';
     const condMap = {};
 
     lookupFilters.conditions.forEach((cond, idx) => {
       const sfId = localIdToSFId[cond.formField];
       let val = formValues[sfId];
-      const sfFieldType = objectFields.find(
-        (f) => f.name === cond.objectField
-      )?.type;
+      const sfFieldType = objectFields.find(f => f.name === cond.objectField)?.type;
 
-      let clause = "";
+      let clause = '';
 
       switch (cond.operator) {
-        case "equals":
-          clause = `${cond.objectField} = ${formatValForSOQL(
-            val,
-            sfFieldType
-          )}`;
+        case 'equals':
+          clause = `${cond.objectField} = ${formatValForSOQL(val, sfFieldType)}`;
           break;
-        case "!=":
-          clause = `${cond.objectField} != ${formatValForSOQL(
-            val,
-            sfFieldType
-          )}`;
+        case '!=':
+          clause = `${cond.objectField} != ${formatValForSOQL(val, sfFieldType)}`;
           break;
-        case "greater than":
-          clause = `${cond.objectField} > ${formatValForSOQL(
-            val,
-            sfFieldType
-          )}`;
+        case 'greater than':
+          clause = `${cond.objectField} > ${formatValForSOQL(val, sfFieldType)}`;
           break;
-        case "greater than or equal to":
-          clause = `${cond.objectField} >= ${formatValForSOQL(
-            val,
-            sfFieldType
-          )}`;
+        case 'greater than or equal to':
+          clause = `${cond.objectField} >= ${formatValForSOQL(val, sfFieldType)}`;
           break;
-        case "less than":
-          clause = `${cond.objectField} < ${formatValForSOQL(
-            val,
-            sfFieldType
-          )}`;
+        case 'less than':
+          clause = `${cond.objectField} < ${formatValForSOQL(val, sfFieldType)}`;
           break;
-        case "less than or equal to":
-          clause = `${cond.objectField} <= ${formatValForSOQL(
-            val,
-            sfFieldType
-          )}`;
+        case 'less than or equal to':
+          clause = `${cond.objectField} <= ${formatValForSOQL(val, sfFieldType)}`;
           break;
-        case "contains":
-          clause = `${cond.objectField} LIKE '%${val ?? ""}%'`;
+        case 'contains':
+          clause = `${cond.objectField} LIKE '%${val ?? ''}%'`;
           break;
-        case "startsWith":
-          clause = `${cond.objectField} LIKE '${val ?? ""}%'`;
+        case 'startsWith':
+          clause = `${cond.objectField} LIKE '${val ?? ''}%'`;
           break;
-        case "endsWith":
-          clause = `${cond.objectField} LIKE '%${val ?? ""}'`;
+        case 'endsWith':
+          clause = `${cond.objectField} LIKE '%${val ?? ''}'`;
           break;
-        case "is null":
+        case 'is null':
           clause = `${cond.objectField} = null`;
           break;
-        case "is not null":
+        case 'is not null':
           clause = `${cond.objectField} != null`;
           break;
         default:
-          clause = "TRUE";
+          clause = 'TRUE';
           break;
       }
 
       condMap[(idx + 1).toString()] = clause;
     });
 
-    if (lookupFilters.logicType === "Custom" && lookupFilters.logicExpression) {
-      return lookupFilters.logicExpression.replace(
-        /\d+/g,
-        (n) => condMap[n] || "TRUE"
-      );
+    if (lookupFilters.logicType === 'Custom' && lookupFilters.logicExpression) {
+      return lookupFilters.logicExpression.replace(/\d+/g, n => condMap[n] || 'TRUE');
     }
-    const glue = lookupFilters.logicType || "AND";
+    const glue = lookupFilters.logicType || 'AND';
     return Object.values(condMap).filter(Boolean).join(` ${glue} `);
   };
+
 
   const handleChange = (fieldId, value, isFile = false) => {
     setFormValues((prev) => ({ ...prev, [fieldId]: isFile ? value : value }));
@@ -675,7 +598,7 @@ function PublicFormViewer({ runPrefill = false }) {
       }
 
       // Also clear error for parent field if this is a subfield, e.g. "fieldId_subfield"
-      const underscoreIndex = fieldId.indexOf("_");
+      const underscoreIndex = fieldId.indexOf('_');
       if (underscoreIndex > 0) {
         const parentFieldId = fieldId.substring(0, underscoreIndex);
         if (newErrors[parentFieldId]) {
@@ -687,6 +610,7 @@ function PublicFormViewer({ runPrefill = false }) {
     });
   };
 
+
   const handleRatingChange = (fieldId, value) => {
     setSelectedRatings((prev) => ({ ...prev, [fieldId]: value }));
     handleChange(fieldId, value);
@@ -697,21 +621,21 @@ function PublicFormViewer({ runPrefill = false }) {
     handleChange(fieldId, checked);
   };
 
-  // const handleOptionToggle = (fieldId, option, allowMultiple) => {
-  //   setSelectedOptions((prev) => {
-  //     let newOptions;
-  //     if (allowMultiple) {
-  //       newOptions = prev[fieldId].includes(option)
-  //         ? prev[fieldId].filter((opt) => opt !== option)
-  //         : [...prev[fieldId], option];
-  //     } else {
-  //       newOptions = option;
-  //       setIsDropdownOpen((prev) => ({ ...prev, [fieldId]: false }));
-  //     }
-  //     handleChange(fieldId, newOptions);
-  //     return { ...prev, [fieldId]: newOptions };
-  //   });
-  // };
+  const handleOptionToggle = (fieldId, option, allowMultiple) => {
+    setSelectedOptions((prev) => {
+      let newOptions;
+      if (allowMultiple) {
+        newOptions = prev[fieldId].includes(option)
+          ? prev[fieldId].filter((opt) => opt !== option)
+          : [...prev[fieldId], option];
+      } else {
+        newOptions = option;
+        setIsDropdownOpen((prev) => ({ ...prev, [fieldId]: false }));
+      }
+      handleChange(fieldId, newOptions);
+      return { ...prev, [fieldId]: newOptions };
+    });
+  };
 
   const handleFileChange = (fieldId, e, fieldType) => {
     const files = e.target.files;
@@ -729,7 +653,7 @@ function PublicFormViewer({ runPrefill = false }) {
   const handleSignatureEnd = (fieldId, sigCanvasInstance) => {
     if (sigCanvasInstance && !sigCanvasInstance.isEmpty()) {
       // Use getTrimmedCanvas() for a cleaner result, fallback to getCanvas()
-      const dataUrl = sigCanvasInstance.toDataURL("image/png");
+      const dataUrl = sigCanvasInstance.toDataURL('image/png');
       setSignatures((prev) => ({ ...prev, [fieldId]: dataUrl }));
       handleChange(fieldId, dataUrl);
     }
@@ -855,43 +779,28 @@ function PublicFormViewer({ runPrefill = false }) {
 
     formData.Fields.forEach((field) => {
       // For section fields, recursively validate their subfields
-      const fieldId =
-        (typeof field.Properties__c === "string"
-          ? JSON.parse(field.Properties__c || "{}").id
-          : field.Properties__c?.id) || field.Id;
+      const fieldId = (typeof field.Properties__c === 'string' ? JSON.parse(field.Properties__c || '{}').id : field.Properties__c?.id) || field.Id;
       const currentState = getFieldUiState(fieldId, formValues);
-      const properties =
-        typeof field.Properties__c === "string"
-          ? JSON.parse(field.Properties__c || "{}")
-          : field.Properties__c || {};
+      const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
       if (field.Field_Type__c === "section" && properties.subFields) {
         if (properties.subFields.leftField) {
           const leftError = validateSingleField(
             properties.subFields.leftField,
             formValues[properties.subFields.leftField.id],
-            formValues,
-            { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
-          if (leftError)
-            newErrors[properties.subFields.leftField.id] = leftError;
+          if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
         if (properties.subFields.rightField) {
           const rightError = validateSingleField(
             properties.subFields.rightField,
             formValues[properties.subFields.rightField.id],
-            formValues,
-            { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
-          if (rightError)
-            newErrors[properties.subFields.rightField.id] = rightError;
+          if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
         }
       } else {
-        const error = validateSingleField(
-          field,
-          formValues[field.Id || properties.id],
-          formValues,
-          { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
-        );
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } });
         if (error) newErrors[field.Id || properties.id] = error;
       }
     });
@@ -1062,71 +971,45 @@ function PublicFormViewer({ runPrefill = false }) {
   // };
 
   // Utility: Validation for a single field (returns an error message string if invalid, or null if valid)
-  const validateSingleField = (
-    field,
-    value,
-    allValues,
-    { signaturesObj, uiState } = {}
-  ) => {
+  const validateSingleField = (field, value, allValues, { signaturesObj, uiState } = {}) => {
     let properties = {};
     if (field.Properties__c) {
-      properties =
-        typeof field.Properties__c === "string"
-          ? JSON.parse(field.Properties__c || "{}")
-          : field.Properties__c || {};
+      properties = typeof field.Properties__c === "string"
+        ? JSON.parse(field.Properties__c || "{}")
+        : (field.Properties__c || {});
     }
     // For SECTION FIELDS, copy key props from top level into properties if not present
     // (e.g. label, maxChars, allowedDomains, min, max, etc.)
     [
-      "label",
-      "isRequired",
-      "maxChars",
-      "shortTextMaxChars",
-      "longTextMaxChars",
-      "allowedDomains",
-      "enableConfirmation",
-      "allowedFileTypes",
-      "maxFileSize",
-      "min",
-      "max",
-      "priceLimits",
-      "numberValueLimits",
-      "enableAgeVerification",
-      "minAge",
-      "restrictAmPm",
-      "subFields",
+      "label", "isRequired", "maxChars", "shortTextMaxChars", "longTextMaxChars", "allowedDomains",
+      "enableConfirmation", "allowedFileTypes", "maxFileSize", "min", "max", "priceLimits", "numberValueLimits",
+      "enableAgeVerification", "minAge", "restrictAmPm", "subFields"
     ].forEach((key) => {
       if (
-        (typeof properties[key] === "undefined" || properties[key] === null) &&
-        typeof field[key] !== "undefined"
+        (typeof properties[key] === "undefined" || properties[key] === null)
+        && typeof field[key] !== "undefined"
       ) {
         properties[key] = field[key];
       }
     });
     const fieldType = field.Field_Type__c || field.type;
-    const fieldLabel =
-      properties.label || field.Name || field.id || properties.id;
-    const isRequired =
-      properties.isRequired ||
-      uiState?.[properties.id || field.Id || field.id]?.required ||
-      false;
+    const fieldLabel = properties.label || field.Name || field.id || properties.id;
+    const isRequired = properties.isRequired || uiState?.[properties.id || field.Id || field.id]?.required || false;
     // Required logic (handles most types including special cases)
     if (
       isRequired &&
       fieldType !== "address" &&
       fieldType !== "fullname" &&
-      fieldType !== "phone" &&
-      (value === "" ||
+      fieldType !== "phone" && (
+        value === "" ||
         value == null ||
         (Array.isArray(value) && value.length === 0) ||
         (fieldType === "fileupload" && !value) ||
         (fieldType === "imageuploader" && !value) ||
-        (fieldType === "signature" &&
-          signaturesObj &&
-          !signaturesObj[field.Id]) ||
+        (fieldType === "signature" && signaturesObj && !signaturesObj[field.Id]) ||
         (fieldType === "terms" && !value) ||
-        (fieldType === "scalerating" &&
-          (!value || Object.keys(value).length === 0)))
+        (fieldType === "scalerating" && (!value || Object.keys(value).length === 0))
+      )
     ) {
       return `${fieldLabel} is required`;
     }
@@ -1138,10 +1021,8 @@ function PublicFormViewer({ runPrefill = false }) {
         if (properties.numberValueLimits?.enabled) {
           const numValue = parseFloat(value);
           const { min, max } = properties.numberValueLimits;
-          if (min != null && numValue < parseFloat(min))
-            return `${fieldLabel} must be at least ${min}`;
-          if (max != null && numValue > parseFloat(max))
-            return `${fieldLabel} must be at most ${max}`;
+          if (min != null && numValue < parseFloat(min)) return `${fieldLabel} must be at least ${min}`;
+          if (max != null && numValue > parseFloat(max)) return `${fieldLabel} must be at most ${max}`;
         }
         break;
       case "price":
@@ -1149,61 +1030,37 @@ function PublicFormViewer({ runPrefill = false }) {
         if (properties.priceLimits?.enabled) {
           const numValue = parseFloat(value);
           const { min, max } = properties.priceLimits;
-          if (min != null && numValue < parseFloat(min))
-            return `${fieldLabel} must be at least ${min}`;
-          if (max != null && numValue > parseFloat(max))
-            return `${fieldLabel} must be at most ${max}`;
+          if (min != null && numValue < parseFloat(min)) return `${fieldLabel} must be at least ${min}`;
+          if (max != null && numValue > parseFloat(max)) return `${fieldLabel} must be at most ${max}`;
         }
         break;
       case "shorttext":
-        if (
-          properties.shortTextMaxChars &&
-          value &&
-          value.length > properties.shortTextMaxChars
-        )
+        if (properties.shortTextMaxChars && value && value.length > properties.shortTextMaxChars)
           return `${fieldLabel} must be at most ${properties.shortTextMaxChars} characters`;
         break;
       case "longtext":
-        if (
-          properties.longTextMaxChars &&
-          value &&
-          value.length > properties.longTextMaxChars
-        )
+        if (properties.longTextMaxChars && value && value.length > properties.longTextMaxChars)
           return `${fieldLabel} must be at most ${properties.longTextMaxChars} characters`;
         break;
       case "email":
         if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
           return `${fieldLabel} must be a valid email address`;
         if (properties.allowedDomains && value) {
-          const domains = properties.allowedDomains
-            .split(",")
-            .map((d) => d.trim());
+          const domains = properties.allowedDomains.split(",").map((d) => d.trim());
           const domain = value.split("@")[1];
-          if (!domains.includes(domain))
-            return `${fieldLabel} must be from one of these domains: ${domains.join(
-              ", "
-            )}`;
+          if (!domains.includes(domain)) return `${fieldLabel} must be from one of these domains: ${domains.join(", ")}`;
         }
-        if (
-          properties.enableConfirmation &&
-          value !== allValues[`${field.Id || properties.id}_confirmation`]
-        ) {
+        if (properties.enableConfirmation && value !== allValues[`${field.Id || properties.id}_confirmation`]) {
           return `Email confirmation does not match`;
         }
         break;
       case "fileupload":
       case "imageuploader":
-        if (
-          value &&
-          properties.maxFileSize &&
-          value.size > properties.maxFileSize * 1024 * 1024
-        )
+        if (value && properties.maxFileSize && value.size > properties.maxFileSize * 1024 * 1024)
           return `File size exceeds ${properties.maxFileSize}MB limit`;
         if (value && properties.allowedFileTypes) {
           const extension = value.name.split(".").pop().toLowerCase();
-          const allowed = properties.allowedFileTypes
-            .split(",")
-            .map((type) => type.trim().toLowerCase());
+          const allowed = properties.allowedFileTypes.split(",").map((type) => type.trim().toLowerCase());
           if (!allowed.includes(extension))
             return `File type ${extension} is not allowed. Allowed types: ${properties.allowedFileTypes}`;
         }
@@ -1216,10 +1073,8 @@ function PublicFormViewer({ runPrefill = false }) {
           const birthDate = new Date(value);
           let age = today.getFullYear() - birthDate.getFullYear();
           const m = today.getMonth() - birthDate.getMonth();
-          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate()))
-            age--;
-          if (age < properties.minAge)
-            return `You must be at least ${properties.minAge} years old`;
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+          if (age < properties.minAge) return `You must be at least ${properties.minAge} years old`;
         }
         break;
       case "datetime":
@@ -1231,43 +1086,23 @@ function PublicFormViewer({ runPrefill = false }) {
           const [hourStr] = value.split(":");
           const hour = parseInt(hourStr, 10);
           const isAm = hour >= 0 && hour < 12;
-          if (
-            (properties.restrictAmPm === "AM" && !isAm) ||
-            (properties.restrictAmPm === "PM" && isAm)
-          ) {
+          if ((properties.restrictAmPm === "AM" && !isAm) || (properties.restrictAmPm === "PM" && isAm)) {
             return `Time must be ${properties.restrictAmPm}`;
           }
         }
         break;
       case "phone":
         if (value) {
-          const isCountryCodeEnabled =
-            properties.subFields?.countryCode?.enabled;
+          const isCountryCodeEnabled = properties.subFields?.countryCode?.enabled;
           if (isCountryCodeEnabled) {
-            const countryCode =
-              allValues[`${field.Id || properties.id}_countryCode`] ||
-              properties.subFields?.countryCode?.value ||
-              "US";
+            const countryCode = allValues[`${field.Id || properties.id}_countryCode`] || properties.subFields?.countryCode?.value || "US";
             try {
               const adjustedValue = value.replace(/\D/g, "");
-              const phoneNumber = parsePhoneNumberFromString(
-                adjustedValue,
-                countryCode
-              );
-              if (!phoneNumber || !phoneNumber.isValid())
-                return `${fieldLabel} is not a valid phone number for ${countryCode}`;
-              const maxDigits =
-                phoneNumber.countryCallingCode === "+1"
-                  ? 10
-                  : phoneNumber.nationalNumber.length <= 15
-                  ? phoneNumber.nationalNumber.length
-                  : 15;
-              if (adjustedValue.length > maxDigits)
-                return `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
-              if (
-                countryCode === "US" &&
-                !/^[2-9]\d{2}$/.test(phoneNumber.nationalNumber.slice(0, 3))
-              ) {
+              const phoneNumber = parsePhoneNumberFromString(adjustedValue, countryCode);
+              if (!phoneNumber || !phoneNumber.isValid()) return `${fieldLabel} is not a valid phone number for ${countryCode}`;
+              const maxDigits = phoneNumber.countryCallingCode === "+1" ? 10 : phoneNumber.nationalNumber.length <= 15 ? phoneNumber.nationalNumber.length : 15;
+              if (adjustedValue.length > maxDigits) return `${fieldLabel} exceeds maximum digits (${maxDigits}) for ${countryCode}`;
+              if (countryCode === "US" && !/^[2-9]\d{2}$/.test(phoneNumber.nationalNumber.slice(0, 3))) {
                 return `${fieldLabel} must include a valid US area code`;
               }
             } catch (error) {
@@ -1278,30 +1113,19 @@ function PublicFormViewer({ runPrefill = false }) {
         break;
       case "address":
         if (isRequired && properties.subFields) {
-          const subfieldsToCheck = [
-            "street",
-            "city",
-            "state",
-            "country",
-            "postal",
-          ];
+          const subfieldsToCheck = ["street", "city", "state", "country", "postal"];
           const missingFields = [];
 
           for (const subfield of subfieldsToCheck) {
             const subConfig = properties.subFields[subfield];
             if (
-              subfield === "street"
+              (subfield === "street"
                 ? subConfig?.visiblesubFields !== false
-                : subConfig?.visible !== false
+                : subConfig?.visible !== false)
             ) {
-              const subValue =
-                allValues[
-                  `${field.id || field.Id || properties.id}_${subfield}`
-                ] || "";
-              if (
-                !subValue ||
-                (typeof subValue === "string" && subValue.trim() === "")
-              ) {
+
+              const subValue = allValues[`${field.id || field.Id || properties.id}_${subfield}`] || '';
+              if (!subValue || (typeof subValue === "string" && subValue.trim() === "")) {
                 missingFields.push(subConfig?.label || subfield);
               }
             }
@@ -1321,14 +1145,8 @@ function PublicFormViewer({ runPrefill = false }) {
           for (const subfield of subfieldsToCheck) {
             const subConfig = properties.subFields[subfield];
             if (subConfig?.enabled !== false) {
-              const subValue =
-                allValues[
-                  `${field.id || field.Id || properties.id}_${subfield}`
-                ] || "";
-              if (
-                !subValue ||
-                (typeof subValue === "string" && subValue.trim() === "")
-              ) {
+              const subValue = allValues[`${field.id || field.Id || properties.id}_${subfield}`] || '';
+              if (!subValue || (typeof subValue === "string" && subValue.trim() === "")) {
                 missingFields.push(subConfig?.label || subfield);
               }
             }
@@ -1336,6 +1154,31 @@ function PublicFormViewer({ runPrefill = false }) {
 
           if (missingFields.length > 0) {
             return `Please fill out all the fields in full name.`;
+          }
+        }
+        break;
+      case "checkbox":
+        // Only validate minSelection if field is required or has selections
+        if (isRequired || (Array.isArray(value) && value.length > 0)) {
+          const selectedCount = Array.isArray(value) ? value.length : 0;
+          const minSelection = properties.minSelection || 0;
+
+          if (minSelection > 0 && selectedCount < minSelection) {
+            return `${fieldLabel}: Please select at least ${minSelection} option(s)`;
+          }
+        }
+        break;
+
+      case "dropdown":
+        if (properties.allowMultipleSelections) {
+          // Only validate minSelection if field is required or has selections
+          if (isRequired || (Array.isArray(value) && value.length > 0)) {
+            const selectedCount = Array.isArray(value) ? value.length : 0;
+            const minSelection = properties.minSelection || 0;
+
+            if (minSelection > 0 && selectedCount < minSelection) {
+              return `${fieldLabel}: Please select at least ${minSelection} option(s)`;
+            }
           }
         }
         break;
@@ -1356,19 +1199,13 @@ function PublicFormViewer({ runPrefill = false }) {
 
     setIsSubmitting(true);
     try {
-      const visiblePageIds = new Set(
-        getVisiblePages(formValues).map(
-          (arr) => `page_${arr[0].Page_Number__c}`
-        )
-      );
+      const visiblePageIds = new Set(getVisiblePages(formValues).map(arr => `page_${arr[0].Page_Number__c}`));
 
       // Filter out fields that belong to hidden pages
       const filteredFormValues = {};
-      Object.keys(formValues).forEach((key) => {
+      Object.keys(formValues).forEach(key => {
         // Find field's page number from formData.Fields
-        const field = formData.Fields.find(
-          (f) => f.Id === key || JSON.parse(f.Properties__c || "{}").id === key
-        );
+        const field = formData.Fields.find(f => (f.Id === key || (JSON.parse(f.Properties__c || '{}').id === key)));
         if (!field) {
           filteredFormValues[key] = formValues[key]; // Keep if field metadata not found (safer fallback)
         } else {
@@ -1382,7 +1219,7 @@ function PublicFormViewer({ runPrefill = false }) {
       const filesToUpload = {};
 
       const loopPageKeys = pages
-        .map((arr) => {
+        .map(arr => {
           const pageArr = arr;
           const pageId = `page_${pageArr[0]?.Page_Number__c}`;
           const loopCond = getLoopConditionForPage(pageArr, filteredFormValues);
@@ -1391,35 +1228,24 @@ function PublicFormViewer({ runPrefill = false }) {
         .filter(Boolean);
 
       const loopFieldsByPage = {};
-      loopPageKeys.forEach((pageId) => {
+      loopPageKeys.forEach(pageId => {
         // Get all fields on this page (including section subfields etc)
-        loopFieldsByPage[pageId] = pages
-          .find((arr) => `page_${arr[0]?.Page_Number__c}` === pageId)
-          .map((f) => {
-            const properties =
-              typeof f.Properties__c === "string"
-                ? JSON.parse(f.Properties__c || "{}")
-                : f.Properties__c || {};
+        loopFieldsByPage[pageId] = pages.find(arr => `page_${arr[0]?.Page_Number__c}` === pageId)
+          .map(f => {
+            const properties = typeof f.Properties__c === "string" ? JSON.parse(f.Properties__c || "{}") : (f.Properties__c || {});
             // Collect main field and subfields (e.g. for fullname, address)
             let fieldIds = [f.Id || properties.id];
-            if (
-              f.Field_Type__c === "phone" &&
-              properties.subFields?.countryCode?.enabled
-            ) {
+            if (f.Field_Type__c === "phone" && properties.subFields?.countryCode?.enabled) {
               fieldIds.push(`${f.Id || properties.id}_countryCode`);
             }
             if (f.Field_Type__c === "fullname" && properties.subFields) {
               fieldIds = fieldIds.concat(
-                ["salutation", "first", "last"].map(
-                  (sub) => `${f.Id || properties.id}_${sub}`
-                )
+                ["salutation", "first", "last"].map(sub => `${f.Id || properties.id}_${sub}`)
               );
             }
             if (f.Field_Type__c === "address" && properties.subFields) {
               fieldIds = fieldIds.concat(
-                ["street", "city", "state", "country", "postal"].map(
-                  (sub) => `${f.Id || properties.id}_${sub}`
-                )
+                ["street", "city", "state", "country", "postal"].map(sub => `${f.Id || properties.id}_${sub}`)
               );
             }
             return fieldIds;
@@ -1428,24 +1254,23 @@ function PublicFormViewer({ runPrefill = false }) {
       });
 
       // Move answers of loop pages from root to loop array
-      loopPageKeys.forEach((loopKey) => {
+      loopPageKeys.forEach(loopKey => {
         const loopArray = filteredFormValues[`${loopKey}_loop`];
         if (!Array.isArray(loopArray)) return;
         // Each element of the loop is a set of values for this page's fields
-        submissionData[`${loopKey}_loop`] = loopArray.map((ansSet) => {
+        submissionData[`${loopKey}_loop`] = loopArray.map(ansSet => {
           // Each ansSet is a map of (fieldId: value) only for that loop round.
           // For consistency, also copy any subfields for e.g. phone, fullname, address.
           const obj = {};
-          loopFieldsByPage[loopKey].forEach((fid) => {
+          loopFieldsByPage[loopKey].forEach(fid => {
             if (ansSet[fid] !== undefined) obj[fid] = ansSet[fid];
           });
           return obj;
         });
         // Remove these fields from root: do not store latest loop round separately
-        loopFieldsByPage[loopKey].forEach((fid) => {
+        loopFieldsByPage[loopKey].forEach(fid => {
           if (submissionData[fid] !== undefined) delete submissionData[fid];
-          if (submissionData[`${fid}_countryCode`] !== undefined)
-            delete submissionData[`${fid}_countryCode`];
+          if (submissionData[`${fid}_countryCode`] !== undefined) delete submissionData[`${fid}_countryCode`];
         });
       });
 
@@ -1507,65 +1332,47 @@ function PublicFormViewer({ runPrefill = false }) {
           submissionData.paymentData
         );
       }
+
       for (const key of Object.keys(filteredFormValues)) {
         const field = formData.Fields.find((f) => f.Id === key);
         const fieldType = field?.Field_Type__c;
-        const properties = field ? JSON.parse(field.Properties__c || "{}") : {};
+        const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
-        if (
-          ["fileupload", "imageuploader"].includes(fieldType) &&
-          filteredFormValues[key] instanceof File
-        ) {
+        if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
           filesToUpload[key] = filteredFormValues[key];
           submissionData[key] = filteredFormValues[key].name;
-        } else if (fieldType === "signature" && signatures[key]) {
+        } else if (fieldType === 'signature' && signatures[key]) {
           const signatureBlob = await (await fetch(signatures[key])).blob();
-          const signatureFile = new File([signatureBlob], `${key}.png`, {
-            type: "image/png",
-          });
+          const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
           filesToUpload[key] = signatureFile;
           submissionData[key] = `${key}.png`;
-        } else if (fieldType === "phone" && !key.endsWith("_countryCode")) {
+        } else if (fieldType === 'phone' && !key.endsWith('_countryCode')) {
           // Handle phone fields
           if (properties.subFields?.countryCode?.enabled) {
-            const countryCode =
-              filteredFormValues[`${key}_countryCode`] ||
-              properties.subFields.countryCode.value ||
-              "US";
-            const phoneNumber = filteredFormValues[key]
-              ? filteredFormValues[key].replace(/\D/g, "")
-              : "";
+            const countryCode = filteredFormValues[`${key}_countryCode`] || properties.subFields.countryCode.value || 'US';
+            const phoneNumber = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
             try {
-              const phoneObj = parsePhoneNumberFromString(
-                phoneNumber,
-                countryCode
-              );
+              const phoneObj = parsePhoneNumberFromString(phoneNumber, countryCode);
               if (phoneObj && phoneObj.isValid()) {
                 // Combine country code and phone number in E.164 format
-                submissionData[key] = phoneObj.format("E.164");
+                submissionData[key] = phoneObj.format('E.164');
               } else {
                 // If invalid, store the raw phone number
                 submissionData[key] = phoneNumber;
-                console.warn(
-                  `Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`
-                );
+                console.warn(`Invalid phone number for ${key}: ${phoneNumber} (${countryCode})`);
               }
               // Include country code separately for formatter reference
               submissionData[`${key}_countryCode`] = countryCode;
             } catch (error) {
               submissionData[key] = phoneNumber;
               submissionData[`${key}_countryCode`] = countryCode;
-              console.warn(
-                `Error parsing phone number for ${key}: ${error.message}`
-              );
+              console.warn(`Error parsing phone number for ${key}: ${error.message}`);
             }
           } else {
             // For phone fields without country code subfield, clean to digits
-            submissionData[key] = filteredFormValues[key]
-              ? filteredFormValues[key].replace(/\D/g, "")
-              : "";
+            submissionData[key] = filteredFormValues[key] ? filteredFormValues[key].replace(/\D/g, '') : '';
           }
-        } else if (key.endsWith("_countryCode")) {
+        } else if (key.endsWith('_countryCode')) {
           // Country code is already handled above
           continue;
         } else {
@@ -1576,30 +1383,28 @@ function PublicFormViewer({ runPrefill = false }) {
       const uploadToS3 = async (file) => {
         const reader = new Promise((resolve, reject) => {
           const r = new FileReader();
-          r.onload = () => resolve(r.result.split(",")[1]);
+          r.onload = () => resolve(r.result.split(',')[1]);
           r.onerror = reject;
           r.readAsDataURL(file);
         });
 
         const base64String = await reader;
 
-        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(
-          file.name
-        )}&fileType=${encodeURIComponent(file.type)}`;
+        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
 
         const response = await fetch(apiUrl, {
-          method: "POST",
+          method: 'POST',
           body: base64String,
-          headers: { "Content-Type": "application/octet-stream" },
+          headers: { 'Content-Type': 'application/octet-stream' }
         });
 
         if (!response.ok) {
           const err = await response.json();
-          throw new Error(err.message || "Upload to S3 failed");
+          throw new Error(err.message || 'Upload to S3 failed');
         }
 
         const data = await response.json();
-        return data.fileUrl; // S3 URL
+        return data.fileUrl;  // S3 URL
       };
 
       // Upload all files and assign URLs into submissionData
@@ -1610,14 +1415,14 @@ function PublicFormViewer({ runPrefill = false }) {
         } catch (uploadErr) {
           console.error(`Failed to upload ${key}`, uploadErr);
           setIsSubmitting(false);
-          return; // stop submission on error or handle as needed
+          return;  // stop submission on error or handle as needed
         }
       }
 
       const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
@@ -1634,10 +1439,10 @@ function PublicFormViewer({ runPrefill = false }) {
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Failed to submit form");
+        throw new Error(data.error || 'Failed to submit form');
       }
 
-      // const submissionId = data.submissionId;
+      const submissionId = data.submissionId;
 
       const updatedSubmissionData = { ...submissionData };
 
@@ -1651,9 +1456,9 @@ function PublicFormViewer({ runPrefill = false }) {
       }
 
       const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
@@ -1671,16 +1476,12 @@ function PublicFormViewer({ runPrefill = false }) {
         if (flowData.results) {
           Object.entries(flowData.results).forEach(([nodeId, result]) => {
             if (result.error) {
-              const mapping = formData.mappings.find(
-                (m) => m.Node_Id__c === nodeId
-              );
+              const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
               if (mapping?.Formatter_Config__c) {
-                const formatterConfig = JSON.parse(
-                  mapping.Formatter_Config__c || "{}"
-                );
+                const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
                 let fieldId = formatterConfig.inputField;
-                if (fieldId.includes("_phoneNumber")) {
-                  fieldId = fieldId.replace("_phoneNumber", "");
+                if (fieldId.includes('_phoneNumber')) {
+                  fieldId = fieldId.replace('_phoneNumber', '');
                 }
                 newErrors[fieldId] = result.error;
               }
@@ -1688,54 +1489,56 @@ function PublicFormViewer({ runPrefill = false }) {
           });
           if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
-            throw new Error(
-              "Form submission completed but flow execution had errors"
-            );
+            throw new Error('Form submission completed but flow execution had errors');
           }
         }
-        throw new Error(flowData.error || "Failed to execute flow");
+        throw new Error(flowData.error || 'Failed to execute flow');
       }
 
-      alert("Form submitted and flow executed successfully!");
+      alert('Form submitted and flow executed successfully!');
 
       // Set to show thank you page
       setThankyouData(formData?.ThankYou || null);
-      console.log("formdata =>", formData);
-      console.log("thankyouData =>", formData?.ThankYou);
+      console.log('formdata =>', formData)
+      console.log('thankyouData =>', formData?.ThankYou)
       setIsSubmitted(true);
 
       const initialValues = {};
+      let hasPayment = false;
 
       formData.Fields.forEach((field) => {
-        const properties = JSON.parse(field.Properties__c || "{}");
+        const properties = JSON.parse(field.Properties__c || '{}');
         const fieldType = field.Field_Type__c;
 
-        if (
-          fieldType === "phone" &&
-          properties.subFields?.countryCode?.enabled
-        ) {
-          initialValues[`${field.Id || properties.id}_countryCode`] =
-            properties.subFields.countryCode.value || "US";
-          initialValues[field.Id || properties.id] = "";
-        } else if (
-          fieldType === "checkbox" ||
-          (fieldType === "dropdown" && properties.allowMultipleSelections)
-        ) {
+        // Check for payment fields
+        if (fieldType === "paypal_payment") {
+          hasPayment = true;
+        }
+
+        if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
+          initialValues[`${field.Id || properties.id}_countryCode`] = properties.subFields.countryCode.value || 'US';
+          initialValues[field.Id || properties.id] = '';
+        } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
           initialValues[field.Id || properties.id] = [];
-        } else if (fieldType === "datetime" || fieldType === "date") {
+        } else if (fieldType === 'datetime' || fieldType === 'date') {
           initialValues[field.Id || properties.id] = null;
-        } else if (fieldType === "scalerating") {
+        } else if (fieldType === 'scalerating') {
           initialValues[field.Id || properties.id] = {};
+        } else if (fieldType === "paypal_payment") {
+          // Payment fields don't need initial values
+          initialValues[field.Id || properties.id] = null;
         } else {
-          initialValues[field.Id || properties.id] = "";
+          initialValues[field.Id || properties.id] = '';
         }
       });
 
+      setHasPaymentField(hasPayment);
       setFormValues(initialValues);
       setErrors({});
       setSignatures({});
       setFilePreviews({});
       setSelectedRatings({});
+      setSelectedOptions({});
       setToggles({});
       setCurrentPage(0);
     } catch (error) {
@@ -1746,12 +1549,14 @@ function PublicFormViewer({ runPrefill = false }) {
       //   } catch (e) {
       //     throw new Error(e.message || 'Invalid link format');
       //   }
+
       //   const [userId, formId] = decrypted.split('$');
       //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
       //     method: 'POST',
       //     headers: { 'Content-Type': 'application/json' },
       //     body: JSON.stringify({ userId }),
       //   });
+
       //   const tokenData = await tokenResponse.json();
       //   if (!tokenResponse.ok || tokenData.error) {
       //     throw new Error(tokenData.error || 'Failed to fetch access token');
@@ -1768,186 +1573,132 @@ function PublicFormViewer({ runPrefill = false }) {
     }
   };
 
-  const evaluateCondition = React.useCallback(
-    (condition, values, loopArrayKey = null) => {
-      if (!condition) return false;
+  const evaluateCondition = (condition, values, loopArrayKey = null) => {
+    if (!condition) return false;
 
-      // Helper for getting a field value, including from loop arrays
-      function getValueForField(fieldId) {
-        // Try direct value
-        const plainValue = values[localIdToSFId[fieldId] || fieldId];
-        if (plainValue !== undefined) return plainValue;
+    // Helper for getting a field value, including from loop arrays
+    function getValueForField(fieldId) {
+      // Try direct value
+      const plainValue = values[localIdToSFId[fieldId] || fieldId];
+      if (plainValue !== undefined) return plainValue;
 
-        // Search all page_x_loop keys for this field in any iteration if not found
-        const loopVals = Object.keys(values)
-          .filter((key) => key.endsWith("_loop") && Array.isArray(values[key]))
-          .flatMap((loopKey) =>
-            values[loopKey]
-              .map((iteration) => iteration[localIdToSFId[fieldId] || fieldId])
-              .filter((v) => v !== undefined)
-          );
-        // If found in any loop, return the array (for some/any logic)
-        if (loopVals.length) return loopVals;
-        return undefined;
-      }
+      // Search all page_x_loop keys for this field in any iteration if not found
+      const loopVals = Object.keys(values)
+        .filter(key => key.endsWith('_loop') && Array.isArray(values[key]))
+        .flatMap(loopKey =>
+          values[loopKey]
+            .map(iteration => iteration[localIdToSFId[fieldId] || fieldId])
+            .filter(v => v !== undefined)
+        );
+      // If found in any loop, return the array (for some/any logic)
+      if (loopVals.length) return loopVals;
+      return undefined;
+    }
 
-      // Evaluate each subcondition
-      const condBools = (condition.conditions || []).map((cond) => {
-        let val = getValueForField(cond.ifField);
-        // If val is an array (loop), match any iteration meeting the condition
-        if (Array.isArray(val)) {
-          return val.some((itVal) => {
-            switch (cond.operator) {
-              case "equals":
-                return itVal === cond.value;
-              case "not equals":
-                return itVal !== cond.value;
-              case "contains":
-                return (itVal || "")
-                  .toLowerCase()
-                  .includes((cond.value || "").toLowerCase());
-              case "does not contain":
-                return !(itVal || "")
-                  .toLowerCase()
-                  .includes((cond.value || "").toLowerCase());
-              case "greater than":
-                return Number(itVal) > Number(cond.value);
-              case "greater than or equal to":
-                return Number(itVal) >= Number(cond.value);
-              case "smaller than":
-                return Number(itVal) < Number(cond.value);
-              case "smaller than or equal to":
-                return Number(itVal) <= Number(cond.value);
-              case "is null":
-                return itVal == null || itVal === "";
-              case "is not null":
-                return itVal != null && itVal !== "";
-              default:
-                return false;
-            }
-          });
-        } else {
-          // Not a loop field
+    // Evaluate each subcondition
+    const condBools = (condition.conditions || []).map((cond) => {
+      let val = getValueForField(cond.ifField);
+      // If val is an array (loop), match any iteration meeting the condition
+      if (Array.isArray(val)) {
+        return val.some(itVal => {
           switch (cond.operator) {
-            case "equals":
-              return val === cond.value;
-            case "not equals":
-              return val !== cond.value;
-            case "contains":
-              return (val || "")
-                .toLowerCase()
-                .includes((cond.value || "").toLowerCase());
-            case "does not contain":
-              return !(val || "")
-                .toLowerCase()
-                .includes((cond.value || "").toLowerCase());
-            case "greater than":
-              return Number(val) > Number(cond.value);
-            case "greater than or equal to":
-              return Number(val) >= Number(cond.value);
-            case "smaller than":
-              return Number(val) < Number(cond.value);
-            case "smaller than or equal to":
-              return Number(val) <= Number(cond.value);
-            case "is null":
-              return val == null || val === "";
-            case "is not null":
-              return val != null && val !== "";
-            default:
-              return false;
+            case 'equals': return itVal === cond.value;
+            case 'not equals': return itVal !== cond.value;
+            case 'contains': return (itVal || '').toLowerCase().includes((cond.value || '').toLowerCase());
+            case 'does not contain': return !(itVal || '').toLowerCase().includes((cond.value || '').toLowerCase());
+            case 'greater than': return Number(itVal) > Number(cond.value);
+            case 'greater than or equal to': return Number(itVal) >= Number(cond.value);
+            case 'smaller than': return Number(itVal) < Number(cond.value);
+            case 'smaller than or equal to': return Number(itVal) <= Number(cond.value);
+            case 'is null': return itVal == null || itVal === '';
+            case 'is not null': return itVal != null && itVal !== '';
+            default: return false;
           }
-        }
-      });
-
-      // Logic handling (unchanged)
-      if (condition.logic === "Custom" && condition.logicExpression) {
-        let expr = condition.logicExpression;
-        condBools.forEach((v, idx) => {
-          expr = expr.replace(
-            new RegExp(`\\b${idx + 1}\\b`, "g"),
-            v ? "true" : "false"
-          );
         });
-        try {
-          expr = expr
-            .replace(/\bAND\b/gi, "&&")
-            .replace(/\bOR\b/gi, "||")
-            .replace(/[^truefals()&|! ]/gi, "");
-          // eslint-disable-next-line no-eval
-          return eval(expr);
-        } catch {
-          return false;
+      } else {
+        // Not a loop field
+        switch (cond.operator) {
+          case 'equals': return val === cond.value;
+          case 'not equals': return val !== cond.value;
+          case 'contains': return (val || '').toLowerCase().includes((cond.value || '').toLowerCase());
+          case 'does not contain': return !(val || '').toLowerCase().includes((cond.value || '').toLowerCase());
+          case 'greater than': return Number(val) > Number(cond.value);
+          case 'greater than or equal to': return Number(val) >= Number(cond.value);
+          case 'smaller than': return Number(val) < Number(cond.value);
+          case 'smaller than or equal to': return Number(val) <= Number(cond.value);
+          case 'is null': return val == null || val === '';
+          case 'is not null': return val != null && val !== '';
+          default: return false;
         }
       }
-      if (condition.logic === "OR") return condBools.some(Boolean);
-      return condBools.every(Boolean);
-    },
-    [localIdToSFId]
-  );
+    });
 
-  const getVisiblePages = React.useCallback(
-    (formValues) => {
-      let visiblePages = [...pages];
-      // Hide logic
-      formConditions
-        .filter((c) => c.type === "skip_hide_page" && c.thenAction === "hide")
-        .forEach((condition) => {
-          if (evaluateCondition(condition, formValues)) {
-            (condition.targetPage || []).forEach((pid) => {
-              visiblePages = visiblePages.filter((pageArr) =>
-                pageArr[0]?.Page_Number__c
-                  ? `page_${pageArr[0].Page_Number__c}` !== pid
-                  : true
-              );
-            });
-          }
+    // Logic handling (unchanged)
+    if (condition.logic === 'Custom' && condition.logicExpression) {
+      let expr = condition.logicExpression;
+      condBools.forEach((v, idx) => {
+        expr = expr.replace(new RegExp(`\\b${idx + 1}\\b`, 'g'), v ? 'true' : 'false');
+      });
+      try {
+        expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||').replace(/[^truefals()&|! ]/gi, '');
+        // eslint-disable-next-line no-eval
+        return eval(expr);
+      } catch { return false; }
+    }
+    if (condition.logic === 'OR') return condBools.some(Boolean);
+    return condBools.every(Boolean);
+  };
+
+
+
+  const getVisiblePages = (formValues) => {
+    let visiblePages = [...pages];
+    // Hide logic
+    formConditions.filter(c => c.type === 'skip_hide_page' && c.thenAction === 'hide').forEach(condition => {
+      if (evaluateCondition(condition, formValues)) {
+        (condition.targetPage || []).forEach(pid => {
+          visiblePages = visiblePages.filter(pageArr =>
+            pageArr[0]?.Page_Number__c
+              ? `page_${pageArr[0].Page_Number__c}` !== pid
+              : true
+          );
         });
-      // "Loop" handled in navigation logic below
-      return visiblePages;
-    },
-    [pages, formConditions, evaluateCondition]
-  );
+      }
+    });
+    // "Loop" handled in navigation logic below
+    return visiblePages;
+  };
 
   const getFieldAllowedOptions = (fieldId, formValues) => {
     let allowed = null;
-    formConditions
-      .filter(
-        (c) =>
-          c.type === "dependent" &&
-          (localIdToSFId[c.dependentField] || c.dependentField) === fieldId
-      )
-      .forEach((cond) => {
-        const sourceFieldId = localIdToSFId[cond.ifField] || cond.ifField;
-        const sourceValue = formValues[sourceFieldId];
-        if (
-          sourceValue === cond.value ||
-          (Array.isArray(cond.value) && cond.value.includes(sourceValue))
-        ) {
-          allowed = Array.isArray(cond.dependentValues)
-            ? cond.dependentValues
-            : [];
-        }
-      });
+    formConditions.filter(c => c.type === 'dependent' && (localIdToSFId[c.dependentField] || c.dependentField) === fieldId).forEach(cond => {
+      const sourceFieldId = localIdToSFId[cond.ifField] || cond.ifField;
+      const sourceValue = formValues[sourceFieldId];
+      if (sourceValue === cond.value || (Array.isArray(cond.value) && cond.value.includes(sourceValue))) {
+        allowed = Array.isArray(cond.dependentValues) ? cond.dependentValues : [];
+      }
+    });
     return allowed;
   };
 
+
   const getFieldUiState = (fieldId, formValues) => {
     let state = { hidden: false, required: false, mask: null, disabled: false };
-    formConditions.forEach((c) => {
-      if (c.type === "show_hide" && c.thenFields?.includes(fieldId)) {
+    formConditions.forEach(c => {
+      if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
-          if (c.thenAction === "show") state.hidden = false;
-          if (c.thenAction === "hide") state.hidden = true;
+          if (c.thenAction === 'show') state.hidden = false;
+          if (c.thenAction === 'hide') state.hidden = true;
         }
       }
-      if (c.type === "enable_require_mask" && c.thenFields?.includes(fieldId)) {
+      if (c.type === 'enable_require_mask' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
-          if (c.thenAction === "require") state.required = true;
+          if (c.thenAction === 'require') state.required = true;
           if (c.thenAction === "don't require") state.required = false;
-          if (c.thenAction === "set mask") state.mask = c.maskPattern;
-          if (c.thenAction === "unmask") state.mask = null;
-          if (c.thenAction === "enable") state.disabled = false;
-          if (c.thenAction === "disable") state.disabled = true;
+          if (c.thenAction === 'set mask') state.mask = c.maskPattern;
+          if (c.thenAction === 'unmask') state.mask = null;
+          if (c.thenAction === 'enable') state.disabled = false;
+          if (c.thenAction === 'disable') state.disabled = true;
         }
       }
     });
@@ -1955,18 +1706,15 @@ function PublicFormViewer({ runPrefill = false }) {
   };
   const getNextPageIndex = (currentIdx, formValues) => {
     // Evaluate for "skip to"
+    let idx = currentIdx;
     // NOTE: skip conditions ONLY apply on current page
-    const skipConditions = formConditions.filter(
-      (c) =>
-        c.type === "skip_hide_page" &&
-        c.sourcePage === `page_${pages[currentIdx][0].Page_Number__c}` &&
-        c.thenAction === "skip to"
-    );
+    const skipConditions = formConditions
+      .filter(c => c.type === 'skip_hide_page' && c.sourcePage === `page_${pages[currentIdx][0].Page_Number__c}` && c.thenAction === 'skip to');
     for (const cond of skipConditions) {
       if (evaluateCondition(cond, formValues)) {
         // Find index of the targetPage
         const targetIdx = pages.findIndex(
-          (arr) => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
+          arr => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
         );
         if (targetIdx !== -1) return targetIdx;
       }
@@ -1974,14 +1722,10 @@ function PublicFormViewer({ runPrefill = false }) {
     // Normal next, just +1 for visible pages
     const visible = getVisiblePages(formValues);
     const myId = `page_${pages[currentIdx][0].Page_Number__c}`;
-    const idxInVisible = visible.findIndex(
-      (arr) => `page_${arr[0].Page_Number__c}` === myId
-    );
+    const idxInVisible = visible.findIndex(arr => `page_${arr[0].Page_Number__c}` === myId);
     if (idxInVisible !== -1 && idxInVisible < visible.length - 1) {
       const nextPageId = `page_${visible[idxInVisible + 1][0].Page_Number__c}`;
-      return pages.findIndex(
-        (arr) => `page_${arr[0].Page_Number__c}` === nextPageId
-      );
+      return pages.findIndex(arr => `page_${arr[0].Page_Number__c}` === nextPageId);
     }
     return currentIdx; // stay if at end
   };
@@ -1989,14 +1733,10 @@ function PublicFormViewer({ runPrefill = false }) {
     // Always allow "back" unless already on first page
     const visible = getVisiblePages(formValues);
     const myId = `page_${pages[currentIdx][0].Page_Number__c}`;
-    const idxInVisible = visible.findIndex(
-      (arr) => `page_${arr[0].Page_Number__c}` === myId
-    );
+    const idxInVisible = visible.findIndex(arr => `page_${arr[0].Page_Number__c}` === myId);
     if (idxInVisible > 0) {
       const prevPageId = `page_${visible[idxInVisible - 1][0].Page_Number__c}`;
-      return pages.findIndex(
-        (arr) => `page_${arr[0].Page_Number__c}` === prevPageId
-      );
+      return pages.findIndex(arr => `page_${arr[0].Page_Number__c}` === prevPageId);
     }
     return currentIdx;
   };
@@ -2009,14 +1749,10 @@ function PublicFormViewer({ runPrefill = false }) {
 
     if (isLoopPage) {
       let n = 1;
-      if (
-        loopCond.loopType === "field" &&
-        loopCond.loopField &&
-        formValues[localIdToSFId[loopCond.loopField]]
-      ) {
+      if (loopCond.loopType === 'field' && loopCond.loopField && formValues[localIdToSFId[loopCond.loopField]]) {
         n = Number(formValues[localIdToSFId[loopCond.loopField]]) || 1;
         n = Math.max(1, n);
-      } else if (loopCond.loopType === "static" && loopCond.loopValue) {
+      } else if (loopCond.loopType === 'static' && loopCond.loopValue) {
         n = Number(loopCond.loopValue) || 1;
         n = Math.max(1, n);
       }
@@ -2026,42 +1762,38 @@ function PublicFormViewer({ runPrefill = false }) {
         loopCounters[currentPageId].count !== n ||
         !loopCounters[currentPageId].set
       ) {
-        setLoopCounters((lc) => ({
+        setLoopCounters(lc => ({
           ...lc,
-          [currentPageId]: { count: n, index: 0, answers: [], set: true },
+          [currentPageId]: { count: n, index: 0, answers: [], set: true }
         }));
       }
     }
     // eslint-disable-next-line
   }, [currentPage, pages, formValues]);
 
+
   // Remove formValues for hidden pages/fields
   useEffect(() => {
     // When currentPage/formValues changes
     const visible = getVisiblePages(formValues);
-    const visiblePageIds = new Set(
-      visible.map((arr) => `page_${arr[0].Page_Number__c}`)
-    );
+    const visiblePageIds = new Set(visible.map(arr => `page_${arr[0].Page_Number__c}`));
     // Remove answers to hidden pages
     const toRemove = [];
-    pages.forEach((pageArr) => {
+    pages.forEach(pageArr => {
       const pid = `page_${pageArr[0].Page_Number__c}`;
       if (!visiblePageIds.has(pid)) {
-        pageArr.forEach((field) => toRemove.push(field.Id || field.id));
+        pageArr.forEach(field => toRemove.push(field.Id || field.id));
       }
     });
-  }, [currentPage, formConditions, formValues, getVisiblePages, pages]);
+
+  }, [currentPage, formConditions]);
 
   const getLoopConditionForPage = (pageArr, values) => {
     if (!pageArr) return null;
     const pageId = `page_${pageArr[0]?.Page_Number__c}`;
     const cond = formConditions.find(
-      (c) =>
-        c.type === "skip_hide_page" &&
-        c.thenAction === "loop" &&
-        (Array.isArray(c.targetPage)
-          ? c.targetPage.includes(pageId)
-          : c.targetPage === pageId)
+      c => c.type === 'skip_hide_page' && c.thenAction === 'loop'
+        && (Array.isArray(c.targetPage) ? c.targetPage.includes(pageId) : c.targetPage === pageId)
     );
     if (cond && evaluateCondition(cond, values)) return cond;
     return null;
@@ -2076,43 +1808,28 @@ function PublicFormViewer({ runPrefill = false }) {
 
     // Validate current iteration or page fields
     currentFields.forEach((field) => {
-      const fieldId =
-        (typeof field.Properties__c === "string"
-          ? JSON.parse(field.Properties__c || "{}").id
-          : field.Properties__c?.id) || field.Id;
+      const fieldId = (typeof field.Properties__c === 'string' ? JSON.parse(field.Properties__c || '{}').id : field.Properties__c?.id) || field.Id;
       const currentState = getFieldUiState(fieldId, formValues);
-      const properties =
-        typeof field.Properties__c === "string"
-          ? JSON.parse(field.Properties__c || "{}")
-          : field.Properties__c || {};
+      const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
       if (field.Field_Type__c === "section" && properties.subFields) {
         if (properties.subFields.leftField) {
           const leftError = validateSingleField(
             properties.subFields.leftField,
             formValues[properties.subFields.leftField.id],
-            formValues,
-            { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
-          if (leftError)
-            newErrors[properties.subFields.leftField.id] = leftError;
+          if (leftError) newErrors[properties.subFields.leftField.id] = leftError;
         }
         if (properties.subFields.rightField) {
           const rightError = validateSingleField(
             properties.subFields.rightField,
             formValues[properties.subFields.rightField.id],
-            formValues,
-            { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
+            formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
           );
-          if (rightError)
-            newErrors[properties.subFields.rightField.id] = rightError;
+          if (rightError) newErrors[properties.subFields.rightField.id] = rightError;
         }
       } else {
-        const error = validateSingleField(
-          field,
-          formValues[field.Id || properties.id],
-          formValues,
-          { signaturesObj: signatures, uiState: { [fieldId]: currentState } }
-        );
+        const error = validateSingleField(field, formValues[field.Id || properties.id], formValues, { signaturesObj: signatures, uiState: { [fieldId]: currentState } });
         if (error) newErrors[field.Id || properties.id] = error;
       }
     });
@@ -2125,27 +1842,20 @@ function PublicFormViewer({ runPrefill = false }) {
       setErrors((prev) => {
         const updatedErrors = { ...prev };
         currentFields.forEach((field) => {
-          const properties =
-            typeof field.Properties__c === "string"
-              ? JSON.parse(field.Properties__c || "{}")
-              : field.Properties__c || {};
-          if (updatedErrors[field.Id || properties.id])
-            delete updatedErrors[field.Id || properties.id];
+          const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
+          if (updatedErrors[field.Id || properties.id]) delete updatedErrors[field.Id || properties.id];
         });
         return updatedErrors;
       });
 
       if (isLoopPage) {
         // Save answers for this loop instance
-        const pageFields = (pages[currentPage] || []).map(
-          (f) =>
-            f.Id || (f.Properties__c && JSON.parse(f.Properties__c || "{}").id)
-        );
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
         // Save current iteration answers including subfields
         const loopValues = {};
-        pageFields.forEach((f) => {
+        pageFields.forEach(f => {
           loopValues[f] = formValues[f];
-          Object.keys(formValues).forEach((key) => {
+          Object.keys(formValues).forEach(key => {
             if (key.startsWith(`${f}_`)) {
               loopValues[key] = formValues[key];
             }
@@ -2159,29 +1869,25 @@ function PublicFormViewer({ runPrefill = false }) {
         // If not last iteration, move to next iteration
         if (currentLoopState.index < currentLoopState.count - 1) {
           // Move to next round of this page
-          setLoopCounters((lc) => ({
+          setLoopCounters(lc => ({
             ...lc,
             [currentPageId]: {
               ...currentLoopState,
               index: currentLoopState.index + 1,
-              answers: newAnswers,
-            },
+              answers: newAnswers
+            }
           }));
           // Load next iteration answers into formValues or clear if none saved
-          setFormValues((prevFormValues) => {
-            const nextIterationVals =
-              newAnswers[currentLoopState.index + 1] || {};
-            const pageFields = (pages[currentPage] || []).map(
-              (f) =>
-                f.Id ||
-                (f.Properties__c && JSON.parse(f.Properties__c || "{}").id)
-            );
+          setFormValues(prevFormValues => {
+
+            const nextIterationVals = newAnswers[currentLoopState.index + 1] || {};
+            const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
             const updatedFormValues = { ...prevFormValues };
 
             // Clear the loop page fields and their subfields in formValues
-            pageFields.forEach((f) => {
+            pageFields.forEach(f => {
               delete updatedFormValues[f];
-              Object.keys(updatedFormValues).forEach((key) => {
+              Object.keys(updatedFormValues).forEach(key => {
                 if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
               });
             });
@@ -2195,17 +1901,17 @@ function PublicFormViewer({ runPrefill = false }) {
           return;
         } else {
           // On last iteration, update answers
-          setLoopCounters((lc) => ({
+          setLoopCounters(lc => ({
             ...lc,
-            [currentPageId]: { ...currentLoopState, answers: newAnswers },
+            [currentPageId]: { ...currentLoopState, answers: newAnswers }
           }));
 
           // Save loop answers array in formValues with cleanup of individual loop fields
-          setFormValues((vals) => {
+          setFormValues(vals => {
             const cleanedVals = { ...vals };
-            pageFields.forEach((f) => {
+            pageFields.forEach(f => {
               delete cleanedVals[f];
-              Object.keys(cleanedVals).forEach((key) => {
+              Object.keys(cleanedVals).forEach(key => {
                 if (key.startsWith(`${f}_`)) delete cleanedVals[key];
               });
             });
@@ -2229,14 +1935,11 @@ function PublicFormViewer({ runPrefill = false }) {
   const handlePreviousPage = () => {
     if (isLoopPage && currentLoopState.index > 0) {
       // Save current iteration answers before going back
-      const pageFields = (pages[currentPage] || []).map(
-        (f) =>
-          f.Id || (f.Properties__c && JSON.parse(f.Properties__c || "{}").id)
-      );
+      const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
       const loopValues = {};
-      pageFields.forEach((f) => {
+      pageFields.forEach(f => {
         loopValues[f] = formValues[f];
-        Object.keys(formValues).forEach((key) => {
+        Object.keys(formValues).forEach(key => {
           if (key.startsWith(`${f}_`)) {
             loopValues[key] = formValues[key];
           }
@@ -2246,28 +1949,25 @@ function PublicFormViewer({ runPrefill = false }) {
       newAnswers[currentLoopState.index] = { ...loopValues };
 
       // Move to previous iteration and load
-      setLoopCounters((lc) => ({
+      setLoopCounters(lc => ({
         ...lc,
         [currentPageId]: {
           ...currentLoopState,
           index: currentLoopState.index - 1,
-          answers: newAnswers,
-        },
+          answers: newAnswers
+        }
       }));
 
       // Load previous iteration answers (or empty)
-      setFormValues((prevFormValues) => {
+      setFormValues(prevFormValues => {
         const prevIterationVals = newAnswers[currentLoopState.index - 1] || {};
-        const pageFields = (pages[currentPage] || []).map(
-          (f) =>
-            f.Id || (f.Properties__c && JSON.parse(f.Properties__c || "{}").id)
-        );
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
         const updatedFormValues = { ...prevFormValues };
 
         // Clear the loop page fields and their subfields in formValues
-        pageFields.forEach((f) => {
+        pageFields.forEach(f => {
           delete updatedFormValues[f];
-          Object.keys(updatedFormValues).forEach((key) => {
+          Object.keys(updatedFormValues).forEach(key => {
             if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
           });
         });
@@ -2277,17 +1977,15 @@ function PublicFormViewer({ runPrefill = false }) {
 
         return updatedFormValues;
       });
+
     } else {
       // Normal page back, save current iteration first if loop page
       if (isLoopPage) {
-        const pageFields = (pages[currentPage] || []).map(
-          (f) =>
-            f.Id || (f.Properties__c && JSON.parse(f.Properties__c || "{}").id)
-        );
+        const pageFields = (pages[currentPage] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
         const loopValues = {};
-        pageFields.forEach((f) => {
+        pageFields.forEach(f => {
           loopValues[f] = formValues[f];
-          Object.keys(formValues).forEach((key) => {
+          Object.keys(formValues).forEach(key => {
             if (key.startsWith(`${f}_`)) {
               loopValues[key] = formValues[key];
             }
@@ -2295,9 +1993,9 @@ function PublicFormViewer({ runPrefill = false }) {
         });
         const newAnswers = [...currentLoopState.answers];
         newAnswers[currentLoopState.index] = { ...loopValues };
-        setLoopCounters((lc) => ({
+        setLoopCounters(lc => ({
           ...lc,
-          [currentPageId]: { ...currentLoopState, answers: newAnswers },
+          [currentPageId]: { ...currentLoopState, answers: newAnswers }
         }));
       }
 
@@ -2308,20 +2006,15 @@ function PublicFormViewer({ runPrefill = false }) {
         const newPageId = `page_${pages[prevIdx]?.[0]?.Page_Number__c}`;
         const newLoopState = loopCounters[newPageId];
         if (newLoopState && newLoopState.count > 0) {
-          setFormValues((prevFormValues) => {
-            const iterationVals =
-              newLoopState.answers[newLoopState.index] || {};
-            const pageFields = (pages[prevIdx] || []).map(
-              (f) =>
-                f.Id ||
-                (f.Properties__c && JSON.parse(f.Properties__c || "{}").id)
-            );
+          setFormValues(prevFormValues => {
+            const iterationVals = newLoopState.answers[newLoopState.index] || {};
+            const pageFields = (pages[prevIdx] || []).map(f => f.Id || (f.Properties__c && JSON.parse(f.Properties__c || '{}').id));
             const updatedFormValues = { ...prevFormValues };
 
             // Clear the loop page fields and their subfields in formValues
-            pageFields.forEach((f) => {
+            pageFields.forEach(f => {
               delete updatedFormValues[f];
-              Object.keys(updatedFormValues).forEach((key) => {
+              Object.keys(updatedFormValues).forEach(key => {
                 if (key.startsWith(`${f}_`)) delete updatedFormValues[key];
               });
             });
@@ -2331,6 +2024,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
             return updatedFormValues;
           });
+
         }
       }
     }
@@ -2342,11 +2036,9 @@ function PublicFormViewer({ runPrefill = false }) {
 
     // Create a mapping of unique keys to Salesforce IDs for referenced fields
     const fieldIdMap = {};
-    (properties.fieldReferences || []).forEach((refId) => {
+    (properties.fieldReferences || []).forEach(refId => {
       // First try to find the field by Unique_Key__c
-      const referencedField = formData.Fields.find(
-        (f) => f.Unique_Key__c === refId
-      );
+      const referencedField = formData.Fields.find(f => f.Unique_Key__c === refId);
       if (referencedField) {
         // Use the Salesforce ID if available, otherwise use the unique key
         fieldIdMap[refId] = referencedField.Id || referencedField.Unique_Key__c;
@@ -2360,27 +2052,27 @@ function PublicFormViewer({ runPrefill = false }) {
     const referencedValues = {};
     Object.entries(fieldIdMap).forEach(([refKey, sfId]) => {
       // Check if this field has subfields in the form values
-      const hasSubfields = Object.keys(formValues).some(
-        (key) => key.startsWith(`${sfId}_`) && key !== sfId // Exclude the main field itself
+      const hasSubfields = Object.keys(formValues).some(key =>
+        key.startsWith(`${sfId}_`) &&
+        key !== sfId // Exclude the main field itself
       );
 
       if (hasSubfields) {
         // For fields with subfields, collect all subfield values
         const subfieldValues = [];
-        Object.keys(formValues).forEach((key) => {
+        Object.keys(formValues).forEach(key => {
           if (key.startsWith(`${sfId}_`)) {
             subfieldValues.push(formValues[key]);
           }
         });
 
         // Join subfield values with space for the main field reference
-        referencedValues[refKey] = subfieldValues.join(" ").trim();
+        referencedValues[refKey] = subfieldValues.join(' ').trim();
 
         // Also include individual subfields in case they're referenced directly
-        Object.keys(formValues).forEach((key) => {
+        Object.keys(formValues).forEach(key => {
           if (key.startsWith(`${sfId}_`)) {
-            referencedValues[`${refKey}_${key.split("_")[1]}`] =
-              formValues[key];
+            referencedValues[`${refKey}_${key.split('_')[1]}`] = formValues[key];
           }
         });
       } else {
@@ -2391,6 +2083,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
     console.log(properties.formula);
 
+
     // Evaluate the formula using the mapped values
     const result = evaluateFormula(
       properties.formula,
@@ -2399,7 +2092,7 @@ function PublicFormViewer({ runPrefill = false }) {
     );
 
     // Handle decimal places if specified
-    if (typeof result === "number" && properties.decimalPlaces !== undefined) {
+    if (typeof result === 'number' && properties.decimalPlaces !== undefined) {
       return Number(result.toFixed(properties.decimalPlaces));
     }
 
@@ -2426,23 +2119,19 @@ function PublicFormViewer({ runPrefill = false }) {
   const loopCond = getLoopConditionForPage(pages[currentPage], formValues);
   const isLoopPage = !!loopCond;
 
-  let currentLoopState = loopCounters[currentPageId] || {
-    count: 1,
-    index: 0,
-    answers: [],
-  };
-  // const inLoop = isLoopPage && currentLoopState.count > 0;
+  let currentLoopState = loopCounters[currentPageId] || { count: 1, index: 0, answers: [] };
+  const inLoop = isLoopPage && currentLoopState.count > 0;
   function convertUserMaskToInputMask(mask) {
-    if (!mask) return "";
-    return mask.replace(/@/g, "a").replace(/#/g, "9");
-    // '*' stays the same
+    if (!mask) return '';
+    return mask
+      .replace(/@/g, 'a')
+      .replace(/#/g, '9')
+      // '*' stays the same
+      ;
   }
   const renderField = (field) => {
-    const properties = JSON.parse(field.Properties__c || "{}");
-    const state = getFieldUiState(
-      properties.id || field.Id || field.id,
-      formValues
-    );
+    const properties = JSON.parse(field.Properties__c || '{}');
+    const state = getFieldUiState(properties.id || field.Id || field.id, formValues);
     const isHidden = state.hidden || properties.isHidden;
     if (isHidden) return null;
     const fieldId = field.Id || properties.id;
@@ -2452,29 +2141,25 @@ function PublicFormViewer({ runPrefill = false }) {
     const isRequired = properties.isRequired || state.required;
     const hasError = !!errors[fieldId];
     const helpText = properties.showHelpText ? properties.helpText : null;
-    const labelAlignment = properties.labelAlignment || "top";
+    const labelAlignment = properties.labelAlignment || 'top';
     const inputMask = state.mask || properties.maskPattern || null;
     const mask = convertUserMaskToInputMask(inputMask);
 
     const commonProps = {
       id: fieldId,
       disabled: isDisabled,
-      "aria-required": isRequired,
-      "aria-describedby": hasError ? `${fieldId}-error` : undefined,
-      className: `w-full p-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${
-        hasError ? "border-red-500" : "border-gray-300"
-      }`,
+      'aria-required': isRequired,
+      'aria-describedby': hasError ? `${fieldId}-error` : undefined,
+      className: `w-full p-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 ${hasError ? 'border-red-500' : 'border-gray-300'}`,
     };
 
     const labelAlignmentClass =
-      labelAlignment === "center"
-        ? "text-center"
-        : labelAlignment === "right"
-        ? "text-right"
-        : "text-left";
-    const labelClass = `block text-sm font-medium mb-1 ${labelAlignmentClass} ${
-      hasError ? "text-red-600" : "text-gray-700"
-    }`;
+      labelAlignment === 'center'
+        ? 'text-center'
+        : labelAlignment === 'right'
+          ? 'text-right'
+          : 'text-left';
+    const labelClass = `block text-sm font-medium mb-1 ${labelAlignmentClass} ${hasError ? 'text-red-600' : 'text-gray-700'}`;
 
     const renderLabel = () => (
       <label htmlFor={fieldId} className={labelClass}>
@@ -2483,22 +2168,22 @@ function PublicFormViewer({ runPrefill = false }) {
       </label>
     );
 
-    const renderError = () =>
+    const renderError = () => (
       hasError && (
-        <p
-          id={`${fieldId}-error`}
-          className="text-red-500 text-sm mt-1"
-          role="alert"
-        >
+        <p id={`${fieldId}-error`} className="text-red-500 text-sm mt-1" role="alert">
           {errors[fieldId]}
         </p>
-      );
+      )
+    );
 
-    // const renderHelpText = () =>
-    //   helpText && <p className="text-gray-500 text-sm mt-1">{helpText}</p>;
+    const renderHelpText = () => (
+      helpText && (
+        <p className="text-gray-500 text-sm mt-1">{helpText}</p>
+      )
+    );
 
     switch (fieldType) {
-      case "shorttext":
+      case 'shorttext':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -2512,12 +2197,10 @@ function PublicFormViewer({ runPrefill = false }) {
               <>
                 <InputMask
                   mask={mask}
-                  value={formValues[fieldId] || ""}
+                  value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
-                  onBlur={() =>
-                    dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                  }
-                  placeholder={properties.placeholder?.main || ""}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                  placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
                 >
@@ -2531,20 +2214,16 @@ function PublicFormViewer({ runPrefill = false }) {
                     />
                   )}
                 </InputMask>
-                <small className="text-gray-500 mt-1 block">
-                  Enter in the format: {mask}
-                </small>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
               </>
             ) : (
               <input
                 type="text"
                 {...commonProps}
-                value={formValues[fieldId] || ""}
+                value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
-                onBlur={() =>
-                  dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                }
-                placeholder={properties.placeholder?.main || ""}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.shortTextMaxChars}
                 disabled={isDisabled}
               />
@@ -2553,7 +2232,8 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "longtext":
+
+      case 'longtext':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -2567,70 +2247,62 @@ function PublicFormViewer({ runPrefill = false }) {
               <>
                 <InputMask
                   mask={mask}
-                  value={formValues[fieldId] || ""}
+                  value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
-                  onBlur={() =>
-                    dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                  }
-                  placeholder={properties.placeholder?.main || ""}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                  placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
                 >
                   {(inputProps) => (
                     <input
-                      type="text" // use text input for masked longtext
+                      type="text"  // use text input for masked longtext
                       {...commonProps}
                       {...inputProps}
                       disabled={isDisabled}
                       maxLength={properties.longTextMaxChars}
-                      style={{ minHeight: "4rem" }} // optional, keeps textarea height similar
+                      style={{ minHeight: '4rem' }} // optional, keeps textarea height similar
                     />
                   )}
                 </InputMask>
-                <small className="text-gray-500 mt-1 block">
-                  Enter in the format: {mask}
-                </small>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
               </>
             ) : properties.isRichText ? (
               <ReactQuill
                 theme="snow"
-                value={formValues[fieldId] || ""}
+                value={formValues[fieldId] || ''}
                 onChange={(value) => handleChange(fieldId, value)}
-                onBlur={() =>
-                  dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                }
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                 readOnly={isDisabled}
-                placeholder={properties.placeholder?.main || ""}
+                placeholder={properties.placeholder?.main || ''}
                 modules={{
                   toolbar: isDisabled
                     ? false
                     : [
-                        ["bold", "italic", "underline", "strike"],
-                        ["blockquote", "code-block"],
-                        [{ header: 1 }, { header: 2 }],
-                        [{ list: "ordered" }, { list: "bullet" }],
-                        [{ script: "sub" }, { script: "super" }],
-                        [{ indent: "-1" }, { indent: "+1" }],
-                        [{ direction: "rtl" }],
-                        [{ size: ["small", false, "large", "huge"] }],
-                        [{ header: [1, 2, 3, 4, 5, 6, false] }],
-                        [{ color: [] }, { background: [] }],
-                        [{ font: [] }],
-                        [{ align: [] }],
-                        ["clean"],
-                      ],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      ['blockquote', 'code-block'],
+                      [{ header: 1 }, { header: 2 }],
+                      [{ list: 'ordered' }, { list: 'bullet' }],
+                      [{ script: 'sub' }, { script: 'super' }],
+                      [{ indent: '-1' }, { indent: '+1' }],
+                      [{ direction: 'rtl' }],
+                      [{ size: ['small', false, 'large', 'huge'] }],
+                      [{ header: [1, 2, 3, 4, 5, 6, false] }],
+                      [{ color: [] }, { background: [] }],
+                      [{ font: [] }],
+                      [{ align: [] }],
+                      ['clean'],
+                    ],
                 }}
               />
             ) : (
               <textarea
                 {...commonProps}
                 rows="4"
-                value={formValues[fieldId] || ""}
+                value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
-                onBlur={() =>
-                  dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                }
-                placeholder={properties.placeholder?.main || ""}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                placeholder={properties.placeholder?.main || ''}
                 maxLength={properties.longTextMaxChars}
                 disabled={isDisabled}
               />
@@ -2640,14 +2312,14 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "number":
+      case 'number':
         if (isHidden) return null;
         const containerClass =
-          labelAlignment === "center"
-            ? "text-center"
-            : labelAlignment === "right"
-            ? "text-right"
-            : "text-left";
+          labelAlignment === 'center'
+            ? 'text-center'
+            : labelAlignment === 'right'
+              ? 'text-right'
+              : 'text-left';
         return (
           <div className={`mb-4 ${containerClass}`}>
             {renderLabel()}
@@ -2660,12 +2332,10 @@ function PublicFormViewer({ runPrefill = false }) {
               <>
                 <InputMask
                   mask={mask}
-                  value={formValues[fieldId] || ""}
+                  value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
-                  onBlur={() =>
-                    dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                  }
-                  placeholder={properties.placeholder?.main || ""}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                  placeholder={properties.placeholder?.main || ''}
                   disabled={isDisabled}
                   maskPlaceholder=" "
                 >
@@ -2680,20 +2350,16 @@ function PublicFormViewer({ runPrefill = false }) {
                     />
                   )}
                 </InputMask>
-                <small className="text-gray-500 mt-1 block">
-                  Enter in the format: {mask}
-                </small>
+                <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
               </>
             ) : (
               <input
                 type="number"
                 {...commonProps}
-                value={formValues[fieldId] || ""}
+                value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
-                onBlur={() =>
-                  dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                }
-                placeholder={properties.placeholder?.main || ""}
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                placeholder={properties.placeholder?.main || ''}
                 min={properties.numberValueLimits?.min}
                 max={properties.numberValueLimits?.max}
                 disabled={isDisabled}
@@ -2704,7 +2370,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "price":
+      case 'price':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -2715,20 +2381,15 @@ function PublicFormViewer({ runPrefill = false }) {
               </Tooltip>
             )}
             <div className="flex items-center gap-2">
-              <span className="text-gray-700">
-                {properties.currencyType || "USD"}
-              </span>
+              <span className="text-gray-700">{properties.currencyType || 'USD'}</span>
               {mask ? (
                 <>
                   <InputMask
                     mask={mask}
-                    value={formValues[fieldId] || ""}
+                    value={formValues[fieldId] || ''}
                     onChange={(e) => handleChange(fieldId, e.target.value)}
-                    onBlur={() =>
-                      dependentFields.has(fieldId) &&
-                      runPrefillForField(fieldId)
-                    }
-                    placeholder={properties.placeholder?.main || ""}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                    placeholder={properties.placeholder?.main || ''}
                     disabled={isDisabled}
                     maskPlaceholder=" "
                   >
@@ -2744,32 +2405,29 @@ function PublicFormViewer({ runPrefill = false }) {
                       />
                     )}
                   </InputMask>
-                  <small className="text-gray-500 mt-1 block">
-                    Enter in the format: {mask}
-                  </small>
+                  <small className="text-gray-500 mt-1 block">Enter in the format: {mask}</small>
                 </>
               ) : (
                 <input
                   type="number"
                   {...commonProps}
                   step="0.01"
-                  value={formValues[fieldId] || ""}
+                  value={formValues[fieldId] || ''}
                   onChange={(e) => handleChange(fieldId, e.target.value)}
-                  onBlur={() =>
-                    dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                  }
-                  placeholder={properties.placeholder?.main || ""}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                  placeholder={properties.placeholder?.main || ''}
                   min={properties.priceLimits?.min}
                   max={properties.priceLimits?.max}
                   disabled={isDisabled}
                 />
               )}
+
             </div>
             {renderError()}
           </div>
         );
 
-      case "email":
+      case 'email':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -2782,21 +2440,16 @@ function PublicFormViewer({ runPrefill = false }) {
             <input
               type="email"
               {...commonProps}
-              value={formValues[fieldId] || ""}
+              value={formValues[fieldId] || ''}
               onChange={(e) => handleChange(fieldId, e.target.value)}
-              onBlur={() =>
-                dependentFields.has(fieldId) && runPrefillForField(fieldId)
-              }
-              placeholder={properties.placeholder?.main || "example@domain.com"}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              placeholder={properties.placeholder?.main || 'example@domain.com'}
               maxLength={properties.maxChars}
               disabled={isDisabled}
             />
             {properties.enableConfirmation && (
               <div className="mt-2">
-                <label
-                  htmlFor={`${fieldId}_confirmation`}
-                  className={labelClass}
-                >
+                <label htmlFor={`${fieldId}_confirmation`} className={labelClass}>
                   Confirm Email
                   {isRequired && <span className="text-red-500 ml-1">*</span>}
                 </label>
@@ -2804,22 +2457,13 @@ function PublicFormViewer({ runPrefill = false }) {
                   type="email"
                   {...commonProps}
                   id={`${fieldId}_confirmation`}
-                  value={formValues[`${fieldId}_confirmation`] || ""}
-                  onChange={(e) =>
-                    handleChange(`${fieldId}_confirmation`, e.target.value)
-                  }
-                  onBlur={() =>
-                    dependentFields.has(`${fieldId}_confirmation`) &&
-                    runPrefillForField(`${fieldId}_confirmation`)
-                  }
+                  value={formValues[`${fieldId}_confirmation`] || ''}
+                  onChange={(e) => handleChange(`${fieldId}_confirmation`, e.target.value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_confirmation`) && runPrefillForField(`${fieldId}_confirmation`)}
                   placeholder="Confirm email"
                 />
                 {errors[`${fieldId}_confirmation`] && (
-                  <p
-                    id={`${fieldId}_confirmation-error`}
-                    className="text-red-500 text-sm mt-1"
-                    role="alert"
-                  >
+                  <p id={`${fieldId}_confirmation-error`} className="text-red-500 text-sm mt-1" role="alert">
                     {errors[`${fieldId}_confirmation`]}
                   </p>
                 )}
@@ -2829,22 +2473,17 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "phone":
+      case 'phone':
         if (isHidden) return null;
-        const countryCode =
-          formValues[`${fieldId}_countryCode`] ||
-          properties.subFields?.countryCode?.value ||
-          "US";
-        let phoneMask = "(999) 999-9999"; // Default mask for non-country code case
+        const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
+        let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
         try {
           const exampleNumber = getExampleNumber(countryCode);
           if (exampleNumber) {
-            phoneMask = exampleNumber.format("NATIONAL").replace(/[0-9]/g, "9");
+            phoneMask = exampleNumber.format('NATIONAL').replace(/[0-9]/g, '9');
           }
         } catch (error) {
-          console.warn(
-            `No example number for country ${countryCode}, using default mask`
-          );
+          console.warn(`No example number for country ${countryCode}, using default mask`);
         }
 
         return (
@@ -2860,49 +2499,34 @@ function PublicFormViewer({ runPrefill = false }) {
                 <div className="w-1/3">
                   <PhoneInput
                     country={countryCode.toLowerCase()}
-                    value={formValues[`${fieldId}_countryCode`] || "US"}
+                    value={formValues[`${fieldId}_countryCode`] || 'US'}
                     onChange={(phone, countryData) => {
-                      const newCountryCode =
-                        countryData.countryCode.toUpperCase();
+                      const newCountryCode = countryData.countryCode.toUpperCase();
                       handleChange(`${fieldId}_countryCode`, newCountryCode);
-                      handleChange(fieldId, ""); // Reset phone number
+                      handleChange(fieldId, ''); // Reset phone number
                     }}
-                    onBlur={() =>
-                      dependentFields.has(`${fieldId}_countryCode`) &&
-                      runPrefillForField(`${fieldId}_countryCode`)
-                    }
-                    inputClass={`p-2 border rounded text-sm w-full ${
-                      hasError ? "border-red-500" : "border-gray-300"
-                    }`}
+                    onBlur={() => dependentFields.has(`${fieldId}_countryCode`) && runPrefillForField(`${fieldId}_countryCode`)}
+                    inputClass={`p-2 border rounded text-sm w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
                     buttonClass="border rounded p-1 bg-white"
                     dropdownClass="border rounded max-h-64 overflow-y-auto"
                     containerClass="flex items-center w-full"
-                    inputProps={{
-                      "aria-label": "Country code selector",
-                      readOnly: true,
-                    }}
+                    inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
                     disabled={isDisabled}
                     placeholder=""
                     enableSearch
                     searchPlaceholder="Search country"
                     searchNotFound="No country found"
-                    preferredCountries={["us", "ca", "gb"]}
+                    preferredCountries={['us', 'ca', 'gb']}
                   />
                 </div>
                 <div className="w-2/3">
                   <input
                     type="text"
                     {...commonProps}
-                    value={formValues[fieldId] || ""}
+                    value={formValues[fieldId] || ''}
                     onChange={(e) => handleChange(fieldId, e.target.value)}
-                    onBlur={() =>
-                      dependentFields.has(fieldId) &&
-                      runPrefillForField(fieldId)
-                    }
-                    placeholder={
-                      properties.subFields?.phoneNumber?.placeholder ||
-                      "Enter phone number"
-                    }
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                    placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                     disabled={isDisabled}
                     aria-label="Phone number"
                   />
@@ -2911,41 +2535,30 @@ function PublicFormViewer({ runPrefill = false }) {
             ) : mask ? (
               <InputMask
                 mask={properties.subFields?.phoneNumber?.phoneMask || phoneMask}
-                value={formValues[fieldId] || ""}
+                value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
-                onBlur={() =>
-                  dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                }
-                className={`w-full p-2 border rounded ${
-                  hasError ? "border-red-500" : "border-gray-300"
-                }`}
-                placeholder={
-                  properties.subFields?.phoneNumber?.placeholder ||
-                  "Enter phone number"
-                }
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
               />
             ) : (
               <input
                 type="text"
                 {...commonProps}
-                value={formValues[fieldId] || ""}
+                value={formValues[fieldId] || ''}
                 onChange={(e) => handleChange(fieldId, e.target.value)}
-                onBlur={() =>
-                  dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                }
-                placeholder={
-                  properties.subFields?.phoneNumber?.placeholder ||
-                  "Enter phone number"
-                }
+                onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                placeholder={properties.subFields?.phoneNumber?.placeholder || 'Enter phone number'}
                 disabled={isDisabled}
               />
-            )}
+            )
+            }
             {renderError()}
           </div>
         );
 
-      case "date":
+      case 'date':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -2956,78 +2569,41 @@ function PublicFormViewer({ runPrefill = false }) {
               </Tooltip>
             )}
             <DatePicker
-              format={
-                properties.dateFormat?.replace(
-                  /\//g,
-                  properties.dateSeparator || "-"
-                ) || "yyyy-MM-dd"
-              }
-              value={
-                formValues[fieldId]
-                  ? new Date(formValues[fieldId] + "T00:00:00")
-                  : null
-              }
+              format={properties.dateFormat?.replace(/\//g, properties.dateSeparator || '-') || 'yyyy-MM-dd'}
+              value={formValues[fieldId] ? new Date(formValues[fieldId] + 'T00:00:00') : null}
               onChange={(date) => {
                 if (date) {
                   const year = date.getFullYear();
-                  const month = String(date.getMonth() + 1).padStart(2, "0");
-                  const day = String(date.getDate()).padStart(2, "0");
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
                   const formattedDate = `${year}-${month}-${day}`;
                   handleChange(fieldId, formattedDate);
                 } else {
                   handleChange(fieldId, null);
                 }
               }}
-              onBlur={() =>
-                dependentFields.has(fieldId) && runPrefillForField(fieldId)
-              }
-              placeholder={properties.placeholder?.main || "Select date"}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              placeholder={properties.placeholder?.main || 'Select date'}
               className="w-full"
               disabled={isDisabled}
-              isoWeek={properties.weekStartDay === "Monday"}
+              isoWeek={properties.weekStartDay === 'Monday'}
               locale={{
                 months: properties.customMonthLabels || [
-                  "January",
-                  "February",
-                  "March",
-                  "April",
-                  "May",
-                  "June",
-                  "July",
-                  "August",
-                  "September",
-                  "October",
-                  "November",
-                  "December",
+                  'January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'
                 ],
-                today: properties.customTodayLabel || "Today",
+                today: properties.customTodayLabel || 'Today',
               }}
               disabledDate={(date) => {
-                if (
-                  properties.disabledDates?.includes(
-                    date.toISOString().split("T")[0]
-                  )
-                )
-                  return true;
-                if (
-                  properties.dateRange?.start &&
-                  date < new Date(properties.dateRange.start)
-                )
-                  return true;
-                if (
-                  properties.dateRange?.end &&
-                  date > new Date(properties.dateRange.end)
-                )
-                  return true;
+                if (properties.disabledDates?.includes(date.toISOString().split('T')[0])) return true;
+                if (properties.dateRange?.start && date < new Date(properties.dateRange.start)) return true;
+                if (properties.dateRange?.end && date > new Date(properties.dateRange.end)) return true;
                 if (properties.enableAgeVerification) {
                   const today = new Date();
                   const birthDate = new Date(date);
                   let age = today.getFullYear() - birthDate.getFullYear();
                   const m = today.getMonth() - birthDate.getMonth();
-                  if (
-                    m < 0 ||
-                    (m === 0 && today.getDate() < birthDate.getDate())
-                  ) {
+                  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
                     age--;
                   }
                   return age < properties.minAge;
@@ -3039,7 +2615,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "datetime":
+      case 'datetime':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3052,56 +2628,40 @@ function PublicFormViewer({ runPrefill = false }) {
             <DatePicker
               format={
                 properties.dateFormat && properties.timeFormat
-                  ? `${properties.dateFormat.replace(
-                      /\//g,
-                      properties.dateSeparator || "-"
-                    )} ${
-                      properties.timeFormat === "hh:mm a" ? "hh:mm a" : "HH:mm"
-                    }`
-                  : "yyyy-MM-dd HH:mm"
+                  ? `${properties.dateFormat.replace(/\//g, properties.dateSeparator || '-')} ${properties.timeFormat === 'hh:mm a' ? 'hh:mm a' : 'HH:mm'}`
+                  : 'yyyy-MM-dd HH:mm'
               }
               value={formValues[fieldId] ? new Date(formValues[fieldId]) : null}
-              onBlur={() =>
-                dependentFields.has(fieldId) && runPrefillForField(fieldId)
-              }
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               onChange={(date) => {
                 if (date) {
                   const year = date.getFullYear();
-                  const month = String(date.getMonth() + 1).padStart(2, "0");
-                  const day = String(date.getDate()).padStart(2, "0");
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
                   let hours = date.getHours();
-                  const minutes = String(date.getMinutes()).padStart(2, "0");
-                  if (properties.timeFormat === "hh:mm a") {
+                  const minutes = String(date.getMinutes()).padStart(2, '0');
+                  if (properties.timeFormat === 'hh:mm a') {
                     const hours12 = date.getHours() % 12 || 12;
-                    const ampm = date.getHours() >= 12 ? "PM" : "AM";
-                    hours =
-                      ampm === "PM"
-                        ? hours12 === 12
-                          ? 12
-                          : hours12 + 12
-                        : hours12 === 12
-                        ? 0
-                        : hours12;
+                    const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+                    hours = ampm === 'PM' ? (hours12 === 12 ? 12 : hours12 + 12) : (hours12 === 12 ? 0 : hours12);
                   }
-                  const formattedHours = String(hours).padStart(2, "0");
+                  const formattedHours = String(hours).padStart(2, '0');
                   const formattedDateTime = `${year}-${month}-${day} ${formattedHours}:${minutes}`;
                   handleChange(fieldId, formattedDateTime);
                 } else {
                   handleChange(fieldId, null);
                 }
               }}
-              placeholder={
-                properties.placeholder?.main || "Select date and time"
-              }
+              placeholder={properties.placeholder?.main || 'Select date and time'}
               className="w-full"
               disabled={isDisabled}
-              showMeridian={properties.timeFormat === "hh:mm a"}
+              showMeridian={properties.timeFormat === 'hh:mm a'}
             />
             {renderError()}
           </div>
         );
 
-      case "time":
+      case 'time':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3112,36 +2672,28 @@ function PublicFormViewer({ runPrefill = false }) {
               </Tooltip>
             )}
             <DatePicker
-              format={properties.timeFormat || "HH:mm"}
-              value={
-                formValues[fieldId]
-                  ? new Date(`1970-01-01T${formValues[fieldId]}`)
-                  : null
-              }
-              onBlur={() =>
-                dependentFields.has(fieldId) && runPrefillForField(fieldId)
-              }
+              format={properties.timeFormat || 'HH:mm'}
+              value={formValues[fieldId] ? new Date(`1970-01-01T${formValues[fieldId]}`) : null}
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               onChange={(date) => {
                 if (date) {
-                  const hours = String(date.getHours()).padStart(2, "0");
-                  const minutes = String(date.getMinutes()).padStart(2, "0");
+                  const hours = String(date.getHours()).padStart(2, '0');
+                  const minutes = String(date.getMinutes()).padStart(2, '0');
                   const time = `${hours}:${minutes}`;
                   handleChange(fieldId, time);
                 } else {
-                  handleChange(fieldId, "");
+                  handleChange(fieldId, '');
                 }
               }}
-              placeholder={properties.placeholder?.main || "Select time"}
+              placeholder={properties.placeholder?.main || 'Select time'}
               className="w-full"
               disabled={isDisabled}
-              showMeridian={properties.timeFormat === "hh:mm a"}
+              showMeridian={properties.timeFormat === 'hh:mm a'}
               disabledTime={(date) => {
                 if (!properties.restrictAmPm) return {};
                 const hours = date.getHours();
-                if (properties.restrictAmPm === "AM" && hours >= 12)
-                  return { hour: true };
-                if (properties.restrictAmPm === "PM" && hours < 12)
-                  return { hour: true };
+                if (properties.restrictAmPm === 'AM' && hours >= 12) return { hour: true };
+                if (properties.restrictAmPm === 'PM' && hours < 12) return { hour: true };
                 return {};
               }}
             />
@@ -3149,8 +2701,14 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "checkbox":
+      case 'checkbox':
         if (isHidden) return null;
+
+        const currentValues = Array.isArray(formValues[fieldId]) ? formValues[fieldId] : [];
+        const selectedCount = currentValues.length;
+        const minSelection = properties.minSelection || 0;
+        const maxSelection = properties.maxSelection || Infinity;
+
         return (
           <div className="mb-4">
             <label className={labelClass}>
@@ -3158,46 +2716,53 @@ function PublicFormViewer({ runPrefill = false }) {
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
             <div className="space-y-2">
-              {(properties.options || ["Option 1", "Option 2"]).map(
-                (option, idx) => (
+              {(properties.options || ['Option 1', 'Option 2']).map((option, idx) => {
+                const isChecked = currentValues.includes(option);
+                const isDisabledCheck = isDisabled ||
+                  (!isChecked && selectedCount >= maxSelection && maxSelection < Infinity);
+
+                return (
                   <div key={idx} className="flex items-center">
                     <input
                       type="checkbox"
                       id={`${fieldId}-${idx}`}
-                      checked={
-                        Array.isArray(formValues[fieldId]) &&
-                        formValues[fieldId].includes(option)
-                      }
+                      checked={Array.isArray(formValues[fieldId]) && formValues[fieldId].includes(option)}
                       onChange={(e) => {
-                        const newValue = e.target.checked
-                          ? [...(formValues[fieldId] || []), option]
-                          : (formValues[fieldId] || []).filter(
-                              (opt) => opt !== option
-                            );
-                        handleChange(fieldId, newValue);
+                        if (e.target.checked) {
+                          // Add option if not exceeding max selection
+                          if (selectedCount < maxSelection || maxSelection === Infinity) {
+                            const newValue = [...currentValues, option];
+                            handleChange(fieldId, newValue);
+                          }
+                        } else {
+                          // Remove option
+                          const newValue = currentValues.filter((opt) => opt !== option);
+                          handleChange(fieldId, newValue);
+                        }
                       }}
-                      onBlur={() =>
-                        dependentFields.has(fieldId) &&
-                        runPrefillForField(fieldId)
-                      }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      disabled={isDisabled}
+                      className={`h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ${isDisabledCheck && !isChecked ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      disabled={isDisabledCheck}
                     />
-                    <label
-                      htmlFor={`${fieldId}-${idx}`}
-                      className="ml-2 block text-sm text-gray-700"
-                    >
+                    <label htmlFor={`${fieldId}-${idx}`} className="ml-2 block text-sm text-gray-700">
                       {option}
                     </label>
                   </div>
                 )
-              )}
+              })}
             </div>
+
+             {/* Selection count and validation messages */}
+            <div className="mt-1 text-sm text-gray-500">
+              Selected: {selectedCount}
+              {(minSelection > 0 || maxSelection < Infinity) && ` of ${maxSelection < Infinity ? maxSelection : '∞'}`}
+            </div>
+
             {renderError()}
           </div>
         );
 
-      case "radio":
+      case 'radio':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3206,40 +2771,32 @@ function PublicFormViewer({ runPrefill = false }) {
               {isRequired && <span className="text-red-500 ml-1">*</span>}
             </label>
             <div className="space-y-2">
-              {(properties.options || ["Option 1", "Option 2", "Option 3"]).map(
-                (option, idx) => (
-                  <div key={idx} className="flex items-center">
-                    <input
-                      type="radio"
-                      id={`${fieldId}-${idx}`}
-                      name={fieldId}
-                      value={option}
-                      checked={formValues[fieldId] === option}
-                      onChange={(e) => handleChange(fieldId, e.target.value)}
-                      onBlur={() =>
-                        dependentFields.has(fieldId) &&
-                        runPrefillForField(fieldId)
-                      }
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                      disabled={isDisabled}
-                    />
-                    <label
-                      htmlFor={`${fieldId}-${idx}`}
-                      className="ml-2 block text-sm text-gray-700"
-                    >
-                      {option}
-                    </label>
-                  </div>
-                )
-              )}
+              {(properties.options || ['Option 1', 'Option 2', 'Option 3']).map((option, idx) => (
+                <div key={idx} className="flex items-center">
+                  <input
+                    type="radio"
+                    id={`${fieldId}-${idx}`}
+                    name={fieldId}
+                    value={option}
+                    checked={formValues[fieldId] === option}
+                    onChange={(e) => handleChange(fieldId, e.target.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    disabled={isDisabled}
+                  />
+                  <label htmlFor={`${fieldId}-${idx}`} className="ml-2 block text-sm text-gray-700">
+                    {option}
+                  </label>
+                </div>
+              ))}
             </div>
             {renderError()}
           </div>
         );
 
-      case "dropdown":
+      case 'dropdown':
         const allowedOptions = getFieldAllowedOptions(fieldId, formValues);
-        const fieldOptions = allowedOptions || properties.options || [];
+        const fieldOptions = allowedOptions || (properties.options || []);
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3250,30 +2807,42 @@ function PublicFormViewer({ runPrefill = false }) {
               </Tooltip>
             )}
             <Select
-              style={{ width: "100%" }}
+              style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
-              onChange={(val) => handleChange(fieldId, val)}
-              onBlur={() =>
-                dependentFields.has(fieldId) && runPrefillForField(fieldId)
-              }
-              mode={properties.allowMultipleSelections ? "multiple" : undefined}
-              placeholder={properties.placeholder?.main || "Select an option"}
+onChange={(val) => {
+                // Validate selection limits for multiple selections
+                if (properties.allowMultipleSelections && Array.isArray(val)) {
+                  if (val.length <= properties.maxSelection) {
+                    handleChange(fieldId, val);
+                  }
+                } else {
+                  handleChange(fieldId, val);
+                }
+              }}              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              mode={properties.allowMultipleSelections ? 'multiple' : undefined}
+                            maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
+
+              placeholder={properties.placeholder?.main || 'Select an option'}
               disabled={isDisabled}
-              className={`w-full ${
-                hasError ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full ${hasError ? 'border-red-500' : 'border-gray-300'}`}
             >
               {fieldOptions.map((option, idx) => (
-                <Option key={option} value={option}>
-                  {option}
-                </Option>
+                <Option key={option} value={option}>{option}</Option>
               ))}
             </Select>
+
+            {/* Validation for dropdown with multiple selections */}
+            {properties.allowMultipleSelections && (
+              <div className="mt-1 text-sm text-gray-500">
+                {`Select between ${properties.minSelection} and ${properties.maxSelection < Infinity ? properties.maxSelection : 'unlimited'} options`}
+              </div>
+            )}
+            
             {renderError()}
           </div>
         );
 
-      case "fileupload":
+      case 'fileupload':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3286,38 +2855,26 @@ function PublicFormViewer({ runPrefill = false }) {
             <input
               type="file"
               {...commonProps}
-              onChange={(e) => handleFileChange(fieldId, e, "fileupload")}
-              accept={
-                properties.allowedFileTypes ||
-                "image/*,application/pdf,.doc,.docx"
-              }
+              onChange={(e) => handleFileChange(fieldId, e, 'fileupload')}
+              accept={properties.allowedFileTypes || 'image/*,application/pdf,.doc,.docx'}
               multiple={properties.multipleFiles}
             />
             {filePreviews[fieldId] && (
               <div className="mt-2">
-                <img
-                  src={filePreviews[fieldId]}
-                  alt="Preview"
-                  className="max-h-32"
-                  onError={(e) => (e.target.style.display = "none")}
-                />
+                <img src={filePreviews[fieldId]} alt="Preview" className="max-h-32" onError={(e) => (e.target.style.display = 'none')} />
               </div>
             )}
             {properties.maxFileSize && (
-              <p className="text-gray-500 text-sm mt-1">
-                Max file size: {properties.maxFileSize}MB
-              </p>
+              <p className="text-gray-500 text-sm mt-1">Max file size: {properties.maxFileSize}MB</p>
             )}
             {properties.allowedFileTypes && (
-              <p className="text-gray-500 text-sm mt-1">
-                Allowed types: {properties.allowedFileTypes}
-              </p>
+              <p className="text-gray-500 text-sm mt-1">Allowed types: {properties.allowedFileTypes}</p>
             )}
             {renderError()}
           </div>
         );
 
-      case "imageuploader":
+      case 'imageuploader':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3333,23 +2890,17 @@ function PublicFormViewer({ runPrefill = false }) {
                 accept="image/*"
                 className="hidden"
                 id={`file-upload-${fieldId}`}
-                onChange={(e) => handleFileChange(fieldId, e, "imageuploader")}
+                onChange={(e) => handleFileChange(fieldId, e, 'imageuploader')}
                 disabled={isDisabled}
               />
               <label
                 htmlFor={`file-upload-${fieldId}`}
-                className={`block h-32 text-sm p-2 border rounded bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 cursor-pointer ${
-                  isDisabled ? "cursor-not-allowed opacity-50" : ""
-                } ${hasError ? "border-red-500" : "border-gray-300"}`}
+                className={`block h-32 text-sm p-2 border rounded bg-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-200 cursor-pointer ${isDisabled ? 'cursor-not-allowed opacity-50' : ''} ${hasError ? 'border-red-500' : 'border-gray-300'}`}
               >
                 {filePreviews[fieldId] ? (
-                  <img
-                    src={filePreviews[fieldId]}
-                    alt="Preview"
-                    className="max-h-full max-w-full"
-                  />
+                  <img src={filePreviews[fieldId]} alt="Preview" className="max-h-full max-w-full" />
                 ) : (
-                  "Click to Upload Image"
+                  'Click to Upload Image'
                 )}
               </label>
             </div>
@@ -3357,7 +2908,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "toggle":
+      case 'toggle':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3370,25 +2921,13 @@ function PublicFormViewer({ runPrefill = false }) {
                 <input
                   type="checkbox"
                   checked={toggles[fieldId] || false}
-                  onChange={(e) =>
-                    handleToggleChange(fieldId, e.target.checked)
-                  }
-                  onBlur={() =>
-                    dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                  }
+                  onChange={(e) => handleToggleChange(fieldId, e.target.checked)}
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   className="sr-only peer"
                   disabled={isDisabled}
                 />
-                <div
-                  className={`w-11 h-6 bg-gray-200 rounded-full peer ${
-                    toggles[fieldId] ? "peer-checked:bg-blue-600" : ""
-                  }`}
-                >
-                  <div
-                    className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${
-                      toggles[fieldId] ? "translate-x-5" : "translate-x-1"
-                    }`}
-                  />
+                <div className={`w-11 h-6 bg-gray-200 rounded-full peer ${toggles[fieldId] ? 'peer-checked:bg-blue-600' : ''}`}>
+                  <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${toggles[fieldId] ? 'translate-x-5' : 'translate-x-1'}`} />
                 </div>
               </label>
             </div>
@@ -3396,7 +2935,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "fullname":
+      case 'fullname':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3409,65 +2948,35 @@ function PublicFormViewer({ runPrefill = false }) {
             <div className="flex gap-3">
               {properties.subFields?.salutation?.enabled && (
                 <Select
-                  style={{ width: "33%" }}
-                  value={
-                    formValues[`${fieldId}_salutation`] ||
-                    properties.subFields.salutation.placeholder
-                  }
-                  onChange={(value) =>
-                    handleChange(`${fieldId}_salutation`, value)
-                  }
-                  onBlur={() =>
-                    dependentFields.has(`${fieldId}_salutation`) &&
-                    runPrefillForField(`${fieldId}_salutation`)
-                  }
+                  style={{ width: '33%' }}
+                  value={formValues[`${fieldId}_salutation`] || properties.subFields.salutation.placeholder}
+                  onChange={(value) => handleChange(`${fieldId}_salutation`, value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_salutation`) && runPrefillForField(`${fieldId}_salutation`)}
                   disabled={isDisabled}
                   className="w-1/5"
-                  placeholder={
-                    properties.subFields.salutation.placeholder || "Select"
-                  }
-                  options={(properties.subFields.salutation.options || []).map(
-                    (option) => ({
-                      label: option,
-                      value: option,
-                    })
-                  )}
+                  placeholder={properties.subFields.salutation.placeholder || 'Select'}
+                  options={(properties.subFields.salutation.options || []).map((option) => ({
+                    label: option,
+                    value: option,
+                  }))}
                 />
               )}
               <input
                 type="text"
-                className={`w-full p-2 border rounded ${
-                  hasError ? "border-red-500" : "border-gray-300"
-                }`}
-                value={formValues[`${fieldId}_firstName`] || ""}
-                onChange={(e) =>
-                  handleChange(`${fieldId}_firstName`, e.target.value)
-                }
-                onBlur={() =>
-                  dependentFields.has(`${fieldId}_firstName`) &&
-                  runPrefillForField(`${fieldId}_firstName`)
-                }
-                placeholder={
-                  properties.subFields.firstName?.placeholder || "First Name"
-                }
+                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                value={formValues[`${fieldId}_firstName`] || ''}
+                onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
+                onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
+                placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
                 disabled={isDisabled}
               />
               <input
                 type="text"
-                className={`w-full p-2 border rounded ${
-                  hasError ? "border-red-500" : "border-gray-300"
-                }`}
-                value={formValues[`${fieldId}_lastName`] || ""}
-                onChange={(e) =>
-                  handleChange(`${fieldId}_lastName`, e.target.value)
-                }
-                onBlur={() =>
-                  dependentFields.has(`${fieldId}_lastName`) &&
-                  runPrefillForField(`${fieldId}_lastName`)
-                }
-                placeholder={
-                  properties.subFields.lastName?.placeholder || "Last Name"
-                }
+                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                value={formValues[`${fieldId}_lastName`] || ''}
+                onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
+                onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
+                placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
                 disabled={isDisabled}
               />
             </div>
@@ -3475,7 +2984,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "address":
+      case 'address':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3488,25 +2997,14 @@ function PublicFormViewer({ runPrefill = false }) {
             <div className="space-y-3">
               {properties.subFields?.street?.visiblesubFields !== false && (
                 <div>
-                  <label className="text-xs text-gray-500">
-                    {properties.subLabels?.street || "Street Address"}
-                  </label>
+                  <label className="text-xs text-gray-500">{properties.subLabels?.street || 'Street Address'}</label>
                   <input
                     type="text"
-                    className={`w-full p-2 border rounded ${
-                      hasError ? "border-red-500" : "border-gray-300"
-                    }`}
-                    value={formValues[`${fieldId}_street`] || ""}
-                    onChange={(e) =>
-                      handleChange(`${fieldId}_street`, e.target.value)
-                    }
-                    onBlur={() =>
-                      dependentFields.has(`${fieldId}_street`) &&
-                      runPrefillForField(`${fieldId}_street`)
-                    }
-                    placeholder={
-                      properties.placeholder?.street || "Street Address"
-                    }
+                    className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                    value={formValues[`${fieldId}_street`] || ''}
+                    onChange={(e) => handleChange(`${fieldId}_street`, e.target.value)}
+                    onBlur={() => dependentFields.has(`${fieldId}_street`) && runPrefillForField(`${fieldId}_street`)}
+                    placeholder={properties.placeholder?.street || 'Street Address'}
                     disabled={isDisabled}
                   />
                 </div>
@@ -3514,46 +3012,28 @@ function PublicFormViewer({ runPrefill = false }) {
               <div className="flex gap-3">
                 {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">
-                      {properties.subLabels?.city || "City"}
-                    </label>
+                    <label className="text-xs text-gray-500">{properties.subLabels?.city || 'City'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${
-                        hasError ? "border-red-500" : "border-gray-300"
-                      }`}
-                      value={formValues[`${fieldId}_city`] || ""}
-                      onChange={(e) =>
-                        handleChange(`${fieldId}_city`, e.target.value)
-                      }
-                      onBlur={() =>
-                        dependentFields.has(`${fieldId}_city`) &&
-                        runPrefillForField(`${fieldId}_city`)
-                      }
-                      placeholder={properties.placeholder?.city || "City"}
+                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues[`${fieldId}_city`] || ''}
+                      onChange={(e) => handleChange(`${fieldId}_city`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_city`) && runPrefillForField(`${fieldId}_city`)}
+                      placeholder={properties.placeholder?.city || 'City'}
                       disabled={isDisabled}
                     />
                   </div>
                 )}
                 {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">
-                      {properties.subLabels?.state || "State"}
-                    </label>
+                    <label className="text-xs text-gray-500">{properties.subLabels?.state || 'State'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${
-                        hasError ? "border-red-500" : "border-gray-300"
-                      }`}
-                      value={formValues[`${fieldId}_state`] || ""}
-                      onChange={(e) =>
-                        handleChange(`${fieldId}_state`, e.target.value)
-                      }
-                      onBlur={() =>
-                        dependentFields.has(`${fieldId}_state`) &&
-                        runPrefillForField(`${fieldId}_state`)
-                      }
-                      placeholder={properties.placeholder?.state || "State"}
+                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues[`${fieldId}_state`] || ''}
+                      onChange={(e) => handleChange(`${fieldId}_state`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_state`) && runPrefillForField(`${fieldId}_state`)}
+                      placeholder={properties.placeholder?.state || 'State'}
                       disabled={isDisabled}
                     />
                   </div>
@@ -3562,48 +3042,28 @@ function PublicFormViewer({ runPrefill = false }) {
               <div className="flex gap-3">
                 {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">
-                      {properties.subLabels?.country || "Country"}
-                    </label>
+                    <label className="text-xs text-gray-500">{properties.subLabels?.country || 'Country'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${
-                        hasError ? "border-red-500" : "border-gray-300"
-                      }`}
-                      value={formValues[`${fieldId}_country`] || ""}
-                      onChange={(e) =>
-                        handleChange(`${fieldId}_country`, e.target.value)
-                      }
-                      onBlur={() =>
-                        dependentFields.has(`${fieldId}_country`) &&
-                        runPrefillForField(`${fieldId}_country`)
-                      }
-                      placeholder={properties.placeholder?.country || "Country"}
+                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues[`${fieldId}_country`] || ''}
+                      onChange={(e) => handleChange(`${fieldId}_country`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_country`) && runPrefillForField(`${fieldId}_country`)}
+                      placeholder={properties.placeholder?.country || 'Country'}
                       disabled={isDisabled}
                     />
                   </div>
                 )}
                 {properties.subFields?.city?.visible !== false && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">
-                      {properties.subLabels?.postal || "Postal Code"}
-                    </label>
+                    <label className="text-xs text-gray-500">{properties.subLabels?.postal || 'Postal Code'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${
-                        hasError ? "border-red-500" : "border-gray-300"
-                      }`}
-                      value={formValues[`${fieldId}_postal`] || ""}
-                      onChange={(e) =>
-                        handleChange(`${fieldId}_postal`, e.target.value)
-                      }
-                      onBlur={() =>
-                        dependentFields.has(`${fieldId}_postal`) &&
-                        runPrefillForField(`${fieldId}_postal`)
-                      }
-                      placeholder={
-                        properties.placeholder?.postal || "Postal Code"
-                      }
+                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues[`${fieldId}_postal`] || ''}
+                      onChange={(e) => handleChange(`${fieldId}_postal`, e.target.value)}
+                      onBlur={() => dependentFields.has(`${fieldId}_postal`) && runPrefillForField(`${fieldId}_postal`)}
+                      placeholder={properties.placeholder?.postal || 'Postal Code'}
                       disabled={isDisabled}
                     />
                   </div>
@@ -3614,7 +3074,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "signature":
+      case 'signature':
         if (isHidden) return null;
         return (
           <div className="mb-4 flex flex-col items-start">
@@ -3626,15 +3086,9 @@ function PublicFormViewer({ runPrefill = false }) {
             )}
             <SignatureCanvas
               penColor="black"
-              canvasProps={{
-                width: 280,
-                height: 100,
-                className: "border rounded bg-white mb-2",
-              }}
-              ref={(ref) => (signatureRefs.current[fieldId] = ref)}
-              onEnd={() =>
-                handleSignatureEnd(fieldId, signatureRefs.current[fieldId])
-              }
+              canvasProps={{ width: 280, height: 100, className: "border rounded bg-white mb-2" }}
+              ref={ref => (signatureRefs.current[fieldId] = ref)}
+              onEnd={() => handleSignatureEnd(fieldId, signatureRefs.current[fieldId])}
               backgroundColor="#fff"
             />
             <div className="flex gap-2 mb-2">
@@ -3664,7 +3118,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "terms":
+      case 'terms':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3675,9 +3129,7 @@ function PublicFormViewer({ runPrefill = false }) {
                   id={fieldId}
                   checked={formValues[fieldId] || false}
                   onChange={(e) => handleChange(fieldId, e.target.checked)}
-                  onBlur={() =>
-                    dependentFields.has(fieldId) && runPrefillForField(fieldId)
-                  }
+                  onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   disabled={isDisabled}
                   aria-required={isRequired}
@@ -3692,12 +3144,10 @@ function PublicFormViewer({ runPrefill = false }) {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline"
                     >
-                      {properties.placeholder?.main ||
-                        "I agree to the terms and conditions"}
+                      {properties.placeholder?.main || 'I agree to the terms and conditions'}
                     </a>
                   ) : (
-                    properties.placeholder?.main ||
-                    "I agree to the terms and conditions"
+                    properties.placeholder?.main || 'I agree to the terms and conditions'
                   )}
                   {isRequired && <span className="text-red-500 ml-1">*</span>}
                 </label>
@@ -3707,47 +3157,39 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "displaytext":
+      case 'displaytext':
         if (isHidden) return null;
         return (
           <div className="mb-4">
             <div
               className="text-gray-700"
               dangerouslySetInnerHTML={{
-                __html: properties?.value || "Display Text",
+                __html: properties?.value || 'Display Text'
               }}
             />
           </div>
         );
 
-      case "header":
+      case 'header':
         if (isHidden) return null;
         return (
           <div className="mb-6">
-            <h2
-              className={`text-2xl font-bold text-gray-800 ${
-                properties.alignment === "left"
-                  ? "text-left"
-                  : properties.alignment === "right"
-                  ? "text-right"
-                  : "text-center"
-              }`}
-            >
-              {properties.heading || "Form Header"}
+            <h2 className={`text-2xl font-bold text-gray-800 ${properties.alignment === 'left' ? 'text-left' :
+              properties.alignment === 'right' ? 'text-right' :
+                'text-center'
+              }`}>
+              {properties.heading || 'Form Header'}
             </h2>
           </div>
         );
 
-      case "rating":
+      case 'rating':
         if (isHidden) return null;
         const ratingRange = properties.ratingRange || 5;
         const ratingOptions = {
           emoji: Array.from({ length: ratingRange }, (_, i) => ({
             value: `emoji${i + 1}`,
-            symbol:
-              properties.ratingEmojis?.[i] ||
-              ["😞", "🙁", "😐", "🙂", "😀"][i % 5] ||
-              "😀",
+            symbol: properties.ratingEmojis?.[i] || ['😞', '🙁', '😐', '🙂', '😀'][i % 5] || '😀',
             label: properties.ratingValues?.[i] || `Rating ${i + 1}`,
           })),
           star: Array.from({ length: ratingRange }, (_, i) => ({
@@ -3756,17 +3198,17 @@ function PublicFormViewer({ runPrefill = false }) {
           })),
           heart: Array.from({ length: ratingRange }, (_, i) => ({
             value: `heart${i + 1}`,
-            symbol: "❤️",
+            symbol: '❤️',
             label: properties.ratingValues?.[i] || `Rating ${i + 1}`,
           })),
           bulb: Array.from({ length: ratingRange }, (_, i) => ({
             value: `bulb${i + 1}`,
-            symbol: "💡",
+            symbol: '💡',
             label: properties.ratingValues?.[i] || `Rating ${i + 1}`,
           })),
           lightning: Array.from({ length: ratingRange }, (_, i) => ({
             value: `lightning${i + 1}`,
-            symbol: "⚡",
+            symbol: '⚡',
             label: properties.ratingValues?.[i] || `Rating ${i + 1}`,
           })),
         };
@@ -3781,62 +3223,32 @@ function PublicFormViewer({ runPrefill = false }) {
             )}
             <div className="flex flex-col gap-4">
               <div className="flex gap-2">
-                {ratingOptions[properties.ratingType || "emoji"].map(
-                  (option, idx) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => handleRatingChange(fieldId, option.value)}
-                      onBlur={() =>
-                        dependentFields.has(fieldId) &&
-                        runPrefillForField(fieldId)
-                      }
-                      disabled={isDisabled}
-                      className={`text-2xl ${
-                        selectedRatings[fieldId] === option.value
-                          ? "text-blue-600"
-                          : "text-gray-400"
-                      } hover:text-blue-500 focus:outline-none`}
-                    >
-                      {properties.ratingType === "star" ? (
-                        selectedRatings[fieldId] === option.value ? (
-                          <AiFillStar />
-                        ) : (
-                          <AiOutlineStar />
-                        )
-                      ) : properties.ratingType === "heart" ? (
-                        selectedRatings[fieldId] === option.value ? (
-                          <AiFillHeart />
-                        ) : (
-                          <AiOutlineHeart />
-                        )
-                      ) : properties.ratingType === "bulb" ? (
-                        selectedRatings[fieldId] === option.value ? (
-                          <FaLightbulb />
-                        ) : (
-                          <FaRegLightbulb />
-                        )
-                      ) : properties.ratingType === "lightning" ? (
-                        selectedRatings[fieldId] === option.value ? (
-                          <FaBolt />
-                        ) : (
-                          <FaBolt />
-                        )
-                      ) : (
-                        option.symbol
-                      )}
-                    </button>
-                  )
-                )}
+                {ratingOptions[properties.ratingType || 'emoji'].map((option, idx) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleRatingChange(fieldId, option.value)}
+                    onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+                    disabled={isDisabled}
+                    className={`text-2xl ${selectedRatings[fieldId] === option.value ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 focus:outline-none`}
+                  >
+                    {properties.ratingType === 'star' ? (
+                      selectedRatings[fieldId] === option.value ? <AiFillStar /> : <AiOutlineStar />
+                    ) : properties.ratingType === 'heart' ? (
+                      selectedRatings[fieldId] === option.value ? <AiFillHeart /> : <AiOutlineHeart />
+                    ) : properties.ratingType === 'bulb' ? (
+                      selectedRatings[fieldId] === option.value ? <FaLightbulb /> : <FaRegLightbulb />
+                    ) : properties.ratingType === 'lightning' ? (
+                      selectedRatings[fieldId] === option.value ? <FaBolt /> : <FaBolt />
+                    ) : (
+                      option.symbol
+                    )}
+                  </button>
+                ))}
               </div>
               {selectedRatings[fieldId] && (
                 <p className="text-sm text-gray-600">
-                  Selected:{" "}
-                  {
-                    ratingOptions[properties.ratingType || "emoji"].find(
-                      (o) => o.value === selectedRatings[fieldId]
-                    )?.label
-                  }
+                  Selected: {ratingOptions[properties.ratingType || 'emoji'].find(o => o.value === selectedRatings[fieldId])?.label}
                 </p>
               )}
             </div>
@@ -3844,7 +3256,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "scalerating":
+      case 'scalerating':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3859,42 +3271,26 @@ function PublicFormViewer({ runPrefill = false }) {
                 <tr className="bg-gray-200">
                   <th className="border border-gray-300 p-2"></th>
                   {properties.columns?.map((col, idx) => (
-                    <th
-                      key={idx}
-                      className="border border-gray-300 p-2 text-center"
-                    >
-                      {col}
-                    </th>
+                    <th key={idx} className="border border-gray-300 p-2 text-center">{col}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {properties.rows?.map((row, rowIdx) => (
                   <tr key={rowIdx} className="odd:bg-white even:bg-gray-50">
-                    <td className="border border-gray-300 p-2 font-semibold">
-                      {row}
-                    </td>
+                    <td className="border border-gray-300 p-2 font-semibold">{row}</td>
                     {properties.columns.map((col, colIdx) => (
-                      <td
-                        key={colIdx}
-                        className="border border-gray-300 p-2 text-center"
-                      >
+                      <td key={colIdx} className="border border-gray-300 p-2 text-center">
                         <input
                           type="radio"
                           name={`${fieldId}_row_${rowIdx}`}
                           value={col}
                           checked={formValues[fieldId]?.[row] === col}
                           onChange={() => {
-                            const newValue = {
-                              ...formValues[fieldId],
-                              [row]: col,
-                            };
+                            const newValue = { ...formValues[fieldId], [row]: col };
                             handleChange(fieldId, newValue);
                           }}
-                          onBlur={() =>
-                            dependentFields.has(fieldId) &&
-                            runPrefillForField(fieldId)
-                          }
+                          onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
                           disabled={isDisabled}
                         />
                       </td>
@@ -3907,7 +3303,7 @@ function PublicFormViewer({ runPrefill = false }) {
           </div>
         );
 
-      case "divider":
+      case 'divider':
         if (isHidden) return null;
         return <hr className="border-gray-300 my-4" />;
 
@@ -3918,13 +3314,8 @@ function PublicFormViewer({ runPrefill = false }) {
         let formattedValue = calculationResult;
 
         // Handle decimal places if specified
-        if (
-          typeof calculationResult === "number" &&
-          properties.decimalPlaces !== undefined
-        ) {
-          formattedValue = Number(
-            calculationResult.toFixed(properties.decimalPlaces)
-          );
+        if (typeof calculationResult === 'number' && properties.decimalPlaces !== undefined) {
+          formattedValue = Number(calculationResult.toFixed(properties.decimalPlaces));
         }
 
         return (
@@ -3938,16 +3329,15 @@ function PublicFormViewer({ runPrefill = false }) {
             <input
               type="text"
               {...commonProps}
-              value={formattedValue ?? ""}
+              value={formattedValue ?? ''}
               readOnly={properties?.isReadOnly !== false}
-              className={`w-full p-2 border rounded-md ${
-                hasError ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full p-2 border rounded-md ${hasError ? "border-red-500" : "border-gray-300"
+                }`}
             />
             {renderError()}
           </div>
         );
-      case "link":
+      case 'link':
         if (isHidden) return null;
         return (
           <div className="mb-4">
@@ -3960,20 +3350,16 @@ function PublicFormViewer({ runPrefill = false }) {
             <input
               type="url"
               {...commonProps}
-              value={formValues[fieldId] || ""}
+              value={formValues[fieldId] || ''}
               onChange={(e) => handleChange(fieldId, e.target.value)}
-              onBlur={() =>
-                dependentFields.has(fieldId) && runPrefillForField(fieldId)
-              }
-              placeholder={
-                properties.placeholder?.main || "https://example.com"
-              }
+              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              placeholder={properties.placeholder?.main || 'https://example.com'}
             />
             {renderError()}
           </div>
         );
 
-      case "section":
+      case 'section':
         if (isHidden) return null;
 
         // Parse the subFields from properties
@@ -3981,26 +3367,18 @@ function PublicFormViewer({ runPrefill = false }) {
         const rightFieldProps = properties.subFields?.rightField;
 
         // Find the actual field objects from formData.Fields
-        const leftField = formData.Fields.find(
-          (f) => f.Id === leftFieldProps?.id
-        );
-        const rightField = formData.Fields.find(
-          (f) => f.Id === rightFieldProps?.id
-        );
+        const leftField = formData.Fields.find(f => f.Id === leftFieldProps?.id);
+        const rightField = formData.Fields.find(f => f.Id === rightFieldProps?.id);
 
-        const normalizedLeftField = leftField
-          ? {
-              ...leftField,
-              Id: leftField.Id || leftField.id,
-            }
-          : null;
+        const normalizedLeftField = leftField ? {
+          ...leftField,
+          Id: leftField.Id || leftField.id
+        } : null;
 
-        const normalizedRightField = rightField
-          ? {
-              ...rightField,
-              Id: rightField.Id || rightField.id,
-            }
-          : null;
+        const normalizedRightField = rightField ? {
+          ...rightField,
+          Id: rightField.Id || rightField.id
+        } : null;
 
         // If fields aren't found in formData.Fields, create mock field objects
         const createFieldFromProps = (fieldProps) => {
@@ -4010,10 +3388,10 @@ function PublicFormViewer({ runPrefill = false }) {
             Field_Type__c: fieldProps.type,
             Properties__c: JSON.stringify(fieldProps),
             // Add other required properties with defaults
-            Name: fieldProps.label || "",
+            Name: fieldProps.label || '',
             Page_Number__c: field.Page_Number__c, // Use section's page number
             Order_Number__c: field.Order_Number__c, // Use section's order number
-            Unique_Key__c: fieldProps.id,
+            Unique_Key__c: fieldProps.id
           };
         };
 
@@ -4021,20 +3399,15 @@ function PublicFormViewer({ runPrefill = false }) {
         const leftFieldToRender = normalizedLeftField
           ? { ...normalizedLeftField, Id: `${field.Id}_leftField` }
           : leftFieldProps
-          ? {
-              ...createFieldFromProps(leftFieldProps),
-              Id: `${field.Id}_leftField`,
-            }
-          : null;
+            ? { ...createFieldFromProps(leftFieldProps), Id: `${field.Id}_leftField` }
+            : null;
 
         const rightFieldToRender = normalizedRightField
           ? { ...normalizedRightField, Id: `${field.Id}_rightField` }
           : rightFieldProps
-          ? {
-              ...createFieldFromProps(rightFieldProps),
-              Id: `${field.Id}_rightField`,
-            }
-          : null;
+            ? { ...createFieldFromProps(rightFieldProps), Id: `${field.Id}_rightField` }
+            : null;
+
 
         return (
           <div className="mb-4 border p-4 rounded">
@@ -4070,7 +3443,7 @@ function PublicFormViewer({ runPrefill = false }) {
                   autoSubmit,
                 });
 
-                setRequiresPayment(!!req);
+                setHasPaymentField(!!req);
                 setPaymentCompleted(!!paid);
 
                 if (autoSubmit && paid) {
@@ -4097,11 +3470,7 @@ function PublicFormViewer({ runPrefill = false }) {
   return (
     <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6"
-        aria-label="Public Form"
-      >
+      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
         <div className="page">
           {pages[currentPage]?.map((field) => (
             <div key={field.Unique_Key__c}>{renderField(field)}</div>
@@ -4115,23 +3484,18 @@ function PublicFormViewer({ runPrefill = false }) {
               type="button"
               onClick={handlePreviousPage}
               disabled={currentPage === 0}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                currentPage === 0
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
+              className={`py-2 px-4 rounded-md font-medium transition ${currentPage === 0
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               aria-label="Previous Page"
             >
               Previous
             </button>
-          ) : (
-            ""
-          )}
+          ) : ''}
 
           <span className="text-gray-600">
-            Page{" "}
-            {visiblePages.findIndex((arr) => arr === pages[currentPage]) + 1} of{" "}
-            {visiblePages.length}
+            Page {visiblePages.findIndex(arr => arr === pages[currentPage]) + 1} of {visiblePages.length}
           </span>
 
           {/* Show Next or Submit button */}
@@ -4144,30 +3508,29 @@ function PublicFormViewer({ runPrefill = false }) {
             >
               Next
             </button>
-          ) : // On last page: show Submit button only if payment not required OR payment is completed
-          !requiresPayment || paymentCompleted ? (
-            <button
-              type="submit"
-              disabled={isSubmitting || !accessToken}
-              className={`py-2 px-4 rounded-md font-medium transition ${
-                isSubmitting || !accessToken
+          ) : // On last page: show Submit button only if no payment field OR payment is completed
+            !hasPaymentField || paymentCompleted ? (
+              <button
+                type="submit"
+                disabled={isSubmitting || !accessToken}
+                className={`py-2 px-4 rounded-md font-medium transition ${isSubmitting || !accessToken
                   ? "opacity-50 cursor-not-allowed"
                   : "bg-green-600 hover:bg-green-700 text-white"
-              }`}
-              aria-label="Submit Form"
-            >
-              {isSubmitting
-                ? "Submitting..."
-                : paymentCompleted
-                ? "Complete Submission"
-                : "Submit"}
-            </button>
-          ) : (
-            // If has payment field and payment not completed, show instruction
-            <div className="text-center py-2 px-4 text-gray-600 text-sm">
-              Complete payment above to submit the form
-            </div>
-          )}
+                  }`}
+                aria-label="Submit Form"
+              >
+                {isSubmitting
+                  ? "Submitting..."
+                  : paymentCompleted
+                    ? "Complete Submission"
+                    : "Submit"}
+              </button>
+            ) : (
+              // If has payment field and payment not completed, show instruction
+              <div className="text-center py-2 px-4 text-gray-600 text-sm">
+                Complete payment above to submit the form
+              </div>
+            )}
         </div>
       </form>
     </div>

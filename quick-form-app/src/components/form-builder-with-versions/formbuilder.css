@@ -499,3 +499,39 @@
     height: 100%;
     overflow: scroll;
 }
+
+/* Version Dropdown Styles */
+
+.version-dropdown-modal {
+  position: absolute;
+  top: 48px; /* adjust as needed to appear below the icon */
+  right: 0;
+  z-index: 50;
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  border-radius: 10px;
+  padding: 16px 12px;
+  min-width: 340px;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.version-dropdown-row:hover {
+  background: #f1f1f1 !important;
+}
+
+.version-label {
+  font-weight: 500;
+  color: #222;
+}
+
+.version-date {
+  font-size: 12px;
+  color: #888;
+}

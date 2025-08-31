@@ -25,6 +25,9 @@ import { enhancedFormPaymentProcessor } from "./payment-fields/EnhancedFormPayme
 import { setUserContext } from "./payment-fields/paypal/api/paypalApi";
 import Submissions from "./Submissions";
 import PreviewForm from "./PreviewForm";
+import VersionList from "./VersionList.js";
+import { motion, AnimatePresence } from "framer-motion";
+import { displayName } from "react-quill";
 
 const themes = [
   {
@@ -102,7 +105,7 @@ function MainFormBuilder({
   showSubmission
 }) {
   // const { formVersionId } = useParams();
-  const location = useLocation();
+    const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
     urlFormVersionId || location.state?.formVersionId || null;
@@ -137,11 +140,28 @@ function MainFormBuilder({
   const [showPreview, setShowPreview] = useState(false);
   const [previewFormData, setPreviewFormData] = useState({ formVersion: null, formFields: [] });
   const [previewStep, setPreviewStep] = useState(0); // 0: builder, 1: fade mainmenubar, 2: fade sidebar, 3: show preview
-const [formConditions, setFormConditions] = useState([]);
+  const [formConditions, setFormConditions] = useState([]);
   const [prefills, setPrefills] = useState([]);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [pendingVersionId, setPendingVersionId] = useState(null);
 
   const [fieldsState, { set: setFields, undo, redo, canUndo, canRedo }] =
     useUndo([]);
+
+
+  const modalVariants = {
+    hidden: { opacity: 0, scale: 0.8 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      transition: { type: "spring", stiffness: 300, damping: 25 }
+    },
+    exit: {
+      opacity: 0,
+      scale: 0.8,
+      transition: { duration: 0.15 }
+    }
+  };
 
   // Initialize data for Thank You Page
   const [content, setContent] = useState({
@@ -319,6 +339,9 @@ const [formConditions, setFormConditions] = useState([]);
   const [saveError, setSaveError] = useState(null);
   const fields = fieldsState.present;
 
+ const [footerConfigs, setFooterConfigs] = useState({});
+
+
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
       const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
@@ -355,10 +378,27 @@ const [formConditions, setFormConditions] = useState([]);
 
 
   const handleBackToBuilder = () => {
-    setShowPreview(false);
-    setPreviewStep(2); // show mainmenubar
-    setTimeout(() => setPreviewStep(1), 400); // hide preview
-    setTimeout(() => setPreviewStep(0), 800); // show builder/sidebar
+    // Find first draft version
+    const draftVersion = formVersions.find(v => v.Stage__c === "Draft");
+    if (draftVersion) {
+      setSelectedVersionId(draftVersion.Id);
+      navigate(`/form-builder/${draftVersion.Id}`);
+      fetchFormData(
+        sessionStorage.getItem("userId"),
+        sessionStorage.getItem("instanceUrl"),
+        draftVersion.Id
+      );
+      setShowPreview(false);
+      setPreviewStep(2);
+      setTimeout(() => setPreviewStep(1), 400);
+      setTimeout(() => setPreviewStep(0), 800);
+    } else {
+      // fallback to current logic if no draft version
+      setShowPreview(false);
+      setPreviewStep(2);
+      setTimeout(() => setPreviewStep(1), 400);
+      setTimeout(() => setPreviewStep(0), 800);
+    }
   };
 
   const handlePublish = async () => {
@@ -606,8 +646,28 @@ const [formConditions, setFormConditions] = useState([]);
       setCurrentFormVersion(formVersion);
       const formFields = formVersion.Fields || [];
 
+      // Process footer fields into footerConfigs
+      const footerConfigsFromDB = {};
+      
+      formFields.forEach((field) => {
+        if (field.Field_Type__c === "footer") {
+          try {
+            const properties = JSON.parse(field.Properties__c || "{}");
+            if (properties.pageIndex !== undefined) {
+              footerConfigsFromDB[properties.pageIndex] = properties.subFields || {};
+            }
+          } catch (e) {
+            console.warn(`Failed to parse footer properties for field ${field.Unique_Key__c}:`, e);
+          }
+        }
+      });
+      
+      setFooterConfigs(footerConfigsFromDB);
+
       const pages = {};
       formFields.forEach((field) => {
+        if (field.Field_Type__c === "footer") return;
+        
         const pageNumber = field.Page_Number__c || 1;
         if (!pages[pageNumber]) {
           pages[pageNumber] = [];
@@ -667,12 +727,26 @@ const [formConditions, setFormConditions] = useState([]);
 
   const handleVersionChange = (e) => {
     const newVersionId = e.target.value;
+    const selectedVersion = formVersions.find(v => v.Id === newVersionId);
     setSelectedVersionId(newVersionId);
+
     const userId = sessionStorage.getItem("userId");
     const instanceUrl = sessionStorage.getItem("instanceUrl");
-    if (userId && instanceUrl) {
-      fetchFormData(userId, instanceUrl, newVersionId);
+
+    if (userId && instanceUrl && selectedVersion) {
       navigate(`/form-builder/${newVersionId}`);
+      if (selectedVersion.Stage__c === "Draft") {
+        fetchFormData(userId, instanceUrl, newVersionId);
+      } else {
+        // Show preview for non-draft version after navigation
+        setPreviewStep(1);
+        setTimeout(() => setPreviewStep(2), 400);
+        setTimeout(() => setPreviewStep(3), 500);
+        setTimeout(() => {
+          setPreviewFormData({ formVersion: selectedVersion, formFields: selectedVersion.Fields || [] });
+          setShowPreview(true);
+        }, 1200);
+      }
     }
   };
 
@@ -702,22 +776,22 @@ const [formConditions, setFormConditions] = useState([]);
   }, [fields]);
 
 
-useEffect(() => {
-  console.log('currentFormVersion changed', currentFormVersion);
-  
-  if (currentFormVersion && currentFormVersion.Conditions) {
-    // Parse conditions if needed
-    const parsedConditions = currentFormVersion.Conditions.map(c =>
-      c.Condition_Data__c
-        ? (typeof c.Condition_Data__c === 'string'
+  useEffect(() => {
+    console.log('currentFormVersion changed', currentFormVersion);
+
+    if (currentFormVersion && currentFormVersion.Conditions) {
+      // Parse conditions if needed
+      const parsedConditions = currentFormVersion.Conditions.map(c =>
+        c.Condition_Data__c
+          ? (typeof c.Condition_Data__c === 'string'
             ? JSON.parse(c.Condition_Data__c)
             : c.Condition_Data__c)
-        : c
-    );
-    setFormConditions(parsedConditions);
-  }
-  if (currentFormVersion && currentFormVersion.Prefills) {
-     // Parse Prefill array from currentFormVersion Prefills if available
+          : c
+      );
+      setFormConditions(parsedConditions);
+    }
+    if (currentFormVersion && currentFormVersion.Prefills) {
+      // Parse Prefill array from currentFormVersion Prefills if available
       if (currentFormVersion.Prefills && Array.isArray(currentFormVersion.Prefills)) {
         const parsedPrefills = currentFormVersion.Prefills.map(p => {
           let parsedData = {};
@@ -736,8 +810,8 @@ useEffect(() => {
         });
         setPrefills(parsedPrefills);
       }
-  }
-}, [currentFormVersion]);
+    }
+  }, [currentFormVersion]);
 
   const updateSubmissionStats = (submissions) => {
     if (!submissions || submissions.length === 0) {
@@ -786,6 +860,35 @@ useEffect(() => {
     if (currentPage.length > 0 || pages.length === 0) {
       pages.push({ fields: currentPage, pageNumber });
     }
+
+    // Create footer fields from footerConfigs
+  const footerFields = Object.entries(footerConfigs).map(([pageIndexStr, config]) => {
+    const pageIndex = parseInt(pageIndexStr);
+    const pageNumber = pageIndex + 1; // Convert 0-indexed to 1-indexed
+    
+    const footerId = `footer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const footerProperties = {
+      id: footerId,
+      type: "footer",
+      label: "Footer",
+      alignment: "center",
+      pageIndex: pageIndex,
+      subFields: config,
+      isHidden: false
+    };
+
+    return {
+      Name: "Footer",
+      Field_Type__c: "footer",
+      Page_Number__c: pageNumber,
+      Order_Number__c: 999, // Place at the end of the page
+      Properties__c: JSON.stringify(footerProperties),
+      Unique_Key__c: footerId,
+      isHidden__c: false,
+      Default_Value__c: null
+    };
+  });
 
     const formVersion = {
       Name: currentFormVersion?.Name || formName || "Contact Form",
@@ -903,9 +1006,10 @@ useEffect(() => {
           isHidden__c: field.isHidden
         };
       })
-    );  
+    );
     
-    return { formVersion, formFields };
+
+    return { formVersion, formFields: [...formFields, ...footerFields]};
   };
 
   const saveFormToSalesforce = async () => {
@@ -1740,32 +1844,30 @@ useEffect(() => {
               </AnimatedTooltip>
             </div>
             {!showPreview && (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4" style={{ position: "relative" }}>
                 <button
                   className="flex items-center justify-center my-version-btn"
                   onClick={() => setShowVersionDropdown((v) => !v)}
                   title="Change Version"
+                  style={{ position: "relative" }}
                 >
                   <BsStack className="text-white text-xl" />
                 </button>
-                {showVersionDropdown && (
-                  <div className="stack-modal">
-                    <select
-                      value={selectedVersionId || ""}
-                      onChange={handleVersionChange}
-                      className="p-2 bg-white text-black rounded-md"
-                    >
-                      <option value="" disabled>
-                        Select Version
-                      </option>
-                      {formVersions.map((version) => (
-                        <option key={version.Id} value={version.Id}>
-                          Version {version.Version__c} ({version.Stage__c})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <VersionList
+                  visible={showVersionDropdown}
+                  versions={formVersions}
+                  selectedVersionId={selectedVersionId}
+                  // onChange={(val) => {
+                  //   setShowVersionDropdown(false);
+                  //   handleVersionChange({ target: { value: val } });
+                  // }}
+                  onChange={(val) => {
+                    setShowVersionDropdown(false);
+                    setPendingVersionId(val);
+                    setShowConfirmation(true);
+                  }}
+                  onClose={() => setShowVersionDropdown(false)}
+                />
                 <button
                   className="preview-btn flex items-center gap-2"
                   title="Preview"
@@ -1960,58 +2062,182 @@ useEffect(() => {
                       onUndo={undo}
                       onRedo={redo}
                       isSidebarOpen={isSidebarOpen}
+                       footerConfigs={footerConfigs}
+  setFooterConfigs={setFooterConfigs}
                     />
                   )}
                 </div>
                 {/* Sidebar only visible when not in preview */}
                 <div className={`w-1/4 pl-2 ${previewStep > 1 ? "slide-out-right" : "slide-in-right"}`}>
-                  {showSidebar && !selectedFieldId && !selectedFooter ? (
-                    <Sidebar
-                      selectedTheme={selectedTheme}
-                      onThemeSelect={setSelectedTheme}
-                      themes={themes}
-                    />
-                  ) : (
-                    <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
-                      {(selectedFieldId || selectedFooter) && (
-                        <FieldEditor
-                          selectedField={selectedField}
-                          selectedFooter={selectedFooter}
-                          onUpdateField={handleUpdateField}
-                          onDeleteField={handleDeleteField}
-                          onClose={() => {
-                            setSelectedFieldId(null);
-                            setSelectedSectionSide(null);
-                            setSelectedFooter(null);
-                            setShowSidebar(true);
-                          }}
-                          fields={fields}
-                        fieldsets = {fieldsets}
+                    {showSidebar && !selectedFieldId && !selectedFooter ? (
+                      <Sidebar
+                        selectedTheme={selectedTheme}
+                        onThemeSelect={setSelectedTheme}
+                        themes={themes}
+                      />
+                    ) : (
+                      <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
+                        {(selectedFieldId || selectedFooter) && (
+                          <FieldEditor
+                            selectedField={selectedField}
+                            selectedFooter={selectedFooter}
+                            onUpdateField={handleUpdateField}
+                            onDeleteField={handleDeleteField}
+                            onClose={() => {
+                              setSelectedFieldId(null);
+                              setSelectedSectionSide(null);
+                              setSelectedFooter(null);
+                              setShowSidebar(true);
+                            }}
+                            fields={fields}
+                            fieldsets = {fieldsets}
                         onAddFieldsFromFieldset = {handleAddFieldsFromFieldset}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
+                              footerConfigs={footerConfigs}
+  setFooterConfigs={setFooterConfigs}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                 {/* PreviewForm covers full width below header */}
                 {showPreview && (
-                  <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center fade-in preview-div">
+                  <div className="absolute top-10 left-0 w-full h-full flex items-start justify-center fade-in preview-div">
                     <div className="bg-white rounded-lg shadow-lg border p-8" style={{ minWidth: 700 }}>
                       <PreviewForm
                         formVersion={previewFormData.formVersion}
                         formFields={previewFormData.formFields}
-                        formConditions={formConditions} 
-                        prefills={prefills} 
+                        formConditions={formConditions}
+                        prefills={prefills}
                       />
                     </div>
                   </div>
                 )}
+                {/* Confirmation Modal */}
+                <AnimatePresence>
+                  {showConfirmation && (
+                    <div style={{
+                      position: "fixed",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: "rgba(0, 0, 0, 0.5)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      zIndex: 2000
+                    }}>
+                      <motion.div
+                        variants={modalVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        style={{
+                          background: "white",
+                          borderRadius: 10,
+                          padding: "16px",
+                          maxWidth: 400,
+                          width: "100%",
+                          boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
+                        }}
+                      >
+                        {/* Get the selected version to check its stage */}
+                        {pendingVersionId && (() => {
+                          const selectedVersion = formVersions.find(v => v.Id === pendingVersionId);
+                          const isDraft = selectedVersion?.Stage__c === "Draft";
+
+                          return (
+                            <>
+                              {!isDraft && (
+                                <div className="flex gap-1">
+                                  <svg width="25" height="25" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M83.5712 91.6669H16.4285C14.218 91.6664 12.0466 91.0843 10.1323 89.9789C8.21807 88.8735 6.62846 87.2838 5.52318 85.3695C4.41789 83.4551 3.83586 81.2837 3.83557 79.0732C3.83528 76.8627 4.41673 74.6911 5.52151 72.7765L39.0928 14.6303C40.1983 12.7158 41.7882 11.126 43.7028 10.0207C45.6173 8.91539 47.7891 8.3335 49.9998 8.3335C52.2106 8.3335 54.3824 8.91539 56.2969 10.0207C58.2115 11.126 59.8014 12.7158 60.9068 14.6303L94.4782 72.7765C95.583 74.6911 96.1644 76.8627 96.1641 79.0732C96.1638 81.2837 95.5818 83.4551 94.4765 85.3695C93.3712 87.2838 91.7816 88.8735 89.8674 89.9789C87.9531 91.0843 85.7817 91.6664 83.5712 91.6669Z" fill="#FFB92E" />
+                                    <path d="M50 74.9998C52.3012 74.9998 54.1667 73.1344 54.1667 70.8332C54.1667 68.532 52.3012 66.6665 50 66.6665C47.6989 66.6665 45.8334 68.532 45.8334 70.8332C45.8334 73.1344 47.6989 74.9998 50 74.9998Z" fill="white" />
+                                    <path d="M50 58.3335C48.895 58.3335 47.8352 57.8945 47.0538 57.1131C46.2724 56.3317 45.8334 55.2719 45.8334 54.1668V37.5002C45.8334 36.3951 46.2724 35.3353 47.0538 34.5539C47.8352 33.7725 48.895 33.3335 50 33.3335C51.1051 33.3335 52.1649 33.7725 52.9463 34.5539C53.7277 35.3353 54.1667 36.3951 54.1667 37.5002V54.1668C54.1667 55.2719 53.7277 56.3317 52.9463 57.1131C52.1649 57.8945 51.1051 58.3335 50 58.3335Z" fill="white" />
+                                  </svg>
+
+                                  <p style={{
+                                    fontSize: 14,
+                                    paddingBottom: 5,
+                                    paddingTop: 5,
+                                    color: "#666",
+                                    fontStyle: "italic",
+                                    margin: 0,
+                                  }}>
+                                    {selectedVersion?.Stage__c} version cannot be edited, only previewed.
+                                  </p>
+                                </div>
+                              )}
+                              <p style={{
+                                fontSize: 16,
+                                paddingBottom: 20,
+                                paddingTop: 10,
+                                fontWeight: 500,
+                                color: "black",
+                                lineHeight: 1.5,
+                                margin: 0
+                              }}>
+                                Are you sure you want to switch versions?
+                              </p>
+                            </>
+                          );
+                        })()}
+
+                        <div style={{
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: 10
+                        }}>
+                          <button
+                            onClick={() => {
+                              setShowConfirmation(false);
+                              setPendingVersionId(null);
+                            }}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: 5,
+                              border: "1px solid #d9d9d9",
+                              background: "#fff",
+                              color: "#666",
+                              fontWeight: 500,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowConfirmation(false);
+                              if (pendingVersionId) {
+                                handleVersionChange({ target: { value: pendingVersionId } });
+                                setPendingVersionId(null);
+                              }
+                            }}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: 5,
+                              border: "none",
+                              background: "#028AB0",
+                              color: "#fff",
+                              fontWeight: 500,
+                              cursor: "pointer"
+                            }}
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      </motion.div>
+                    </div>
+                  )}
+                </AnimatePresence>
               </div>
+
             )}
         </div>
       </div>
     </div>
+
   );
 }
 
