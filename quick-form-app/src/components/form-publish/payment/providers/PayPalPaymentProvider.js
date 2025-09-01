@@ -626,7 +626,7 @@ const PayPalPaymentProvider = ({
           body: JSON.stringify(paymentRequest),
         });
 
-  const result = await response.json();
+        const result = await response.json();
 
         if (!response.ok || !result.success) {
           const errorMsg =

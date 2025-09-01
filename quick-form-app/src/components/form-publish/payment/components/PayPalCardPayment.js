@@ -1,5 +1,9 @@
 import React, { useState } from "react";
-import { PayPalCardFieldsProvider, PayPalCardFieldsForm, usePayPalCardFields } from "@paypal/react-paypal-js";
+import {
+  PayPalCardFieldsProvider,
+  PayPalCardFieldsForm,
+  usePayPalCardFields,
+} from "@paypal/react-paypal-js";
 
 // Submit button component that uses the card fields
 const SubmitCardPayment = ({

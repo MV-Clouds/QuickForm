@@ -44,12 +44,15 @@ const PaymentContent = ({
     switch (paymentType) {
       case "donation_button": {
         // Render the hosted donate button directly (no amount input or method select)
-        const donationButtonId = subFields?.donationButtonId || subFields?.hostedButtonId;
+        const donationButtonId =
+          subFields?.donationButtonId || subFields?.hostedButtonId;
         return (
           <div className="mb-4">
             <PayPalDonateButton
               hostedButtonId={donationButtonId}
-              environment={process.env.NODE_ENV === "production" ? "production" : "sandbox"}
+              environment={
+                process.env.NODE_ENV === "production" ? "production" : "sandbox"
+              }
               merchantId={merchantCredentials?.merchantId}
               itemName={subFields?.itemName || "Donation"}
               customMessage={subFields?.customMessage}
@@ -85,7 +88,7 @@ const PaymentContent = ({
         // Check if it's a static amount (fixed price) or variable amount (user input)
         const amountType = subFields?.amount?.type;
         const staticAmount = subFields?.amount?.value;
-        
+
         if (amountType === "static" && staticAmount) {
           // Static amount - show fixed price, no user input
           return (
@@ -99,9 +102,9 @@ const PaymentContent = ({
                     Fixed Amount:
                   </span>
                   <span className="text-xl font-bold text-gray-900">
-                    {new Intl.NumberFormat('en-US', {
-                      style: 'currency',
-                      currency: subFields?.currency || 'USD'
+                    {new Intl.NumberFormat("en-US", {
+                      style: "currency",
+                      currency: subFields?.currency || "USD",
                     }).format(staticAmount)}
                   </span>
                 </div>
@@ -124,7 +127,7 @@ const PaymentContent = ({
           );
         }
 
-  default:
+      default:
         // For other payment types, show amount input if needed
         return (
           <AmountInput

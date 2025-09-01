@@ -89,11 +89,14 @@ function paymentFieldReducer(state, action) {
     case ACTIONS.UPDATE_PAYMENT_TYPE:
       const newPaymentType = action.payload;
       let updatedAmount = { ...state.amount };
-      
+
       // Set appropriate amount type defaults based on payment type
       if (newPaymentType === "custom_amount") {
         // For custom amount, default to static if not already set to static or variable
-        if (updatedAmount.type !== "static" && updatedAmount.type !== "variable") {
+        if (
+          updatedAmount.type !== "static" &&
+          updatedAmount.type !== "variable"
+        ) {
           updatedAmount.type = "static";
         }
       } else if (newPaymentType === "donation") {
@@ -106,7 +109,7 @@ function paymentFieldReducer(state, action) {
         // For subscription, amount is managed by subscription plan
         updatedAmount.type = "subscription";
       }
-      
+
       return {
         ...state,
         paymentType: newPaymentType,

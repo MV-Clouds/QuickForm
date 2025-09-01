@@ -479,7 +479,9 @@ const GooglePayIntegration = ({
       const err =
         error instanceof Error
           ? error
-          : new Error(error?.message || error?.toString() || "Google Pay failed");
+          : new Error(
+              error?.message || error?.toString() || "Google Pay failed"
+            );
       onError && onError(err);
     } finally {
       if (componentMounted.current) {
