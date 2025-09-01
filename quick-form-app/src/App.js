@@ -15,7 +15,7 @@ import GuestPageD from './components/LandingPage/GuestPageD';
 import NotificationPage from './components/NotificationSettings/NotificationSettingsModal';
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
-
+import LargeFileUpload from './components/file-upload/large-file-upload';
 function App() {
   return (
     // Set up the router for navigation
@@ -27,6 +27,7 @@ function App() {
             <Routes>
               {/* Public route for login */}
               <Route path="/" element={<Login />} />
+              <Route path='/upload' element ={<LargeFileUpload/>}/>
               <Route path="/guest" element={<ProtectedRoute element={< GuestPageD />} />} />
               {/* Protected route for form creation wizard */}
               <Route
