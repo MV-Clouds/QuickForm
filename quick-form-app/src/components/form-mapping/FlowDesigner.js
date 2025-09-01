@@ -1,73 +1,139 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from "react";
-import ReactFlow, { useNodesState,useReactFlow, useEdgesState, addEdge, Controls, Background, Handle, Position } from "reactflow";
+import ReactFlow, { useNodesState, useReactFlow, useEdgesState, useViewport, addEdge, ControlButton, Background, Handle, Position } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import Modal from "react-modal";
 import Select from "react-select";
 import "reactflow/dist/style.css";
+import './Mapping.css';
 
-const CustomNode = ({ data, selected, id, onAddAction }) => {
+const CustomControls = ({ handleUndo, handleRedo, canUndo, canRedo }) => {
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+
+  const getButtonStyle = (canProceed) => ({
+    cursor: canProceed ? 'pointer' : 'not-allowed',
+    opacity: canProceed ? 1 : 0.5,
+  });
+
+  return (
+    <div className="react-flow__controls">
+      <ControlButton onClick={handleUndo} title="Undo" disabled={!canUndo} style={getButtonStyle(canUndo)}>
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 18H14.75C16.1424 18 17.4777 17.4469 18.4623 16.4623C19.4469 15.4777 20 14.1424 20 12.75C20 11.3576 19.4469 10.0223 18.4623 9.03769C17.4777 8.05312 16.1424 7.5 14.75 7.5H5M7.5 4L4 7.5L7.5 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+      </ControlButton>
+      <ControlButton onClick={handleRedo} title="Redo" disabled={!canRedo} style={getButtonStyle(canRedo)}>
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M13 18H9.25C7.85761 18 6.52226 17.4469 5.53769 16.4623C4.55312 15.4777 4 14.1424 4 12.75C4 11.3576 4.55312 10.0223 5.53769 9.03769C6.52226 8.05312 7.85761 7.5 9.25 7.5H19M16.5 4L20 7.5L16.5 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+      </ControlButton>
+      <ControlButton onClick={() => zoomIn()} title="Zoom In">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9.18549 14.9286C12.3255 14.9286 14.871 12.3702 14.871 9.21429C14.871 6.05837 12.3255 3.5 9.18549 3.5C6.04548 3.5 3.5 6.05837 3.5 9.21429C3.5 12.3702 6.04548 14.9286 9.18549 14.9286Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M10.9621 9.21484H6.91113M19.4999 19.5006L13.3028 13.3508M8.97223 7V11.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+      </ControlButton>
+      <ControlButton onClick={() => zoomOut()} title="Zoom Out">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9.68549 15.4286C12.8255 15.4286 15.371 12.8702 15.371 9.71429C15.371 6.55837 12.8255 4 9.68549 4C6.54548 4 4 6.55837 4 9.71429C4 12.8702 6.54548 15.4286 9.68549 15.4286Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M11.9595 9.71484H7.41113M19.9999 20.0006L13.8028 13.8508" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+      </ControlButton>
+      <ControlButton onClick={() => fitView()} title="Fit View">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 9.33333V4H9.33333M14.6667 4H20V9.33333M4 14.6667V20H9.33333M20 14.6667V20H14.6667" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+      </ControlButton>
+    </div>
+  );
+};
+
+const CustomNode = ({ data, selected, id, onAddAction, edges = [] }) => {
   const [isHovered, setIsHovered] = useState(false);
   const { deleteElements } = useReactFlow();
-  
+
   const nodeType = data.actionType || data.action || "default";
+
+  // Check if handles are connected
+  const hasTopConnection = edges.some(edge => edge.target === id && edge.targetHandle === "top");
+  const hasBottomConnection = edges.some(edge => edge.source === id && edge.sourceHandle === "bottom");
 
   const handleDelete = (e) => {
     e.stopPropagation();
     deleteElements({ nodes: [{ id }] });
   };
 
-  const getNodeStyles = () => {
-    const baseStyles = "relative backdrop-blur-sm border-2 rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl";
+  const handleAddTop = (e) => {
+    e.stopPropagation();
+    // Add logic for adding node above
+    console.log("Add node above", id);
+  };
 
+  const handleAddBottom = (e) => {
+    e.stopPropagation();
+    // Add logic for adding node below
+    console.log("Add node below", id);
+  };
+
+  const getNodeIcon = () => {
     switch (nodeType) {
-      case "Condition":
-        return `${baseStyles} bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-300 hover:border-indigo-400`;
+      case "Condition": 
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M7 8L3 12L7 16M17 8L21 12L17 16M14 4L10 20" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
+      case "Loop": 
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 4V10H7M23 20V14H17" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14L18.36 18.36A9 9 0 0 1 3.51 15" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
+      case "Formatter":
+      case "Filter":
+      case "Path":
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 17L12 22L22 17" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 12L12 17L22 12" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
       case "Create/Update":
       case "CreateUpdate":
       case "Find":
-        return `${baseStyles} bg-gradient-to-br from-rose-50 to-rose-100 border-rose-300 hover:border-rose-400`;
-      case "Formatter":
-      case "Filter":
-      case "Loop":
-      case "Path":
-        return `${baseStyles} bg-gradient-to-br from-amber-50 to-amber-100 border-amber-300 hover:border-amber-400`;
-      default:
-        return `${baseStyles} bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300 hover:border-gray-400`;
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M21 15V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3H9" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M16 3H21V8" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14 15L21 8" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
+      case "Google Sheet":
+      case "FindGoogleSheet":
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6A2 2 0 0 0 4 4V20A2 2 0 0 0 6 22H18A2 2 0 0 0 20 20V8Z" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14 2V8H20" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M8 13H16" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M8 17H16" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
+      default: 
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="#8B5CF6" strokeWidth="2" fill="none"/>
+            <circle cx="9" cy="9" r="2" stroke="#8B5CF6" strokeWidth="2" fill="none"/>
+            <path d="M21 15L16 10L5 21" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        );
     }
   };
-
-  const getIconColor = () => {
-    switch (nodeType) {
-      case "Condition": return "text-indigo-600";
-      case "Formatter":
-      case "Filter":
-      case "Loop": 
-      case "Path": return "text-amber-600";
-      case "Create/Update":
-      case "CreateUpdate":
-      case "Find": return "text-rose-600";
-      default: return "text-gray-600";
-    }
-  };
-
-  const getIcon = () => {
-    switch (nodeType) {
-      case "Condition": return "🔀";
-      case "Loop": return "🔄";
-      case "formatter": return "🎨";
-      case "Create/Update":
-      case "CreateUpdate":
-      case "Find": return "⚡";
-      case "Formatter":
-      case "Filter": 
-      case "Path": return "🔧";
-      case "Google Sheet" : return "✉";
-      case "FindGoogleSheet" : return "📝";
-      default: return "📋";
-    }
-  };
-
-  const shouldShowIcon = id !== "start" && id !== "end";
 
   return (
     <motion.div
@@ -76,25 +142,30 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2 }}
       draggable={data.draggable !== false}
-      className={`${getNodeStyles()} ${data.draggable === false ? "cursor-default" : "cursor-grab"} pointer-events-auto min-w-[120px] p-4 group`}
+      className={`relative bg-white border-2 border-gray-200 rounded-xl shadow-md transition-all duration-300 hover:shadow-lg ${data.draggable === false ? "cursor-default" : "cursor-grab"} pointer-events-auto min-w-[180px] p-4 group`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Top Handle */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="top"
-        className="w-4 h-4 bg-gradient-to-r from-slate-400 to-slate-500 -top-2 left-1/2 transform -translate-x-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
-      />
+      {/* Top Add Button - only show if no connection */}
+      {!hasTopConnection && (
+        <button
+          onClick={handleAddTop}
+          className="absolute -top-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-blue-600 z-10 shadow-md"
+        >
+          +
+        </button>
+      )}
 
       {/* Node Content */}
-      <div className="flex justify-between items-center space-x-3">
-        <div className="flex justify-center items-center space-x-2">
-          {shouldShowIcon && (
-            <span className={`text-lg ${getIconColor()}`}>{getIcon()}</span>
-          )}
-          <div className="font-semibold text-slate-700 text-sm leading-tight">
+      <div className="flex items-center space-x-3">
+        <div className="flex-shrink-0">
+          {getNodeIcon()}
+        </div>
+        <div className="flex-1">
+          <div className="font-medium text-gray-800 text-sm">
+            {nodeType}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
             {nodeType}
           </div>
         </div>
@@ -108,33 +179,24 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
         )}
       </div>
 
-      {/* Hover Effect */}
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl pointer-events-none"
-          />
-        )}
-      </AnimatePresence>
+      {/* Bottom Add Button - only show if no connection */}
+      {!hasBottomConnection && (
+        <button
+          onClick={handleAddBottom}
+          className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-blue-600 z-10 shadow-md"
+        >
+          +
+        </button>
+      )}
 
-      {/* Bottom Handle */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="bottom"
-        className="w-4 h-4 bg-gradient-to-r from-slate-400 to-slate-500 -bottom-2 left-1/2 transform -translate-x-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
-      />
-
-      {(isHovered || selected) && id !== "start" && id !== "end" && (
+      {/* Delete Button */}
+      {(isHovered || selected)  && (
         <motion.button
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
           onClick={handleDelete}
-          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md hover:bg-red-600 z-10"
+          className="absolute -top-2 -right-2 bg-gray-300 text-black rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md hover:bg-red-600 z-10"
           whileHover={{ scale: 1.1 }}
         >
           ×
@@ -148,13 +210,13 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
             type="source"
             position={Position.Right}
             id="loop"
-            className="w-4 h-4 bg-gradient-to-r from-violet-400 to-violet-500 right-[-8px] top-1/2 transform -translate-y-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
+            className="w-3 h-3 bg-purple-400 right-[-6px] top-1/2 transform -translate-y-1/2 border-2 border-white rounded-full shadow-sm pointer-events-auto"
           />
           <Handle
             type="target"
             position={Position.Right}
             id="loop-back"
-            className="w-4 h-4 bg-gradient-to-r from-violet-400 to-violet-500 right-[-8px] top-1/3 transform -translate-y-1/2 border-2 border-white rounded-full shadow-md pointer-events-auto transition-all duration-200 hover:scale-110"
+            className="w-3 h-3 bg-purple-400 right-[-6px] top-1/3 transform -translate-y-1/2 border-2 border-white rounded-full shadow-sm pointer-events-auto"
           />
         </>
       )}
@@ -162,11 +224,17 @@ const CustomNode = ({ data, selected, id, onAddAction }) => {
   );
 };
 
-const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdgeDelete }) => {
+const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdgeSettings }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const path = `M${sourceX},${sourceY} L${targetX},${targetY}`;
   const midX = (sourceX + targetX) / 2;
   const midY = (sourceY + targetY) / 2;
+
+  const handleSettingsClick = (e) => {
+    e.stopPropagation();
+    setShowSettings(!showSettings);
+  };
 
   return (
     <g
@@ -189,11 +257,12 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdge
         style={style}
         className={`react-flow__edge-path fill-none stroke-3 transition-all duration-300 ${isHovered ? 'filter drop-shadow-lg' : ''}`}
         stroke="#64748b"
-        strokeWidth={isHovered ? "4" : "2"}
+        strokeWidth={isHovered ? "3" : "2"}
         d={path}
         filter={isHovered ? `url(#glow-${id})` : undefined}
       />
 
+      {/* Settings Gear Icon */}
       <AnimatePresence>
         {isHovered && (
           <motion.g
@@ -201,25 +270,55 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdge
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             className="cursor-pointer"
-            onClick={() => onEdgeDelete(id)}
+            onClick={handleSettingsClick}
           >
             <circle
               cx={midX}
               cy={midY}
-              r="16"
-              className="fill-red-500 stroke-white stroke-2 filter drop-shadow-lg"
+              r="12"
+              className="fill-white stroke-gray-300 stroke-2 filter drop-shadow-md"
             />
-            <text
-              x={midX}
-              y={midY + 5}
-              className="fill-white text-center text-sm font-bold"
-              textAnchor="middle"
-            >
-              ×
-            </text>
+            <g transform={`translate(${midX - 8}, ${midY - 8})`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 15A3 3 0 1 0 12 9A3 3 0 0 0 12 15Z" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M19.4 15A1.65 1.65 0 0 0 18.33 16.5L19.21 18.45A1.65 1.65 0 0 1 18.33 21H5.67A1.65 1.65 0 0 1 4.79 18.45L5.67 16.5A1.65 1.65 0 0 0 4.6 15A1.65 1.65 0 0 0 3 13.35V10.65A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 5.67 7.5L4.79 5.55A1.65 1.65 0 0 1 5.67 3H18.33A1.65 1.65 0 0 1 19.21 5.55L18.33 7.5A1.65 1.65 0 0 0 19.4 9A1.65 1.65 0 0 0 21 10.65V13.35A1.65 1.65 0 0 0 19.4 15Z" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </g>
           </motion.g>
         )}
       </AnimatePresence>
+
+      {/* Settings Popup */}
+      {showSettings && (
+        <foreignObject x={midX + 20} y={midY - 40} width="120" height="80">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 text-sm"
+          >
+            <button
+              className="w-full text-left px-2 py-1 hover:bg-gray-100 rounded flex items-center space-x-2"
+              onClick={() => {
+                console.log("Add condition to edge", id);
+                setShowSettings(false);
+              }}
+            >
+              <span>+</span>
+              <span>Add</span>
+            </button>
+            <button
+              className="w-full text-left px-2 py-1 hover:bg-gray-100 rounded flex items-center space-x-2 text-red-600"
+              onClick={() => {
+                console.log("Delete edge", id);
+                setShowSettings(false);
+              }}
+            >
+              <span>🗑</span>
+              <span>Delete</span>
+            </button>
+          </motion.div>
+        </foreignObject>
+      )}
     </g>
   );
 };
@@ -238,11 +337,70 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     { value: "Find", label: "Find" },
   ];
 
+  // ## 3. State and refs for undo/redo history
+  const [history, setHistory] = useState([{ nodes: initialNodes, edges: initialEdges }]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const isRestoring = useRef(false);
+
+  // Sync with parent component when initialNodes changes
   useEffect(() => {
-    setParentNodes(nodes);
-    setParentEdges(edges);
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
+
+  // Debounced sync with parent component to avoid excessive updates
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setParentNodes(nodes);
+      setParentEdges(edges);
+    }, 100); // Debounce by 100ms
+
+    return () => clearTimeout(timeoutId);
   }, [nodes, edges, setParentNodes, setParentEdges]);
 
+  // 4. Effect to capture changes and update history
+  useEffect(() => {
+    // If we are restoring from history, don't create a new entry
+    if (isRestoring.current) {
+      isRestoring.current = false;
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      const newHistoryEntry = { nodes, edges };
+      // Prevent adding duplicate states to history
+      if (JSON.stringify(newHistoryEntry.nodes) === JSON.stringify(history[historyIndex].nodes) && JSON.stringify(newHistoryEntry.edges) === JSON.stringify(history[historyIndex].edges)) {
+        return;
+      }
+
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(newHistoryEntry);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+    }, 500); // Debounce changes by 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [nodes, edges, history, historyIndex]);
+
+  // ## 5. Undo/Redo handler functions
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      isRestoring.current = true; // Set flag to prevent new history entry
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setNodes(history[newIndex].nodes);
+      setEdges(history[newIndex].edges);
+    }
+  }, [history, historyIndex, setNodes, setEdges]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isRestoring.current = true; // Set flag to prevent new history entry
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setNodes(history[newIndex].nodes);
+      setEdges(history[newIndex].edges);
+    }
+  }, [history, historyIndex, setNodes, setEdges]);
 
   // Add self-connected edge for loop nodes
   useEffect(() => {
@@ -281,10 +439,12 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     };
   }, [setNodes, setEdges]);
 
-  const nodesWithDraggable = nodes.map((node) => ({
+  const nodesWithDraggable = useMemo(() => nodes.map((node) => ({
     ...node,
     draggable: node.draggable !== false,
-  }));
+  })), [nodes]);
+
+  const debouncedCalculateNodeOrders = useRef(null);
 
   const handleNodesChange = useCallback(
     (changes) => {
@@ -308,27 +468,53 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     orderCounterRef.current = 1;
     const levelNodeCounts = {};
 
-    const calculateLevels = (nodeId, level = 1) => {
-      if (!nodeId || visited.has(nodeId)) return;
-      visited.add(nodeId);
-      const currentLevel = nodeLevels.get(nodeId) || 0;
-      nodeLevels.set(nodeId, Math.max(currentLevel, level));
-      const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
-      for (const edge of outgoingEdges) {
-        if (edge.target === "end") {
-          const endCurrentLevel = nodeLevels.get("end") || 0;
-          nodeLevels.set("end", Math.max(endCurrentLevel, level + 1));
-        } else {
-          calculateLevels(edge.target, level + 1);
+    // Create adjacency list for faster traversal
+    const adjacencyList = new Map();
+    currentNodes.forEach(node => adjacencyList.set(node.id, []));
+    currentEdges.forEach(edge => {
+      if (adjacencyList.has(edge.source)) {
+        adjacencyList.get(edge.source).push(edge.target);
+      }
+    });
+
+    // Calculate levels using BFS for better performance
+    const calculateLevelsBFS = () => {
+      const queue = [];
+      const inDegree = new Map();
+
+      // Initialize in-degree
+      currentNodes.forEach(node => inDegree.set(node.id, 0));
+      currentEdges.forEach(edge => {
+        if (inDegree.has(edge.target)) {
+          inDegree.set(edge.target, inDegree.get(edge.target) + 1);
+        }
+      });
+
+      // Find nodes with in-degree 0 (start nodes)
+      currentNodes.forEach(node => {
+        if (inDegree.get(node.id) === 0) {
+          queue.push({ nodeId: node.id, level: 1 });
+          nodeLevels.set(node.id, 1);
+          visited.add(node.id);
+        }
+      });
+
+      while (queue.length > 0) {
+        const { nodeId, level } = queue.shift();
+        const children = adjacencyList.get(nodeId) || [];
+
+        for (const childId of children) {
+          if (!visited.has(childId)) {
+            const currentChildLevel = nodeLevels.get(childId) || 0;
+            nodeLevels.set(childId, Math.max(currentChildLevel, level + 1));
+            visited.add(childId);
+            queue.push({ nodeId: childId, level: level + 1 });
+          }
         }
       }
     };
 
-    const startNode = currentNodes.find(node => node.id === "start");
-    if (startNode) {
-      visited.clear();
-      calculateLevels(startNode.id);
-    }
+    calculateLevelsBFS();
 
     visited.clear();
     const assignOrders = (nodeId, targetLevel = null) => {
@@ -348,65 +534,41 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       }
 
       if (!levelNodeCounts[level]) levelNodeCounts[level] = {};
-      const actionKey = node.data.action || (node.id === "start" ? "Start" : node.id === "end" ? "End" : "Condition");
+      const actionKey = node.data.action || "Action";
       levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
       const index = levelNodeCounts[level][actionKey];
 
-      let label = node.id === "start" ? "Start" :
-        node.id === "end" ? "End" :
-          node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
-            node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
-              node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
-                node.data.action === "Filter" ? `Filter_${index}_Level${level}` :
-                  node.data.action === "Path" ? `Path_${index}_Level${level}` :
-                    `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
-      
-      let displayLabel = node.data.action || (node.id === "start" ? "Start" : node.id === "end" ? "End" : `Condition ${index}`);
+      let label =
+        node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
+          node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
+            node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
+              node.data.action === "Filter" ? `Filter_${index}_Level${level}` :
+                node.data.action === "Path" ? `Path_${index}_Level${level}` :
+                  `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
+
+      let displayLabel = node.data.action || `Action ${index}`;
 
       updatedNodes[nodeIndex] = {
         ...node,
         data: { ...node.data, order, label, displayLabel },
       };
 
-      const childEdges = currentEdges.filter(edge => edge.source === nodeId && edge.target !== "end");
-      for (const edge of childEdges) {
-        assignOrders(edge.target);
+      const children = adjacencyList.get(nodeId) || [];
+      for (const childId of children) {
+        assignOrders(childId);
       }
     };
 
-    assignOrders("start");
+    // assign orders for all nodes
     for (const node of currentNodes) {
-      if (!visited.has(node.id) && node.id !== "end") {
+      if (!visited.has(node.id)) {
         assignOrders(node.id);
-      }
-    }
-
-    const endNode = currentNodes.find(node => node.id === "end");
-    if (endNode) {
-      const endLevel = nodeLevels.get("end") || 1;
-      const maxOrder = Math.max(...Array.from(nodeOrders.values()));
-      const finalOrder = maxOrder + 1;
-      
-      if (!levelNodeCounts[endLevel]) levelNodeCounts[endLevel] = {};
-      levelNodeCounts[endLevel]["End"] = 1;
-      
-      const endNodeIndex = updatedNodes.findIndex(n => n.id === "end");
-      if (endNodeIndex !== -1) {
-        updatedNodes[endNodeIndex] = {
-          ...updatedNodes[endNodeIndex],
-          data: {
-            ...updatedNodes[endNodeIndex].data,
-            order: finalOrder,
-            label: "End",
-            displayLabel: "End",
-          },
-        };
-        nodeOrders.set("end", finalOrder);
       }
     }
 
     return updatedNodes;
   }, []);
+
 
   const onConnect = useCallback(
     (params) => {
@@ -426,16 +588,6 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
 
       if (params.source === params.target && params.sourceHandle !== "loop") {
         alert("Cannot connect a node to itself.");
-        return;
-      }
-
-      if (params.target === "start") {
-        alert("Cannot connect to the Start node.");
-        return;
-      }
-
-      if (params.source === "end") {
-        alert("End node cannot have outgoing connections.");
         return;
       }
 
@@ -525,6 +677,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           },
         ];
 
+        // Batch updates to avoid multiple re-renders
         setNodes((nds) => {
           const updatedNodes = [...nds, newConditionNode];
           setEdges((eds) => {
@@ -554,6 +707,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           animated: params.sourceHandle === "loop",
         };
 
+        // Batch updates to avoid multiple re-renders
         setEdges((eds) => {
           const updatedEdges = addEdge(newEdge, eds);
           const updatedNodes = calculateNodeOrders(nodes, updatedEdges);
@@ -570,32 +724,32 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       setEdges((eds) => {
         const edge = eds.find((e) => e.id === edgeId);
         let newEdges = eds.filter((e) => e.id !== edgeId);
-        
+
         // Handle condition node removal for path nodes
         if (edge.conditionNodeId) {
           // Remove all edges connected to the condition node
-          newEdges = newEdges.filter((e) => 
+          newEdges = newEdges.filter((e) =>
             !(e.source === edge.conditionNodeId || e.target === edge.conditionNodeId)
           );
           // Remove the condition node itself
           setNodes((nds) => nds.filter((n) => n.id !== edge.conditionNodeId));
         }
-        
+
         // Also check if this was a path node connection
-        const pathNodeEdge = eds.find(e => 
-          e.id === edgeId && 
+        const pathNodeEdge = eds.find(e =>
+          e.id === edgeId &&
           nodes.some(n => n.id === e.source && n.data.action === "Path")
         );
-        
+
         if (pathNodeEdge) {
           // Find and remove any associated condition nodes
-          const conditionNodes = nodes.filter(n => 
-            n.data.pathNodeId === pathNodeEdge.source && 
+          const conditionNodes = nodes.filter(n =>
+            n.data.pathNodeId === pathNodeEdge.source &&
             n.data.targetNodeId === pathNodeEdge.target
           );
-          
+
           conditionNodes.forEach(conditionNode => {
-            newEdges = newEdges.filter(e => 
+            newEdges = newEdges.filter(e =>
               !(e.source === conditionNode.id || e.target === conditionNode.id)
             );
             setNodes(nds => nds.filter(n => n.id !== conditionNode.id));
@@ -610,129 +764,9 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     [setEdges, setNodes, nodes, calculateNodeOrders]
   );
 
-  const onDragOver = useCallback((event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  }, []);
-
-  const onDrop = useCallback(
-    (event) => {
-      event.preventDefault();
-      const type = event.dataTransfer.getData("application/reactflow-type");
-      const action = event.dataTransfer.getData("application/reactflow-id");
-      if (!type || !action) return;
-
-      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
-      const position = { x: event.clientX - reactFlowBounds.left - 50, y: event.clientY - reactFlowBounds.top - 25 };
-      const randomNum = Math.floor(Math.random() * 10000);
-      const nodeName = action.toLowerCase().replace("/", "_");
-      const newNode = {
-        id: `${nodeName}_${randomNum}`,
-        type: "custom",
-        position,
-        data: {
-          label: `${action}_Level0`,
-          displayLabel: action,
-          type,
-          action,
-          order: null,
-          ...(type === "action" && action === "Create/Update" ? {
-            enableConditions: false,
-            returnLimit: "",
-            salesforceObject: "",
-            fieldMappings: [],
-            conditions: [],
-            logicType: "AND",
-            customLogic: "",
-          } : {}),
-          ...(type === "action" && action === "Find" ? {
-            salesforceObject: "",
-            conditions: [],
-            returnLimit: "",
-            sortField: "",
-            sortOrder: "ASC",
-            logicType: "AND",
-            customLogic: "",
-          } : {}),
-          ...(type === "action" && action === "Filter" ? {
-            salesforceObject: "",
-            conditions: [],
-            returnLimit: "",
-            sortField: "",
-            sortOrder: "ASC",
-            logicType: "AND",
-            customLogic: "",
-          } : {}),
-          ...(type === "utility" && action === "Condition" ? {
-            conditions: [],
-            logicType: "AND",
-            customLogic: "",
-          } : {}),
-          ...(type === "utility" && action === "Path" ? { pathOption: "Rules" } : {}),
-          ...(type === "utility" && action === "Loop" ? {
-            loopConfig: {
-              loopCollection: "",
-              currentItemVariableName: "",
-              maxIterations: "",
-              loopVariables: {
-                currentIndex: false,
-                counter: false,
-                indexBase: "0"
-              },
-              exitConditions: [],
-            }
-          } : {}),
-          ...(type === "utility" && action === "Formatter" ? {
-            formatterConfig: {
-              formatType: "date",
-              operation: "",
-              inputField: "",
-              outputVariable: "",
-              options: {}
-            }
-          } : {}),
-          ...(type === "integration" && action === 'Google Sheet') ? {   
-                label: `${action}_Level0`,
-                displayLabel: action,
-                type,
-                action,
-                order: null,
-                selectedSheetName: '', // Initialize
-                spreadsheetId: '', // Initialize
-                sheetConditions: [], // Initialize
-                conditionsLogic: 'AND', // Initialize
-                sheetcustomLogic: '', // Initialize
-                ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),  
-              } : {},
-              ...(type === "integration" && action === 'FindGoogleSheet') ? {   
-                googleSheetReturnLimit: 0, // New
-                googleSheetSortField: '',     // New
-                googleSheetSortOrder: 'ASC',
-                columns: []
-              } : {}
-        },
-        draggable: true,
-      };
-      setNodes((nds) => {
-        const updatedNodes = [...nds, newNode];
-        const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
-        return recalculatedNodes;
-      });
-    },
-    [setNodes, edges, calculateNodeOrders]
-  );
-
   const onNodeClick = useCallback(
     (event, node) => {
-      console.log('Node' , node)
-      if (node.id !== "start") {
-        const hasIncomingEdge = edges.some((edge) => edge.target === node.id);
-        if (!hasIncomingEdge) {
-          alert("Please connect the node with an incoming edge before configuring it.");
-          return;
-        }
-      }
-      if (["Create/Update", "Find", "Filter", "Condition", "Path", "Loop", "Formatter" , 'Google Sheet' ,'FindGoogleSheet'].includes(node.data.action)) {
+      if (["Create/Update", "Find", "Filter", "Condition", "Path", "Loop", "Formatter", 'Google Sheet', 'FindGoogleSheet'].includes(node.data.action)) {
         setSelectedNode(node);
       }
     },
@@ -818,22 +852,17 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     setLoopNodeId(null);
   };
 
-  // Validate flow before saving
-  const validateFlow = useCallback(() => {
-    const actionNodes = nodes.filter(node => !['start', 'end'].includes(node.id));
-    if (actionNodes.length === 0) {
-      alert("Flow must contain at least one action node.");
-      return false;
-    }
-    return true;
-  }, [nodes]);
-
   const nodeTypes = useMemo(() => ({
     custom: (props) => <CustomNode {...props} onAddAction={handleAddAction} />
   }), []);
+
   const edgeTypes = useMemo(() => ({
     default: (props) => <CustomEdge {...props} onEdgeDelete={onEdgeDelete} />
   }), [onEdgeDelete]);
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < history.length - 1;
+
 
   return (
     <div className="w-full h-full relative overflow-hidden">
@@ -845,12 +874,10 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
           onNodeClick={onNodeClick}
           onNodesDelete={useCallback((nodesToDelete) => {
             const nodeIds = nodesToDelete.map(n => n.id);
-            setEdges(eds => eds.filter(e => 
+            setEdges(eds => eds.filter(e =>
               !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
             ));
           }, [setEdges])}
@@ -860,26 +887,17 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           className="w-full h-full"
           proOptions={{ hideAttribution: true }}
         >
-          <Controls
-            className="bg-white/95 backdrop-blur-sm border border-slate-200 rounded-xl shadow-lg p-2"
-            style={{
-              button: {
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '8px',
-                margin: '2px',
-                transition: 'all 0.2s ease',
-                color: '#475569'
-              }
-            }}
+          <CustomControls
+            handleUndo={handleUndo}
+            handleRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
           <Background
-            color="#e2e8f0"
             gap={24}
             size={1}
             variant="dots"
-            className="opacity-40"
+            className="opacity-100"
           />
         </ReactFlow>
       </div>
@@ -924,3 +942,5 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
 };
 
 export default FlowDesigner;
+
+

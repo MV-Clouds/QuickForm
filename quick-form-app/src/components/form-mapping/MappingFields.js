@@ -1,75 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from 'react-router-dom';
 import { ReactFlowProvider, useEdges } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
-import { XMarkIcon } from '@heroicons/react/24/solid';
+import { XMarkIcon, PlusIcon } from '@heroicons/react/24/solid';
 import { useSalesforceData } from '../Context/MetadataContext';
+import FloatingAddButton from "./FloatingAddButton";
 
-const Sidebar = ({ onDragStart }) => {
-  const actions = ["Create/Update", "Find"];
-  const utilities = ["Formatter", "Filter", "Path", "Loop"];
-  const integrations = ["Google Sheet" , 'FindGoogleSheet']; // Add Google Sheet Integration
-
-  return (
-    <motion.div
-      className="w-1/5 min-w-[200px] bg-white p-6 h-full overflow-y-auto shadow-lg border-r border-gray-200"
-      initial={{ x: -100, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
-      <h2 className="text-lg font-semibold text-gray-700 mb-6 border-b border-gray-200 pb-3">Actions</h2>
-      {actions.map((action) => (        
-        <motion.div
-          key={action}
-          draggable
-          onDragStart={(event) => onDragStart(event, "action", action)}
-          className="mb-3 p-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-md cursor-grab shadow-sm hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200 ease-in-out flex items-center justify-between text-sm"
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-        >
-          <span>{action}</span>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-75" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
-        </motion.div>
-      ))}
-      <h2 className="text-lg font-semibold text-gray-700 mb-6 mt-8 border-b border-gray-200 pb-3">Utilities</h2>
-      {utilities.map((utility) => (
-        <motion.div
-          key={utility}
-          draggable
-          onDragStart={(event) => onDragStart(event, "utility", utility)}
-          className="mb-3 p-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-md cursor-grab shadow-sm hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200 ease-in-out flex items-center justify-between text-sm"
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-        >
-          <span>{utility}</span>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-75" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 4a1 1 0 00-1 1v3H6a1 1 0 100 2h3v3a1 1 0 102 0v-3h3a1 1 0 100-2h-3V5a1 1 0 00-1-1z" />
-          </svg>
-        </motion.div>
-      ))}
-      {/* New Integration Panel */}
-      <h2 className="text-lg font-semibold text-gray-700 mb-6 mt-8 border-b border-gray-200 pb-3">Integrations</h2>
-      {integrations.map((integration) => (
-        <motion.div
-          key={integration}
-          draggable
-          onDragStart={(event) => onDragStart(event, "integration", integration)}
-          className="mb-3 p-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-md cursor-grab shadow-sm hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200 ease-in-out flex items-center justify-between text-sm"
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-        >
-          <span>{integration}</span>
-        </motion.div>
-      ))}
-    </motion.div>
-  );
-};
-
-const MappingFields = () => {
+const MappingFields = ({ onSaveCallback }) => {
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
@@ -86,25 +25,39 @@ const MappingFields = () => {
   const [edges, setEdges] = useState([]);
   const tokenRef = useRef(null);
   const [googleSheetConfig, setGoogleSheetConfig] = useState(null);
+  const orderCounterRef = useRef(1);
+  const reactFlowWrapperRef = useRef(null);
+  const [addButtonPosition, setAddButtonPosition] = useState({ x: 0, y: 0 });
 
-  const initialNodes = [
-    {
-      id: "start",
-      type: "custom",
-      position: { x: 250, y: 50 },
-      data: { label: "Start", displayLabel: "Start", order: 1, type: "start", action: "Start" },
-      draggable: true,
-    },
-    {
-      id: "end",
-      type: "custom",
-      position: { x: 250, y: 500 },
-      data: { label: "End", displayLabel: "End", order: null, type: "end", action: "End" },
-      draggable: true,
-    },
-  ];
-
+  const initialNodes = [];
   const initialEdges = [];
+
+  // Calculate center position on mount and resize
+  useEffect(() => {
+    const updateButtonPosition = () => {
+      if (reactFlowWrapperRef.current) {
+        const rect = reactFlowWrapperRef.current.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        setAddButtonPosition({
+          x: centerX - 24, // Half of button width (48px)
+          y: centerY - 24  // Half of button height (48px)
+        });
+      }
+    };
+
+    // Initial position calculation
+    updateButtonPosition();
+
+    // Update position on window resize
+    window.addEventListener('resize', updateButtonPosition);
+
+    return () => {
+      window.removeEventListener('resize', updateButtonPosition);
+    };
+  }, []);
+
 
   const fetchGoogleSheetCredentials = async (token) => {
     try {
@@ -203,7 +156,7 @@ const MappingFields = () => {
           }
 
           return acc;
-        }, []);        
+        }, []);
         setFormFields(normalizedFields);
       } else {
         console.warn('Form version not found or has no fields');
@@ -254,7 +207,7 @@ const MappingFields = () => {
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
-console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
+      console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       if (!token || !instanceUrl || !userId) {
         throw new Error('User not authenticated or instance URL missing');
       }
@@ -287,8 +240,6 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
   };
 
   const validateNode = (nodeId, allNodeIds) => {
-    if (nodeId === "start" || nodeId === "end") return true;
-
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) {
       showToast(`Node ${nodeId} not found.`);
@@ -373,7 +324,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         return false;
       }
     } else if (node.data.action === "Find" || node.data.action === "Filter") {
-      if ( !nodeMapping.conditions || nodeMapping.conditions.length === 0) {
+      if (!nodeMapping.conditions || nodeMapping.conditions.length === 0) {
         showToast(`No Salesforce object or complete conditions defined for node ${node.data.displayLabel}.`);
         return false;
       }
@@ -536,7 +487,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       return;
     }
 
-    const actionNodes = nodes.filter(node => !['start', 'end'].includes(node.id));
+    const actionNodes = nodes;
     if (actionNodes.length === 0) {
       showToast("Flow must contain at least one action node.", 'error');
       setIsSaving(false);
@@ -552,14 +503,22 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       setToken(newToken);
     }
 
-    for (const node of nodes) {
-      const isConnected = edges.some((edge) => edge.source === node.id || edge.target === node.id);
-      if (!isConnected && node.id !== "start" && node.id !== "end") {
-        showToast(`Node ${node.data.displayLabel} is not connected. Please connect all nodes before saving.`, 'error');
-        setIsSaving(false);
-        return;
+    if (nodes.length > 1) {
+      for (const node of nodes) {
+        const isConnected = edges.some(
+          (edge) => edge.source === node.id || edge.target === node.id
+        );
+        if (!isConnected) {
+          showToast(
+            `Node ${node.data.displayLabel} is not connected. Please connect all nodes before saving.`,
+            'error'
+          );
+          setIsSaving(false);
+          return;
+        }
       }
     }
+
 
     const allMappings = [];
     let maxOrder = 0;
@@ -571,11 +530,9 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       const nextNodeIds = outgoingEdges.map((e) => e.target).filter((id, index, self) => self.indexOf(id) === index);
 
       console.log('nodeMapping:', nodeMapping);
-      
+
       let actionType = nodeMapping.actionType || node.data.action;
-      if (node.id === "start") actionType = "Start";
-      else if (node.id === "end") actionType = "End";
-      else if (actionType === "Create/Update") actionType = "CreateUpdate";
+      if (actionType === "Create/Update") actionType = "CreateUpdate";
       else if (actionType === "Find") actionType = "Find";
       else if (actionType === "Filter") actionType = "Filter";
       else if (actionType === "Path") actionType = "Path";
@@ -584,7 +541,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       else if (actionType === "Condition") actionType = "Condition";
       else if (!actionType) actionType = node.data.action || "Unknown";
 
-      const order = node.data.order || (actionType !== "End" ? ++maxOrder : maxOrder + 1);
+      const order = node.data.order || ++maxOrder;
       maxOrder = Math.max(maxOrder, order);
 
       const mappingData = {
@@ -597,7 +554,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
             (actionType === "Condition" && nodeMapping.pathOption === "Rules")
             ? nodeMapping.salesforceObject || ""
             : "",
-        fieldMappings: actionType === "CreateUpdate" || actionType === 'Google Sheet' ? nodeMapping.fieldMappings || [] :  [],
+        fieldMappings: actionType === "CreateUpdate" || actionType === 'Google Sheet' ? nodeMapping.fieldMappings || [] : [],
         conditions:
           actionType === "Find" ||
             actionType === "Filter" ||
@@ -631,14 +588,14 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         order,
         formVersionId,
       };
-      if (actionType === 'Google Sheet' ) {  
+      if (actionType === 'Google Sheet') {
         mappingData.selectedSheetName = nodeMapping.selectedSheetName || '';
         mappingData.spreadsheetId = nodeMapping.spreadsheetId || '';
         mappingData.sheetConditions = nodeMapping.sheetConditions || [];
         mappingData.conditionsLogic = nodeMapping.conditionsLogic || 'AND';
         mappingData.sheetcustomLogic = nodeMapping.sheetcustomLogic || '';
         mappingData.updateMultiple = nodeMapping.updateMultiple || false;
-      }else if( actionType === 'FindGoogleSheet'){
+      } else if (actionType === 'FindGoogleSheet') {
         mappingData.findSheetConditions = nodeMapping.findSheetConditions || [];
         mappingData.googleSheetReturnLimit = nodeMapping.googleSheetReturnLimit || '';
         mappingData.googleSheetSortField = nodeMapping.googleSheetSortField || '';
@@ -648,7 +605,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         mappingData.spreadsheetId = nodeMapping.spreadsheetId || '';
         mappingData.sheetColumns = nodeMapping.sheetColumns || []; // Add columns to mappingData
       }
-      
+
       allMappings.push(mappingData);
     }
 
@@ -660,7 +617,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       }
     }
     console.log('allMappings:', allMappings);
-    
+
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
     const saveMappingsUrl = process.env.REACT_APP_SAVE_MAPPINGS_URL;
 
@@ -699,7 +656,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
         throw new Error(`Save failed: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
-      console.log('Error in Saving mapping' , error)
+      console.log('Error in Saving mapping', error)
       // if (error.message.includes('INVALID_JWT_FORMAT')) {
       //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
       //     method: 'POST',
@@ -719,11 +676,18 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
     }
   };
 
+  // Register the save callback when component mounts
+  useEffect(() => {
+    if (onSaveCallback) {
+      onSaveCallback(saveAllConfiguration);
+    }
+  }, [onSaveCallback]);
+
   const initializeData = async () => {
     setIsLoading(true);
-    console.log('FormVersion d ==>' , formVersionId);
-    console.log('Form Records' , formRecords);
-    
+    console.log('FormVersion d ==>', formVersionId);
+    console.log('Form Records', formRecords);
+
     try {
       if (!formVersionId || !formRecords || formRecords.length === 0) {
         showToast("Form version data not loaded yet", 'error');
@@ -795,19 +759,17 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
               customValue: ''
             },
             id: mapping.id || '',
-            type: mapping.actionType === 'Start' || mapping.actionType === 'End'
-              ? mapping.actionType.toLowerCase()
-              : mapping.actionType === 'Condition' || mapping.actionType === 'Path' ||
-                mapping.actionType === 'Loop' || mapping.actionType === 'Formatter'
-                ? 'utility'
-                : 'action',
+            type: (mapping.actionType === 'Condition' || mapping.actionType === 'Path' ||
+              mapping.actionType === 'Loop' || mapping.actionType === 'Formatter')
+              ? 'utility'
+              : 'action',
             displayLabel: mapping.label || mapping.actionType,
-            selectedSheetName : mapping.selectedSheetName || '',
-            spreadsheetId : mapping.spreadsheetId || '',
-            sheetConditions : mapping.sheetConditions || [],
+            selectedSheetName: mapping.selectedSheetName || '',
+            spreadsheetId: mapping.spreadsheetId || '',
+            sheetConditions: mapping.sheetConditions || [],
             conditionsLogic: mapping.conditionsLogic || 'AND', // Add this
             sheetcustomLogic: mapping.sheetcustomLogic || '', // Add this
-            updateMultiple : mapping.updateMultiple || false,
+            updateMultiple: mapping.updateMultiple || false,
             googleSheetReturnLimit: mapping.googleSheetReturnLimit || '',
             googleSheetSortField: mapping.googleSheetSortField || '',
             googleSheetSortOrder: mapping.googleSheetSortOrder || 'ASC'
@@ -826,7 +788,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                   ...node.data,
                   label: mapping.label,
                   displayLabel: mapping.displayLabel || mapping.label,
-                  action: mapping.actionType === "CreateUpdate" ? "Create/Update" : mapping.actionType, 
+                  action: mapping.actionType === "CreateUpdate" ? "Create/Update" : mapping.actionType,
                   type: mapping.type,
                   order: mapping.order,
                   salesforceObject: mapping.salesforceObject,
@@ -884,23 +846,197 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
       setIsLoading(false);
     }
   };
-  useEffect(()=>{
-    console.log('Mapping data' ,mappings)
-  },[mappings])
+
   useEffect(() => {
     initializeData();
-  }, [formVersionId,formRecords]);
+  }, [formVersionId, formRecords]);
 
-  const onDragStart = (event, nodeType, action) => {
-    event.dataTransfer.setData("application/reactflow-type", nodeType);
-    event.dataTransfer.setData("application/reactflow-id", action);
-    event.dataTransfer.effectAllowed = "move";
+  const calculateNodeOrders = useCallback((currentNodes, currentEdges) => {
+    const updatedNodes = [...currentNodes];
+    const visited = new Set();
+    const nodeOrders = new Map();
+    const nodeLevels = new Map();
+    orderCounterRef.current = 1;
+    const levelNodeCounts = {};
+
+    const calculateLevels = (nodeId, level = 1) => {
+      if (!nodeId || visited.has(nodeId)) return;
+      visited.add(nodeId);
+      const currentLevel = nodeLevels.get(nodeId) || 0;
+      nodeLevels.set(nodeId, Math.max(currentLevel, level));
+      const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
+      for (const edge of outgoingEdges) {
+        calculateLevels(edge.target, level + 1);
+      }
+    };
+
+    // calculate levels for all nodes
+    visited.clear();
+    for (const node of currentNodes) {
+      if (!visited.has(node.id)) {
+        calculateLevels(node.id);
+      }
+    }
+
+    visited.clear();
+    const assignOrders = (nodeId, targetLevel = null) => {
+      if (!nodeId || visited.has(nodeId)) return;
+      const nodeIndex = updatedNodes.findIndex(n => n.id === nodeId);
+      if (nodeIndex === -1) return;
+      const node = updatedNodes[nodeIndex];
+      const level = targetLevel !== null ? targetLevel : (nodeLevels.get(nodeId) || 1);
+      visited.add(nodeId);
+
+      let order;
+      if (nodeOrders.has(nodeId)) {
+        order = nodeOrders.get(nodeId);
+      } else {
+        order = orderCounterRef.current++;
+        nodeOrders.set(nodeId, order);
+      }
+
+      if (!levelNodeCounts[level]) levelNodeCounts[level] = {};
+      const actionKey = node.data.action || "Action";
+      levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
+      const index = levelNodeCounts[level][actionKey];
+
+      let label =
+        node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
+          node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
+            node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
+              node.data.action === "Filter" ? `Filter_${index}_Level${level}` :
+                node.data.action === "Path" ? `Path_${index}_Level${level}` :
+                  `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
+
+      let displayLabel = node.data.action || `Action ${index}`;
+
+      updatedNodes[nodeIndex] = {
+        ...node,
+        data: { ...node.data, order, label, displayLabel },
+      };
+
+      const childEdges = currentEdges.filter(edge => edge.source === nodeId);
+      for (const edge of childEdges) {
+        assignOrders(edge.target);
+      }
+    };
+
+    // assign orders for all nodes
+    for (const node of currentNodes) {
+      if (!visited.has(node.id)) {
+        assignOrders(node.id);
+      }
+    }
+
+    return updatedNodes;
+  }, []);
+
+
+  const onAddNode = (nodeType, action) => {
+    const reactFlowWrapper = document.querySelector('.react-flow');
+    if (!reactFlowWrapper) return;
+
+    const rect = reactFlowWrapper.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const randomNum = Math.floor(Math.random() * 10000);
+    const nodeName = action.toLowerCase().replace("/", "_");
+    const newNode = {
+      id: `${nodeName}_${randomNum}`,
+      type: "custom",
+      position: { x: centerX, y: centerY },
+      data: {
+        label: `${action}_Level0`,
+        displayLabel: action,
+        type: nodeType,
+        action,
+        order: null,
+        ...(action === "Create/Update" ? {
+          enableConditions: false,
+          returnLimit: "",
+          salesforceObject: "",
+          fieldMappings: [],
+          conditions: [],
+          logicType: "AND",
+          customLogic: "",
+        } : {}),
+        ...(action === "Find" ? {
+          salesforceObject: "",
+          conditions: [],
+          returnLimit: "",
+          sortField: "",
+          sortOrder: "ASC",
+          logicType: "AND",
+          customLogic: "",
+        } : {}),
+        ...(action === "Filter" ? {
+          salesforceObject: "",
+          conditions: [],
+          returnLimit: "",
+          sortField: "",
+          sortOrder: "ASC",
+          logicType: "AND",
+          customLogic: "",
+        } : {}),
+        ...(action === "Condition" ? {
+          conditions: [],
+          logicType: "AND",
+          customLogic: "",
+        } : {}),
+        ...(action === "Path" ? { pathOption: "Rules" } : {}),
+        ...(action === "Loop" ? {
+          loopConfig: {
+            loopCollection: "",
+            currentItemVariableName: "",
+            maxIterations: "",
+            loopVariables: {
+              currentIndex: false,
+              counter: false,
+              indexBase: "0"
+            },
+            exitConditions: [],
+          }
+        } : {}),
+        ...(action === "Formatter" ? {
+          formatterConfig: {
+            formatType: "date",
+            operation: "",
+            inputField: "",
+            outputVariable: "",
+            options: {}
+          }
+        } : {}),
+        ...(action === 'Google Sheet') ? {
+          selectedSheetName: '', // Initialize
+          spreadsheetId: '', // Initialize
+          sheetConditions: [], // Initialize
+          conditionsLogic: 'AND', // Initialize
+          sheetcustomLogic: '', // Initialize
+          ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),
+        } : {},
+        ...(action === 'FindGoogleSheet') ? {
+          googleSheetReturnLimit: 0, // New
+          googleSheetSortField: '',     // New
+          googleSheetSortOrder: 'ASC',
+          columns: []
+        } : {}
+      },
+      draggable: true,
+    };
+
+    setNodes((nds) => {
+      const updatedNodes = [...nds, newNode];
+      const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
+      return recalculatedNodes;
+    });
+
   };
 
   return (
-    <div className="flex h-screen">
-      <div className="flex-1 flex flex-col relative h-screen transition-all duration-300">
-        <div className="flex flex-col h-screen bg-gray-50 font-sans relative">
+    <div className="flex p-6 h-screen bg-[#f8fafc]">
+      <div className="flex-1 flex flex-col relative transition-all duration-300">
+        <div className="flex flex-col border rounded bg-gray-50 font-sans relative">
           <AnimatePresence>
             {isLoading && (
               <motion.div
@@ -920,33 +1056,8 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
 
           {!isLoading && (
             <>
-              <motion.header
-                className="bg-white p-4 flex justify-between items-center shadow-md h-16 sticky top-0 z-10 border-b border-gray-200"
-                initial={{ y: -100, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <h1 className="text-xl font-bold text-gray-800 tracking-tight">
-                  Field Mapping
-                </h1>
-                <motion.button
-                  onClick={saveAllConfiguration}
-                  disabled={isSaving}
-                  className={`px-5 py-2 rounded-md font-medium text-white shadow-sm transition-all duration-200 ease-in-out
-                    ${isSaving
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    }`}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {isSaving ? "Saving..." : "Save All Configuration"}
-                </motion.button>
-              </motion.header>
-
               <div className="flex flex-1 overflow-hidden">
-                <Sidebar onDragStart={onDragStart} />
-                <div className="flex-1 relative z-0 h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
+                <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
                   <ReactFlowProvider>
                     <FlowDesigner
                       initialNodes={nodes}
@@ -954,11 +1065,19 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                       setSelectedNode={setSelectedNode}
                       setNodes={setNodes}
                       setEdges={setEdges}
+                      onAddNode={onAddNode} 
                     />
                   </ReactFlowProvider>
+
+                  {/* Add the floating button component */}
+                  <FloatingAddButton
+                    onAddNode={onAddNode}
+                    reactFlowWrapper={reactFlowWrapperRef}
+                    nodes={nodes}
+                  />
                 </div>
 
-                {selectedNode && ["Create/Update","CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition" , 'Google Sheet' , 'FindGoogleSheet'].includes(selectedNode.data.action) && (
+                {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
                   <ActionPanel
                     nodeId={selectedNode.id}
                     nodeType={selectedNode.data.action}
@@ -973,7 +1092,7 @@ console.log('userId:', userId, 'instanceUrl:', instanceUrl, 'token:', token);
                     nodes={nodes}
                     edges={edges}
                     credentials={googleSheetConfig?.credentials}
-                    sfToken = {token}
+                    sfToken={token}
                   />
                 )}
               </div>

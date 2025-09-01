@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect,useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { FaRegStar } from "react-icons/fa";
 import { BsStack } from "react-icons/bs";
@@ -163,6 +163,33 @@ function MainFormBuilder({
       transition: { duration: 0.15 }
     }
   };
+
+  const [saveMappingCallback, setSaveMappingCallback] = useState(null);
+
+  // Function to register the save callback
+  const registerSaveCallback = useCallback((callback) => {
+    console.log("Save callback registered");
+    setSaveMappingCallback(() => callback);
+  }, []);
+
+  // Save Workflow button handler
+  const handleSaveWorkflow = () => {
+    console.log("Save Workflow clicked, callback:", saveMappingCallback);
+    if (saveMappingCallback && typeof saveMappingCallback === 'function') {
+      saveMappingCallback();
+    } else {
+      console.error("Save callback not registered or not a function");
+      alert("Save functionality not ready yet. Please try again in a moment.");
+    }
+  };
+
+  // Clean up callback when component unmounts or showMapping changes
+  useEffect(() => {
+    if (!showMapping) {
+      setSaveMappingCallback(null);
+    }
+  }, [showMapping]);
+
 
   // Initialize data for Thank You Page
   const [content, setContent] = useState({
@@ -1763,6 +1790,42 @@ function MainFormBuilder({
             </div>
             {!showPreview && (
               <div className="flex items-center gap-4" style={{ position: "relative" }}>
+                {showMapping ? (
+                  // Show only Save Workflow button when showMapping is true
+                  <button
+                    className="publish-btn flex items-center gap-2"
+                    title="Save Workflow"
+                    onClick={handleSaveWorkflow}
+                  >
+                    <span className="flex items-center">
+                    <svg
+                      width="25"
+                      height="24"
+                      viewBox="0 0 25 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M4.82031 7.2C4.82031 5.43269 6.253 4 8.02031 4H12.8203H15.0262C15.6627 4 16.2732 4.25286 16.7233 4.70294L20.1174 8.09706C20.5675 8.54714 20.8203 9.15759 20.8203 9.79411V12V16.8C20.8203 18.5673 19.3876 20 17.6203 20H8.02031C6.253 20 4.82031 18.5673 4.82031 16.8V7.2Z"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                      <path
+                        d="M8.02026 14.4008C8.02026 13.5171 8.73661 12.8008 9.62026 12.8008H16.0203C16.9039 12.8008 17.6203 13.5171 17.6203 14.4008V20.0008H8.02026V14.4008Z"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                      <path
+                        d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                  </span>
+                    Save Workflow
+                  </button>
+                ) : (
+                  <>
                 <button
                   className="flex items-center justify-center my-version-btn"
                   onClick={() => setShowVersionDropdown((v) => !v)}
@@ -1775,10 +1838,6 @@ function MainFormBuilder({
                   visible={showVersionDropdown}
                   versions={formVersions}
                   selectedVersionId={selectedVersionId}
-                  // onChange={(val) => {
-                  //   setShowVersionDropdown(false);
-                  //   handleVersionChange({ target: { value: val } });
-                  // }}
                   onChange={(val) => {
                     setShowVersionDropdown(false);
                     setPendingVersionId(val);
@@ -1881,6 +1940,8 @@ function MainFormBuilder({
                       Publish
                     </button>
                   )}
+                   </>
+                )}
               </div>
             )}
           </div>
@@ -1945,7 +2006,7 @@ function MainFormBuilder({
                 sendNotificationData={sendNotificationData}
               />
             ) : showMapping ? (
-              <MappingFields />
+              <MappingFields onSaveCallback={registerSaveCallback} />
             ) : (
               <div className="flex w-full h-screen builder-start" style={{ position: "relative" }}>
                 {/* Builder fades out when preview is active */}
