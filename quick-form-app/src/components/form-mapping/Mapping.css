@@ -1,0 +1,104 @@
+.react-flow__controls {
+  position: absolute;
+  bottom: 20px !important;
+  left: 50% !important;
+  top: auto !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  background: linear-gradient(to right, #1D6D9E, #0B295E) !important;
+  backdrop-filter: blur(4px) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+  padding: 8px !important;
+  padding-left: 15px !important;
+  padding-right: 15px !important;
+  gap: 4px !important;
+  color: white;
+}
+
+.react-flow__controls button {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 8px !important;
+  margin: 0 2px !important;
+  transition: all 0.2s ease !important;
+  color: #f9f9f9 !important;
+  width: 24px !important;
+}
+
+.react-flow__controls button svg {
+    max-width: 32px !important;
+    max-height: 32px !important;
+}
+
+
+/* Custom node styles */
+.react-flow__node {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  width: 250px !important;
+}
+
+/* Edge styles */
+.react-flow__edge-path {
+  stroke: #64748b;
+  stroke-width: 2;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #475569;
+  stroke-width: 3;
+}
+
+/* Custom node animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse-animation {
+  animation: pulse 2s infinite;
+}
+
+/* Settings popup styles */
+.settings-popup {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  min-width: 120px;
+}
+
+.settings-popup button {
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.settings-popup button:hover {
+  background-color: #f3f4f6;
+}
+
+.settings-popup button.delete-option {
+  color: #dc2626;
+}
+
+.settings-popup button.delete-option:hover {
+  background-color: #fef2f2;
+}
