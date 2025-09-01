@@ -46,7 +46,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
       if (formRecords.length > 0) {
         // console.log('notifydata', formRecords.filter(form => form.Id === formId))
         const rec = formRecords.filter(form => form.Id === formId)[0]?.Notifications
-        // console.log('rec', rec)
+        console.log('rec', rec)
         cleanData = rec?.map((field) => {
           return {
             id: field.Id,
@@ -56,7 +56,8 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
             createdDate: new Date(field.LastModifiedDate).toLocaleDateString('en-GB'),
             body: field.Body__c,
             receipents: field.Receipe__c,
-            gmailAccount : field.Gmail__c || ''
+            gmailAccount : field.Gmail__c || '',
+            condition : field.Condition__c || [],
           }
         });
       }

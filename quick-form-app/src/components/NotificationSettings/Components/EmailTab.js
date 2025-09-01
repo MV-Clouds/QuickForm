@@ -66,7 +66,7 @@ export const EmailTab = ({ rules, setRules, setActiveTab, editingRuleId, setEdit
         : [],
         emailSubject: rules && editingRuleId ? (JSON.parse(rules.find(rule => rule.id === editingRuleId)?.body).subject) : '',
         emailBody: rules && editingRuleId ? (JSON.parse(rules.find(rule => rule.id === editingRuleId)?.body).body) : '',
-        conditions: [],
+        conditions: rules && editingRuleId ? JSON.parse(rules.find(rule => rule.id === editingRuleId)?.condition) : [],
         schedule: 'immediate',
         delayDateTime: '',
         attachment: null,

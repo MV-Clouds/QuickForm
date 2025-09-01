@@ -84,6 +84,7 @@ export const ConditionInput = ({
   const [pendingRows, setPendingRows] = useState([
     { field: "", operator: "==", value: "" },
   ]);
+  console.log('condition fields' , conditionFields)
   const [logicType, setLogicType] = useState("AND");
   const [customLogic, setCustomLogic] = useState("");
   const [logicError, setLogicError] = useState("");

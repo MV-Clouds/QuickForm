@@ -661,7 +661,7 @@ const NotificationTab = ({
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="px-5 py-2.5 bg-blue-900 text-white rounded-lg shadow-md flex items-center gap-2"
+                    className="px-5 py-2.5 login-button rounded-lg shadow-md flex items-center gap-2"
                     onClick={toggleAddOptions}
                   >
                     <Plus size={18} />
