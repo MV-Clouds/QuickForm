@@ -28,7 +28,7 @@
 }
 
 .share-section {
-  margin-bottom: 32px;
+  /* margin-bottom: 32px; */
   background: #F9FAFB;
   border-radius: 8px;
   padding: 16px;
@@ -50,6 +50,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+  margin-top: 8px;
 }
 
 .share-input {
@@ -151,7 +152,7 @@
 }
 
 .share-section-embed {
-  margin-top: 32px;
+  margin-top: 24px;
   background: #F9FAFB;
   border-radius: 8px;
   padding: 24px;
@@ -164,7 +165,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 
 .share-select {
@@ -192,7 +193,7 @@
   border-radius: 8px;
   outline: none;
   resize: none;
-  height: 18vh;
+  height: 17vh;
 }
 
 .share-select .ant-select-selection-item {
@@ -421,7 +422,6 @@
 /* Tabs container */
 .tabs {
   display: flex;
-  margin-bottom: 8px;
   z-index: 0;
 }
 
@@ -505,4 +505,22 @@
   filter: blur(4px);
   pointer-events: none;
   user-select: none;
+}
+
+@media (min-height: 702px) {
+  .share-section-embed {
+    margin-top: 32px;
+  }
+
+  .share-embed-code {
+    height: 20vh;
+  }
+
+  .share-row {
+    margin-top: 16px;
+  }
+
+  .embed-section {
+    margin-bottom: 16px;
+  }
 }
