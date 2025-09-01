@@ -28,7 +28,7 @@ const initialState = {
 
   // Amount configuration
   amount: {
-    type: "fixed",
+    type: "static", // Changed from "fixed" to "static" for consistency
     value: 0,
     currency: "USD",
     minAmount: "",
@@ -87,9 +87,30 @@ function paymentFieldReducer(state, action) {
       };
 
     case ACTIONS.UPDATE_PAYMENT_TYPE:
+      const newPaymentType = action.payload;
+      let updatedAmount = { ...state.amount };
+      
+      // Set appropriate amount type defaults based on payment type
+      if (newPaymentType === "custom_amount") {
+        // For custom amount, default to static if not already set to static or variable
+        if (updatedAmount.type !== "static" && updatedAmount.type !== "variable") {
+          updatedAmount.type = "static";
+        }
+      } else if (newPaymentType === "donation") {
+        // For donation, default to variable amount
+        updatedAmount.type = "variable";
+      } else if (newPaymentType === "product_wise") {
+        // For product-wise, amount type is managed by product selection
+        updatedAmount.type = "product_based";
+      } else if (newPaymentType === "subscription") {
+        // For subscription, amount is managed by subscription plan
+        updatedAmount.type = "subscription";
+      }
+      
       return {
         ...state,
-        paymentType: action.payload,
+        paymentType: newPaymentType,
+        amount: updatedAmount,
         lastUpdated: new Date().toISOString(),
         isDirty: true,
       };

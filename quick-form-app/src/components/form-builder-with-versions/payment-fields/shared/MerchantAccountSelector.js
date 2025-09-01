@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { FaInfoCircle, FaPlus, FaSpinner } from "react-icons/fa";
 import MerchantOnboardingModal from "../MerchantOnboardingModal";
 import {
-  initiatePayment,
   fetchOnboardedAccounts,
   fetchMerchantCapabilities,
   setUserContext,
@@ -36,36 +35,62 @@ const MerchantAccountSelector = ({
   const [capabilitiesError, setCapabilitiesError] = useState("");
   const lastFetchedMerchantRef = useRef(null);
 
+  // Fetch capabilities function - memoized to prevent unnecessary re-renders
+  const fetchCapabilities = useCallback(async (merchantId) => {
+    if (!merchantId) return;
+
+    // Prevent duplicate calls for the same merchant
+    if (merchantId === lastFetchedMerchantRef.current && capabilities) {
+      console.log(
+        "🔍 MerchantAccountSelector: Skipping duplicate capabilities fetch for:",
+        merchantId
+      );
+      return;
+    }
+
+    console.log(
+      "🔍 MerchantAccountSelector: fetchCapabilities called for:",
+      merchantId,
+      "at",
+      new Date().toISOString()
+    );
+
+    setCapabilitiesLoading(true);
+    setCapabilitiesError("");
+    try {
+      console.log("🔍 Fetching capabilities for merchant:", merchantId);
+      const result = await fetchMerchantCapabilities(merchantId);
+      console.log("🔍 Capabilities result:", result);
+
+      if (result.success) {
+        const capabilities = result.capabilities || {};
+        console.log("🔍 Processed capabilities:", capabilities);
+        setCapabilities(capabilities);
+        lastFetchedMerchantRef.current = merchantId; // Update ref on successful fetch
+      } else {
+        throw new Error(result.error || "Failed to fetch capabilities");
+      }
+    } catch (err) {
+      console.error("❌ Error fetching capabilities:", err);
+      setCapabilitiesError(err.message);
+      // Clear capabilities on error to force refresh
+      setCapabilities(null);
+    } finally {
+      setCapabilitiesLoading(false);
+    }
+  }, []); // Empty dependencies to prevent infinite loops
+
   // Fetch onboarded accounts following Main1.js fetchOnboardedAccount pattern
-  const fetchOnboardedAccount = async () => {
+  const fetchOnboardedAccount = useCallback(async () => {
     setLoading(true);
     setError("");
     setNoAccountsWarning("");
 
     try {
       const result = await fetchOnboardedAccounts();
-      // const result = data.data;
-      // result.hasAccounts = result?.count > 0;
-      // result.success = result?.count > 0;
       console.log(
         "🔍 MerchantAccountSelector - fetchOnboardedAccount result:",
         result
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.success:",
-        result.success
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.hasAccounts:",
-        result.hasAccounts
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.accounts:",
-        result.accounts
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.accounts.length:",
-        result.accounts?.length
       );
 
       if (result.success) {
@@ -82,7 +107,9 @@ const MerchantAccountSelector = ({
             onMerchantChange(firstAccountId);
             // Also fetch capabilities using the PayPal merchant id from the account
             const firstPaypalMerchantId = result.accounts[0].Merchant_ID__c;
-            fetchCapabilities(firstPaypalMerchantId);
+            if (firstPaypalMerchantId) {
+              fetchCapabilities(firstPaypalMerchantId);
+            }
           } else if (selectedMerchantId) {
             console.log(
               "🎯 Merchant already selected, skipping auto-selection:",
@@ -118,7 +145,7 @@ const MerchantAccountSelector = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchCapabilities, selectedMerchantId]);
 
   // Set user context if provided
   useEffect(() => {
@@ -134,13 +161,14 @@ const MerchantAccountSelector = ({
   // Load accounts on component mount
   useEffect(() => {
     fetchOnboardedAccount();
-  }, []);
+  }, [fetchOnboardedAccount]);
 
   // Fetch capabilities when selected account (Salesforce Id) changes
   useEffect(() => {
     if (
       selectedMerchantId &&
-      selectedMerchantId !== lastFetchedMerchantRef.current
+      selectedMerchantId !== lastFetchedMerchantRef.current &&
+      accounts.length > 0 // Only proceed if accounts are loaded
     ) {
       console.log(
         "🔍 MerchantAccountSelector: selected account changed, fetching capabilities:",
@@ -148,7 +176,6 @@ const MerchantAccountSelector = ({
         "Previous:",
         lastFetchedMerchantRef.current
       );
-      lastFetchedMerchantRef.current = selectedMerchantId;
       // Map selected account Id to PayPal merchant id for capability fetch
       const selected = accounts.find((acc) => acc.Id === selectedMerchantId);
       const paypalMerchantId = selected?.Merchant_ID__c;
@@ -161,55 +188,7 @@ const MerchantAccountSelector = ({
         selectedMerchantId
       );
     }
-  }, [selectedMerchantId, accounts]);
-
-  // Add this function to refresh accounts after onboarding
-  const refreshAccounts = () => {
-    fetchOnboardedAccount();
-  };
-
-  // Fetch capabilities function
-  const fetchCapabilities = async (merchantId) => {
-    if (!merchantId) return;
-
-    // Prevent duplicate calls for the same merchant
-    if (merchantId === lastFetchedMerchantRef.current && capabilities) {
-      console.log(
-        "🔍 MerchantAccountSelector: Skipping duplicate capabilities fetch for:",
-        merchantId
-      );
-      return;
-    }
-
-    console.log(
-      "🔍 MerchantAccountSelector: fetchCapabilities called for:",
-      merchantId,
-      "at",
-      new Date().toISOString()
-    );
-
-    setCapabilitiesLoading(true);
-    setCapabilitiesError("");
-    try {
-      console.log("🔍 Fetching capabilities for merchant:", merchantId);
-      const result = await fetchMerchantCapabilities(merchantId);
-      console.log("🔍 Capabilities result:", result);
-
-      if (result.success) {
-        const capabilities = result.capabilities || {};
-        console.log("🔍 Processed capabilities:", capabilities);
-        setCapabilities(capabilities);
-      } else {
-        throw new Error(result.error || "Failed to fetch capabilities");
-      }
-    } catch (err) {
-      console.error("❌ Error fetching capabilities:", err);
-      setCapabilitiesError(err.message);
-      setCapabilities(null);
-    } finally {
-      setCapabilitiesLoading(false);
-    }
-  };
+  }, [selectedMerchantId, accounts, fetchCapabilities]);
 
   // Handle merchant change and fetch capabilities
   const handleMerchantChange = (accountId) => {
@@ -232,7 +211,11 @@ const MerchantAccountSelector = ({
   // Retry button
   const handleRetryCapabilities = () => {
     if (selectedMerchantId) {
-      fetchCapabilities(selectedMerchantId);
+      const selected = accounts.find((acc) => acc.Id === selectedMerchantId);
+      const paypalMerchantId = selected?.Merchant_ID__c;
+      if (paypalMerchantId) {
+        fetchCapabilities(paypalMerchantId);
+      }
     }
   };
 
@@ -246,7 +229,7 @@ const MerchantAccountSelector = ({
     if (onCapabilitiesChange) {
       onCapabilitiesChange(capabilities);
     }
-  }, [capabilities, onCapabilitiesChange]);
+  }, [capabilities]);
 
   return (
     <div className={`merchant-account-selector ${className}`}>

@@ -5,6 +5,7 @@ import ProductSelection from "./ProductSelection";
 import SubscriptionSelection from "./SubscriptionSelection";
 import PayPalCardPayment from "./PayPalCardPayment";
 import GooglePayIntegration from "./GooglePayIntegration";
+import PayPalDonateButton from "./PayPalDonateButton";
 
 /**
  * Payment Content Component
@@ -41,6 +42,25 @@ const PaymentContent = ({
   // Render content based on payment type
   const renderPaymentTypeContent = () => {
     switch (paymentType) {
+      case "donation_button": {
+        // Render the hosted donate button directly (no amount input or method select)
+        const donationButtonId = subFields?.donationButtonId || subFields?.hostedButtonId;
+        return (
+          <div className="mb-4">
+            <PayPalDonateButton
+              hostedButtonId={donationButtonId}
+              environment={process.env.NODE_ENV === "production" ? "production" : "sandbox"}
+              merchantId={merchantCredentials?.merchantId}
+              itemName={subFields?.itemName || "Donation"}
+              customMessage={subFields?.customMessage}
+              customImageUrl={subFields?.customImageUrl}
+              onComplete={onApprove}
+              onError={onError}
+              className="w-full"
+            />
+          </div>
+        );
+      }
       case "product_wise":
         return (
           <ProductSelection
@@ -62,7 +82,50 @@ const PaymentContent = ({
         );
 
       case "custom_amount":
-      default:
+        // Check if it's a static amount (fixed price) or variable amount (user input)
+        const amountType = subFields?.amount?.type;
+        const staticAmount = subFields?.amount?.value;
+        
+        if (amountType === "static" && staticAmount) {
+          // Static amount - show fixed price, no user input
+          return (
+            <div className="mb-6">
+              <h4 className="text-lg font-medium text-gray-900 mb-4">
+                Payment Amount
+              </h4>
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-700 font-medium">
+                    Fixed Amount:
+                  </span>
+                  <span className="text-xl font-bold text-gray-900">
+                    {new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: subFields?.currency || 'USD'
+                    }).format(staticAmount)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        } else {
+          // Variable amount - show user input
+          return (
+            <AmountInput
+              amount={paymentAmount}
+              onAmountChange={onAmountChange}
+              error={amountError}
+              currency={subFields?.currency || "USD"}
+              suggestedAmounts={subFields?.suggestedAmounts || []}
+              placeholder={subFields?.placeholder || "Enter amount"}
+              amountConfig={subFields?.amount || {}}
+              paymentType={paymentType}
+            />
+          );
+        }
+
+  default:
+        // For other payment types, show amount input if needed
         return (
           <AmountInput
             amount={paymentAmount}
@@ -71,6 +134,8 @@ const PaymentContent = ({
             currency={subFields?.currency || "USD"}
             suggestedAmounts={subFields?.suggestedAmounts || []}
             placeholder={subFields?.placeholder || "Enter amount"}
+            amountConfig={subFields?.amount || {}}
+            paymentType={paymentType}
           />
         );
     }
@@ -97,7 +162,7 @@ const PaymentContent = ({
                 shape: "rect",
                 color: "blue",
                 layout: "vertical",
-                label: "paypal",
+                label: paymentType === "subscription" ? "subscribe" : "paypal",
               }}
             />
           </div>

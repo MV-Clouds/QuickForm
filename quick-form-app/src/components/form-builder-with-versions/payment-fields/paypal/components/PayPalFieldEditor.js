@@ -19,7 +19,7 @@ const PayPalFieldEditor = ({
     selectedField?.subFields?.paymentType || "one_time"
   );
   const [amountType, setAmountType] = useState(
-    selectedField?.subFields?.amount?.type || "fixed"
+    selectedField?.subFields?.amount?.type || "static"
   );
   const [amountValue, setAmountValue] = useState(
     selectedField?.subFields?.amount?.value || 0
@@ -86,7 +86,7 @@ const PayPalFieldEditor = ({
   useEffect(() => {
     if (selectedField) {
       setPaymentType(selectedField?.subFields?.paymentType || "one_time");
-      setAmountType(selectedField?.subFields?.amount?.type || "fixed");
+      setAmountType(selectedField?.subFields?.amount?.type || "static");
       setAmountValue(selectedField?.subFields?.amount?.value || 0);
       setCurrency(selectedField?.subFields?.amount?.currency || "USD");
       setMinAmount(selectedField?.subFields?.amount?.minAmount || "");
@@ -248,8 +248,8 @@ const PayPalFieldEditor = ({
                 }}
                 className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               >
-                <option value="fixed">Fixed Amount</option>
-                <option value="variable">Variable Amount</option>
+                <option value="static">Static Amount (Fixed Price)</option>
+                <option value="variable">Variable Amount (User Choice)</option>
                 <option value="custom">Custom Amount (User Enters)</option>
                 <option value="suggested">Suggested Amounts</option>
                 <option value="product_based">Product Based</option>
@@ -284,8 +284,8 @@ const PayPalFieldEditor = ({
               </select>
             </div>
           </div>
-          {/* Fixed Amount Configuration */}
-          {amountType === "fixed" && (
+          {/* Static Amount Configuration */}
+          {amountType === "static" && (
             <div className="mt-2">
               <label className="text-xs text-gray-500">Amount</label>
               <input

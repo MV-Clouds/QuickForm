@@ -456,7 +456,8 @@ const PayPalPaymentProvider = ({
               "All required fields must be filled before processing payment.",
           });
           setIsProcessing(false);
-          return;
+          // Throw to ensure PayPal SDK rejects onClick and does not open a window
+          throw new Error("Form validation failed");
         }
         console.log("✅ Form validation passed - proceeding with payment");
 
@@ -611,7 +612,10 @@ const PayPalPaymentProvider = ({
           paymentRequest.formData = formValues;
         }
 
-        console.log("🔍 Payment request debug:", paymentRequest);
+        console.log(
+          "🔍 Payment request debug (about to initiate):",
+          JSON.stringify(paymentRequest, null, 2)
+        );
 
         // Call payment gateway API
         const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
@@ -622,7 +626,7 @@ const PayPalPaymentProvider = ({
           body: JSON.stringify(paymentRequest),
         });
 
-        const result = await response.json();
+  const result = await response.json();
 
         if (!response.ok || !result.success) {
           const errorMsg =
@@ -650,9 +654,28 @@ const PayPalPaymentProvider = ({
           );
         }
 
-        console.log("🆔 Returning order ID to PayPal SDK:", orderId);
-        setIsProcessing(false);
-        console.log("🔄 Setting processing state to false");
+        // Extra debug payload resembling what actions.order.create would have used
+        const debugPayload = {
+          intent: paymentType === "subscription" ? "SUBSCRIPTION" : "CAPTURE",
+          purchase_units: [
+            {
+              amount: {
+                value: parseFloat(paymentAmount) || 0,
+                currency_code: amountConfig.currency || "USD",
+              },
+              custom_id: currentItemNumber,
+            },
+          ],
+        };
+        console.log(
+          "🆔 Returning order ID to PayPal SDK:",
+          orderId,
+          "\n🧾 Actions.create debug payload:",
+          JSON.stringify(debugPayload, null, 2)
+        );
+
+        // Don't set processing to false here - this is only order creation, not completion
+        // setIsProcessing(false);  // Removed: PayPal SDK interprets this as completion
         return orderId;
       } catch (error) {
         console.error("❌ Payment initiation error:", error);
@@ -1025,14 +1048,18 @@ const PayPalPaymentProvider = ({
   // Handle payment errors
   const onError = useCallback(
     (error) => {
-      console.error("❌ PayPal payment error:", error);
+      const err =
+        error instanceof Error
+          ? error
+          : new Error(error?.message || error?.toString() || "Unknown error");
+      console.error("❌ PayPal payment error:", err);
       setStatusMessage({
         type: "error",
         message: "Payment error occurred",
-        details: "Please try again or contact support",
+        details: err.message || "Please try again or contact support",
       });
       setIsProcessing(false);
-      onPaymentError?.(error);
+      onPaymentError?.(err);
     },
     [onPaymentError]
   );

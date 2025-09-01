@@ -1,10 +1,5 @@
 import React, { useState } from "react";
-import {
-  PayPalScriptProvider,
-  PayPalCardFieldsProvider,
-  PayPalCardFieldsForm,
-  usePayPalCardFields,
-} from "@paypal/react-paypal-js";
+import { PayPalCardFieldsProvider, PayPalCardFieldsForm, usePayPalCardFields } from "@paypal/react-paypal-js";
 
 // Submit button component that uses the card fields
 const SubmitCardPayment = ({
@@ -14,7 +9,7 @@ const SubmitCardPayment = ({
   isPaying,
   setIsPaying,
 }) => {
-  const { cardFieldsForm, fields } = usePayPalCardFields();
+  const { cardFieldsForm } = usePayPalCardFields();
 
   const handleClick = async () => {
     if (!cardFieldsForm) {
@@ -121,9 +116,13 @@ const PayPalCardPayment = ({
   };
 
   const handleError = (error) => {
-    console.error("💳 PayPal card fields error:", error);
+    const err =
+      error instanceof Error
+        ? error
+        : new Error(error?.message || error?.toString() || "Card fields error");
+    console.error("💳 PayPal card fields error:", err);
     setIsPaying(false);
-    onError(error);
+    onError(err);
   };
 
   return (

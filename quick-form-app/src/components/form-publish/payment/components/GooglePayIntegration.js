@@ -342,14 +342,30 @@ const GooglePayIntegration = ({
             console.error("❌ Google Pay payment failed:", result);
             const errorMessage =
               result?.error?.message || result?.error || "Payment failed";
-            onError && onError(errorMessage);
+            const err =
+              result?.error instanceof Error
+                ? result.error
+                : new Error(
+                    typeof errorMessage === "string"
+                      ? errorMessage
+                      : JSON.stringify(errorMessage)
+                  );
+            onError && onError(err);
             resolve({ transactionState: "ERROR" });
           }
         } catch (error) {
           console.error("❌ Payment processing error:", error);
           const errorMessage =
             error?.message || error?.toString() || "Payment processing failed";
-          onError && onError(errorMessage);
+          const err =
+            error instanceof Error
+              ? error
+              : new Error(
+                  typeof errorMessage === "string"
+                    ? errorMessage
+                    : JSON.stringify(errorMessage)
+                );
+          onError && onError(err);
           resolve({ transactionState: "ERROR" });
         }
       });
@@ -460,7 +476,11 @@ const GooglePayIntegration = ({
       await client.loadPaymentData(paymentDataRequest);
     } catch (error) {
       console.error("❌ Google Pay button click error:", error);
-      onError && onError(error.message);
+      const err =
+        error instanceof Error
+          ? error
+          : new Error(error?.message || error?.toString() || "Google Pay failed");
+      onError && onError(err);
     } finally {
       if (componentMounted.current) {
         setLoading(false);
