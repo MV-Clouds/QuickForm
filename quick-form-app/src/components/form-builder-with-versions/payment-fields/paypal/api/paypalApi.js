@@ -224,6 +224,23 @@ export const fetchOnboardedAccounts = async () => {
   return await fetchMerchantAccounts();
 };
 
+// Resolve Salesforce Account Id to PayPal Merchant_ID__c
+export const resolvePaypalMerchantId = async (merchantId) => {
+  try {
+    if (!merchantId) return merchantId;
+    const result = await fetchMerchantAccounts();
+    const accounts = result?.accounts || [];
+    const match = accounts.find((acc) => acc?.Id === merchantId);
+    return match?.Merchant_ID__c || merchantId;
+  } catch (e) {
+    console.warn(
+      "Could not resolve PayPal merchant id; using provided value",
+      e
+    );
+    return merchantId;
+  }
+};
+
 // Fetch merchant capabilities
 export const fetchMerchantCapabilities = async (merchantId) => {
   const response = await apiRequest(
