@@ -41,17 +41,6 @@
   width: 250px !important;
 }
 
-/* Edge styles */
-.react-flow__edge-path {
-  stroke: #64748b;
-  stroke-width: 2;
-}
-
-.react-flow__edge:hover .react-flow__edge-path {
-  stroke: #475569;
-  stroke-width: 3;
-}
-
 /* Custom node animations */
 @keyframes pulse {
   0%, 100% {

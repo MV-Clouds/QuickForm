@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpDown, Edit, Folder, Heart, Trash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-
 export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavoriteForm, handleCloneForm }) => [
   {
     header: 'Sr. No.',
@@ -55,17 +54,15 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
     header: 'Status',
     cell: ({ row, table }) => {
     const handleStatusChange = (formId)=>{
-      
     }
       return (
-        
         <div className="flex items-center justify-center gap-2">
           <motion.button
             onClick={()=>handleStatusChange(row.original.id)}
             className={`relative w-12 h-7 rounded-full border transition-colors duration-200 focus:outline-none ${row.getValue('status') === 'Active' ? 'bg-green-400 border-green-500' : 'bg-gray-300 border-gray-400'}`}
             initial={row.getValue('status') === 'Active'}
             disabled = {row.getValue('activeVersion') === 'None'}
-            animate={{ backgroundColor: row.getValue('status') === 'Active' ? '#00C853' : '#d1d5db', borderColor: row.getValue('status') === 'Active' ? '#22c55e' : '#9ca3af' }}
+            animate={{ backgroundColor: row.getValue('status') === 'Active' ? '#00C853' : '#D1D5DB', borderColor: row.getValue('status') === 'Active' ? '#22C55E' : '#9CA3AF' }}
           >
             <motion.span
               className="absolute left-1 top-[3px] bg-white rounded-full shadow-md"
@@ -113,7 +110,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
       const [dropUp, setDropUp] = useState(false);
       const ref = useRef();
       const btnRef = useRef();
-
+      const [dropdownPos , setDropdownPos] = useState({ top: 0, left: 0 });
       // Close popup on outside click or ESC
       useEffect(() => {
         function handleClickOutside(event) {
@@ -136,17 +133,17 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
           document.removeEventListener('keydown', handleEsc);
         };
       }, [open]);
-
       // Dynamic dropdown direction
       useEffect(() => {
         if (open && btnRef.current && ref.current) {
           const btnRect = btnRef.current.getBoundingClientRect();
-          const dropdownHeight = 300; // px, estimate
-          const spaceBelow = window.innerHeight - btnRect.bottom;
-          setDropUp(spaceBelow < dropdownHeight + 16); // 16px margin
+          const dropdownHeight = 140; // px, estimate
+          setDropdownPos({
+            left: btnRect.left - 160,
+            top: window.innerHeight - btnRect.bottom < dropdownHeight + 16 ? btnRect.top - dropdownHeight - 8 : btnRect.bottom + 8,
+          });
         }
       }, [open]);
-
       const handleDelete = (formId) => {
         handleDeleteForm(formId);
       };
@@ -170,8 +167,8 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: dropUp ? 10 : -10, scale: 0.97 }}
                 transition={{ duration: 0.18 }}
-                className={`absolute right-[10%] z-[999] w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col ${dropUp ? "bottom-[100%]" : ''}`}
-                style={{ boxShadow: '0 8px 32px 0 rgba(18, 3, 3, 0.12)12)' }}
+                className={`w-40 rounded-md shadow-xl border border-gray-200 bg-white py-2 flex flex-col`}
+                style={{ boxShadow: '0 8px 32px 0 rgba(18, 3, 3, 0.12)12)', position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, zIndex: 1000 }}
               >
                 <button
                   className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 text-gray-800 font-medium transition-colors"
@@ -234,7 +231,6 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
                   </svg>
                   Clone
                 </button>
-
               </motion.div>
             )}
           </AnimatePresence>
@@ -243,3 +239,4 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
     },
   },
 ];
+

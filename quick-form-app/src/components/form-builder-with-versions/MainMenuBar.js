@@ -3,37 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSalesforceData } from '../Context/MetadataContext';
 
-function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId, publishLink, submissionStats  }) {
+function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersionId, publishLink  }) {
   const navigate = useNavigate();
-  const [submissionCount, setSubmissionCount] = useState(0);
   const { userProfile } = useSalesforceData();
 
-  useEffect(() => {
-    if (!selectedVersionId || !formRecords || formRecords.length === 0) {
-      setSubmissionCount(0);
-      return;
-    }
-
-    // Find the form record that contains the selected version
-    const currentFormRecord = formRecords.find((record) =>
-      record.FormVersions?.some((version) => version.Id === selectedVersionId)
-    );
-
-    if (currentFormRecord) {
-      // Find the specific version and get its submission count
-      const currentVersion = currentFormRecord.FormVersions.find(
-        (version) => version.Id === selectedVersionId
-      );
-
-      if (currentVersion && currentVersion.Submission_Count__c !== undefined) {
-        setSubmissionCount(currentVersion.Submission_Count__c || 0);
-      } else {
-        setSubmissionCount(0);
-      }
-    } else {
-      setSubmissionCount(0);
-    }
-  }, [selectedVersionId, formRecords]);
 
   const handleMappingClick = () => {
     // Find the selected form version
@@ -136,11 +109,6 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
           />
         </svg>
       ),
-      // Prefer the centralized submissionStats if provided (keeps counts accurate)
-      badge:
-        submissionStats && typeof submissionStats.totalSubmissions === "number"
-          ? submissionStats.totalSubmissions
-          : submissionCount,
     },
     {
       name: 'Notification',

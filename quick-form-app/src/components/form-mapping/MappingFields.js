@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from 'react-router-dom';
-import { ReactFlowProvider, useEdges } from "reactflow";
+import { ReactFlowProvider, addEdge } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
@@ -28,7 +28,6 @@ const MappingFields = ({ onSaveCallback }) => {
   const orderCounterRef = useRef(1);
   const reactFlowWrapperRef = useRef(null);
   const [addButtonPosition, setAddButtonPosition] = useState({ x: 0, y: 0 });
-
   const initialNodes = [];
   const initialEdges = [];
 
@@ -487,13 +486,6 @@ const MappingFields = ({ onSaveCallback }) => {
       return;
     }
 
-    const actionNodes = nodes;
-    if (actionNodes.length === 0) {
-      showToast("Flow must contain at least one action node.", 'error');
-      setIsSaving(false);
-      return;
-    }
-
     if (!token) {
       const newToken = await fetchAccessToken(userId, instanceUrl);
       if (!newToken) {
@@ -931,8 +923,114 @@ const MappingFields = ({ onSaveCallback }) => {
     return updatedNodes;
   }, []);
 
+  // const onAddNode = useCallback((nodeType, action) => {
 
-  const onAddNode = (nodeType, action) => {
+  //     const reactFlowWrapper = document.querySelector('.react-flow');
+  //     if (!reactFlowWrapper) return;
+
+  //     const rect = reactFlowWrapper.getBoundingClientRect();
+  //     const centerX = rect.width / 2;
+  //     const centerY = rect.height / 2;
+
+
+  //     const randomNum = Math.floor(Math.random() * 10000);
+  //     const nodeName = action.toLowerCase().replace("/", "_");
+  //     const newNodeId = `${nodeName}_${randomNum}`;
+  //     const newNode = {
+  //       id: newNodeId,
+  //       type: "custom",
+  //       position: { x: centerX, y: centerY },
+  //       data: {
+  //         label: `${action}_Level0`,
+  //         displayLabel: action,
+  //         type: nodeType,
+  //         action,
+  //         order: null,
+  //         ...(action === "Create/Update" ? {
+  //           enableConditions: false,
+  //           returnLimit: "",
+  //           salesforceObject: "",
+  //           fieldMappings: [],
+  //           conditions: [],
+  //           logicType: "AND",
+  //           customLogic: "",
+  //         } : {}),
+  //         ...(action === "Find" ? {
+  //           salesforceObject: "",
+  //           conditions: [],
+  //           returnLimit: "",
+  //           sortField: "",
+  //           sortOrder: "ASC",
+  //           logicType: "AND",
+  //           customLogic: "",
+  //         } : {}),
+  //         ...(action === "Filter" ? {
+  //           salesforceObject: "",
+  //           conditions: [],
+  //           returnLimit: "",
+  //           sortField: "",
+  //           sortOrder: "ASC",
+  //           logicType: "AND",
+  //           customLogic: "",
+  //         } : {}),
+  //         ...(action === "Condition" ? {
+  //           conditions: [],
+  //           logicType: "AND",
+  //           customLogic: "",
+  //         } : {}),
+  //         ...(action === "Path" ? { pathOption: "Rules" } : {}),
+  //         ...(action === "Loop" ? {
+  //           loopConfig: {
+  //             loopCollection: "",
+  //             currentItemVariableName: "",
+  //             maxIterations: "",
+  //             loopVariables: {
+  //               currentIndex: false,
+  //               counter: false,
+  //               indexBase: "0"
+  //             },
+  //             exitConditions: [],
+  //           }
+  //         } : {}),
+  //         ...(action === "Formatter" ? {
+  //           formatterConfig: {
+  //             formatType: "date",
+  //             operation: "",
+  //             inputField: "",
+  //             outputVariable: "",
+  //             options: {}
+  //           }
+  //         } : {}),
+  //         ...(action === 'Google Sheet') ? {
+  //           selectedSheetName: '', // Initialize
+  //           spreadsheetId: '', // Initialize
+  //           sheetConditions: [], // Initialize
+  //           conditionsLogic: 'AND', // Initialize
+  //           sheetcustomLogic: '', // Initialize
+  //           ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),
+  //         } : {},
+  //         ...(action === 'FindGoogleSheet') ? {
+  //           googleSheetReturnLimit: 0, // New
+  //           googleSheetSortField: '',     // New
+  //           googleSheetSortOrder: 'ASC',
+  //           columns: []
+  //         } : {}
+  //       },
+  //       draggable: true,
+  //     };
+
+  //     setNodes((nds) => {
+  //       const updatedNodes = [...nds, newNode];
+  //       const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
+  //        console.log('Nodes after addition:', recalculatedNodes);
+  //       return recalculatedNodes;
+  //     });
+
+  //     return newNodeId;
+  // }, [setNodes, calculateNodeOrders]);
+
+  const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null) => {
+
     const reactFlowWrapper = document.querySelector('.react-flow');
     if (!reactFlowWrapper) return;
 
@@ -940,10 +1038,12 @@ const MappingFields = ({ onSaveCallback }) => {
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
+
     const randomNum = Math.floor(Math.random() * 10000);
     const nodeName = action.toLowerCase().replace("/", "_");
+    const newNodeId = `${nodeName}_${randomNum}`;
     const newNode = {
-      id: `${nodeName}_${randomNum}`,
+      id: newNodeId,
       type: "custom",
       position: { x: centerX, y: centerY },
       data: {
@@ -1031,7 +1131,45 @@ const MappingFields = ({ onSaveCallback }) => {
       return recalculatedNodes;
     });
 
-  };
+    if (sourceNodeId && connectionType) {
+    let newEdge;
+    
+    if (connectionType === 'bottom') {
+      // Connect from bottom of source node to top of new node
+      newEdge = {
+        id: `e${sourceNodeId}-${newNodeId}`,
+        source: sourceNodeId,
+        sourceHandle: "bottom", // Use bottom handle of source
+        target: newNodeId,
+        targetHandle: "top",    // Use top handle of target
+        type: "default",
+        style: { stroke: '#999', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed' },
+      };
+    } else if (connectionType === 'top') {
+      newEdge = {
+        id: `e${newNodeId}-${sourceNodeId}`,
+        source: newNodeId,
+        sourceHandle: "bottom", // Use bottom handle of new node
+        target: sourceNodeId,
+        targetHandle: "top",    // Use top handle of source
+        type: "default",
+        style: { stroke: '#999', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed' },
+      };
+    }
+
+    if (newEdge) {
+      setEdges((eds) => {
+        const updatedEdges = addEdge(newEdge, eds);
+        setNodes((nds) => calculateNodeOrders(nds, updatedEdges));
+        return updatedEdges;
+      });
+    }
+  }
+
+    return newNodeId;
+  }, [setNodes, calculateNodeOrders, setEdges]);
 
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">
@@ -1065,7 +1203,7 @@ const MappingFields = ({ onSaveCallback }) => {
                       setSelectedNode={setSelectedNode}
                       setNodes={setNodes}
                       setEdges={setEdges}
-                      onAddNode={onAddNode} 
+                      onAddNode={onAddNode}
                     />
                   </ReactFlowProvider>
 
@@ -1088,7 +1226,7 @@ const MappingFields = ({ onSaveCallback }) => {
                     setSalesforceObjects={setSalesforceObjects}
                     fetchSalesforceFields={fetchSalesforceFields}
                     onClose={() => setSelectedNode(null)}
-                    nodeLabel={selectedNode.data.action}
+                    // nodeLabel={selectedNode.data.action}
                     nodes={nodes}
                     edges={edges}
                     credentials={googleSheetConfig?.credentials}

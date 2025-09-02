@@ -2090,7 +2090,7 @@ function MainFormBuilder({
                 formRecords={sfFormRecords}
               />
             ) : showMapping ? (
-              <MappingFields />
+              <MappingFields onSaveCallback={registerSaveCallback} />
             ) : (
               <div className="flex w-full h-screen builder-start" style={{ position: "relative" }}>
                 {/* Builder fades out when preview is active */}
