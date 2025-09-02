@@ -60,14 +60,14 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   const nodeRef = useRef(null);
   const nodeType = data.actionType || data.action || "default";
 
- // Check if handles are connected
+  // Check if handles are connected
   const hasTopConnection = edges.some(edge => edge.target === id && edge.targetHandle === "top");
   const hasBottomConnection = edges.some(edge => edge.source === id && edge.sourceHandle === "bottom");
 
   console.log(edges);
-  
-  console.log(hasTopConnection,hasBottomConnection );
-  
+
+  console.log(hasTopConnection, hasBottomConnection);
+
   const getButtonPosition = (e, isTop) => {
     if (!nodeRef.current) return { x: 0, y: 0 };
 
@@ -251,17 +251,17 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
         )}
         {/* Default Handles */}
         <Handle
-  type="source"
-  position={Position.Bottom}
-  id="bottom"
-  className="w-1 h-1 bg-edge-default bottom-[-6px] left-1/2 transform -translate-x-1/2 border-2 border-background rounded-full"
-/>
-<Handle
-  type="target"
-  position={Position.Top}
-  id="top"
-  className="w-1 h-1 bg-edge-default top-[-6px] left-1/2 transform -translate-x-1/2 border-2 border-background rounded-full"
-/>
+          type="source"
+          position={Position.Bottom}
+          id="bottom"
+          className="w-1 h-1 bg-edge-default bottom-[-6px] left-1/2 transform -translate-x-1/2 border-2 border-background rounded-full"
+        />
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="top"
+          className="w-1 h-1 bg-edge-default top-[-6px] left-1/2 transform -translate-x-1/2 border-2 border-background rounded-full"
+        />
       </motion.div>
 
       {/* Popup Menu */}
@@ -491,20 +491,6 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     };
   }, [setNodes, setEdges]);
 
-  // Expose helper to update a node's label from anywhere (e.g., ActionPanel)
-  useEffect(() => {
-    window.setNodeLabel = (nodeId, newLabel) => {
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n
-        )
-      );
-    };
-    return () => {
-      delete window.setNodeLabel;
-    };
-  }, [setNodes]);
-
   const nodesWithDraggable = useMemo(() => nodes.map((node) => ({
     ...node,
     draggable: node.draggable !== false,
@@ -604,22 +590,11 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
       const index = levelNodeCounts[level][actionKey];
 
-      const generatedLabel =
-        node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
-          node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
-            node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
-              node.data.action === "Filter" ? `Filter_${index}_Level${level}` :
-                node.data.action === "Path" ? `Path_${index}_Level${level}` :
-                  `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
-
-      const generatedDisplayLabel = node.data.action || `Action ${index}`;
-
-      const finalLabel = node.data.label || generatedLabel;
-      const finalDisplayLabel = node.data.displayLabel || generatedDisplayLabel;
+      let displayLabel = node.data.action || `Action ${index}`;
 
       updatedNodes[nodeIndex] = {
         ...node,
-        data: { ...node.data, order, label: finalLabel, displayLabel: finalDisplayLabel },
+        data: { ...node.data, order, displayLabel },
       };
 
       const children = adjacencyList.get(nodeId) || [];
@@ -733,7 +708,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           {
             id: `e${params.source}-${conditionNodeId}`,
             source: params.source,
-            sourceHandle: params.sourceHandle || "bottom", 
+            sourceHandle: params.sourceHandle || "bottom",
             target: conditionNodeId,
             type: "default",
             conditionNodeId,

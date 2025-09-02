@@ -67,18 +67,18 @@ const ActionPanel = ({
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
   const [sheetName, setSheetName] = useState("");
-  const [spreadsheetId , setSpreadsheetId] = useState();
-  const [sheetLink , setSheetLink] = useState("");
+  const [spreadsheetId, setSpreadsheetId] = useState();
+  const [sheetLink, setSheetLink] = useState("");
   const [fieldMappings, setFieldMappings] = useState([]);
-  const [sheetConditions , setsheetConditions] = useState([]);
+  const [sheetConditions, setsheetConditions] = useState([]);
   const [conditionsLogic, setConditionsLogic] = useState('AND');
   const [sheetcustomLogic, setsheetCustomLogic] = useState(''); // custom logic string e.g. "(1 AND 2) OR 3"
   const instanceUrl = sessionStorage.getItem('instanceUrl');
   const userId = sessionStorage.getItem('userId');
   const [updateMultiple, setUpdateMultiple] = useState(false); // New state variable
-  const [findsortField , setfindsortfield] = useState('')
-  const [findsortOrder , setfindsortOrder] = useState('ASC');
-  const [findreturnLimit , setfindreturnLimit] = useState("");
+  const [findsortField, setfindsortfield] = useState('')
+  const [findsortOrder, setfindsortOrder] = useState('ASC');
+  const [findreturnLimit, setfindreturnLimit] = useState("");
   const [findSheetConditions, setFindSheetConditions] = useState([]); // New state for FindGoogleSheet conditions
   const [findConditionsLogic, setFindConditionsLogic] = useState('AND'); // New state for FindGoogleSheet conditions logic
   const [findSheetCustomLogic, setFindSheetCustomLogic] = useState(''); // New state for FindGoogleSheet custom logic
@@ -87,10 +87,7 @@ const ActionPanel = ({
   const [findSelectedSheetName, setFindSelectedSheetName] = useState(''); // New state for FindGoogleSheet selectedSheetName
   const [findUpdateMultiple, setFindUpdateMultiple] = useState(false); // New state for FindGoogleSheet updateMultiple
   const [findGoogleSheetColumns, setFindGoogleSheetColumns] = useState([]); // New state for FindGoogleSheet columns
-
-  // Common fields
   const [customLabel, setCustomLabel] = useState(nodeLabel || mappings[nodeId]?.label || "");
-  const readOnlyType = mappings[nodeId]?.actionType || nodeType;
 
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
@@ -135,7 +132,7 @@ const ActionPanel = ({
     setSpreadsheetId(nodeMapping?.spreadsheetId || "")
     setsheetConditions(nodeMapping?.sheetConditions || []);
     setConditionsLogic(nodeMapping?.conditionsLogic || 'AND');
-    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || ''); 
+    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || '');
     const loopConfig = nodeMapping.loopConfig || {};
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
@@ -188,16 +185,11 @@ const ActionPanel = ({
     setFindSelectedSheetName(nodeMapping.selectedSheetName || "");
     setFindUpdateMultiple(nodeMapping.updateMultiple || false);
     setFindGoogleSheetColumns(nodeMapping.columns || []); // Initialize FindGoogleSheet columns
-
+    setCustomLabel((mappings[nodeId]?.label ?? nodeLabel) || "");
     // setfindreturnLimit(nodeMapping.findreturnLimit);
     // setfindsortOrder(nodeMapping.findsortOrder);
     // setfindsortfield(nodeMapping.findsortField);
-  }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
-
-  // Sync label when node changes or external mapping label updates
-  useEffect(() => {
-    setCustomLabel((mappings[nodeId]?.label ?? nodeLabel) || "");
-  }, [nodeId, nodeLabel, mappings]);
+  }, [nodeId, mappings, nodeLabel, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
     if (!selectedObject) return;
@@ -432,6 +424,16 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
+
+  const handleLabelBlur = () => {
+    const val = (customLabel || "").trim();
+    if (setNodeLabel) setNodeLabel(nodeId, val || undefined);
+    setMappings(prev => ({
+      ...prev,
+      [nodeId]: { ...prev[nodeId], label: val || undefined },
+    }));
+  };
+
   const handleSave = (spreadsheetId = null) => {
     if (isGoogleSheet) {
       setMappings((prev) => ({
@@ -465,7 +467,7 @@ const ActionPanel = ({
           googleSheetReturnLimit: findreturnLimit, // Using specific state
           googleSheetSortField: findsortField, // Using specific state
           googleSheetSortOrder: findsortOrder, // Using specific state
-          columns : findGoogleSheetColumns
+          columns: findGoogleSheetColumns
         },
       }));
     } else {
@@ -563,10 +565,10 @@ const ActionPanel = ({
   const handleFindNodeChange = (selected, isLoop = false) => {
     const findNodeId = selected ? selected.value : "";
     console.log('isLoop:', isLoop, 'findNodeId:', findNodeId);
-    
+
     if (isLoop) {
       console.log('Setting loop collection to:', findNodeId);
-      
+
       setLoopCollection(findNodeId);
       // Update mappings state for loop collection
       setMappings((prev) => ({
@@ -596,15 +598,6 @@ const ActionPanel = ({
       handleObjectChange("");
     }
   };
-
-  const handleLabelBlur = () => {
-  const val = (customLabel || "").trim();
-  if (setNodeLabel) setNodeLabel(nodeId, val || undefined);
-  setMappings(prev => ({
-    ...prev,
-    [nodeId]: { ...prev[nodeId], label: val || undefined },
-  }));
-};
 
   const addMapping = () => {
     setLocalMappings((prev) => [...prev, { formFieldId: "", fieldType: "", salesforceField: "" }]);
@@ -1119,11 +1112,11 @@ const ActionPanel = ({
 
   const renderConditions = (conditionType = "conditions", isExit = false) => {
     const conditionsList = isExit ? exitConditions : conditions;
-     // Helper function to get field options based on node type and loop collection
+    // Helper function to get field options based on node type and loop collection
     const getFieldOptionsForConditions = () => {
       if (isExit && isLoopNode && loopCollection) {
         const loopCollectionNode = nodes.find(node => node.id === loopCollection);
-        console.log('loop node' , loopCollectionNode)
+        console.log('loop node', loopCollectionNode)
         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
           const googleSheetNodeMapping = mappings[loopCollection] || {};
           console.log('sheet', googleSheetNodeMapping)
@@ -1131,7 +1124,7 @@ const ActionPanel = ({
         }
       }
       // New logic for Filter node conditions
-    if (isFilterNode && selectedFindNode) {
+      if (isFilterNode && selectedFindNode) {
         const findNode = nodes.find(node => node.id === selectedFindNode);
         if (findNode && findNode.data.action === 'FindGoogleSheet') {
           const googleSheetNodeMapping = mappings[selectedFindNode] || {};
@@ -1146,14 +1139,14 @@ const ActionPanel = ({
         return operatorGroups.default; // For exit conditions, use default operators
       }
       if (isExit && isLoopNode && loopCollection) {
-         const loopCollectionNode = nodes.find(node => node.id === loopCollection);
-         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
-           // For Google Sheet columns, assume string operators for now
+        const loopCollectionNode = nodes.find(node => node.id === loopCollection);
+        if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
+          // For Google Sheet columns, assume string operators for now
           return operatorGroups.text;
-         }
-       }
-         // New logic for Filter node conditions
-    if (isFilterNode && selectedFindNode) {
+        }
+      }
+      // New logic for Filter node conditions
+      if (isFilterNode && selectedFindNode) {
         const findNode = nodes.find(node => node.id === selectedFindNode);
         if (findNode && findNode.data.action === 'FindGoogleSheet') {
           return operatorGroups.text;
@@ -1248,7 +1241,7 @@ const ActionPanel = ({
               <div className="col-span-5">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Field</label>
                 <Select
-                    value={
+                  value={
                     getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
                       ? {
                         ...getFieldOptionsForConditions().find((opt) => opt.value === condition.field),
@@ -1408,6 +1401,32 @@ const ActionPanel = ({
           </button>
         </div>
 
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+              <input
+                type="text"
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+                onBlur={handleLabelBlur}
+                maxLength="25"
+                placeholder="Enter node label"
+                className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <input
+                type="text"
+                value={mappings[nodeId]?.actionType || nodeType}
+                readOnly
+                className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-100 text-gray-700"
+              />
+            </div>
+          </div>
+        </div>
+
         <AnimatePresence>
           {saveError && (
             <motion.p
@@ -1421,31 +1440,6 @@ const ActionPanel = ({
           )}
         </AnimatePresence>
 
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
-              <input
-                type="text"
-                value={customLabel}
-                onChange={(e) => setCustomLabel(e.target.value)}
-                onBlur={handleLabelBlur}
-                placeholder="Enter node label"
-                className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <input
-                type="text"
-                value={readOnlyType}
-                readOnly
-                className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-100 text-gray-700"
-              />
-            </div>
-          </div>
-        </div>
-
         {isGoogleSheet && (
           <motion.div
             className=""
@@ -1453,20 +1447,20 @@ const ActionPanel = ({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
           >
-          <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
-            sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns}/>
+            <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
+              sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns} />
           </motion.div>
         )}
         {isFindGoogleSheet && (
           <motion.div
-          className=""
-          initial={{ x: 300, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 300, opacity: 0 }}
-        >
-          <GoogleSheetFindPanel
-                onSave={(config) => {
-                console.log(mappings[nodeId] , 'insave')
+            className=""
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+          >
+            <GoogleSheetFindPanel
+              onSave={(config) => {
+                console.log(mappings[nodeId], 'insave')
                 setFindSelectedSheetName(config.selectedSheetName); // Use new state
                 setFindSpreadsheetId(config.spreadsheetId); // Use new state
                 setFindSheetConditions(config.findSheetConditions); // Use new state
@@ -1491,19 +1485,19 @@ const ActionPanel = ({
                     updateMultiple: config.updateMultiple,
                     googleSheetReturnLimit: config.googleSheetReturnLimit,
                     googleSheetSortOrder: config.googleSheetSortOrder,
-                    googleSheetSortField : config.googleSheetSortField,
-                    logicType : config.logicType,
-                    customLogic : config.customLogic,
-                    sheetColumns : config.sheetColumns
+                    googleSheetSortField: config.googleSheetSortField,
+                    logicType: config.logicType,
+                    customLogic: config.customLogic,
+                    sheetColumns: config.sheetColumns
                   }
                 }));
               }}
               initialConfig={mappings[nodeId]}
-          userId={userId}
-          instanceUrl={instanceUrl} 
-          token={sfToken}  
-          sheetsApiUrl={'https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch'}/>
-        </motion.div>
+              userId={userId}
+              instanceUrl={instanceUrl}
+              token={sfToken}
+              sheetsApiUrl={'https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch'} />
+          </motion.div>
         )}
         <div className="space-y-6">
           {(isPathNode || isConditionNode) && (
@@ -1594,7 +1588,7 @@ const ActionPanel = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {isLoopNode ? "Select Collection Node" : "Select Find Node"}
                 </label>
-                
+
                 <Select
                   value={
                     collectionOptions.find(
@@ -1602,7 +1596,7 @@ const ActionPanel = ({
                         opt.value === (isLoopNode ? loopCollection : selectedFindNode)
                     ) || null
                   }
-                 
+
                   onChange={(selected) => handleFindNodeChange(selected, isLoopNode)}
                   options={collectionOptions}
                   placeholder={collectionOptions.length ? "Select Find Node" : "No Find Nodes Available"}
@@ -1742,7 +1736,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {(isFindNode || isFilterNode || (isConditionNode &&  pathOption == 'Rules')) && (
+          {(isFindNode || isFilterNode || (isConditionNode && pathOption == 'Rules')) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2751,18 +2745,18 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
     { label: "Starts With", value: "STARTS WITH" },
     { label: "Ends With", value: "ENDS WITH" }
   ];
-  
+
   const colType = condition.fieldType || 'string';
   const operators = STRING_OPERATORS;
 
   return (
-    <motion.div 
-      key={index} 
-      layout 
-      initial={{ opacity: 0, x: -20 }} 
-      animate={{ opacity: 1, x: 0 }} 
+    <motion.div
+      key={index}
+      layout
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      style={{ display:'flex', gap:12, alignItems:'center', marginBottom:10 }}
+      style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}
     >
       {/* Left: Column select */}
       <AntSelect
@@ -2770,17 +2764,17 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
         placeholder="Select Column"
         value={condition.field || undefined}
         onChange={value => {
-          onChange(index, { 
-            field: value, 
-            operator: '', 
-            value: '' 
+          onChange(index, {
+            field: value,
+            operator: '',
+            value: ''
           });
         }}
         options={columns.map(c => ({ label: c, value: c }))}
       />
 
-       {/* Center: Operator select */}
-       <AntSelect
+      {/* Center: Operator select */}
+      <AntSelect
         style={{ width: 180 }}
         placeholder="Select Operator"
         value={condition.operator || undefined}
@@ -2790,12 +2784,12 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
       />
 
       {/* Right: Value input (conditional) */}
-       {/* Right: Value input */}
-       <Input
+      {/* Right: Value input */}
+      <Input
         style={{ width: 150 }}
         placeholder="Enter Value"
         value={condition.value || ''}
-        onChange={e => onChange(index, {...condition, value: e.target.value })}
+        onChange={e => onChange(index, { ...condition, value: e.target.value })}
         disabled={!condition.operator}
       />
 
@@ -2805,19 +2799,19 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
   );
 };
 
-const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, setsheetLogicType ,customLogic,setCustomLogic ,updateMultiple ,setUpdateMultiple }) => {
+const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, setsheetLogicType, customLogic, setCustomLogic, updateMultiple, setUpdateMultiple }) => {
   const selectedLogic = sheetlogicType || 'AND';
   console.log('selectedlogic', selectedLogic)
   const onConditionChange = (index, updatedCondition) => {
-    setConditions(conds => conds.map((c,i) => i === index ? updatedCondition : c));
+    setConditions(conds => conds.map((c, i) => i === index ? updatedCondition : c));
   };
 
   const onAddCondition = () => {
-    setConditions(conds => [...conds, {field:'', operator:'', value:'', fieldType:''}]);
+    setConditions(conds => [...conds, { field: '', operator: '', value: '', fieldType: '' }]);
   };
 
   const onRemoveCondition = (index) => {
-    setConditions(conds => conds.filter((_,i) => i !== index));
+    setConditions(conds => conds.filter((_, i) => i !== index));
   };
   const validateCustomLogic = (logic, conditionsLength) => {
     // Tokenize input
@@ -2826,9 +2820,9 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
       .replace(/\s+/g, " ")
       .trim()
       .split(" ");
-  
+
     let errors = [];
-  
+
     // Validate individual tokens
     tokens.forEach((token, i) => {
       if (/^\d+$/.test(token)) {
@@ -2840,7 +2834,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
         errors.push(`Invalid token "${token}"`);
       }
     });
-  
+
     // Check for invalid operator sequences
     for (let i = 0; i < tokens.length - 1; i++) {
       if (
@@ -2850,7 +2844,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
         errors.push(`Operators '${tokens[i]}' and '${tokens[i + 1]}' cannot be together—must be separated by a condition.`);
       }
     }
-  
+
     // Check brackets balance
     let balance = 0;
     for (let ch of logic) {
@@ -2862,7 +2856,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
       }
     }
     if (balance > 0) errors.push("Unclosed brackets");
-  
+
     // Optionally check if logic starts/ends with AND/OR (which is usually invalid)
     if (["AND", "OR"].includes(tokens[0])) {
       errors.push("Logic cannot start with an operator.");
@@ -2870,10 +2864,10 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
     if (["AND", "OR"].includes(tokens[tokens.length - 1])) {
       errors.push("Logic cannot end with an operator.");
     }
-  
+
     return errors;
   };
-  
+
   const handleKeyDown = (e) => {
     if (e.key === " " || e.key === "Enter") {
       // Use the value just before space is added
@@ -2890,7 +2884,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
       }
     }
   };
-  
+
   if (!columns || columns?.length === 0) {
     // If no columns, do not show condition panel
     setsheetLogicType('AND')
@@ -2899,8 +2893,8 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
 
   return (
     <div style={{ marginTop: 24 }}>
-      <Switch 
-        checked={conditions?.length > 0} 
+      <Switch
+        checked={conditions?.length > 0}
         onChange={enabled => {
           if (!enabled) setConditions([]);
           else onAddCondition();
@@ -2936,50 +2930,50 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
             ]}
           />
         </div>
-      )}  
-       {sheetlogicType === 'Custom' && conditions.length > 1  && (
-      <div style={{ marginBottom:16 }}>
-        <textarea
-          value={customLogic}
-          onChange={e => {
-            const newLogic = e.target.value;
-            console.log('NEw logic',newLogic)
-            setCustomLogic(newLogic);
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder='e.g., (1 AND 2) OR 3'
-          style={{
-            width: '100%',
-            minHeight: 60,
-            padding: 8,
-            fontSize: 14,
-            borderRadius: 4,
-            borderColor: '#ccc',
-            marginBottom: 8,
-            fontFamily: 'monospace',
-            resize: 'vertical'
-          }}
-        />
+      )}
+      {sheetlogicType === 'Custom' && conditions.length > 1 && (
+        <div style={{ marginBottom: 16 }}>
+          <textarea
+            value={customLogic}
+            onChange={e => {
+              const newLogic = e.target.value;
+              console.log('NEw logic', newLogic)
+              setCustomLogic(newLogic);
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder='e.g., (1 AND 2) OR 3'
+            style={{
+              width: '100%',
+              minHeight: 60,
+              padding: 8,
+              fontSize: 14,
+              borderRadius: 4,
+              borderColor: '#ccc',
+              marginBottom: 8,
+              fontFamily: 'monospace',
+              resize: 'vertical'
+            }}
+          />
 
-        {/* Validation */}
-        {customLogic && (
-          validateCustomLogic(customLogic, conditions.length).length > 0 ? (
-            <div style={{ color: "red", fontSize: 13 }}>
-              {validateCustomLogic(customLogic, conditions.length).map((err, idx) => (
-                <div key={idx}>⚠ {err}</div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ color: "green", fontSize: 13 }}>
-              ✅ Logic looks good
-            </div>
-          )
-        )}
-      </div>
-    )}
+          {/* Validation */}
+          {customLogic && (
+            validateCustomLogic(customLogic, conditions.length).length > 0 ? (
+              <div style={{ color: "red", fontSize: 13 }}>
+                {validateCustomLogic(customLogic, conditions.length).map((err, idx) => (
+                  <div key={idx}>⚠ {err}</div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: "green", fontSize: 13 }}>
+                ✅ Logic looks good
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
-      {conditions.length > 0 && (
+        {conditions.length > 0 && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -3009,14 +3003,14 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
   );
 };
 
-const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave , sheetconditions , setsheetConditions , instanceUrl , userId,sfToken ,conditionsLogic , setConditionsLogic ,sheetcustomLogic , setsheetCustomLogic ,spreadsheetId , setSpreadsheetId , updateMultiple , setUpdateMultiple , setFindGoogleSheetColumns}) => {
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave, sheetconditions, setsheetConditions, instanceUrl, userId, sfToken, conditionsLogic, setConditionsLogic, sheetcustomLogic, setsheetCustomLogic, spreadsheetId, setSpreadsheetId, updateMultiple, setUpdateMultiple, setFindGoogleSheetColumns }) => {
   const [error, setError] = useState("");
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [conditionsEnabled, setConditionsEnabled] = useState(false);
-  
-  
+
+
   async function fetchSpreadsheets({ instanceUrl, sfToken, userId }) {
     const apiUrl = "https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch";
 
@@ -3096,44 +3090,44 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
       }
     }
 
-   // Only fetch if spreadsheetId not set — else skip to avoid unnecessary API call
-   // Only fetch spreadsheets if they are not already loaded or if spreadsheetId exists but columns are not loaded
-     if (spreadsheets.length === 0 || (spreadsheetId && selectedColumns.length === 0)) {
+    // Only fetch if spreadsheetId not set — else skip to avoid unnecessary API call
+    // Only fetch spreadsheets if they are not already loaded or if spreadsheetId exists but columns are not loaded
+    if (spreadsheets.length === 0 || (spreadsheetId && selectedColumns.length === 0)) {
       loadSpreadsheets();
-    } 
-  }, [instanceUrl, sfToken, userId , fieldMappings.length, spreadsheets.length, selectedColumns.length]);
-  // Handler when spreadsheet is selected
- // When a spreadsheet is selected, update sheetName and set its columns
- const onSpreadsheetChange = (spreadsheetId) => {
-  const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
-  if (selected) {
-    setSheetName(selected.spreadsheetName);
-    setSelectedColumns(selected.columns || []);
-    setSpreadsheetId(selected.spreadsheetId)
-    setsheetConditions([]); // Clear conditions when changing spreadsheet
-    setsheetCustomLogic(''); // Reset custom logic
-    // setConditionsEnabled(true); // Enable conditions when a new spreadsheet is selected
-    if(selected.columns[0]){
-       // Populate fieldMappings automatically based on columns
-       setsheetConditions([])
-    const newMappings = selected.columns[0]
-    .map(col => ({
-      column: col,
-      id: "",     // no form field selected yet
-      name: "",
-      label: col  // keep label as trimmed column
-    }));
-      setFieldMappings(newMappings);
-    } else {
-      setSheetName("");
-      setSelectedColumns([]);
-      setSpreadsheetId(undefined);
-      setFieldMappings([]);
-      setsheetConditions([]);
-      setConditionsLogic('AND');
-      setsheetCustomLogic('');
-      // setConditionsEnabled(false);
     }
+  }, [instanceUrl, sfToken, userId, fieldMappings.length, spreadsheets.length, selectedColumns.length]);
+  // Handler when spreadsheet is selected
+  // When a spreadsheet is selected, update sheetName and set its columns
+  const onSpreadsheetChange = (spreadsheetId) => {
+    const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+    if (selected) {
+      setSheetName(selected.spreadsheetName);
+      setSelectedColumns(selected.columns || []);
+      setSpreadsheetId(selected.spreadsheetId)
+      setsheetConditions([]); // Clear conditions when changing spreadsheet
+      setsheetCustomLogic(''); // Reset custom logic
+      // setConditionsEnabled(true); // Enable conditions when a new spreadsheet is selected
+      if (selected.columns[0]) {
+        // Populate fieldMappings automatically based on columns
+        setsheetConditions([])
+        const newMappings = selected.columns[0]
+          .map(col => ({
+            column: col,
+            id: "",     // no form field selected yet
+            name: "",
+            label: col  // keep label as trimmed column
+          }));
+        setFieldMappings(newMappings);
+      } else {
+        setSheetName("");
+        setSelectedColumns([]);
+        setSpreadsheetId(undefined);
+        setFieldMappings([]);
+        setsheetConditions([]);
+        setConditionsLogic('AND');
+        setsheetCustomLogic('');
+        // setConditionsEnabled(false);
+      }
     }
   };
   // Add a new mapping entry
@@ -3307,11 +3301,11 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
       >
         {error}
       </motion.div>}
-       {spreadsheetId && (
-        <ConditionsPanel 
-          columns={selectedColumns.flat()} 
-          conditions={sheetconditions} 
-          setConditions={setsheetConditions} 
+      {spreadsheetId && (
+        <ConditionsPanel
+          columns={selectedColumns.flat()}
+          conditions={sheetconditions}
+          setConditions={setsheetConditions}
           sheetlogicType={conditionsLogic}
           setsheetLogicType={setConditionsLogic}
           customLogic={sheetcustomLogic}
@@ -3345,9 +3339,9 @@ const GoogleSheetFindPanel = ({
   const [findreturnLimit, setReturnLimit] = useState(initialConfig?.googleSheetReturnLimit || "");
   const [findsortField, setSortField] = useState(initialConfig?.googleSheetSortField || "");
   const [findsortOrder, setSortOrder] = useState(initialConfig?.googleSheetSortOrder || "ASC");
-  const [findupdateMultiple , setupdateMultiple] = useState(initialConfig?.updateMultiple);
+  const [findupdateMultiple, setupdateMultiple] = useState(initialConfig?.updateMultiple);
   const [error, setError] = useState("");
-  const [findname , setfindname] = useState(initialConfig?.findNodeName || "Default")
+  const [findname, setfindname] = useState(initialConfig?.findNodeName || "Default")
   // Fetch spreadsheets on mount or when dependencies change
   useEffect(() => {
     if (!instanceUrl || !userId || !token || !sheetsApiUrl) return;
@@ -3406,15 +3400,15 @@ const GoogleSheetFindPanel = ({
     const config = {
       findNodeName: findname,                  // name entered by user
       selectedSheetName: sheetName,            // sheet display name
-      findSheetConditions: findconditions ,   // array of conditions
-      updateMultiple: findupdateMultiple , // boolean flag
-      googleSheetReturnLimit: findreturnLimit ,    // limit on rows
+      findSheetConditions: findconditions,   // array of conditions
+      updateMultiple: findupdateMultiple, // boolean flag
+      googleSheetReturnLimit: findreturnLimit,    // limit on rows
       googleSheetSortOrder: findsortOrder,       // field/column to sort by
-      googleSheetSortField : findsortField,
+      googleSheetSortField: findsortField,
       spreadsheetId,
-      logicType : findlogicType,
-      customLogic : findcustomLogic,
-      sheetColumns : columns
+      logicType: findlogicType,
+      customLogic: findcustomLogic,
+      sheetColumns: columns
     };
     console.log(config)
     onSave(config);
@@ -3431,9 +3425,9 @@ const GoogleSheetFindPanel = ({
     >
       {/* Sheet selection */}
       <div className="mb-4">
-      <motion.div layout className="mb-4">
-        <label className="font-medium block mb-1">Name : </label>
-        <Input type="text" onChange={(e) => setfindname(e.target.value)} placeholder="Enter Name.." value={findname}/>
+        <motion.div layout className="mb-4">
+          <label className="font-medium block mb-1">Name : </label>
+          <Input type="text" onChange={(e) => setfindname(e.target.value)} placeholder="Enter Name.." value={findname} />
         </motion.div>
         <label className="font-medium mb-2 block">Select Google Sheet</label>
         {loading ? (
@@ -3456,18 +3450,18 @@ const GoogleSheetFindPanel = ({
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
         <label className="font-medium mb-2 block">Find Conditions</label>
         <ConditionsPanel columns={columns} conditions={findconditions} setConditions={setConditions}
-         logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
-         {columns.length === 0 && (
-         <motion.div
-           initial={{ opacity: 0, y: 10 }}
-           animate={{ opacity: 1, y: 0 }}
-           exit={{ opacity: 0, y: 10 }}
-           className="text-gray-400 text-sm flex items-center gap-2 py-2"
-         >
-           <span>🔎</span>
-           <span>No columns available. Select a Google Sheet to begin.</span>
-         </motion.div>
-         )}
+          logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
+        {columns.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="text-gray-400 text-sm flex items-center gap-2 py-2"
+          >
+            <span>🔎</span>
+            <span>No columns available. Select a Google Sheet to begin.</span>
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Return Limit */}

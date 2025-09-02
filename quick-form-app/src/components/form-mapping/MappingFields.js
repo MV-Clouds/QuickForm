@@ -179,6 +179,14 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   }, []);
 
+
+  const setNodeLabel = React.useCallback((nodeId, newLabel) => {
+  setNodes(nds =>
+    nds.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
+  );
+}, [setNodes]);
+
+
   const fetchAccessToken = async (userId, instanceUrl, retries = 2) => {
     try {
       const url = process.env.REACT_APP_GET_ACCESS_TOKEN_URL || "https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/prod/getAccessToken";
@@ -1170,12 +1178,6 @@ const MappingFields = ({ onSaveCallback }) => {
 
     return newNodeId;
   }, [setNodes, calculateNodeOrders, setEdges]);
-
-  const setNodeLabel = React.useCallback((nodeId, newLabel) => {
-  setNodes(nds =>
-    nds.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
-  );
-}, [setNodes]);
 
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">
