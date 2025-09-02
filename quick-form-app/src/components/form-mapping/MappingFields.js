@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from 'react-router-dom';
 import { ReactFlowProvider, addEdge } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1171,6 +1171,12 @@ const MappingFields = ({ onSaveCallback }) => {
     return newNodeId;
   }, [setNodes, calculateNodeOrders, setEdges]);
 
+  const setNodeLabel = React.useCallback((nodeId, newLabel) => {
+  setNodes(nds =>
+    nds.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
+  );
+}, [setNodes]);
+
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">
       <div className="flex-1 flex flex-col relative transition-all duration-300">
@@ -1226,7 +1232,8 @@ const MappingFields = ({ onSaveCallback }) => {
                     setSalesforceObjects={setSalesforceObjects}
                     fetchSalesforceFields={fetchSalesforceFields}
                     onClose={() => setSelectedNode(null)}
-                    // nodeLabel={selectedNode.data.action}
+                    nodeLabel={selectedNode.data.label}
+                    setNodeLabel={setNodeLabel}
                     nodes={nodes}
                     edges={edges}
                     credentials={googleSheetConfig?.credentials}

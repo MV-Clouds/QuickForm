@@ -193,7 +193,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
           </div>
           <div className="flex-1">
             <div className="font-medium text-gray-800 text-sm">
-              {nodeType}
+              {data.label || data.displayLabel || nodeType}
             </div>
             <div className="text-xs text-gray-500 mt-1">
               {nodeType}
@@ -491,6 +491,20 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     };
   }, [setNodes, setEdges]);
 
+  // Expose helper to update a node's label from anywhere (e.g., ActionPanel)
+  useEffect(() => {
+    window.setNodeLabel = (nodeId, newLabel) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n
+        )
+      );
+    };
+    return () => {
+      delete window.setNodeLabel;
+    };
+  }, [setNodes]);
+
   const nodesWithDraggable = useMemo(() => nodes.map((node) => ({
     ...node,
     draggable: node.draggable !== false,
@@ -590,7 +604,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
       levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
       const index = levelNodeCounts[level][actionKey];
 
-      let label =
+      const generatedLabel =
         node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
           node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
             node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
@@ -598,11 +612,14 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
                 node.data.action === "Path" ? `Path_${index}_Level${level}` :
                   `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
 
-      let displayLabel = node.data.action || `Action ${index}`;
+      const generatedDisplayLabel = node.data.action || `Action ${index}`;
+
+      const finalLabel = node.data.label || generatedLabel;
+      const finalDisplayLabel = node.data.displayLabel || generatedDisplayLabel;
 
       updatedNodes[nodeIndex] = {
         ...node,
-        data: { ...node.data, order, label, displayLabel },
+        data: { ...node.data, order, label: finalLabel, displayLabel: finalDisplayLabel },
       };
 
       const children = adjacencyList.get(nodeId) || [];
