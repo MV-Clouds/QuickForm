@@ -187,7 +187,6 @@ function PublicFormViewer({ runPrefill = false }) {
           ) : c
         );
         setFormConditions(parsedConditions);
-
         const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
           method: 'POST',
           headers: {
@@ -994,6 +993,10 @@ function PublicFormViewer({ runPrefill = false }) {
     });
     const fieldType = field.Field_Type__c || field.type;
     const fieldLabel = properties.label || field.Name || field.id || properties.id;
+    const conditionalState = uiState?.[properties.id || field.Id || field.id] || {};
+    if (conditionalState.hidden) {
+      return null;
+    }
     const isRequired = properties.isRequired || uiState?.[properties.id || field.Id || field.id]?.required || false;
     // Required logic (handles most types including special cases)
     if (
@@ -1683,7 +1686,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
 
   const getFieldUiState = (fieldId, formValues) => {
-    let state = { hidden: false, required: false, mask: null, disabled: false };
+    let state = { hidden: false, required: undefined, mask: null, disabled: undefined };
     formConditions.forEach(c => {
       if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
@@ -1716,7 +1719,36 @@ function PublicFormViewer({ runPrefill = false }) {
         const targetIdx = pages.findIndex(
           arr => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
         );
-        if (targetIdx !== -1) return targetIdx;
+        if (targetIdx !== -1) {
+          // Check for required fields (not dynamically set to "don't require") in intermediate pages
+          const start = Math.min(currentIdx, targetIdx) + 1;
+          const end = Math.max(currentIdx, targetIdx);
+          let blockSkip = false;
+          for (let i = start; i < end; i++) {
+            const intermediatePageFields = pages[i];
+            for (const field of intermediatePageFields) {
+              const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
+              const fieldId =  properties.id || field.Id;
+              // Get UI state from conditions (required/don't require)
+              const uiState = getFieldUiState(fieldId, formValues);
+              const required = properties.isRequired || uiState.required;
+              
+              if (required) {
+                // Dynamically don't require
+                const dontRequire = uiState && uiState.required === false && properties.isRequired;
+                
+                // Only block if not dynamically set to "don't require"
+                if (!dontRequire && (formValues[fieldId] === undefined || formValues[fieldId] === "" ||
+                    (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
+                  blockSkip = true;
+                  break;
+                }
+              }
+            }
+            if (blockSkip) break;
+          }
+          if (!blockSkip) return targetIdx; // Only skip if all checks pass
+        }
       }
     }
     // Normal next, just +1 for visible pages
@@ -2137,8 +2169,16 @@ function PublicFormViewer({ runPrefill = false }) {
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
-    const isDisabled = properties.isDisabled || state.disabled || false;
-    const isRequired = properties.isRequired || state.required;
+    const isDisabled = 
+      typeof state.disabled === 'boolean'
+        ? state.disabled
+        : !!properties.isDisabled;
+
+    const isRequired = 
+      typeof state.required === 'boolean'
+        ? state.required
+        : !!properties.isRequired;
+
     const hasError = !!errors[fieldId];
     const helpText = properties.showHelpText ? properties.helpText : null;
     const labelAlignment = properties.labelAlignment || 'top';
