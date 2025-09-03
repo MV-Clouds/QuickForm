@@ -931,126 +931,162 @@ const MappingFields = ({ onSaveCallback }) => {
     return updatedNodes;
   }, []);
 
-  // const onAddNode = useCallback((nodeType, action) => {
 
-  //     const reactFlowWrapper = document.querySelector('.react-flow');
-  //     if (!reactFlowWrapper) return;
+  // const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null) => {
 
-  //     const rect = reactFlowWrapper.getBoundingClientRect();
-  //     const centerX = rect.width / 2;
-  //     const centerY = rect.height / 2;
+  //   const reactFlowWrapper = document.querySelector('.react-flow');
+  //   if (!reactFlowWrapper) return;
+
+  //   const rect = reactFlowWrapper.getBoundingClientRect();
+  //   const centerX = rect.width / 2;
+  //   const centerY = rect.height / 2;
 
 
-  //     const randomNum = Math.floor(Math.random() * 10000);
-  //     const nodeName = action.toLowerCase().replace("/", "_");
-  //     const newNodeId = `${nodeName}_${randomNum}`;
-  //     const newNode = {
-  //       id: newNodeId,
-  //       type: "custom",
-  //       position: { x: centerX, y: centerY },
-  //       data: {
-  //         label: `${action}_Level0`,
-  //         displayLabel: action,
-  //         type: nodeType,
-  //         action,
-  //         order: null,
-  //         ...(action === "Create/Update" ? {
-  //           enableConditions: false,
-  //           returnLimit: "",
-  //           salesforceObject: "",
-  //           fieldMappings: [],
-  //           conditions: [],
-  //           logicType: "AND",
-  //           customLogic: "",
-  //         } : {}),
-  //         ...(action === "Find" ? {
-  //           salesforceObject: "",
-  //           conditions: [],
-  //           returnLimit: "",
-  //           sortField: "",
-  //           sortOrder: "ASC",
-  //           logicType: "AND",
-  //           customLogic: "",
-  //         } : {}),
-  //         ...(action === "Filter" ? {
-  //           salesforceObject: "",
-  //           conditions: [],
-  //           returnLimit: "",
-  //           sortField: "",
-  //           sortOrder: "ASC",
-  //           logicType: "AND",
-  //           customLogic: "",
-  //         } : {}),
-  //         ...(action === "Condition" ? {
-  //           conditions: [],
-  //           logicType: "AND",
-  //           customLogic: "",
-  //         } : {}),
-  //         ...(action === "Path" ? { pathOption: "Rules" } : {}),
-  //         ...(action === "Loop" ? {
-  //           loopConfig: {
-  //             loopCollection: "",
-  //             currentItemVariableName: "",
-  //             maxIterations: "",
-  //             loopVariables: {
-  //               currentIndex: false,
-  //               counter: false,
-  //               indexBase: "0"
-  //             },
-  //             exitConditions: [],
-  //           }
-  //         } : {}),
-  //         ...(action === "Formatter" ? {
-  //           formatterConfig: {
-  //             formatType: "date",
-  //             operation: "",
-  //             inputField: "",
-  //             outputVariable: "",
-  //             options: {}
-  //           }
-  //         } : {}),
-  //         ...(action === 'Google Sheet') ? {
-  //           selectedSheetName: '', // Initialize
-  //           spreadsheetId: '', // Initialize
-  //           sheetConditions: [], // Initialize
-  //           conditionsLogic: 'AND', // Initialize
-  //           sheetcustomLogic: '', // Initialize
-  //           ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),
-  //         } : {},
-  //         ...(action === 'FindGoogleSheet') ? {
-  //           googleSheetReturnLimit: 0, // New
-  //           googleSheetSortField: '',     // New
-  //           googleSheetSortOrder: 'ASC',
-  //           columns: []
-  //         } : {}
-  //       },
-  //       draggable: true,
+  //   const randomNum = Math.floor(Math.random() * 10000);
+  //   const nodeName = action.toLowerCase().replace("/", "_");
+  //   const newNodeId = `${nodeName}_${randomNum}`;
+  //   const newNode = {
+  //     id: newNodeId,
+  //     type: "custom",
+  //     position: { x: centerX, y: centerY },
+  //     data: {
+  //       label: `${action}_Level0`,
+  //       displayLabel: action,
+  //       type: nodeType,
+  //       action,
+  //       order: null,
+  //       ...(action === "Create/Update" ? {
+  //         enableConditions: false,
+  //         returnLimit: "",
+  //         salesforceObject: "",
+  //         fieldMappings: [],
+  //         conditions: [],
+  //         logicType: "AND",
+  //         customLogic: "",
+  //       } : {}),
+  //       ...(action === "Find" ? {
+  //         salesforceObject: "",
+  //         conditions: [],
+  //         returnLimit: "",
+  //         sortField: "",
+  //         sortOrder: "ASC",
+  //         logicType: "AND",
+  //         customLogic: "",
+  //       } : {}),
+  //       ...(action === "Filter" ? {
+  //         salesforceObject: "",
+  //         conditions: [],
+  //         returnLimit: "",
+  //         sortField: "",
+  //         sortOrder: "ASC",
+  //         logicType: "AND",
+  //         customLogic: "",
+  //       } : {}),
+  //       ...(action === "Condition" ? {
+  //         conditions: [],
+  //         logicType: "AND",
+  //         customLogic: "",
+  //       } : {}),
+  //       ...(action === "Path" ? { pathOption: "Rules" } : {}),
+  //       ...(action === "Loop" ? {
+  //         loopConfig: {
+  //           loopCollection: "",
+  //           currentItemVariableName: "",
+  //           maxIterations: "",
+  //           loopVariables: {
+  //             currentIndex: false,
+  //             counter: false,
+  //             indexBase: "0"
+  //           },
+  //           exitConditions: [],
+  //         }
+  //       } : {}),
+  //       ...(action === "Formatter" ? {
+  //         formatterConfig: {
+  //           formatType: "date",
+  //           operation: "",
+  //           inputField: "",
+  //           outputVariable: "",
+  //           options: {}
+  //         }
+  //       } : {}),
+  //       ...(action === 'Google Sheet') ? {
+  //         selectedSheetName: '', // Initialize
+  //         spreadsheetId: '', // Initialize
+  //         sheetConditions: [], // Initialize
+  //         conditionsLogic: 'AND', // Initialize
+  //         sheetcustomLogic: '', // Initialize
+  //         ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),
+  //       } : {},
+  //       ...(action === 'FindGoogleSheet') ? {
+  //         googleSheetReturnLimit: 0, // New
+  //         googleSheetSortField: '',     // New
+  //         googleSheetSortOrder: 'ASC',
+  //         columns: []
+  //       } : {}
+  //     },
+  //     draggable: true,
+  //   };
+
+  //   setNodes((nds) => {
+  //     const updatedNodes = [...nds, newNode];
+  //     const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
+  //     return recalculatedNodes;
+  //   });
+
+  //   if (sourceNodeId && connectionType) {
+  //   let newEdge;
+    
+  //   if (connectionType === 'bottom') {
+  //     // Connect from bottom of source node to top of new node
+  //     newEdge = {
+  //       id: `e${sourceNodeId}-${newNodeId}`,
+  //       source: sourceNodeId,
+  //       sourceHandle: "bottom", // Use bottom handle of source
+  //       target: newNodeId,
+  //       targetHandle: "top",    // Use top handle of target
+  //       type: "default",
+  //       style: { stroke: '#999', strokeWidth: 2 },
+  //       markerEnd: { type: 'arrowclosed' },
   //     };
+  //   } else if (connectionType === 'top') {
+  //     newEdge = {
+  //       id: `e${newNodeId}-${sourceNodeId}`,
+  //       source: newNodeId,
+  //       sourceHandle: "bottom", // Use bottom handle of new node
+  //       target: sourceNodeId,
+  //       targetHandle: "top",    // Use top handle of source
+  //       type: "default",
+  //       style: { stroke: '#999', strokeWidth: 2 },
+  //       markerEnd: { type: 'arrowclosed' },
+  //     };
+  //   }
 
-  //     setNodes((nds) => {
-  //       const updatedNodes = [...nds, newNode];
-  //       const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
-  //        console.log('Nodes after addition:', recalculatedNodes);
-  //       return recalculatedNodes;
+  //   if (newEdge) {
+  //     setEdges((eds) => {
+  //       const updatedEdges = addEdge(newEdge, eds);
+  //       setNodes((nds) => calculateNodeOrders(nds, updatedEdges));
+  //       return updatedEdges;
   //     });
+  //   }
+  // }
 
-  //     return newNodeId;
-  // }, [setNodes, calculateNodeOrders]);
+  //   return newNodeId;
+  // }, [setNodes, calculateNodeOrders, setEdges]);
 
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null) => {
+  const reactFlowWrapper = document.querySelector('.react-flow');
+  if (!reactFlowWrapper) return;
 
-    const reactFlowWrapper = document.querySelector('.react-flow');
-    if (!reactFlowWrapper) return;
+  const rect = reactFlowWrapper.getBoundingClientRect();
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
 
-    const rect = reactFlowWrapper.getBoundingClientRect();
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-
-
-    const randomNum = Math.floor(Math.random() * 10000);
-    const nodeName = action.toLowerCase().replace("/", "_");
-    const newNodeId = `${nodeName}_${randomNum}`;
-    const newNode = {
+  const randomNum = Math.floor(Math.random() * 10000);
+  const nodeName = action.toLowerCase().replace("/", "_");
+  const newNodeId = `${nodeName}_${randomNum}`;
+  
+  const newNode = {
       id: newNodeId,
       type: "custom",
       position: { x: centerX, y: centerY },
@@ -1133,51 +1169,112 @@ const MappingFields = ({ onSaveCallback }) => {
       draggable: true,
     };
 
-    setNodes((nds) => {
-      const updatedNodes = [...nds, newNode];
-      const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
-      return recalculatedNodes;
-    });
-
-    if (sourceNodeId && connectionType) {
-    let newEdge;
+  setNodes((nds) => {
+    const sourceNode = nds.find(n => n.id === sourceNodeId);
+    let updatedNodes = [...nds, newNode];
     
-    if (connectionType === 'bottom') {
-      // Connect from bottom of source node to top of new node
-      newEdge = {
-        id: `e${sourceNodeId}-${newNodeId}`,
-        source: sourceNodeId,
-        sourceHandle: "bottom", // Use bottom handle of source
-        target: newNodeId,
-        targetHandle: "top",    // Use top handle of target
-        type: "default",
-        style: { stroke: '#999', strokeWidth: 2 },
-        markerEnd: { type: 'arrowclosed' },
+    // Check if source node is a Path node
+    if (sourceNode && sourceNode.data.action === "Path") {
+      // Create a condition node in between
+      const conditionNodeId = `condition_${randomNum}`;
+      
+      // Position condition node between source and target
+      const midX = (sourceNode.position.x + centerX) / 2;
+      const midY = (sourceNode.position.y + centerY) / 2;
+      
+      const conditionNode = {
+        id: conditionNodeId,
+        type: "custom",
+        position: { x: midX, y: midY },
+        data: {
+          label: "Condition",
+          displayLabel: "Condition",
+          action: "Condition",
+          type: "condition",
+          order: null,
+          pathNodeId: sourceNodeId,
+          targetNodeId: newNodeId,
+          pathOption: "Rules",
+          conditions: [],
+          logicType: "AND",
+          customLogic: "",
+        },
+        draggable: true,
       };
-    } else if (connectionType === 'top') {
-      newEdge = {
-        id: `e${newNodeId}-${sourceNodeId}`,
-        source: newNodeId,
-        sourceHandle: "bottom", // Use bottom handle of new node
-        target: sourceNodeId,
-        targetHandle: "top",    // Use top handle of source
-        type: "default",
-        style: { stroke: '#999', strokeWidth: 2 },
-        markerEnd: { type: 'arrowclosed' },
-      };
-    }
-
-    if (newEdge) {
+      
+      updatedNodes = [...updatedNodes, conditionNode];
+      
       setEdges((eds) => {
-        const updatedEdges = addEdge(newEdge, eds);
-        setNodes((nds) => calculateNodeOrders(nds, updatedEdges));
+        // Create edges: source -> condition -> target
+        const newEdges = [
+          {
+            id: `e${sourceNodeId}-${conditionNodeId}`,
+            source: sourceNodeId,
+            sourceHandle: connectionType === 'top' ? "top" : "bottom",
+            target: conditionNodeId,
+            targetHandle: "top",
+            type: "default",
+            conditionNodeId,
+          },
+          {
+            id: `e${conditionNodeId}-${newNodeId}`,
+            source: conditionNodeId,
+            sourceHandle: "bottom",
+            target: newNodeId,
+            targetHandle: "top",
+            type: "default",
+            conditionNodeId,
+          }
+        ];
+        
+        const updatedEdges = [...eds, ...newEdges];
+        const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+        setNodes(recalculatedNodes);
         return updatedEdges;
       });
-    }
-  }
+    } else {
+      // Regular connection for non-Path nodes
+      let newEdge;
+      
+      if (connectionType === 'bottom') {
+        newEdge = {
+          id: `e${sourceNodeId}-${newNodeId}`,
+          source: sourceNodeId,
+          sourceHandle: "bottom",
+          target: newNodeId,
+          targetHandle: "top",
+          type: "default",
+          style: { stroke: '#999', strokeWidth: 2 },
+          markerEnd: { type: 'arrowclosed' },
+        };
+      } else if (connectionType === 'top') {
+        newEdge = {
+          id: `e${newNodeId}-${sourceNodeId}`,
+          source: newNodeId,
+          sourceHandle: "bottom",
+          target: sourceNodeId,
+          targetHandle: "top",
+          type: "default",
+          style: { stroke: '#999', strokeWidth: 2 },
+          markerEnd: { type: 'arrowclosed' },
+        };
+      }
 
-    return newNodeId;
-  }, [setNodes, calculateNodeOrders, setEdges]);
+      if (newEdge) {
+        setEdges((eds) => {
+          const updatedEdges = addEdge(newEdge, eds);
+          const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+          setNodes(recalculatedNodes);
+          return updatedEdges;
+        });
+      }
+    }
+    
+    return updatedNodes;
+  });
+
+  return newNodeId;
+}, [setNodes, calculateNodeOrders, setEdges]);
 
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">

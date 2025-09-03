@@ -60,13 +60,20 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   const nodeRef = useRef(null);
   const nodeType = data.actionType || data.action || "default";
 
-  // Check if handles are connected
-  const hasTopConnection = edges.some(edge => edge.target === id && edge.targetHandle === "top");
-  const hasBottomConnection = edges.some(edge => edge.source === id && edge.sourceHandle === "bottom");
+  // Check if handles are connected (hide + when that end is already used)
+  const hasTopConnection = edges.some(
+    (edge) =>
+      edge.target === id &&
+      edge.targetHandle !== "loop-back" &&
+      (edge.targetHandle === "top" || edge.targetHandle == null)
+  );
 
-  console.log(edges);
-
-  console.log(hasTopConnection, hasBottomConnection);
+  const hasBottomConnection = edges.some(
+    (edge) =>
+      edge.source === id &&
+      edge.sourceHandle !== "loop" &&
+      (edge.sourceHandle === "bottom" || edge.sourceHandle == null)
+  );
 
   const getButtonPosition = (e, isTop) => {
     if (!nodeRef.current) return { x: 0, y: 0 };
@@ -167,6 +174,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   return (
     <>
       <motion.div
+        ref={nodeRef}
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         whileHover={{ scale: 1.02 }}
@@ -278,8 +286,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   );
 };
 
-const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdgeSettings }) => {
-  const [isHovered, setIsHovered] = useState(false);
+const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {} }) => {
   const [showSettings, setShowSettings] = useState(false);
   const path = `M${sourceX},${sourceY} L${targetX},${targetY}`;
   const midX = (sourceX + targetX) / 2;
@@ -292,8 +299,6 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdge
 
   return (
     <g
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className="pointer-events-auto"
     >
       <defs>
@@ -309,37 +314,28 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdge
       <path
         id={id}
         style={style}
-        className={`react-flow__edge-path fill-none stroke-3 transition-all duration-300 ${isHovered ? 'filter drop-shadow-lg' : ''}`}
+        className={`react-flow__edge-path fill-none stroke-3 transition-all duration-300`}
         stroke="#64748b"
-        strokeWidth={isHovered ? "3" : "2"}
         d={path}
-        filter={isHovered ? `url(#glow-${id})` : undefined}
       />
 
       {/* Settings Gear Icon */}
       <AnimatePresence>
-        {isHovered && (
-          <motion.g
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            className="cursor-pointer"
-            onClick={handleSettingsClick}
-          >
-            <circle
-              cx={midX}
-              cy={midY}
-              r="12"
-              className="fill-white stroke-gray-300 stroke-2 filter drop-shadow-md"
-            />
-            <g transform={`translate(${midX - 8}, ${midY - 8})`}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 15A3 3 0 1 0 12 9A3 3 0 0 0 12 15Z" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M19.4 15A1.65 1.65 0 0 0 18.33 16.5L19.21 18.45A1.65 1.65 0 0 1 18.33 21H5.67A1.65 1.65 0 0 1 4.79 18.45L5.67 16.5A1.65 1.65 0 0 0 4.6 15A1.65 1.65 0 0 0 3 13.35V10.65A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 5.67 7.5L4.79 5.55A1.65 1.65 0 0 1 5.67 3H18.33A1.65 1.65 0 0 1 19.21 5.55L18.33 7.5A1.65 1.65 0 0 0 19.4 9A1.65 1.65 0 0 0 21 10.65V13.35A1.65 1.65 0 0 0 19.4 15Z" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </g>
-          </motion.g>
-        )}
+        <motion.g
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          className="cursor-pointer"
+          onClick={handleSettingsClick}
+        >
+          <g transform={`translate(${midX - 11}, ${midY - 11})`}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="24" height="24" rx="12" fill="#CCECFF" />
+              <path d="M12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z" stroke="#5F6165" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M4.005 12.7041V11.2968C4.005 10.4652 4.68467 9.77758 5.52425 9.77758C6.97152 9.77758 7.56323 8.7541 6.83559 7.49872C6.4198 6.77908 6.66767 5.84355 7.39531 5.42776L8.77862 4.63615C9.4103 4.26034 10.2259 4.48423 10.6017 5.11591L10.6897 5.26784C11.4093 6.52321 12.5927 6.52321 13.3203 5.26784L13.4083 5.11591C13.7841 4.48423 14.5997 4.26034 15.2314 4.63615L16.6147 5.42776C17.3423 5.84355 17.5902 6.77908 17.1744 7.49872C16.4468 8.7541 17.0385 9.77758 18.4858 9.77758C19.3173 9.77758 20.005 10.4572 20.005 11.2968V12.7041C20.005 13.5357 19.3253 14.2234 18.4858 14.2234C17.0385 14.2234 16.4468 15.2468 17.1744 16.5022C17.5902 17.2299 17.3423 18.1574 16.6147 18.5732L15.2314 19.3648C14.5997 19.7406 13.7841 19.5167 13.4083 18.885L13.3203 18.7331C12.6007 17.4777 11.4173 17.4777 10.6897 18.7331L10.6017 18.885C10.2259 19.5167 9.4103 19.7406 8.77862 19.3648L7.39531 18.5732C6.66767 18.1574 6.4198 17.2219 6.83559 16.5022C7.56323 15.2468 6.97152 14.2234 5.52425 14.2234C4.68467 14.2234 4.005 13.5357 4.005 12.7041Z" stroke="#5F6165" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </g>
+        </motion.g>
       </AnimatePresence>
 
       {/* Settings Popup */}
@@ -357,17 +353,25 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, onEdge
                 setShowSettings(false);
               }}
             >
-              <span>+</span>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 17C13.4183 17 17 13.4183 17 9C17 4.58172 13.4183 1 9 1C4.58172 1 1 4.58172 1 9C1 13.4183 4.58172 17 9 17Z" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M5.57144 9H12.4286" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M9 5.57227V12.4294" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+
               <span>Add</span>
             </button>
             <button
-              className="w-full text-left px-2 py-1 hover:bg-gray-100 rounded flex items-center space-x-2 text-red-600"
+              className="w-full text-left px-2 py-1 hover:bg-gray-100 rounded flex items-center space-x-2"
               onClick={() => {
                 console.log("Delete edge", id);
                 setShowSettings(false);
               }}
             >
-              <span>🗑</span>
+              <svg width="16" height="16" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11.7601 1C11.8925 1 12 1.09029 12 1.20166V1.79833C12 1.90971 11.8925 2 11.7601 2H0.240001C0.107452 2 0 1.90971 0 1.79833V1.20166C0 1.09029 0.107452 1 0.240001 1H3.42661C3.96661 1 4.40521 0.450497 4.40521 0H7.59482C7.59482 0.450497 8.03282 1 8.57343 1H11.7601Z" fill="#0B0A0A" />
+                <path d="M11.4678 4.4502L9.61816 15.5498H2.38184L0.532227 4.4502H11.4678Z" fill="white" stroke="#262626ff" stroke-width="0.89999" />
+              </svg>
               <span>Delete</span>
             </button>
           </motion.div>
@@ -821,7 +825,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
 
   const nodeTypes = useMemo(() => ({
     custom: (props) => <CustomNode {...props} edges={edges} onAddNode={onAddNode} />
-  }), []);
+  }), [edges, onAddNode]);
 
   const edgeTypes = useMemo(() => ({
     default: (props) => <CustomEdge {...props} onEdgeDelete={onEdgeDelete} />

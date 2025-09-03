@@ -91,3 +91,10 @@
 .settings-popup button.delete-option:hover {
   background-color: #fef2f2;
 }
+
+.save-local{
+    background: linear-gradient(to right, #1D6D9E, #0B295E);
+    border: 1px solid #e2e8f0 !important;
+    color : white;
+    border-radius: 7px;
+}
