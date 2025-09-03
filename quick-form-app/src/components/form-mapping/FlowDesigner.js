@@ -286,7 +286,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   );
 };
 
-const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {} }) => {
+const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {},onEdgeDelete }) => {
   const [showSettings, setShowSettings] = useState(false);
   const path = `M${sourceX},${sourceY} L${targetX},${targetY}`;
   const midX = (sourceX + targetX) / 2;
@@ -363,10 +363,11 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {} }) => {
             </button>
             <button
               className="w-full text-left px-2 py-1 hover:bg-gray-100 rounded flex items-center space-x-2"
-              onClick={() => {
-                console.log("Delete edge", id);
-                setShowSettings(false);
-              }}
+             onClick={(e) => {
+                  e.stopPropagation();
+                  onEdgeDelete?.(id);
+                  setShowSettings(false);
+                }}
             >
               <svg width="16" height="16" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M11.7601 1C11.8925 1 12 1.09029 12 1.20166V1.79833C12 1.90971 11.8925 2 11.7601 2H0.240001C0.107452 2 0 1.90971 0 1.79833V1.20166C0 1.09029 0.107452 1 0.240001 1H3.42661C3.96661 1 4.40521 0.450497 4.40521 0H7.59482C7.59482 0.450497 8.03282 1 8.57343 1H11.7601Z" fill="#0B0A0A" />
@@ -872,7 +873,6 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
           />
         </ReactFlow>
       </div>
-
     </div>
   );
 };

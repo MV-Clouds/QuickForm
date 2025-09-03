@@ -330,6 +330,12 @@ const MappingFields = ({ onSaveCallback }) => {
         showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
         return false;
       }
+        if (nodeMapping.storeAsContentDocument && 
+      (!nodeMapping.selectedFileUploadFields || nodeMapping.selectedFileUploadFields.length === 0)) {
+    showToast(`Please select at least one file upload field for Content Document storage in node ${node.data.label}.`, 'error');
+    return false;
+  }
+
     } else if (node.data.action === "Find" || node.data.action === "Filter") {
       if (!nodeMapping.conditions || nodeMapping.conditions.length === 0) {
         showToast(`No Salesforce object or complete conditions defined for node ${node.data.displayLabel}.`);
@@ -582,6 +588,8 @@ const MappingFields = ({ onSaveCallback }) => {
         sortField: actionType === "Find" || actionType === "Filter" ? nodeMapping.sortField || "" : undefined,
         sortOrder: actionType === "Find" || actionType === "Filter" ? nodeMapping.sortOrder || "ASC" : undefined,
         pathOption: actionType === "Condition" ? nodeMapping.pathOption || "Rules" : undefined,
+          storeAsContentDocument: actionType === "CreateUpdate" ? nodeMapping.storeAsContentDocument || false : undefined,
+  selectedFileUploadFields: actionType === "CreateUpdate" ? nodeMapping.selectedFileUploadFields || [] : [],
         nextNodeIds,
         previousNodeId,
         label: node.data.label,
@@ -764,6 +772,8 @@ const MappingFields = ({ onSaveCallback }) => {
               ? 'utility'
               : 'action',
             displayLabel: mapping.label || mapping.actionType,
+             storeAsContentDocument: mapping.storeAsContentDocument || false,
+  selectedFileUploadFields: mapping.selectedFileUploadFields || [],
             selectedSheetName: mapping.selectedSheetName || '',
             spreadsheetId: mapping.spreadsheetId || '',
             sheetConditions: mapping.sheetConditions || [],

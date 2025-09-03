@@ -140,6 +140,9 @@ const ActionPanel = ({
   const [findUpdateMultiple, setFindUpdateMultiple] = useState(false); // New state for FindGoogleSheet updateMultiple
   const [findGoogleSheetColumns, setFindGoogleSheetColumns] = useState([]); // New state for FindGoogleSheet columns
   const [customLabel, setCustomLabel] = useState(nodeLabel || mappings[nodeId]?.label || "");
+  const [storeAsContentDocument, setStoreAsContentDocument] = useState(false);
+const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
+
   const [accordionOpen, setAccordionOpen] = useState({
     variables: false,
     iterations: false,
@@ -243,9 +246,8 @@ const ActionPanel = ({
     setFindUpdateMultiple(nodeMapping.updateMultiple || false);
     setFindGoogleSheetColumns(nodeMapping.columns || []); // Initialize FindGoogleSheet columns
     setCustomLabel((mappings[nodeId]?.label ?? nodeLabel) || "");
-    // setfindreturnLimit(nodeMapping.findreturnLimit);
-    // setfindsortOrder(nodeMapping.findsortOrder);
-    // setfindsortfield(nodeMapping.findsortField);
+    setStoreAsContentDocument(nodeMapping.storeAsContentDocument || false);
+  setSelectedFileUploadFields(nodeMapping.selectedFileUploadFields || []);
   }, [nodeId, mappings, nodeLabel, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
@@ -1039,6 +1041,8 @@ const ActionPanel = ({
           sortField: (isFindNode || isFilterNode) ? sortField : undefined,
           sortOrder: (isFindNode || isFilterNode) ? sortOrder : undefined,
           pathOption: isConditionNode ? pathOption : undefined,
+          storeAsContentDocument: isCreateUpdateNode ? storeAsContentDocument : undefined,
+        selectedFileUploadFields: isCreateUpdateNode ? selectedFileUploadFields : [],
           previousNodeId,
           nextNodeIds,
           label: nodes.find((n) => n.id === nodeId)?.data.label || `${nodeType}_Level0`,
@@ -2004,6 +2008,50 @@ const ActionPanel = ({
                   </button>
                 </div>
               </div>
+
+              {/* File Upload to Content Document Toggle */}
+    <div className="overflow-visible relative z-10">
+      <div className="flex items-center">
+        <ToggleSwitch
+          checked={storeAsContentDocument}
+          onChange={() => setStoreAsContentDocument(!storeAsContentDocument)}
+          id="content-document-toggle"
+        />
+        <div className="ml-3">
+          <label htmlFor="content-document-toggle" className="text-sm font-medium text-gray-700">
+            Store File Uploads as Content Documents
+          </label>
+        </div>
+      </div>
+
+      {storeAsContentDocument && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="mt-4"
+        >
+          <AntSelect
+            mode="multiple"
+            value={selectedFileUploadFields}
+            onChange={(value) => setSelectedFileUploadFields(value)}
+            placeholder="Select file upload fields"
+            style={{ width: "100%" }}
+            allowClear
+          >
+            {safeFormFields
+              .filter(field => field.type === 'fileupload')
+              .map(field => (
+                <Option key={field.id} value={field.id}>
+                  {field.name}
+                </Option>
+              ))}
+          </AntSelect>
+          <p className="text-xs text-gray-500 mt-2">
+            Selected files will be uploaded as Salesforce Content Documents and linked to the record
+          </p>
+        </motion.div>
+      )}
+    </div>
 
               {/* Enable Conditions Toggle */}
               <div className="overflow-visible relative z-10">
