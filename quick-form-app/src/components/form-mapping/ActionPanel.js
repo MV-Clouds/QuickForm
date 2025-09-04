@@ -141,7 +141,7 @@ const ActionPanel = ({
   const [findGoogleSheetColumns, setFindGoogleSheetColumns] = useState([]); // New state for FindGoogleSheet columns
   const [customLabel, setCustomLabel] = useState(nodeLabel || mappings[nodeId]?.label || "");
   const [storeAsContentDocument, setStoreAsContentDocument] = useState(false);
-const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
+  const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
 
   const [accordionOpen, setAccordionOpen] = useState({
     variables: false,
@@ -174,7 +174,11 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
     // Load node-specific mappings if they exist
     const nodeMapping = mappings[nodeId] || {};
 
-    setLocalMappings(nodeMapping.fieldMappings?.length > 0 ? nodeMapping.fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+    setLocalMappings(
+      nodeMapping.fieldMappings?.length > 0
+        ? nodeMapping.fieldMappings.filter((fm) => fm && (fm.salesforceField || fm.formFieldId))
+        : [{ formFieldId: "", fieldType: "", salesforceField: "" }]
+    );
     setConditions(
       nodeMapping.conditions?.length > 0
         ? nodeMapping.conditions.map(c => ({ ...c, logic: undefined }))
@@ -247,7 +251,7 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
     setFindGoogleSheetColumns(nodeMapping.columns || []); // Initialize FindGoogleSheet columns
     setCustomLabel((mappings[nodeId]?.label ?? nodeLabel) || "");
     setStoreAsContentDocument(nodeMapping.storeAsContentDocument || false);
-  setSelectedFileUploadFields(nodeMapping.selectedFileUploadFields || []);
+    setSelectedFileUploadFields(nodeMapping.selectedFileUploadFields || []);
   }, [nodeId, mappings, nodeLabel, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
@@ -506,8 +510,8 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
 
     console.log(`handleMappingChange called with index=${index}, key=${key}, value=${value}`);
     console.log(`Current mapping before change:`, currentMapping);
-    console.log('localmapping ',localMappings);
-    
+    console.log('localmapping ', localMappings);
+
     // Handle picklist value selection
     if (key === 'picklistValue') {
       newMappings[index] = {
@@ -577,7 +581,7 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
 
   const handleConditionChange = (index, key, value, conditionType = "conditions") => {
     console.log(`handleConditionChange called with index=${index}, key=${key}, value=${value}`);
-    
+
     const setState = conditionType === "exitConditions" ? setExitConditions : setConditions;
     setState((prev) =>
       prev.map((condition, i) => (i === index ? { ...condition, [key]: value } : condition))
@@ -1031,12 +1035,18 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
           actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
           selectedFindNode: isFilterNode || isConditionNode || isLoopNode ? selectedFindNode : '',
           salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
-          fieldMappings: isCreateUpdateNode ? validMappings.map(m => ({
-            formFieldId: m.formFieldId,
-            fieldType: m.fieldType,
-            salesforceField: m.salesforceField,
-            picklistValue: m.picklistValue || undefined
-          })) : [],
+          fieldMappings: isCreateUpdateNode ? [
+            ...validMappings.map(m => ({
+              formFieldId: m.formFieldId,
+              fieldType: m.fieldType,
+              salesforceField: m.salesforceField,
+              picklistValue: m.picklistValue || undefined
+            })),
+            {
+              storeAsContentDocument: storeAsContentDocument,
+              selectedFileUploadFields: selectedFileUploadFields
+            }
+          ] : [],
           conditions: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? validConditions : [],
           logicType: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? logicType : undefined,
           customLogic: logicType === "Custom" ? customLogic : undefined,
@@ -1048,7 +1058,7 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
           sortOrder: (isFindNode || isFilterNode) ? sortOrder : undefined,
           pathOption: isConditionNode ? pathOption : undefined,
           storeAsContentDocument: isCreateUpdateNode ? storeAsContentDocument : undefined,
-        selectedFileUploadFields: isCreateUpdateNode ? selectedFileUploadFields : [],
+          selectedFileUploadFields: isCreateUpdateNode ? selectedFileUploadFields : [],
           previousNodeId,
           nextNodeIds,
           label: nodes.find((n) => n.id === nodeId)?.data.label || `${nodeType}_Level0`,
@@ -1582,14 +1592,14 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Path Option</label>
                 <AntSelect
-  value={pathOption || undefined}
-  onChange={(value) => setPathOption(value || "Rules")}
-  options={pathOptions}
-  placeholder="Select Path Option"
-  size="middle"
-  style={{ width: "100%", marginTop: "4px" }}
-  allowClear
-/>
+                  value={pathOption || undefined}
+                  onChange={(value) => setPathOption(value || "Rules")}
+                  options={pathOptions}
+                  placeholder="Select Path Option"
+                  size="middle"
+                  style={{ width: "100%", marginTop: "4px" }}
+                  allowClear
+                />
               </div>
             </motion.div>
           )}
@@ -1632,20 +1642,20 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
                 </label>
 
                 <AntSelect
-  value={
-    (isLoopNode ? loopCollection : selectedFindNode) || undefined
-  }
-  onChange={(value) => handleFindNodeChange(value, isLoopNode)}
-  options={collectionOptions}
-  placeholder={
-    collectionOptions.length
-      ? "Select Find Node"
-      : "No Find Nodes Available"
-  }
-  size="middle"
-  style={{ width: "100%", marginTop: "4px" }}
-  allowClear
-/>
+                  value={
+                    (isLoopNode ? loopCollection : selectedFindNode) || undefined
+                  }
+                  onChange={(value) => handleFindNodeChange(value, isLoopNode)}
+                  options={collectionOptions}
+                  placeholder={
+                    collectionOptions.length
+                      ? "Select Find Node"
+                      : "No Find Nodes Available"
+                  }
+                  size="middle"
+                  style={{ width: "100%", marginTop: "4px" }}
+                  allowClear
+                />
                 {selectedObject && (
                   <p className="text-sm text-gray-600 mt-2">
                     Using Salesforce object: <span className="font-medium">{selectedObject}</span>
@@ -1942,13 +1952,14 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
                               fontSize: "0.875rem"
                             }}
                             placeholder={formFieldOptions(index).length ? "Select field" : "No options"}
-                            value={mapping.picklistValue || mapping.formFieldId || undefined}
+                            value={(mapping.picklistValue || mapping.formFieldId) || undefined}
                             onChange={(value, option) => {
                               if (!value) {
                                 handleMappingChange(index, "formFieldId", "", { fieldType: "" });
                                 return;
                               }
-                              if (option?.isPicklistValue) {
+                              const isPick = option?.isPicklistValue;
+                              if (isPick) {
                                 handleMappingChange(index, "picklistValue", value);
                               } else {
                                 const field = safeFormFields.find(
@@ -1961,24 +1972,27 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
                             disabled={!formFieldOptions(index).length}
                             showSearch={false} // 🔹 disables search
                           >
-                            {formFieldOptions(index).map(opt => (
-                              <AntSelect.Option
-                                key={opt.value}
-                                value={opt.value}
-                                isPicklistValue={opt.isPicklistValue}
-                                isSubField={opt.isSubField}
-                                disabled={opt.isDisabled}
-                              >
-                                <span
-                                  style={{
-                                    paddingLeft: opt.isSubField ? "24px" : "12px",
-                                    color: opt.isPicklistValue ? "#0369a1" : undefined
-                                  }}
+                            {formFieldOptions(index).flatMap(group =>
+                              group.options.map(opt => (
+                                <Option
+                                  key={opt.value}
+                                  value={opt.value}
+                                  isPicklistValue={opt.isPicklistValue}
+                                  isSubField={opt.isSubField}
+                                  disabled={opt.isDisabled}
                                 >
-                                  {opt.label}
-                                </span>
-                              </AntSelect.Option>
-                            ))}
+                                  <span
+                                    style={{
+                                      paddingLeft: opt.isSubField ? "24px" : "12px",
+                                      color: opt.isPicklistValue ? "#0369a1" : undefined
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </span>
+                                </Option>
+                              ))
+                            )}
+
                           </AntSelect>
                         </div>
 
@@ -2016,48 +2030,48 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
               </div>
 
               {/* File Upload to Content Document Toggle */}
-    <div className="overflow-visible relative z-10">
-      <div className="flex items-center">
-        <ToggleSwitch
-          checked={storeAsContentDocument}
-          onChange={() => setStoreAsContentDocument(!storeAsContentDocument)}
-          id="content-document-toggle"
-        />
-        <div className="ml-3">
-          <label htmlFor="content-document-toggle" className="text-sm font-medium text-gray-700">
-            Store File Uploads as Content Documents
-          </label>
-        </div>
-      </div>
+              <div className="overflow-visible relative z-10">
+                <div className="flex items-center">
+                  <ToggleSwitch
+                    checked={storeAsContentDocument}
+                    onChange={() => setStoreAsContentDocument(!storeAsContentDocument)}
+                    id="content-document-toggle"
+                  />
+                  <div className="ml-3">
+                    <label htmlFor="content-document-toggle" className="text-sm font-medium text-gray-700">
+                      Store File Uploads as Content Documents
+                    </label>
+                  </div>
+                </div>
 
-      {storeAsContentDocument && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          className="mt-4"
-        >
-          <AntSelect
-            mode="multiple"
-            value={selectedFileUploadFields}
-            onChange={(value) => setSelectedFileUploadFields(value)}
-            placeholder="Select file upload fields"
-            style={{ width: "100%" }}
-            allowClear
-          >
-            {safeFormFields
-              .filter(field => field.type === 'fileupload')
-              .map(field => (
-                <Option key={field.id} value={field.id}>
-                  {field.name}
-                </Option>
-              ))}
-          </AntSelect>
-          <p className="text-xs text-gray-500 mt-2">
-            Selected files will be uploaded as Salesforce Content Documents and linked to the record
-          </p>
-        </motion.div>
-      )}
-    </div>
+                {storeAsContentDocument && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="mt-4"
+                  >
+                    <AntSelect
+                      mode="multiple"
+                      value={selectedFileUploadFields}
+                      onChange={(value) => setSelectedFileUploadFields(value)}
+                      placeholder="Select file upload fields"
+                      style={{ width: "100%" }}
+                      allowClear
+                    >
+                      {safeFormFields
+                        .filter(field => field.type === 'fileupload')
+                        .map(field => (
+                          <Option key={field.id} value={field.id}>
+                            {field.name}
+                          </Option>
+                        ))}
+                    </AntSelect>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Selected files will be uploaded as Salesforce Content Documents and linked to the record
+                    </p>
+                  </motion.div>
+                )}
+              </div>
 
               {/* Enable Conditions Toggle */}
               <div className="overflow-visible relative z-10">

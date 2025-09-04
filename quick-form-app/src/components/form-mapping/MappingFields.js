@@ -181,10 +181,10 @@ const MappingFields = ({ onSaveCallback }) => {
 
 
   const setNodeLabel = React.useCallback((nodeId, newLabel) => {
-  setNodes(nds =>
-    nds.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
-  );
-}, [setNodes]);
+    setNodes(nds =>
+      nds.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
+    );
+  }, [setNodes]);
 
 
   const fetchAccessToken = async (userId, instanceUrl, retries = 2) => {
@@ -330,11 +330,11 @@ const MappingFields = ({ onSaveCallback }) => {
         showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
         return false;
       }
-        if (nodeMapping.storeAsContentDocument && 
-      (!nodeMapping.selectedFileUploadFields || nodeMapping.selectedFileUploadFields.length === 0)) {
-    showToast(`Please select at least one file upload field for Content Document storage in node ${node.data.label}.`, 'error');
-    return false;
-  }
+      if (nodeMapping.storeAsContentDocument &&
+        (!nodeMapping.selectedFileUploadFields || nodeMapping.selectedFileUploadFields.length === 0)) {
+        showToast(`Please select at least one file upload field for Content Document storage in node ${node.data.label}.`, 'error');
+        return false;
+      }
 
     } else if (node.data.action === "Find" || node.data.action === "Filter") {
       if (!nodeMapping.conditions || nodeMapping.conditions.length === 0) {
@@ -528,8 +528,8 @@ const MappingFields = ({ onSaveCallback }) => {
 
     const allMappings = [];
     let maxOrder = 0;
-    console.log('nodes==> ',nodes);
-    
+    console.log('nodes==> ', nodes);
+
     for (const node of nodes) {
       const nodeMapping = mappings[node.id] || {};
       const incomingEdge = edges.find((e) => e.target === node.id);
@@ -590,8 +590,8 @@ const MappingFields = ({ onSaveCallback }) => {
         sortField: actionType === "Find" || actionType === "Filter" ? nodeMapping.sortField || "" : undefined,
         sortOrder: actionType === "Find" || actionType === "Filter" ? nodeMapping.sortOrder || "ASC" : undefined,
         pathOption: actionType === "Condition" ? nodeMapping.pathOption || "Rules" : undefined,
-          storeAsContentDocument: actionType === "CreateUpdate" ? nodeMapping.storeAsContentDocument || false : undefined,
-  selectedFileUploadFields: actionType === "CreateUpdate" ? nodeMapping.selectedFileUploadFields || [] : [],
+        storeAsContentDocument: actionType === "CreateUpdate" ? nodeMapping.storeAsContentDocument || false : undefined,
+        selectedFileUploadFields: actionType === "CreateUpdate" ? nodeMapping.selectedFileUploadFields || [] : [],
         nextNodeIds,
         previousNodeId,
         label: node.data.label,
@@ -774,8 +774,8 @@ const MappingFields = ({ onSaveCallback }) => {
               ? 'utility'
               : 'action',
             displayLabel: mapping.label || mapping.actionType,
-             storeAsContentDocument: mapping.storeAsContentDocument || false,
-  selectedFileUploadFields: mapping.selectedFileUploadFields || [],
+            storeAsContentDocument: mapping.storeAsContentDocument || false,
+            selectedFileUploadFields: mapping.selectedFileUploadFields || [],
             selectedSheetName: mapping.selectedSheetName || '',
             spreadsheetId: mapping.spreadsheetId || '',
             sheetConditions: mapping.sheetConditions || [],
@@ -1048,7 +1048,7 @@ const MappingFields = ({ onSaveCallback }) => {
 
   //   if (sourceNodeId && connectionType) {
   //   let newEdge;
-    
+
   //   if (connectionType === 'bottom') {
   //     // Connect from bottom of source node to top of new node
   //     newEdge = {
@@ -1087,18 +1087,18 @@ const MappingFields = ({ onSaveCallback }) => {
   // }, [setNodes, calculateNodeOrders, setEdges]);
 
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null) => {
-  const reactFlowWrapper = document.querySelector('.react-flow');
-  if (!reactFlowWrapper) return;
+    const reactFlowWrapper = document.querySelector('.react-flow');
+    if (!reactFlowWrapper) return;
 
-  const rect = reactFlowWrapper.getBoundingClientRect();
-  const centerX = rect.width / 2;
-  const centerY = rect.height / 2;
+    const rect = reactFlowWrapper.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
 
-  const randomNum = Math.floor(Math.random() * 10000);
-  const nodeName = action.toLowerCase().replace("/", "_");
-  const newNodeId = `${nodeName}_${randomNum}`;
-  
-  const newNode = {
+    const randomNum = Math.floor(Math.random() * 10000);
+    const nodeName = action.toLowerCase().replace("/", "_");
+    const newNodeId = `${nodeName}_${randomNum}`;
+
+    const newNode = {
       id: newNodeId,
       type: "custom",
       position: { x: centerX, y: centerY },
@@ -1181,121 +1181,121 @@ const MappingFields = ({ onSaveCallback }) => {
       draggable: true,
     };
 
-  setNodes((nds) => {
-    const sourceNode = nds.find(n => n.id === sourceNodeId);
-    let updatedNodes = [...nds, newNode];
-    
-    console.log('updatedNodes ',updatedNodes);
-    
-    // Check if source node is a Path node
-    if (sourceNode && sourceNode.data.action === "Path") {
-      // Create a condition node in between
-      const conditionNodeId = `condition_${randomNum}`;
-      
-      // Position condition node between source and target
-      const midX = (sourceNode.position.x + centerX) / 2;
-      const midY = (sourceNode.position.y + centerY) / 2;
-      
-      const conditionNode = {
-        id: conditionNodeId,
-        type: "custom",
-        position: { x: midX, y: midY },
-        data: {
-          label: "Condition",
-          displayLabel: "Condition",
-          action: "Condition",
-          type: "condition",
-          order: null,
-          pathNodeId: sourceNodeId,
-          targetNodeId: newNodeId,
-          pathOption: "Rules",
-          conditions: [],
-          logicType: "AND",
-          customLogic: "",
-        },
-        draggable: true,
-      };
-      
-      updatedNodes = [...updatedNodes, conditionNode];
-      
-      setEdges((eds) => {
-        // Create edges: source -> condition -> target
-        const newEdges = [
-          {
-            id: `e${sourceNodeId}-${conditionNodeId}`,
-            source: sourceNodeId,
-            sourceHandle: connectionType === 'top' ? "top" : "bottom",
-            target: conditionNodeId,
-            targetHandle: "top",
-            type: "default",
-            conditionNodeId,
+    setNodes((nds) => {
+      const sourceNode = nds.find(n => n.id === sourceNodeId);
+      let updatedNodes = [...nds, newNode];
+
+      console.log('updatedNodes ', updatedNodes);
+
+      // Check if source node is a Path node
+      if (sourceNode && sourceNode.data.action === "Path") {
+        // Create a condition node in between
+        const conditionNodeId = `condition_${randomNum}`;
+
+        // Position condition node between source and target
+        const midX = (sourceNode.position.x + centerX) / 2;
+        const midY = (sourceNode.position.y + centerY) / 2;
+
+        const conditionNode = {
+          id: conditionNodeId,
+          type: "custom",
+          position: { x: midX, y: midY },
+          data: {
+            label: "Condition",
+            displayLabel: "Condition",
+            action: "Condition",
+            type: "condition",
+            order: null,
+            pathNodeId: sourceNodeId,
+            targetNodeId: newNodeId,
+            pathOption: "Rules",
+            conditions: [],
+            logicType: "AND",
+            customLogic: "",
           },
-          {
-            id: `e${conditionNodeId}-${newNodeId}`,
-            source: conditionNodeId,
+          draggable: true,
+        };
+
+        updatedNodes = [...updatedNodes, conditionNode];
+
+        setEdges((eds) => {
+          // Create edges: source -> condition -> target
+          const newEdges = [
+            {
+              id: `e${sourceNodeId}-${conditionNodeId}`,
+              source: sourceNodeId,
+              sourceHandle: connectionType === 'top' ? "top" : "bottom",
+              target: conditionNodeId,
+              targetHandle: "top",
+              type: "default",
+              conditionNodeId,
+            },
+            {
+              id: `e${conditionNodeId}-${newNodeId}`,
+              source: conditionNodeId,
+              sourceHandle: "bottom",
+              target: newNodeId,
+              targetHandle: "top",
+              type: "default",
+              conditionNodeId,
+            }
+          ];
+
+          const updatedEdges = [...eds, ...newEdges];
+          const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+          console.log('recalculatedNodes ', recalculatedNodes);
+
+          setNodes(recalculatedNodes);
+          return updatedEdges;
+        });
+      } else {
+        // Regular connection for non-Path nodes
+        let newEdge;
+
+        if (connectionType === 'bottom') {
+          newEdge = {
+            id: `e${sourceNodeId}-${newNodeId}`,
+            source: sourceNodeId,
             sourceHandle: "bottom",
             target: newNodeId,
             targetHandle: "top",
             type: "default",
-            conditionNodeId,
-          }
-        ];
-        
-        const updatedEdges = [...eds, ...newEdges];
-        const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-        console.log('recalculatedNodes ',recalculatedNodes);
-        
-        setNodes(recalculatedNodes);
-        return updatedEdges;
-      });
-    } else {
-      // Regular connection for non-Path nodes
-      let newEdge;
-      
-      if (connectionType === 'bottom') {
-        newEdge = {
-          id: `e${sourceNodeId}-${newNodeId}`,
-          source: sourceNodeId,
-          sourceHandle: "bottom",
-          target: newNodeId,
-          targetHandle: "top",
-          type: "default",
-          style: { stroke: '#999', strokeWidth: 2 },
-          markerEnd: { type: 'arrowclosed' },
-        };
-      } else if (connectionType === 'top') {
-        newEdge = {
-          id: `e${newNodeId}-${sourceNodeId}`,
-          source: newNodeId,
-          sourceHandle: "bottom",
-          target: sourceNodeId,
-          targetHandle: "top",
-          type: "default",
-          style: { stroke: '#999', strokeWidth: 2 },
-          markerEnd: { type: 'arrowclosed' },
-        };
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+          };
+        } else if (connectionType === 'top') {
+          newEdge = {
+            id: `e${newNodeId}-${sourceNodeId}`,
+            source: newNodeId,
+            sourceHandle: "bottom",
+            target: sourceNodeId,
+            targetHandle: "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+          };
+        }
+
+        if (newEdge) {
+          setEdges((eds) => {
+            const updatedEdges = addEdge(newEdge, eds);
+            const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+            console.log('recalculatedNodes 2 ', recalculatedNodes);
+            setNodes(recalculatedNodes);
+            return updatedEdges;
+          });
+        }
       }
 
-      if (newEdge) {
-        setEdges((eds) => {
-          const updatedEdges = addEdge(newEdge, eds);
-          const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-          console.log('recalculatedNodes 2 ',recalculatedNodes);
-          setNodes(recalculatedNodes);
-          return updatedEdges;
-        });
-      }
-    }
-    
-    return updatedNodes;
-  });
+      return updatedNodes;
+    });
 
-  console.log(`New Node ID: ${newNodeId}`);
-  console.log("Updated Nodes:", JSON.stringify(nodes));
-  console.log("Updated Edges:", JSON.stringify(edges));
-  
-  return newNodeId;
-}, [setNodes, calculateNodeOrders, setEdges]);
+    console.log(`New Node ID: ${newNodeId}`);
+    console.log("Updated Nodes:", JSON.stringify(nodes));
+    console.log("Updated Edges:", JSON.stringify(edges));
+
+    return newNodeId;
+  }, [setNodes, calculateNodeOrders, setEdges]);
 
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">
