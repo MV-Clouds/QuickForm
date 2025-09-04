@@ -246,245 +246,245 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   };
 
-  const validateNode = (nodeId, allNodeIds) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    if (!node) {
-      showToast(`Node ${nodeId} not found.`);
-      return false;
-    }
+  // const validateNode = (nodeId, allNodeIds) => {
+  //   const node = nodes.find((n) => n.id === nodeId);
+  //   if (!node) {
+  //     showToast(`Node ${nodeId} not found.`);
+  //     return false;
+  //   }
 
-    if (node.data.action === "Path") {
-      const outgoingEdges = edges.filter((edge) => edge.source === nodeId && edge.conditionNodeId);
-      if (outgoingEdges.length === 0) {
-        if (!mappings[nodeId] || mappings[nodeId].isNew) {
-          showToast(`Path node ${node.data.displayLabel} must have at least one outgoing connection.`);
-          return false;
-        }
-      }
+  //   if (node.data.action === "Path") {
+  //     const outgoingEdges = edges.filter((edge) => edge.source === nodeId && edge.conditionNodeId);
+  //     if (outgoingEdges.length === 0) {
+  //       if (!mappings[nodeId] || mappings[nodeId].isNew) {
+  //         showToast(`Path node ${node.data.displayLabel} must have at least one outgoing connection.`);
+  //         return false;
+  //       }
+  //     }
 
-      for (const edge of outgoingEdges) {
-        const conditionNodeId = edge.target;
-        const conditionNode = nodes.find((n) => n.id === conditionNodeId);
-        if (!conditionNode || conditionNode.data.action !== "Condition") {
-          showToast(`Invalid condition node connected to Path node ${node.data.displayLabel}.`);
-          return false;
-        }
+  //     for (const edge of outgoingEdges) {
+  //       const conditionNodeId = edge.target;
+  //       const conditionNode = nodes.find((n) => n.id === conditionNodeId);
+  //       if (!conditionNode || conditionNode.data.action !== "Condition") {
+  //         showToast(`Invalid condition node connected to Path node ${node.data.displayLabel}.`);
+  //         return false;
+  //       }
 
-        const conditionMapping = mappings[conditionNodeId] || {};
-        const validPathOption = conditionMapping.pathOption || "Rules";
-        if (!["Rules", "Always Run", "Fallback"].includes(validPathOption)) {
-          showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have a valid path option (Rules, Always Run, or Fallback).`);
-          return false;
-        }
-        if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
-          showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
-          return false;
-        }
-        if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
-          showToast(`Logic type must be defined for condition node ${conditionNode.data.displayLabel} with multiple conditions.`);
-          return false;
-        }
-        if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
-          showToast(`Custom logic expression must be provided for condition node ${conditionNode.data.displayLabel}.`);
-          return false;
-        }
-      }
-      return true;
-    } else if (node.data.action === "Condition") {
-      const conditionMapping = mappings[nodeId] || {};
-      const validPathOption = conditionMapping.pathOption || "Rules";
-      if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
-        showToast(`Condition node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
-        return false;
-      }
-      if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
-        showToast(`Logic type must be defined for condition node ${node.data.displayLabel} with multiple conditions.`);
-        return false;
-      }
-      if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
-        showToast(`Custom logic expression must be provided for condition node ${node.data.displayLabel}.`);
-        return false;
-      }
-      return true;
-    }
+  //       const conditionMapping = mappings[conditionNodeId] || {};
+  //       const validPathOption = conditionMapping.pathOption || "Rules";
+  //       if (!["Rules", "Always Run", "Fallback"].includes(validPathOption)) {
+  //         showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have a valid path option (Rules, Always Run, or Fallback).`);
+  //         return false;
+  //       }
+  //       if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
+  //         showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
+  //         return false;
+  //       }
+  //       if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
+  //         showToast(`Logic type must be defined for condition node ${conditionNode.data.displayLabel} with multiple conditions.`);
+  //         return false;
+  //       }
+  //       if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
+  //         showToast(`Custom logic expression must be provided for condition node ${conditionNode.data.displayLabel}.`);
+  //         return false;
+  //       }
+  //     }
+  //     return true;
+  //   } else if (node.data.action === "Condition") {
+  //     const conditionMapping = mappings[nodeId] || {};
+  //     const validPathOption = conditionMapping.pathOption || "Rules";
+  //     if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
+  //       showToast(`Condition node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
+  //       return false;
+  //     }
+  //     if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
+  //       showToast(`Logic type must be defined for condition node ${node.data.displayLabel} with multiple conditions.`);
+  //       return false;
+  //     }
+  //     if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
+  //       showToast(`Custom logic expression must be provided for condition node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     return true;
+  //   }
 
-    const nodeMapping = mappings[nodeId] || {};
-    if (node.data.action === "Create/Update") {
-      if (!nodeMapping.salesforceObject || !nodeMapping.fieldMappings || nodeMapping.fieldMappings.length === 0) {
-        showToast(`No Salesforce object or complete mappings defined for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.enableConditions && (!nodeMapping.conditions || nodeMapping.conditions.length === 0)) {
-        showToast(`No complete conditions defined for node ${node.data.displayLabel} when conditions are enabled.`);
-        return false;
-      }
-      if (nodeMapping.enableConditions && nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
-        showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
-        return false;
-      }
-      if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
-        showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
-        showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
-        return false;
-      }
-      if (nodeMapping.storeAsContentDocument &&
-        (!nodeMapping.selectedFileUploadFields || nodeMapping.selectedFileUploadFields.length === 0)) {
-        showToast(`Please select at least one file upload field for Content Document storage in node ${node.data.label}.`, 'error');
-        return false;
-      }
+  //   const nodeMapping = mappings[nodeId] || {};
+  //   if (node.data.action === "Create/Update") {
+  //     if (!nodeMapping.salesforceObject || !nodeMapping.fieldMappings || nodeMapping.fieldMappings.length === 0) {
+  //       showToast(`No Salesforce object or complete mappings defined for node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.enableConditions && (!nodeMapping.conditions || nodeMapping.conditions.length === 0)) {
+  //       showToast(`No complete conditions defined for node ${node.data.displayLabel} when conditions are enabled.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.enableConditions && nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
+  //       showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
+  //       showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
+  //       showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.storeAsContentDocument &&
+  //       (!nodeMapping.selectedFileUploadFields || nodeMapping.selectedFileUploadFields.length === 0)) {
+  //       showToast(`Please select at least one file upload field for Content Document storage in node ${node.data.label}.`, 'error');
+  //       return false;
+  //     }
 
-    } else if (node.data.action === "Find" || node.data.action === "Filter") {
-      if (!nodeMapping.conditions || nodeMapping.conditions.length === 0) {
-        showToast(`No Salesforce object or complete conditions defined for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
-        showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
-        return false;
-      }
-      if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
-        showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
-        showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
-        return false;
-      }
-    } else if (node.data.action === "Loop") {
-      if (!nodeMapping.loopConfig || !nodeMapping.loopConfig.loopCollection || !nodeMapping.loopConfig.currentItemVariableName) {
-        showToast(`Loop node ${node.data.displayLabel} must have a collection and current item variable name.`);
-        return false;
-      }
-      const findNodeIds = allNodeIds.filter((id) => nodes.find((n) => n.id === id && n.data.action === "Find"));
-      if (!findNodeIds.includes(nodeMapping.loopConfig.loopCollection)) {
-        showToast(`Invalid Find node ID in loop collection for Loop node ${node.data.displayLabel}: ${nodeMapping.loopConfig.loopCollection}. Available Find nodes: ${findNodeIds.join(', ') || 'none'}.`);
-        return false;
-      }
-      if (nodeMapping.loopConfig.maxIterations && (isNaN(nodeMapping.loopConfig.maxIterations) || nodeMapping.loopConfig.maxIterations < 1)) {
-        showToast(`Max iterations for Loop node ${node.data.displayLabel} must be a positive number.`);
-        return false;
-      }
-      if (
-        nodeMapping.loopConfig.loopVariables &&
-        (typeof nodeMapping.loopConfig.loopVariables !== "object" ||
-          typeof nodeMapping.loopConfig.loopVariables.currentIndex !== "boolean" ||
-          typeof nodeMapping.loopConfig.loopVariables.counter !== "boolean" ||
-          !["0", "1"].includes(nodeMapping.loopConfig.loopVariables.indexBase))
-      ) {
-        showToast(`Invalid loop variables configuration for Loop node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.loopConfig.exitConditions && nodeMapping.loopConfig.exitConditions.length > 1 && !nodeMapping.loopConfig.logicType) {
-        showToast(`Logic type must be defined for loop exit conditions in node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.loopConfig.logicType === "Custom" && !nodeMapping.loopConfig.customLogic) {
-        showToast(`Custom logic expression must be provided for loop exit conditions in node ${node.data.displayLabel}.`);
-        return false;
-      }
-    } else if (node.data.action === "Formatter") {
-      if (!nodeMapping.formatterConfig || !nodeMapping.formatterConfig.inputField || !nodeMapping.formatterConfig.operation) {
-        showToast(`Formatter node ${node.data.displayLabel} must have an input field and operation defined.`);
-        return false;
-      }
-      if (nodeMapping.formatterConfig.formatType === "date") {
-        if (nodeMapping.formatterConfig.operation === "format_date" && !nodeMapping.formatterConfig.options?.format) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a date format defined.`);
-          return false;
-        }
-        if (
-          (nodeMapping.formatterConfig.operation === "format_datetime" ||
-            nodeMapping.formatterConfig.operation === "format_time") &&
-          (!nodeMapping.formatterConfig.options?.format || !nodeMapping.formatterConfig.options?.timezone)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a date format and timezone defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "timezone_conversion" &&
-          (!nodeMapping.formatterConfig.options?.timezone || !nodeMapping.formatterConfig.options?.targetTimezone)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have source and target timezones defined.`);
-          return false;
-        }
-        if (
-          (nodeMapping.formatterConfig.operation === "add_date" || nodeMapping.formatterConfig.operation === "subtract_date") &&
-          (!nodeMapping.formatterConfig.options?.unit || nodeMapping.formatterConfig.options?.value === undefined)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a date unit and value defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "date_difference" &&
-          !nodeMapping.formatterConfig.inputField2 &&
-          !nodeMapping.formatterConfig.useCustomInput
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a second input field or use custom input for date difference.`);
-          return false;
-        }
-        if (nodeMapping.formatterConfig.useCustomInput && !nodeMapping.formatterConfig.customValue) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a custom compare date defined.`);
-          return false;
-        }
-      }
-      if (nodeMapping.formatterConfig.formatType === "number") {
-        if (nodeMapping.formatterConfig.operation === "locale_format" && !nodeMapping.formatterConfig.options?.locale) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a locale defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "currency_format" &&
-          (!nodeMapping.formatterConfig.options?.currency || !nodeMapping.formatterConfig.options?.locale)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a currency and locale defined.`);
-          return false;
-        }
-        if (nodeMapping.formatterConfig.operation === "round_number" && nodeMapping.formatterConfig.options?.decimals === undefined) {
-          showToast(`Formatter node ${node.data.displayLabel} must have number of decimals defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "phone_format" &&
-          (!nodeMapping.formatterConfig.options?.countryCode || !nodeMapping.formatterConfig.options?.format)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a country code and format defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "math_operation" &&
-          (!nodeMapping.formatterConfig.options?.operation ||
-            (!nodeMapping.formatterConfig.inputField2 && !nodeMapping.formatterConfig.useCustomInput))
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a math operation and second input field or custom value defined.`);
-          return false;
-        }
-        if (nodeMapping.formatterConfig.useCustomInput && nodeMapping.formatterConfig.customValue === undefined) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a custom value defined for math operation.`);
-          return false;
-        }
-      }
-      if (nodeMapping.formatterConfig.formatType === "text") {
-        if (
-          nodeMapping.formatterConfig.operation === "replace" &&
-          (!nodeMapping.formatterConfig.options?.searchValue || !nodeMapping.formatterConfig.options?.replaceValue)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have search and replace values defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "split" &&
-          (!nodeMapping.formatterConfig.options?.delimiter || !nodeMapping.formatterConfig.options?.index)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a delimiter and index defined.`);
-          return false;
-        }
-      }
-    }
-    return true;
-  };
+  //   } else if (node.data.action === "Find" || node.data.action === "Filter") {
+  //     if (!nodeMapping.conditions || nodeMapping.conditions.length === 0) {
+  //       showToast(`No Salesforce object or complete conditions defined for node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
+  //       showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
+  //       showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
+  //       showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
+  //       return false;
+  //     }
+  //   } else if (node.data.action === "Loop") {
+  //     if (!nodeMapping.loopConfig || !nodeMapping.loopConfig.loopCollection || !nodeMapping.loopConfig.currentItemVariableName) {
+  //       showToast(`Loop node ${node.data.displayLabel} must have a collection and current item variable name.`);
+  //       return false;
+  //     }
+  //     const findNodeIds = allNodeIds.filter((id) => nodes.find((n) => n.id === id && n.data.action === "Find"));
+  //     if (!findNodeIds.includes(nodeMapping.loopConfig.loopCollection)) {
+  //       showToast(`Invalid Find node ID in loop collection for Loop node ${node.data.displayLabel}: ${nodeMapping.loopConfig.loopCollection}. Available Find nodes: ${findNodeIds.join(', ') || 'none'}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.loopConfig.maxIterations && (isNaN(nodeMapping.loopConfig.maxIterations) || nodeMapping.loopConfig.maxIterations < 1)) {
+  //       showToast(`Max iterations for Loop node ${node.data.displayLabel} must be a positive number.`);
+  //       return false;
+  //     }
+  //     if (
+  //       nodeMapping.loopConfig.loopVariables &&
+  //       (typeof nodeMapping.loopConfig.loopVariables !== "object" ||
+  //         typeof nodeMapping.loopConfig.loopVariables.currentIndex !== "boolean" ||
+  //         typeof nodeMapping.loopConfig.loopVariables.counter !== "boolean" ||
+  //         !["0", "1"].includes(nodeMapping.loopConfig.loopVariables.indexBase))
+  //     ) {
+  //       showToast(`Invalid loop variables configuration for Loop node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.loopConfig.exitConditions && nodeMapping.loopConfig.exitConditions.length > 1 && !nodeMapping.loopConfig.logicType) {
+  //       showToast(`Logic type must be defined for loop exit conditions in node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.loopConfig.logicType === "Custom" && !nodeMapping.loopConfig.customLogic) {
+  //       showToast(`Custom logic expression must be provided for loop exit conditions in node ${node.data.displayLabel}.`);
+  //       return false;
+  //     }
+  //   } else if (node.data.action === "Formatter") {
+  //     if (!nodeMapping.formatterConfig || !nodeMapping.formatterConfig.inputField || !nodeMapping.formatterConfig.operation) {
+  //       showToast(`Formatter node ${node.data.displayLabel} must have an input field and operation defined.`);
+  //       return false;
+  //     }
+  //     if (nodeMapping.formatterConfig.formatType === "date") {
+  //       if (nodeMapping.formatterConfig.operation === "format_date" && !nodeMapping.formatterConfig.options?.format) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a date format defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         (nodeMapping.formatterConfig.operation === "format_datetime" ||
+  //           nodeMapping.formatterConfig.operation === "format_time") &&
+  //         (!nodeMapping.formatterConfig.options?.format || !nodeMapping.formatterConfig.options?.timezone)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a date format and timezone defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "timezone_conversion" &&
+  //         (!nodeMapping.formatterConfig.options?.timezone || !nodeMapping.formatterConfig.options?.targetTimezone)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have source and target timezones defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         (nodeMapping.formatterConfig.operation === "add_date" || nodeMapping.formatterConfig.operation === "subtract_date") &&
+  //         (!nodeMapping.formatterConfig.options?.unit || nodeMapping.formatterConfig.options?.value === undefined)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a date unit and value defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "date_difference" &&
+  //         !nodeMapping.formatterConfig.inputField2 &&
+  //         !nodeMapping.formatterConfig.useCustomInput
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a second input field or use custom input for date difference.`);
+  //         return false;
+  //       }
+  //       if (nodeMapping.formatterConfig.useCustomInput && !nodeMapping.formatterConfig.customValue) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a custom compare date defined.`);
+  //         return false;
+  //       }
+  //     }
+  //     if (nodeMapping.formatterConfig.formatType === "number") {
+  //       if (nodeMapping.formatterConfig.operation === "locale_format" && !nodeMapping.formatterConfig.options?.locale) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a locale defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "currency_format" &&
+  //         (!nodeMapping.formatterConfig.options?.currency || !nodeMapping.formatterConfig.options?.locale)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a currency and locale defined.`);
+  //         return false;
+  //       }
+  //       if (nodeMapping.formatterConfig.operation === "round_number" && nodeMapping.formatterConfig.options?.decimals === undefined) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have number of decimals defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "phone_format" &&
+  //         (!nodeMapping.formatterConfig.options?.countryCode || !nodeMapping.formatterConfig.options?.format)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a country code and format defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "math_operation" &&
+  //         (!nodeMapping.formatterConfig.options?.operation ||
+  //           (!nodeMapping.formatterConfig.inputField2 && !nodeMapping.formatterConfig.useCustomInput))
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a math operation and second input field or custom value defined.`);
+  //         return false;
+  //       }
+  //       if (nodeMapping.formatterConfig.useCustomInput && nodeMapping.formatterConfig.customValue === undefined) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a custom value defined for math operation.`);
+  //         return false;
+  //       }
+  //     }
+  //     if (nodeMapping.formatterConfig.formatType === "text") {
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "replace" &&
+  //         (!nodeMapping.formatterConfig.options?.searchValue || !nodeMapping.formatterConfig.options?.replaceValue)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have search and replace values defined.`);
+  //         return false;
+  //       }
+  //       if (
+  //         nodeMapping.formatterConfig.operation === "split" &&
+  //         (!nodeMapping.formatterConfig.options?.delimiter || !nodeMapping.formatterConfig.options?.index)
+  //       ) {
+  //         showToast(`Formatter node ${node.data.displayLabel} must have a delimiter and index defined.`);
+  //         return false;
+  //       }
+  //     }
+  //   }
+  //   return true;
+  // };
 
   const saveAllConfiguration = useCallback(async () => {
     setIsSaving(true);
@@ -619,13 +619,13 @@ const MappingFields = ({ onSaveCallback }) => {
       allMappings.push(mappingData);
     }
 
-    const allNodeIds = allMappings.map((m) => m.nodeId);
-    for (const mapping of allMappings) {
-      if (!validateNode(mapping.nodeId, allNodeIds)) {
-        setIsSaving(false);
-        return;
-      }
-    }
+    // const allNodeIds = allMappings.map((m) => m.nodeId);
+    // for (const mapping of allMappings) {
+    //   if (!validateNode(mapping.nodeId, allNodeIds)) {
+    //     setIsSaving(false);
+    //     return;
+    //   }
+    // }
     console.log('allMappings:', allMappings);
 
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -912,19 +912,11 @@ const MappingFields = ({ onSaveCallback }) => {
       levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
       const index = levelNodeCounts[level][actionKey];
 
-      let label =
-        node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
-          node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
-            node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
-              node.data.action === "Filter" ? `Filter_${index}_Level${level}` :
-                node.data.action === "Path" ? `Path_${index}_Level${level}` :
-                  `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
-
       let displayLabel = node.data.action || `Action ${index}`;
 
       updatedNodes[nodeIndex] = {
         ...node,
-        data: { ...node.data, order, label, displayLabel },
+        data: { ...node.data, order, label: `${displayLabel} Node`, displayLabel },
       };
 
       const childEdges = currentEdges.filter(edge => edge.source === nodeId);
@@ -943,149 +935,6 @@ const MappingFields = ({ onSaveCallback }) => {
     return updatedNodes;
   }, []);
 
-
-  // const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null) => {
-
-  //   const reactFlowWrapper = document.querySelector('.react-flow');
-  //   if (!reactFlowWrapper) return;
-
-  //   const rect = reactFlowWrapper.getBoundingClientRect();
-  //   const centerX = rect.width / 2;
-  //   const centerY = rect.height / 2;
-
-
-  //   const randomNum = Math.floor(Math.random() * 10000);
-  //   const nodeName = action.toLowerCase().replace("/", "_");
-  //   const newNodeId = `${nodeName}_${randomNum}`;
-  //   const newNode = {
-  //     id: newNodeId,
-  //     type: "custom",
-  //     position: { x: centerX, y: centerY },
-  //     data: {
-  //       label: `${action}_Level0`,
-  //       displayLabel: action,
-  //       type: nodeType,
-  //       action,
-  //       order: null,
-  //       ...(action === "Create/Update" ? {
-  //         enableConditions: false,
-  //         returnLimit: "",
-  //         salesforceObject: "",
-  //         fieldMappings: [],
-  //         conditions: [],
-  //         logicType: "AND",
-  //         customLogic: "",
-  //       } : {}),
-  //       ...(action === "Find" ? {
-  //         salesforceObject: "",
-  //         conditions: [],
-  //         returnLimit: "",
-  //         sortField: "",
-  //         sortOrder: "ASC",
-  //         logicType: "AND",
-  //         customLogic: "",
-  //       } : {}),
-  //       ...(action === "Filter" ? {
-  //         salesforceObject: "",
-  //         conditions: [],
-  //         returnLimit: "",
-  //         sortField: "",
-  //         sortOrder: "ASC",
-  //         logicType: "AND",
-  //         customLogic: "",
-  //       } : {}),
-  //       ...(action === "Condition" ? {
-  //         conditions: [],
-  //         logicType: "AND",
-  //         customLogic: "",
-  //       } : {}),
-  //       ...(action === "Path" ? { pathOption: "Rules" } : {}),
-  //       ...(action === "Loop" ? {
-  //         loopConfig: {
-  //           loopCollection: "",
-  //           currentItemVariableName: "",
-  //           maxIterations: "",
-  //           loopVariables: {
-  //             currentIndex: false,
-  //             counter: false,
-  //             indexBase: "0"
-  //           },
-  //           exitConditions: [],
-  //         }
-  //       } : {}),
-  //       ...(action === "Formatter" ? {
-  //         formatterConfig: {
-  //           formatType: "date",
-  //           operation: "",
-  //           inputField: "",
-  //           outputVariable: "",
-  //           options: {}
-  //         }
-  //       } : {}),
-  //       ...(action === 'Google Sheet') ? {
-  //         selectedSheetName: '', // Initialize
-  //         spreadsheetId: '', // Initialize
-  //         sheetConditions: [], // Initialize
-  //         conditionsLogic: 'AND', // Initialize
-  //         sheetcustomLogic: '', // Initialize
-  //         ...(action === "Google Sheet" ? { credentials: null, mappings: [] } : {}),
-  //       } : {},
-  //       ...(action === 'FindGoogleSheet') ? {
-  //         googleSheetReturnLimit: 0, // New
-  //         googleSheetSortField: '',     // New
-  //         googleSheetSortOrder: 'ASC',
-  //         columns: []
-  //       } : {}
-  //     },
-  //     draggable: true,
-  //   };
-
-  //   setNodes((nds) => {
-  //     const updatedNodes = [...nds, newNode];
-  //     const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
-  //     return recalculatedNodes;
-  //   });
-
-  //   if (sourceNodeId && connectionType) {
-  //   let newEdge;
-
-  //   if (connectionType === 'bottom') {
-  //     // Connect from bottom of source node to top of new node
-  //     newEdge = {
-  //       id: `e${sourceNodeId}-${newNodeId}`,
-  //       source: sourceNodeId,
-  //       sourceHandle: "bottom", // Use bottom handle of source
-  //       target: newNodeId,
-  //       targetHandle: "top",    // Use top handle of target
-  //       type: "default",
-  //       style: { stroke: '#999', strokeWidth: 2 },
-  //       markerEnd: { type: 'arrowclosed' },
-  //     };
-  //   } else if (connectionType === 'top') {
-  //     newEdge = {
-  //       id: `e${newNodeId}-${sourceNodeId}`,
-  //       source: newNodeId,
-  //       sourceHandle: "bottom", // Use bottom handle of new node
-  //       target: sourceNodeId,
-  //       targetHandle: "top",    // Use top handle of source
-  //       type: "default",
-  //       style: { stroke: '#999', strokeWidth: 2 },
-  //       markerEnd: { type: 'arrowclosed' },
-  //     };
-  //   }
-
-  //   if (newEdge) {
-  //     setEdges((eds) => {
-  //       const updatedEdges = addEdge(newEdge, eds);
-  //       setNodes((nds) => calculateNodeOrders(nds, updatedEdges));
-  //       return updatedEdges;
-  //     });
-  //   }
-  // }
-
-  //   return newNodeId;
-  // }, [setNodes, calculateNodeOrders, setEdges]);
-
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
     const reactFlowWrapper = document.querySelector('.react-flow');
     if (!reactFlowWrapper) return;
@@ -1103,7 +952,7 @@ const MappingFields = ({ onSaveCallback }) => {
       type: "custom",
       position: { x: centerX, y: centerY },
       data: {
-        label: `${action}_Level0`,
+        label: `${action} Node`,
         displayLabel: action,
         type: nodeType,
         action,

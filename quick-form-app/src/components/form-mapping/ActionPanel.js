@@ -273,7 +273,7 @@ const ActionPanel = ({
           setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
         });
     }
-  }, []);
+  }, [selectedObject]);
 
   const operatorGroups = {
     text: [
@@ -589,7 +589,7 @@ const ActionPanel = ({
   };
 
   const handleFindNodeChange = (selected, isLoop = false) => {
-    const findNodeId = selected ? selected.value : "";
+    const findNodeId = typeof selected === "string" ? selected : (selected && typeof selected === "object" && "value" in selected ? selected.value : "");
     console.log('isLoop:', isLoop, 'findNodeId:', findNodeId);
 
     if (isLoop) {
@@ -618,10 +618,16 @@ const ActionPanel = ({
     }
 
     // Get the Salesforce object from the selected Find node
-    if (findNodeId && mappings[findNodeId] && mappings[findNodeId].salesforceObject) {
+    if (!findNodeId) {
+      handleObjectChange("");
+      return;
+    }
+    if (mappings[findNodeId]?.salesforceObject) {
+      setSaveError(null);
       handleObjectChange(mappings[findNodeId].salesforceObject);
     } else {
-      handleObjectChange("");
+      setSaveError("Selected Find node has no Salesforce object configured. Open and save that Find node first.");
+      // Do not clear current object if the selected Find node isn't configured yet.
     }
   };
 
@@ -742,75 +748,93 @@ const ActionPanel = ({
       label: `${node.data.label}`,
     }));
 
-  const saveLocalMappings = () => {
-    console.log("Saving mappings for node:", nodeId, "Formatter Config:", formatterConfig);
-
-    // For Filter nodes, validate that a Find node is selected
-    if (isFilterNode && !selectedFindNode) {
-      setSaveError("Please select a Find node.");
-      return;
+  const validateSave = (localMappings, conditions, exitConditions) => {
+    // Common validations for all node types
+    if (logicType === "Custom" && !customLogic) {
+      return { error: "Please provide a custom logic expression." };
     }
 
-    // For Filter nodes, validate that we have an object from the Find node
-    // if (isFilterNode && !selectedObject) {
-    //   setSaveError("The selected Find node does not have a Salesforce object configured.");
-    //   return;
-    // }
-
-    // if ((isCreateUpdateNode || isFindNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
-    //   setSaveError("Please select a Salesforce object.");
-    //   return;
-    // }
-
-    // Check if required fields are mapped
-    if (isCreateUpdateNode && selectedObject) {
-      const requiredFields = safeSalesforceObjects
-        .find(obj => obj.name === selectedObject)
-        ?.fields?.filter(f => f.required) || [];
-
-      const missingRequiredFields = requiredFields.filter(reqField => {
-        return !localMappings.some(mapping =>
-          mapping.salesforceField === reqField.name &&
-          (mapping.formFieldId || mapping.picklistValue)
-        );
-      });
-
-      if (missingRequiredFields.length > 0) {
-        setSaveError(`Please map all required fields: ${missingRequiredFields.map(f => f.label || f.name).join(', ')}`);
-        return;
+    // Filter specific validations
+    if (isFilterNode) {
+      if (!selectedFindNode) {
+        return { error: "Please select a Find node." };
       }
     }
 
-    if (isLoopNode && (!loopCollection || !currentItemVariableName)) {
-      setSaveError("Please provide a loop collection and a current item variable name.");
-      return;
+    // Create Update node validations
+    if (isCreateUpdateNode) {
+      if (selectedObject) {
+        const requiredFields = safeSalesforceObjects
+          .find(obj => obj.name === selectedObject)
+          ?.fields?.filter(f => f.required) || [];
+
+        const missingRequiredFields = requiredFields.filter(reqField => {
+          return !localMappings.some(mapping =>
+            mapping.salesforceField === reqField.name &&
+            (mapping.formFieldId || mapping.picklistValue)
+          );
+        });
+
+        if (missingRequiredFields.length > 0) {
+          return { error: `Please map all required fields: ${missingRequiredFields.map(f => f.label || f.name).join(', ')}` };
+        }
+      }
+
+      const validMappings = localMappings.filter((m) => {
+        if (!m.salesforceField) return false;
+        return m.formFieldId || m.picklistValue;
+      });
+
+      if (validMappings.length !== localMappings.length) {
+        return { error: "Some field mappings have type mismatches. Please correct them before saving." };
+      }
+
+      if (validMappings.length === 0) {
+        return { error: "Please add at least one complete mapping." };
+      }
+
+      if (storeAsContentDocument && selectedFileUploadFields.length === 0) {
+        return { error: "Please select at least one file upload field for Content Document storage" };
+      }
     }
 
-    if (isLoopNode && maxIterations && (isNaN(maxIterations) || maxIterations < 1)) {
-      setSaveError("Max iterations must be a positive number.");
-      return;
+    // Loop node validations
+    if (isLoopNode) {
+      if (!loopCollection) {
+        return { error: "Please provide a loop collection." };
+      }
+
+      if (maxIterations && (isNaN(maxIterations) || maxIterations < 1)) {
+        return { error: "Max iterations must be a positive number." };
+      }
+
+      const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
+        .filter((node) => node.data.action === "Find")
+        .map((node) => node.id);
+      if (loopCollection && !validCollectionOptions.includes(loopCollection)) {
+        return { error: `Invalid loop collection: ${loopCollection}. Please select a valid Find node.` };
+      }
     }
 
-    if ((isFindNode || isFilterNode) && returnLimit && (isNaN(returnLimit) || returnLimit < 1 || returnLimit > 100)) {
-      setSaveError("Return limit must be a number between 1 and 100.");
-      return;
+    // Find and Filter node validations
+    if (isFindNode || isFilterNode) {
+      if (returnLimit && (isNaN(returnLimit) || returnLimit < 1 || returnLimit > 100)) {
+        return { error: "Return limit must be a number between 1 and 100." };
+      }
     }
 
-    if (isConditionNode && pathOption === "Rules" && conditions.length === 0) {
-      setSaveError("Please add at least one complete condition for Condition node.");
-      return;
+    // Condition node validations
+    if (isConditionNode) {
+      if (pathOption === "Rules" && conditions.length === 0) {
+        return { error: "Please add at least one complete condition for Condition node." };
+      }
     }
 
-    if (logicType === "Custom" && !customLogic) {
-      setSaveError("Please provide a custom logic expression.");
-      return;
-    }
-
+    // Formatter node validations
     if (isFormatterNode) {
       if (!formatterConfig.inputField || !formatterConfig.operation) {
-        setSaveError("Please provide input field and operation.");
         console.log("Validation failed: Missing inputField or operation");
-        return;
+        return { error: "Please provide input field and operation." };
       }
 
       // Validate input field type compatibility
@@ -818,172 +842,154 @@ const ActionPanel = ({
       if (selectedField) {
         const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
         if (compatibleTypes.length > 0 && !compatibleTypes.includes(selectedField.type)) {
-          setSaveError(`Selected input field type (${selectedField.type}) is not compatible with operation ${formatterConfig.operation}.`);
-          return;
+          return { error: `Selected input field type (${selectedField.type}) is not compatible with operation ${formatterConfig.operation}.` };
         }
       }
 
+      // Date format validations
       if (formatterConfig.formatType === "date") {
         if (formatterConfig.operation === "format_date" && !formatterConfig.options.format) {
-          setSaveError("Please provide date format.");
-          return;
+          return { error: "Please provide date format." };
         }
         if ((formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (!formatterConfig.options.format || !formatterConfig.options.timezone)) {
-          setSaveError("Please provide format and timezone.");
-          return;
+          return { error: "Please provide format and timezone." };
         }
         if (formatterConfig.operation === "timezone_conversion" && (!formatterConfig.options.timezone || !formatterConfig.options.targetTimezone)) {
-          setSaveError("Please provide source and target timezone.");
-          return;
+          return { error: "Please provide source and target timezone." };
         }
         if ((formatterConfig.operation === "add_date" || formatterConfig.operation === "subtract_date") && (!formatterConfig.options.unit || formatterConfig.options.value === undefined)) {
-          setSaveError("Please provide date unit and value.");
-          return;
+          return { error: "Please provide date unit and value." };
         }
         if (formatterConfig.operation === "date_difference") {
           if (!formatterConfig.useCustomInput && !formatterConfig.inputField2) {
-            setSaveError("Please provide a second input field or enable custom input.");
-            return;
+            return { error: "Please provide a second input field or enable custom input." };
           }
           if (formatterConfig.useCustomInput && !formatterConfig.customValue) {
-            setSaveError("Please provide a custom compare date.");
-            return;
+            return { error: "Please provide a custom compare date." };
           }
           if (formatterConfig.inputField2) {
             const secondField = safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2);
             if (secondField) {
               const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
               if (compatibleTypes.length > 0 && !compatibleTypes.includes(secondField.type)) {
-                setSaveError(`Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.`);
-                return;
+                return { error: `Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.` };
               }
             }
           }
         }
       }
+
+      // Number format validations
       if (formatterConfig.formatType === "number") {
         if (formatterConfig.operation === "locale_format" && !formatterConfig.options.locale) {
-          setSaveError("Please provide locale.");
-          return;
+          return { error: "Please provide locale." };
         }
         if (formatterConfig.operation === "currency_format" && (!formatterConfig.options.currency || !formatterConfig.options.locale)) {
-          setSaveError("Please provide currency and locale.");
-          return;
+          return { error: "Please provide currency and locale." };
         }
         if (formatterConfig.operation === "round_number" && formatterConfig.options.decimals === undefined) {
-          setSaveError("Please provide number of decimals.");
-          return;
+          return { error: "Please provide number of decimals." };
         }
         if (formatterConfig.operation === "phone_format" && (!formatterConfig.options.countryCode || !formatterConfig.options.format)) {
-          setSaveError("Please provide country code and format.");
-          return;
+          return { error: "Please provide country code and format." };
         }
         if (formatterConfig.operation === "math_operation") {
           if (!formatterConfig.useCustomInput && !formatterConfig.inputField2) {
-            setSaveError("Please provide a second input field or enable custom input.");
-            return;
+            return { error: "Please provide a second input field or enable custom input." };
           }
           if (formatterConfig.useCustomInput && formatterConfig.customValue === undefined) {
-            setSaveError("Please provide a custom value.");
-            return;
+            return { error: "Please provide a custom value." };
           }
           if (!formatterConfig.options.operation) {
-            setSaveError("Please provide math operation.");
-            return;
+            return { error: "Please provide math operation." };
           }
           if (formatterConfig.inputField2) {
             const secondField = safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2);
             if (secondField) {
               const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
               if (compatibleTypes.length > 0 && !compatibleTypes.includes(secondField.type)) {
-                setSaveError(`Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.`);
-                return;
+                return { error: `Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.` };
               }
             }
           }
         }
       }
+
+      // Text format validations
       if (formatterConfig.formatType === "text") {
         if (formatterConfig.operation === "replace" && (!formatterConfig.options.searchValue || !formatterConfig.options.replaceValue)) {
-          setSaveError("Please provide search and replace values.");
-          return;
+          return { error: "Please provide search and replace values." };
         }
         if (formatterConfig.operation === "split" && (!formatterConfig.options.delimiter || !formatterConfig.options.index)) {
-          setSaveError("Please provide delimiter and index.");
-          return;
+          return { error: "Please provide delimiter and index." };
         }
       }
     }
 
-    const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
-      .filter((node) => node.data.action === "Find")
-      .map((node) => node.id);
-    if (isLoopNode && loopCollection && !validCollectionOptions.includes(loopCollection)) {
-      setSaveError(`Invalid loop collection: ${loopCollection}. Please select a valid Find node.`);
-      return;
-    }
-
-    const validMappings = localMappings.filter((m) => {
-      if (!m.salesforceField) return false;
-
-      // Either form field or picklist value must be set
-      return m.formFieldId || m.picklistValue;
-    });
-
-    if (isCreateUpdateNode && validMappings.length !== localMappings.length) {
-      setSaveError("Some field mappings have type mismatches. Please correct them before saving.");
-      return;
-    }
-
+    // Conditions validation for multiple node types
     const validConditions = conditions.filter((c) =>
       c.field &&
       c.operator &&
       (["IS NULL", "IS NOT NULL"].includes(c.operator) || (c.operator === "BETWEEN" ? c.value && c.value2 : c.value))
     );
+
+    // Exit conditions validation (primarily for Loop nodes)
     const validExitConditions = exitConditions.filter((c) =>
       c.field &&
       c.operator &&
       (["IS NULL", "IS NOT NULL"].includes(c.operator) || (c.operator === "BETWEEN" ? c.value && c.value2 : c.value))
     );
 
-    if (isCreateUpdateNode && validMappings.length === 0) {
-      setSaveError("Please add at least one complete mapping.");
-      return;
-    }
-
     if ((isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) && validConditions.length === 0) {
-      setSaveError("Please add at least one complete condition.");
-      return;
+      return { error: "Please add at least one complete condition." };
     }
 
-    // For Google Sheet nodes, validate required fields
+    // Google Sheets validations
     if (isGoogleSheet) {
       if (!sheetName) {
-        setSaveError("Please provide a sheet name.");
-        return;
+        return { error: "Please provide a sheet name." };
       }
       if (fieldMappings.some(m => !m.column || !m.id)) {
-        setSaveError("Please map all columns and form fields.");
-        return;
+        return { error: "Please map all columns and form fields." };
       }
       const columnNames = fieldMappings.map(m => m.column);
       if (new Set(columnNames).size !== columnNames.length) {
-        setSaveError("Sheet column names must be unique.");
-        return;
+        return { error: "Sheet column names must be unique." };
       }
     }
 
-    // For FindGoogleSheet nodes, validate required fields
+    // FindGoogleSheet validations
     if (isFindGoogleSheet) {
       if (!findSpreadsheetId) {
-        setSaveError("Please select a Google Sheet.");
-        return;
+        return { error: "Please select a Google Sheet." };
       }
       if (findreturnLimit && (isNaN(findreturnLimit) || findreturnLimit < 1 || findreturnLimit > 100)) {
-        setSaveError("Return Limit must be a number between 1 and 100.");
-        return;
+        return { error: "Return Limit must be a number between 1 and 100." };
       }
     }
+
+    // If we reach here, validation passed
+    const validMappings = isCreateUpdateNode ? localMappings.filter((m) => {
+      if (!m.salesforceField) return false;
+      return m.formFieldId || m.picklistValue;
+    }) : [];
+
+    return { validMappings, validConditions, validExitConditions, error: null };
+  };
+
+  const saveLocalMappings = () => {
+    console.log("Saving mappings for node:", nodeId, "Formatter Config:", formatterConfig);
+
+    // Validate using the separate validation function
+    const validationResult = validateSave(localMappings, conditions, exitConditions);
+
+    if (validationResult.error) {
+      setSaveError(validationResult.error);
+      return;
+    }
+
+    // Extract the validated data
+    const { validMappings, validConditions, validExitConditions } = validationResult;
 
     const loopConfig = isLoopNode
       ? {
@@ -1027,13 +1033,12 @@ const ActionPanel = ({
       columns: findGoogleSheetColumns
     } : {};
 
-
     setMappings((prev) => {
       const updatedMappings = {
         ...prev,
         [nodeId]: {
           actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
-          selectedFindNode: isFilterNode || isConditionNode || isLoopNode ? selectedFindNode : '',
+          selectedFindNode: isLoopNode ? loopCollection : (isFilterNode || isConditionNode ? selectedFindNode : ''),
           salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
           fieldMappings: isCreateUpdateNode ? [
             ...validMappings.map(m => ({
@@ -1212,7 +1217,7 @@ const ActionPanel = ({
         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
           const googleSheetNodeMapping = mappings[loopCollection] || {};
           console.log('sheet', googleSheetNodeMapping)
-          return (googleSheetNodeMapping.sheetColumns).map(col => ({ value: col, label: col }));
+          return (googleSheetNodeMapping.sheetColumns || googleSheetNodeMapping.columns || []).map(col => ({ value: col, label: col }));
         }
       }
       // New logic for Filter node conditions
@@ -1220,7 +1225,7 @@ const ActionPanel = ({
         const findNode = nodes.find(node => node.id === selectedFindNode);
         if (findNode && findNode.data.action === 'FindGoogleSheet') {
           const googleSheetNodeMapping = mappings[selectedFindNode] || {};
-          return (googleSheetNodeMapping.sheetColumns || []).map(col => ({ value: col, label: col }));
+          return (googleSheetNodeMapping.sheetColumns || googleSheetNodeMapping.columns || []).map(col => ({ value: col, label: col }));
         }
       }
       return fieldOptions; // Default to Salesforce field options
@@ -1267,7 +1272,6 @@ const ActionPanel = ({
           <div className="overflow-visible">
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Combine Conditions Using</label>
                 <Select
                   value={logicOptions.find((opt) => opt.value === logicType) || null}
                   onChange={(selected) => {
@@ -1506,7 +1510,10 @@ const ActionPanel = ({
             Node Configuration
           </motion.h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              setSaveError(null);
+              if (onClose) onClose();
+            }}
             className="text-gray-500 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1514,6 +1521,20 @@ const ActionPanel = ({
             </svg>
           </button>
         </div>
+
+
+        <AnimatePresence>
+          {saveError && (
+            <motion.p
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="text-red-500 mb-6 p-3 bg-red-50 rounded-md border border-red-100"
+            >
+              {saveError}
+            </motion.p>
+          )}
+        </AnimatePresence>
 
         <div className="mb-6">
           <div className="grid grid-cols-2 gap-4">
@@ -1541,19 +1562,6 @@ const ActionPanel = ({
             </div>
           </div>
         </div>
-
-        <AnimatePresence>
-          {saveError && (
-            <motion.p
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="text-red-500 mb-6 p-3 bg-red-50 rounded-md border border-red-100"
-            >
-              {saveError}
-            </motion.p>
-          )}
-        </AnimatePresence>
 
         {isGoogleSheet && (
           <motion.div
@@ -2127,7 +2135,11 @@ const ActionPanel = ({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Formatter Type</label>
                   <AntSelect
                     value={formatterConfig.formatType || undefined}
-                    onChange={(value) => handleFormatterChange("formatType", value || "date")}
+                    onChange={(value) => {
+                      handleFormatterChange("formatType", value || "date");
+                      handleFormatterChange("inputField", "");
+                      handleFormatterChange("inputField2", "");
+                    }}
                     placeholder="Select Formatter Type"
                     allowClear
                     showSearch={false}
@@ -2219,7 +2231,7 @@ const ActionPanel = ({
                 </div>
 
                 {/* Second Input Field + Toggle (only visible if operation requires it) */}
-                {(formatterConfig.operation === "date_difference" || formatterConfig.operation === "math_operation") && (
+                {["date_difference", "math_operation"].includes(formatterConfig.operation) && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
@@ -2237,6 +2249,7 @@ const ActionPanel = ({
                         }
                         allowClear
                         showSearch={false}
+                        disabled={formatterConfig.useCustomInput}
                         style={{ width: "100%", marginTop: 4 }}
                       >
                         {formFieldOptions(undefined, true).map((group) => (
@@ -2263,36 +2276,37 @@ const ActionPanel = ({
                 )}
               </div>
 
-              {/* Toggle Switch under Second Field */}
-              <div className="flex items-center">
-                <ToggleSwitch
-                  checked={formatterConfig.useCustomInput}
-                  onChange={(e) => handleFormatterChange("useCustomInput", e.target.checked)}
-                  id="custom-input-toggle"
-                />
-                <span className="text-sm font-medium text-gray-700 ml-2">Use Custom Input</span>
-              </div>
+              {["date_difference", "math_operation"].includes(formatterConfig.operation) && (
+                <>
+                  <div className="flex items-center">
+                    <ToggleSwitch
+                      checked={formatterConfig.useCustomInput}
+                      onChange={(e) => handleFormatterChange("useCustomInput", e.target.checked)}
+                      id="custom-input-toggle"
+                    />
+                    <span className="text-sm font-medium text-gray-700 ml-2">Use Custom Input</span>
+                  </div>
 
-              {/* Custom Input (always in a new row below fields) */}
-              {formatterConfig.useCustomInput && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="mt-4"
-                >
-                  <label className="block text-sm font-medium text-gray-700">
-                    {formatterConfig.operation === "date_difference" ? "Custom Compare Date" : "Custom Value"}
-                  </label>
-                  <Input
-                    value={formatterConfig.customValue}
-                    onChange={(e) => handleFormatterChange("customValue", e.target.value)}
-                    placeholder={
-                      formatterConfig.operation === "date_difference" ? "e.g., 2025-06-20" : "e.g., 200"
-                    }
-                  />
-                </motion.div>
+                  {formatterConfig.useCustomInput && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="mt-4"
+                    >
+                      <label className="block text-sm font-medium text-gray-700">
+                        {formatterConfig.operation === "date_difference" ? "Custom Compare Date" : "Custom Value"}
+                      </label>
+                      <Input
+                        value={formatterConfig.customValue}
+                        onChange={(e) => handleFormatterChange("customValue", e.target.value)}
+                        placeholder={
+                          formatterConfig.operation === "date_difference" ? "e.g., 2025-06-20" : "e.g., 200"
+                        }
+                      />
+                    </motion.div>
+                  )}
+                </>
               )}
-
 
               {formatterConfig.formatType === "date" && formatterConfig.operation && (
                 <motion.div
@@ -2752,11 +2766,17 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
           checked={conditionsEnabled}
           onChange={() => {
             if (conditionsEnabled) {
+              // Turning OFF
               setConditions([]);
+              setConditionsEnabled(false);
+            } else {
+              // Turning ON
+              setConditionsEnabled(true);
+              if (conditions.length === 0) {
+                setConditions([{ field: '', operator: '', value: '', fieldType: '' }]);
+              }
             }
-            setConditionsEnabled(!conditionsEnabled);
           }}
-          id="add-condition-toggle"
         />
         <span className="text-sm font-medium text-gray-700">
           Enable Conditions
@@ -2775,7 +2795,6 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
       </div>
       {conditionsEnabled && (
         <>
-
           {/* New AND/OR selector */}
           {conditions.length > 1 && (
             <div className="mb-4">
@@ -2947,7 +2966,6 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
             )}
 
           </AnimatePresence>
-
         </>
       )}
     </div>
@@ -3499,5 +3517,3 @@ const GoogleSheetFindPanel = ({
 };
 
 export default ActionPanel;
-
-
