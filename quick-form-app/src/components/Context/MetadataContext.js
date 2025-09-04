@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export const MetadataContext = createContext();
@@ -13,8 +14,8 @@ export const SalesforceDataProvider = ({ children }) => {
   const [favoriteData , setfavoriteData] = useState([]) //Favorites Data 
  const [Notifications ,  setNotifications] = useState([]); //Notification Data
  const [folders , setFolders] = useState([]); //Folders Data
-
-  // Function to fetch Salesforce data
+  const [googleData , setgoogleData] = useState([]);
+   // Function to fetch Salesforce data
   const fetchSalesforceData = async (userId, instanceUrl) => {
     if (!userId || !instanceUrl) {
       setError('Missing userId or instanceUrl');
@@ -74,15 +75,18 @@ export const SalesforceDataProvider = ({ children }) => {
       const userProfileData = data?.UserProfile || {};
       const folderData = typeof data?.Folders === 'string' ? JSON.parse(data?.Folders) : data?.Folders || [];
       const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
-      // const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
+      const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
+      const parsedgoogleData = typeof data?.GoogleData === 'string' ? JSON.parse(data?.GoogleData) : data?.GoogleData || [];
+      console.log(parsedgoogleData)
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
       setFieldset(parsedFieldset);
-      // setdeletedData(parsedDeletedData);
+      setdeletedData(parsedDeletedData);
       setfavoriteData(favoriteRecords);
       setFolders(folderData);
+      setgoogleData(parsedgoogleData);
       console.log('Metadata fetched successfully:', data);
     } catch (err) {
       setError(err.message);
@@ -120,7 +124,8 @@ export const SalesforceDataProvider = ({ children }) => {
         Fieldset,
         deletedData,
         favoriteData,
-        Folders : folders
+        Folders : folders,
+        googleData
       }}
     >
       {children}

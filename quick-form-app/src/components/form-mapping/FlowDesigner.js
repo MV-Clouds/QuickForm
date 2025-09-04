@@ -119,46 +119,34 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
     switch (nodeType) {
       case "Condition":
         return (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M7 8L3 12L7 16M17 8L21 12L17 16M14 4L10 20" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+           <img src="/mappingicons/filter.png" alt="" className="w-7 h-7" />
         );
       case "Loop":
         return (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M1 4V10H7M23 20V14H17" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14L18.36 18.36A9 9 0 0 1 3.51 15" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+           <img src="/mappingicons/loopicon.png" alt="" className="w-8 h-8" />
         );
       case "Formatter":
+        return (
+           <img src="/mappingicons/formattericon.png" alt="" className="w-8 h-8" />
+        );
       case "Filter":
+        return (
+           <img src="/mappingicons/filter.png" alt="" className="w-7 h-7" />
+        );
       case "Path":
         return (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2 17L12 22L22 17" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M2 12L12 17L22 12" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+           <img src="/mappingicons/pathicon.png" alt="" className="w-8 h-8" />
         );
       case "Create/Update":
       case "CreateUpdate":
       case "Find":
         return (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 15V19A2 2 0 0 1 19 21H5A2 2 0 0 1 3 19V5A2 2 0 0 1 5 3H9" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M16 3H21V8" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M14 15L21 8" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <img src="/mappingicons/salesforce.png" alt="" className="w-10 h-10" />
         );
       case "Google Sheet":
       case "FindGoogleSheet":
         return (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M14 2H6A2 2 0 0 0 4 4V20A2 2 0 0 0 6 22H18A2 2 0 0 0 20 20V8Z" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M14 2V8H20" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M8 13H16" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M8 17H16" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <img src="/mappingicons/googlesheet.png" alt="" className="w-8 h-8" />
         );
       default:
         return (
@@ -286,8 +274,9 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   );
 };
 
-const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {},onEdgeDelete }) => {
+const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges = [], onAddNode, onEdgeDelete }) => {
   const [showSettings, setShowSettings] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
   const path = `M${sourceX},${sourceY} L${targetX},${targetY}`;
   const midX = (sourceX + targetX) / 2;
   const midY = (sourceY + targetY) / 2;
@@ -340,7 +329,7 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {},onEdgeD
 
       {/* Settings Popup */}
       {showSettings && (
-        <foreignObject x={midX + 20} y={midY - 40} width="120" height="80">
+        <foreignObject x={midX + 20} y={midY - 40} width="200" height="80">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -349,8 +338,8 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {},onEdgeD
             <button
               className="w-full text-left px-2 py-1 hover:bg-gray-100 rounded flex items-center space-x-2"
               onClick={() => {
-                console.log("Add condition to edge", id);
                 setShowSettings(false);
+                setShowAddMenu(true);
               }}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -376,6 +365,23 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {},onEdgeD
               <span>Delete</span>
             </button>
           </motion.div>
+        </foreignObject>
+      )}
+      {showAddMenu && (
+        <foreignObject x={midX + 20} y={midY - 40} width="100%" height="260">
+          <div className="relative">
+            <PopupMenu
+              triggerPosition={{ x: 0, y: 0 }}
+              onClose={() => setShowAddMenu(false)}
+              onSelectNode={(category, node) => {
+                const edge = edges.find(e => e.id === id);
+                if (edge && onAddNode) {
+                  onAddNode(category, node, edge.source, 'bottom', edge.target, id);
+                }
+                setShowAddMenu(false);
+              }}
+            />
+          </div>
         </foreignObject>
       )}
     </g>
@@ -829,8 +835,8 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
   }), [edges, onAddNode]);
 
   const edgeTypes = useMemo(() => ({
-    default: (props) => <CustomEdge {...props} onEdgeDelete={onEdgeDelete} />
-  }), [onEdgeDelete]);
+    default: (props) => <CustomEdge {...props} edges={edges} onAddNode={onAddNode} onEdgeDelete={onEdgeDelete} />
+  }), [onEdgeDelete, edges, onAddNode]);
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;

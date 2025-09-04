@@ -1086,7 +1086,7 @@ const MappingFields = ({ onSaveCallback }) => {
   //   return newNodeId;
   // }, [setNodes, calculateNodeOrders, setEdges]);
 
-  const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null) => {
+  const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
     const reactFlowWrapper = document.querySelector('.react-flow');
     if (!reactFlowWrapper) return;
 
@@ -1183,16 +1183,68 @@ const MappingFields = ({ onSaveCallback }) => {
 
     setNodes((nds) => {
       const sourceNode = nds.find(n => n.id === sourceNodeId);
-      let updatedNodes = [...nds, newNode];
+      let updatedNodes = nds;
 
-      console.log('updatedNodes ', updatedNodes);
+      // If inserting between an existing edge, position node between source and target and split the edge
+      if (targetNodeId && edgeIdToReplace) {
+        const targetNode = nds.find(n => n.id === targetNodeId);
+
+        // Compute midpoint position
+        const position = (sourceNode && targetNode)
+          ? { x: (sourceNode.position.x + targetNode.position.x) / 2, y: (sourceNode.position.y + targetNode.position.y) / 2 }
+          : { x: centerX, y: centerY };
+
+        const insertedNode = { ...newNode, position };
+        updatedNodes = [...nds, insertedNode];
+
+        setEdges((eds) => {
+          const edgeToReplace = eds.find((e) => e.id === edgeIdToReplace);
+          let newEdges = eds.filter((e) => e.id !== edgeIdToReplace);
+
+          const edge1 = {
+            id: `e${sourceNodeId}-${newNodeId}`,
+            source: sourceNodeId,
+            sourceHandle: edgeToReplace?.sourceHandle || "bottom",
+            target: newNodeId,
+            targetHandle: "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+            ...(edgeToReplace && edgeToReplace.conditionNodeId ? { conditionNodeId: edgeToReplace.conditionNodeId } : {})
+          };
+
+          const edge2 = {
+            id: `e${newNodeId}-${targetNodeId}`,
+            source: newNodeId,
+            sourceHandle: "bottom",
+            target: targetNodeId,
+            targetHandle: edgeToReplace?.targetHandle || "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+            ...(edgeToReplace && edgeToReplace.conditionNodeId ? { conditionNodeId: edgeToReplace.conditionNodeId } : {})
+          };
+
+          newEdges = addEdge(edge1, newEdges);
+          newEdges = addEdge(edge2, newEdges);
+
+          const recalculatedNodes = calculateNodeOrders(updatedNodes, newEdges);
+          setNodes(recalculatedNodes);
+          return newEdges;
+        });
+
+        return updatedNodes;
+      }
+
+      // Default behavior (attach above/below an existing node)
+      updatedNodes = [...nds, newNode];
 
       // Check if source node is a Path node
       if (sourceNode && sourceNode.data.action === "Path") {
         // Create a condition node in between
         const conditionNodeId = `condition_${randomNum}`;
 
-        // Position condition node between source and target
+        // Position condition node between source and target (newly added node)
         const midX = (sourceNode.position.x + centerX) / 2;
         const midY = (sourceNode.position.y + centerY) / 2;
 
@@ -1219,7 +1271,6 @@ const MappingFields = ({ onSaveCallback }) => {
         updatedNodes = [...updatedNodes, conditionNode];
 
         setEdges((eds) => {
-          // Create edges: source -> condition -> target
           const newEdges = [
             {
               id: `e${sourceNodeId}-${conditionNodeId}`,
@@ -1243,8 +1294,6 @@ const MappingFields = ({ onSaveCallback }) => {
 
           const updatedEdges = [...eds, ...newEdges];
           const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-          console.log('recalculatedNodes ', recalculatedNodes);
-
           setNodes(recalculatedNodes);
           return updatedEdges;
         });
@@ -1280,7 +1329,6 @@ const MappingFields = ({ onSaveCallback }) => {
           setEdges((eds) => {
             const updatedEdges = addEdge(newEdge, eds);
             const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-            console.log('recalculatedNodes 2 ', recalculatedNodes);
             setNodes(recalculatedNodes);
             return updatedEdges;
           });
