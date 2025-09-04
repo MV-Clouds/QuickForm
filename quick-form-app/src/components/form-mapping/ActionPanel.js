@@ -504,6 +504,10 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
     const newMappings = [...localMappings];
     const currentMapping = newMappings[index];
 
+    console.log(`handleMappingChange called with index=${index}, key=${key}, value=${value}`);
+    console.log(`Current mapping before change:`, currentMapping);
+    console.log('localmapping ',localMappings);
+    
     // Handle picklist value selection
     if (key === 'picklistValue') {
       newMappings[index] = {
@@ -572,6 +576,8 @@ const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
   };
 
   const handleConditionChange = (index, key, value, conditionType = "conditions") => {
+    console.log(`handleConditionChange called with index=${index}, key=${key}, value=${value}`);
+    
     const setState = conditionType === "exitConditions" ? setExitConditions : setConditions;
     setState((prev) =>
       prev.map((condition, i) => (i === index ? { ...condition, [key]: value } : condition))

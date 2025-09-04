@@ -486,7 +486,7 @@ const MappingFields = ({ onSaveCallback }) => {
     return true;
   };
 
-  const saveAllConfiguration = async () => {
+  const saveAllConfiguration = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
 
@@ -528,6 +528,8 @@ const MappingFields = ({ onSaveCallback }) => {
 
     const allMappings = [];
     let maxOrder = 0;
+    console.log('nodes==> ',nodes);
+    
     for (const node of nodes) {
       const nodeMapping = mappings[node.id] || {};
       const incomingEdge = edges.find((e) => e.target === node.id);
@@ -682,14 +684,14 @@ const MappingFields = ({ onSaveCallback }) => {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [nodes, edges, mappings, token, formVersionId]);
 
   // Register the save callback when component mounts
   useEffect(() => {
     if (onSaveCallback) {
       onSaveCallback(saveAllConfiguration);
     }
-  }, [onSaveCallback]);
+  }, [onSaveCallback, saveAllConfiguration]);
 
   const initializeData = async () => {
     setIsLoading(true);
@@ -1183,6 +1185,8 @@ const MappingFields = ({ onSaveCallback }) => {
     const sourceNode = nds.find(n => n.id === sourceNodeId);
     let updatedNodes = [...nds, newNode];
     
+    console.log('updatedNodes ',updatedNodes);
+    
     // Check if source node is a Path node
     if (sourceNode && sourceNode.data.action === "Path") {
       // Create a condition node in between
@@ -1239,6 +1243,8 @@ const MappingFields = ({ onSaveCallback }) => {
         
         const updatedEdges = [...eds, ...newEdges];
         const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+        console.log('recalculatedNodes ',recalculatedNodes);
+        
         setNodes(recalculatedNodes);
         return updatedEdges;
       });
@@ -1274,6 +1280,7 @@ const MappingFields = ({ onSaveCallback }) => {
         setEdges((eds) => {
           const updatedEdges = addEdge(newEdge, eds);
           const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+          console.log('recalculatedNodes 2 ',recalculatedNodes);
           setNodes(recalculatedNodes);
           return updatedEdges;
         });
@@ -1283,6 +1290,10 @@ const MappingFields = ({ onSaveCallback }) => {
     return updatedNodes;
   });
 
+  console.log(`New Node ID: ${newNodeId}`);
+  console.log("Updated Nodes:", JSON.stringify(nodes));
+  console.log("Updated Edges:", JSON.stringify(edges));
+  
   return newNodeId;
 }, [setNodes, calculateNodeOrders, setEdges]);
 
