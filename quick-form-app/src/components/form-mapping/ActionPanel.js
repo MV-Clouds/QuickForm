@@ -170,6 +170,11 @@ const ActionPanel = ({
 
   const selectedFindNode = mappings[nodeId]?.selectedFindNode || "";
 
+// Clear error state when switching nodes to prevent stale messages
+  useEffect(() => {
+    setSaveError(null);
+  }, [nodeId]);
+
   useEffect(() => {
     // Load node-specific mappings if they exist
     const nodeMapping = mappings[nodeId] || {};
@@ -619,6 +624,7 @@ const ActionPanel = ({
 
     // Get the Salesforce object from the selected Find node
     if (!findNodeId) {
+      setSaveError(null);
       handleObjectChange("");
       return;
     }
@@ -627,7 +633,6 @@ const ActionPanel = ({
       handleObjectChange(mappings[findNodeId].salesforceObject);
     } else {
       setSaveError("Selected Find node has no Salesforce object configured. Open and save that Find node first.");
-      // Do not clear current object if the selected Find node isn't configured yet.
     }
   };
 
@@ -684,6 +689,7 @@ const ActionPanel = ({
     if (!selectedOption) {
       handleObjectChange("");
       setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+      setSaveError(null);
       return;
     }
 
@@ -2984,7 +2990,6 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
     const apiUrl = process.env.REACT_APP_GOOGLE_SHEET;
     console.log(apiUrl);
 
-
     if (!instanceUrl || !sfToken || !userId) {
       throw new Error("Missing required parameters: instanceUrl, sfToken, userId");
     }
@@ -3322,6 +3327,7 @@ const GoogleSheetFindPanel = ({
   // Fetch spreadsheets on mount or when dependencies change
   useEffect(() => {
     if (!instanceUrl || !userId || !token || !sheetsApiUrl) return;
+
     const url = new URL(sheetsApiUrl);
     url.searchParams.append("instanceUrl", instanceUrl);
     url.searchParams.append("sfToken", token);
@@ -3330,7 +3336,8 @@ const GoogleSheetFindPanel = ({
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        setSpreadsheets(data.spreadsheets || []);
+        const list = data.spreadsheets || [];
+        setSpreadsheets(list);
       })
       .catch(err => {
         setError("Failed to fetch Google Sheets: " + err.message);
