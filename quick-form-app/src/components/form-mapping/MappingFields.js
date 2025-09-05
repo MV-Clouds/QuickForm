@@ -248,10 +248,11 @@ const MappingFields = ({ onSaveCallback }) => {
   };
 
   const calculateNodeOrders = useCallback((currentNodes, currentEdges) => {
-    // Build graph ignoring loop self-edges to avoid skewed ordering
+    // Custom ordering with Path branches: visit Condition 1 branch fully, then Condition 2, etc.
     const updatedNodes = [...currentNodes];
     const idToIndex = new Map();
-    updatedNodes.forEach((n, i) => idToIndex.set(n.id, i));
+    const nodeById = new Map();
+    updatedNodes.forEach((n, i) => { idToIndex.set(n.id, i); nodeById.set(n.id, n); });
 
     const filteredEdges = currentEdges.filter(
       (e) => e.source !== e.target && e.sourceHandle !== "loop" && e.targetHandle !== "loop-back"
@@ -274,66 +275,82 @@ const MappingFields = ({ onSaveCallback }) => {
     // Priority based on on-screen position: top-to-bottom then left-to-right
     const sortByPosition = (a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x);
 
-    const queue = currentNodes
-      .filter((n) => (inDegree.get(n.id) || 0) === 0)
-      .sort(sortByPosition);
+    const getConditionIndex = (condNode) => {
+      const raw = (condNode?.data?.displayLabel || condNode?.data?.label || '').toString();
+      const m1 = raw.match(/Condition\s*(\d+)/i);
+      if (m1 && !isNaN(parseInt(m1[1], 10))) return parseInt(m1[1], 10);
+      const m2 = raw.match(/Cond[_\s-]*(\d+)/i);
+      if (m2 && !isNaN(parseInt(m2[1], 10))) return parseInt(m2[1], 10);
+      return Number.MAX_SAFE_INTEGER;
+    };
+
+    const sortConditions = (aId, bId) => {
+      const a = nodeById.get(aId); const b = nodeById.get(bId);
+      const ai = getConditionIndex(a); const bi = getConditionIndex(b);
+      if (ai !== bi) return ai - bi;
+      return sortByPosition(a, b);
+    };
 
     const visited = new Set();
-    const nodeOrders = new Map();
     orderCounterRef.current = 1;
-
-    // Count per action for display labels
     const actionCounts = {};
     const nextDisplayLabel = (node) => {
-      const actionKey = node.data.action || "Action";
+      const actionKey = node.data.action || 'Action';
       actionCounts[actionKey] = (actionCounts[actionKey] || 0) + 1;
       return node.data.displayLabel || node.data.action || `Action ${actionCounts[actionKey]}`;
     };
 
-    // Kahn's algorithm
-    while (queue.length) {
-      const node = queue.shift();
-      if (visited.has(node.id)) continue;
-      visited.add(node.id);
-
+    const assign = (nodeId) => {
+      if (!nodeId || visited.has(nodeId)) return;
+      visited.add(nodeId);
+      const idx = idToIndex.get(nodeId);
+      if (idx == null) return;
       const order = orderCounterRef.current++;
-      nodeOrders.set(node.id, order);
-
-      const idx = idToIndex.get(node.id);
       const displayLabel = nextDisplayLabel(updatedNodes[idx]);
       updatedNodes[idx] = {
         ...updatedNodes[idx],
         data: { ...updatedNodes[idx].data, order, displayLabel },
       };
+    };
 
-      const children = adjacency.get(node.id) || [];
-      for (const childId of children) {
-        inDegree.set(childId, (inDegree.get(childId) || 1) - 1);
-        if ((inDegree.get(childId) || 0) === 0) {
-          const childNode = currentNodes.find((n) => n.id === childId);
-          if (childNode) {
-            queue.push(childNode);
-            queue.sort(sortByPosition);
-          }
+    const traverseFrom = (nodeId) => {
+      if (!nodeId || visited.has(nodeId)) return;
+      const node = nodeById.get(nodeId);
+      if (!node) return;
+
+      assign(nodeId);
+
+      const children = adjacency.get(nodeId) || [];
+      if (node.data?.action === 'Path') {
+        // Only traverse condition children tied to this Path, in numeric order (then by position)
+        const conditionChildren = children.filter((cid) => {
+          const c = nodeById.get(cid);
+          return c && c.data?.action === 'Condition' && c.data?.pathNodeId === nodeId;
+        }).sort(sortConditions);
+
+        for (const condId of conditionChildren) {
+          traverseFrom(condId);
+        }
+      } else {
+        // For non-Path nodes, traverse children in position order
+        const sorted = [...children].sort((aId, bId) => sortByPosition(nodeById.get(aId), nodeById.get(bId)));
+        for (const cid of sorted) {
+          if (!visited.has(cid)) traverseFrom(cid);
         }
       }
-    }
+    };
 
-    // Remaining nodes (disconnected or in cycles) by position
+    // Start from roots
+    const roots = currentNodes
+      .filter((n) => (inDegree.get(n.id) || 0) === 0)
+      .sort(sortByPosition);
+    for (const r of roots) traverseFrom(r.id);
+
+    // Remaining nodes
     const remaining = currentNodes
       .filter((n) => !visited.has(n.id))
       .sort(sortByPosition);
-
-    for (const node of remaining) {
-      const order = orderCounterRef.current++;
-      nodeOrders.set(node.id, order);
-      const idx = idToIndex.get(node.id);
-      const displayLabel = nextDisplayLabel(updatedNodes[idx]);
-      updatedNodes[idx] = {
-        ...updatedNodes[idx],
-        data: { ...updatedNodes[idx].data, order, displayLabel },
-      };
-    }
+    for (const n of remaining) traverseFrom(n.id);
 
     return updatedNodes;
   }, []);
@@ -384,6 +401,8 @@ const MappingFields = ({ onSaveCallback }) => {
 
     // Build order map to guarantee sequential topological order for save payload
     const buildOrderMap = (ns, es) => {
+      // Mirror the same traversal logic used for display ordering
+      const nodeById = new Map(ns.map(n => [n.id, n]));
       const filtered = es.filter((e) => e.source !== e.target && e.sourceHandle !== 'loop' && e.targetHandle !== 'loop-back');
       const adj = new Map();
       const indeg = new Map();
@@ -395,26 +414,48 @@ const MappingFields = ({ onSaveCallback }) => {
         }
       });
       const sortByPos = (a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x);
-      const q = ns.filter(n => (indeg.get(n.id) || 0) === 0).sort(sortByPos);
+      const getCondIndex = (node) => {
+        const raw = (node?.data?.displayLabel || node?.data?.label || '').toString();
+        const m1 = raw.match(/Condition\s*(\d+)/i);
+        if (m1 && !isNaN(parseInt(m1[1], 10))) return parseInt(m1[1], 10);
+        const m2 = raw.match(/Cond[_\s-]*(\d+)/i);
+        if (m2 && !isNaN(parseInt(m2[1], 10))) return parseInt(m2[1], 10);
+        return Number.MAX_SAFE_INTEGER;
+      };
+      const sortConds = (aId, bId) => {
+        const a = nodeById.get(aId); const b = nodeById.get(bId);
+        const ai = getCondIndex(a); const bi = getCondIndex(b);
+        if (ai !== bi) return ai - bi;
+        return sortByPos(a, b);
+      };
+      const visited = new Set();
       const orderMap = new Map();
       let counter = 1;
-      const visited = new Set();
-      while (q.length) {
-        const node = q.shift();
-        if (visited.has(node.id)) continue;
-        visited.add(node.id);
-        orderMap.set(node.id, counter++);
-        const children = adj.get(node.id) || [];
-        for (const c of children) {
-          indeg.set(c, (indeg.get(c) || 1) - 1);
-          if ((indeg.get(c) || 0) === 0) {
-            const childNode = ns.find(n => n.id === c);
-            if (childNode) { q.push(childNode); q.sort(sortByPos); }
-          }
+
+      const traverseFrom = (id) => {
+        if (!id || visited.has(id)) return;
+        visited.add(id);
+        orderMap.set(id, counter++);
+        const node = nodeById.get(id);
+        const children = adj.get(id) || [];
+        if (node?.data?.action === 'Path') {
+          const condChildren = children.filter(cid => {
+            const c = nodeById.get(cid);
+            return c && c.data?.action === 'Condition' && c.data?.pathNodeId === id;
+          }).sort(sortConds);
+          for (const condId of condChildren) traverseFrom(condId);
+        } else {
+          const sorted = [...children].sort((aId, bId) => sortByPos(nodeById.get(aId), nodeById.get(bId)));
+          for (const cid of sorted) traverseFrom(cid);
         }
-      }
+      };
+
+      const roots = ns.filter(n => (indeg.get(n.id) || 0) === 0).sort(sortByPos);
+      for (const r of roots) traverseFrom(r.id);
+
       const remaining = ns.filter(n => !visited.has(n.id)).sort(sortByPos);
-      for (const n of remaining) orderMap.set(n.id, counter++);
+      for (const n of remaining) traverseFrom(n.id);
+
       return orderMap;
     };
     const orderMap = buildOrderMap(nodesForSave, edges);
