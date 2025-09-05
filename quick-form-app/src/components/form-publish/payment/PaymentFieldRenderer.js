@@ -8,8 +8,10 @@ import {
   formatCurrency,
   getPaymentResultFromUrl,
 } from "./utils/paymentHelpers";
+import { fetchMerchantCredentialsWithCache } from "./utils/merchantCredentials";
 import { validatePaymentFieldConfig } from "./utils/paymentValidation";
 import { API_ENDPOINTS } from "../../../config";
+import { cubicBezierAsString } from "framer-motion";
 
 /**
  * PaymentFieldRenderer Component
@@ -21,6 +23,7 @@ const PaymentFieldRenderer = ({
   linkData,
   onPaymentComplete,
   onPaymentError,
+  onPaymentRequirementChange, // New callback for payment requirements
   className = "",
   formValues = {}, // Add form values for validation
   validateForm, // Add form validation function
@@ -34,9 +37,24 @@ const PaymentFieldRenderer = ({
   const fieldId = field.Id || fieldConfig.id;
 
   // Extract and memoize values FIRST to avoid initialization errors
-  const merchantId = useMemo(
-    () => fieldConfig.subFields?.merchantId || fieldConfig.merchantId,
-    [fieldConfig.subFields?.merchantId, fieldConfig.merchantId]
+  // Use merchantAccountId (Salesforce record ID) if present, otherwise fallback to direct merchantId
+  const accountIdentifier = useMemo(
+    () =>
+      fieldConfig.subFields?.merchantAccountId ||
+      fieldConfig.subFields?.merchantId ||
+      fieldConfig.merchantAccountId ||
+      fieldConfig.merchantId,
+    [
+      fieldConfig.subFields?.merchantAccountId,
+      fieldConfig.subFields?.merchantId,
+      fieldConfig.merchantAccountId,
+      fieldConfig.merchantId,
+    ]
+  );
+
+  console.log(
+    "🔍 PaymentFieldRenderer - accountIdentifier:",
+    accountIdentifier
   );
 
   const paymentType = useMemo(
@@ -49,7 +67,7 @@ const PaymentFieldRenderer = ({
     fieldId,
     fieldConfig,
     subFields: fieldConfig.subFields,
-    merchantId,
+    accountIdentifier,
     paymentType,
     timestamp: new Date().toISOString(),
   });
@@ -71,8 +89,27 @@ const PaymentFieldRenderer = ({
     try {
       setLoadingMessage("Loading merchant capabilities...");
 
-      if (!merchantId) {
-        throw new Error("Merchant ID is required");
+      // Resolve accountIdentifier to an actual merchantId if it's a Salesforce record ID
+      const salesforceIdPattern = /^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/;
+      let effectiveMerchantId = accountIdentifier;
+
+      if (!accountIdentifier) {
+        throw new Error("Merchant account identifier is required");
+      }
+
+      if (salesforceIdPattern.test(accountIdentifier)) {
+        // Try to resolve to a direct merchantId via cached credentials
+        const credRes = await fetchMerchantCredentialsWithCache(
+          accountIdentifier
+        );
+        if (!credRes || !credRes.success) {
+          throw new Error(
+            credRes?.message ||
+              "Failed to resolve merchant from account identifier"
+          );
+        }
+        effectiveMerchantId =
+          credRes.credentials?.merchantId || effectiveMerchantId;
       }
 
       const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
@@ -82,7 +119,7 @@ const PaymentFieldRenderer = ({
         },
         body: JSON.stringify({
           action: "get-merchant-capabilities",
-          merchantId: merchantId,
+          merchantId: effectiveMerchantId,
         }),
       });
 
@@ -120,7 +157,7 @@ const PaymentFieldRenderer = ({
       });
       setIsLoading(false);
     }
-  }, [merchantId, fieldConfig]); // Include fieldConfig since it's used in getAvailablePaymentMethods
+  }, [accountIdentifier, fieldConfig]); // Include fieldConfig since it's used in getAvailablePaymentMethods
 
   // Validate field configuration on mount
   useEffect(() => {
@@ -134,7 +171,7 @@ const PaymentFieldRenderer = ({
       setIsLoading(false);
       return;
     }
-
+    console.log("✅ Payment configuration validated");
     // Load merchant capabilities
     loadMerchantCapabilities();
   }, [fieldConfig, loadMerchantCapabilities]);
@@ -259,6 +296,7 @@ const PaymentFieldRenderer = ({
             onPaymentSuccess={handlePaymentSuccess}
             onPaymentError={handlePaymentError}
             onPaymentCancel={handlePaymentCancel}
+            onPaymentRequirementChange={onPaymentRequirementChange}
             isProduction={process.env.NODE_ENV === "production"}
             formValues={formValues}
             validateForm={validateForm}

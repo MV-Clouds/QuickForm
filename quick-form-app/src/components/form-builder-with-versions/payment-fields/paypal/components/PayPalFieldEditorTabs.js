@@ -1,16 +1,9 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   FaInfoCircle,
   FaCog,
   FaCreditCard,
   FaReceipt,
-  FaHeart,
   FaCheckCircle,
   FaExclamationTriangle,
   FaSpinner,
@@ -18,496 +11,96 @@ import {
   FaChevronRight,
 } from "react-icons/fa";
 import MerchantAccountSelector from "../../shared/MerchantAccountSelector";
-import FormProductManager from "../../shared/FormProductManager";
+import ProductManagementModal from "../../shared/ProductManagementModal";
+import SubscriptionManagementModal from "./SubscriptionManagementModal";
 import { HelpTooltip, ContextualHelp } from "./PayPalFieldHelp";
 import { PaymentProvider, usePaymentContext } from "../../PaymentContext";
-import { fetchMerchantCredentialsWithCache } from "../../../../form-publish/payment/utils/merchantCredentials";
-import { API_ENDPOINTS } from "../../../../../config";
+import { usePaymentFieldState } from "../hooks/usePaymentFieldState";
+import { usePerformanceMonitor } from "../utils/performanceMonitor";
+import { usePaymentFieldValidation } from "../utils/paymentFieldValidator";
+import {
+  getSupportedCurrencies,
+  formatCurrencyLabel,
+  isZeroDecimal,
+  isInCountryOnly,
+} from "../../../../../utils/paypalCurrencies";
+
 
 /**
- * Internal PayPalFieldEditorTabs Component that uses PaymentContext
+ * Refactored PayPal Field Editor with Centralized State Management
  *
- * Custom tab-based configuration interface for PayPal payment fields
- * Organized into sections: Account & Payment Type, Payment Configuration, Advanced Settings
+ * Key improvements:
+ * - Centralized state management with usePaymentFieldState hook
+ * - Proper state persistence across tab changes
+ * - Optimized re-rendering with React.memo and useMemo
+ * - Clean separation of concerns
  */
-const PayPalFieldEditorTabsInternal = ({
+const PayPalFieldEditorTabsRefactored = ({
   selectedField,
   onUpdateField,
   className = "",
 }) => {
-  // Get payment context for userId and formId
-  const { userId, formId, makePaymentApiRequest } = usePaymentContext();
+  // Get payment context
+  const { userId, formId } = usePaymentContext();
 
-  // Cache for capabilities to prevent repeated API calls
-  const capabilitiesCache = useRef({});
-
-  // Memoize selectedField properties to prevent unnecessary re-renders
+  // Extract field data
   const fieldId = selectedField?.id;
   const subFields = useMemo(
     () => selectedField?.subFields || {},
     [selectedField?.subFields]
   );
 
-  // Debug: Log when selectedField changes (only when fieldId actually changes)
-  useEffect(() => {
-    console.log("🔍 PayPalFieldEditorTabsInternal: selectedField changed", {
-      selectedFieldId: fieldId,
-      timestamp: new Date().toISOString(),
-    });
-  }, [fieldId]);
-  // Tab management
-  const [activeTab, setActiveTab] = useState("account");
+  // Use centralized state management
+  const { state, actions, isInitialized } = usePaymentFieldState(
+    subFields,
+    onUpdateField,
+    fieldId
+  );
 
-  // Accordion states for better organization
+  // Performance monitoring
+  const performanceMonitor = usePerformanceMonitor("PayPalFieldEditorTabs");
+
+  // Validation utilities
+  const validator = usePaymentFieldValidation();
+
+  // UI-only state (doesn't need to persist)
+  const [activeTab, setActiveTab] = useState("account");
   const [expandedSections, setExpandedSections] = useState({
     account: true,
     paymentMethods: true,
     behavior: false,
   });
 
-  // PayPal-specific state - Initialize from subFields with memoization
-  const [selectedMerchantId, setSelectedMerchantId] = useState(
-    () => subFields.merchantAccountId || ""
-  );
-  const [paymentType, setPaymentType] = useState(
-    () => subFields.paymentType || "product_wise"
-  );
-  const [capabilities, setCapabilities] = useState(null);
-  const [accountStatus, setAccountStatus] = useState(null);
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [merchantDataLoaded, setMerchantDataLoaded] = useState(false);
-
-  // Amount configuration - Initialize from subFields with memoization
-  const [amountType, setAmountType] = useState(
-    () => subFields.amount?.type || "fixed"
-  );
-  const [amountValue, setAmountValue] = useState(
-    () => subFields.amount?.value || 0
-  );
-  const [currency, setCurrency] = useState(
-    () => subFields.amount?.currency || "USD"
-  );
-  const [minAmount, setMinAmount] = useState(
-    () => subFields.amount?.minAmount || ""
-  );
-  const [maxAmount, setMaxAmount] = useState(
-    () => subFields.amount?.maxAmount || ""
-  );
-
-  // Payment methods - Initialize from subFields with memoization
-  const [paypalEnabled, setPaypalEnabled] = useState(
-    () => subFields.paymentMethods?.paypal !== false
-  );
-  const [cardsEnabled, setCardsEnabled] = useState(
-    () => subFields.paymentMethods?.cards !== false
-  );
-  const [venmoEnabled, setVenmoEnabled] = useState(
-    () => subFields.paymentMethods?.venmo || false
-  );
-  const [googlePayEnabled, setGooglePayEnabled] = useState(
-    () => subFields.paymentMethods?.googlePay || false
-  );
-
-  // Behavior settings - Initialize from subFields with memoization
-  const [collectBillingAddress, setCollectBillingAddress] = useState(
-    () => subFields.behavior?.collectBillingAddress || false
-  );
-  const [collectShippingAddress, setCollectShippingAddress] = useState(
-    () => subFields.behavior?.collectShippingAddress || false
-  );
-
   // Modal state
-  const [showManager, setShowManager] = useState(false);
-  const [managerType, setManagerType] = useState("product");
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  // Currency options are sourced locally; no network call for now
 
-  // Modal handlers to fix button issues
-  const handleOpenManager = useCallback((type) => {
-    console.log("🔍 Opening manager modal:", type);
-    setManagerType(type);
-    setShowManager(true);
-  }, []);
-
-  const handleCloseManager = useCallback(() => {
-    console.log("🔍 Closing manager modal");
-    setShowManager(false);
-    // Reset manager type after a brief delay to prevent state conflicts
-    setTimeout(() => {
-      setManagerType("product");
-    }, 100);
-  }, []);
-
-  // Simplified update field helper - Remove aggressive debouncing for better responsiveness
-  const updateField = useCallback(
-    (updates) => {
-      const currentSubFields = subFields;
-      const updatedSubFields = {
-        ...currentSubFields,
-        ...updates,
-      };
-
-      // Simple change detection
-      const hasChanges =
-        JSON.stringify(currentSubFields) !== JSON.stringify(updatedSubFields);
-
-      if (hasChanges) {
-        console.log("🔍 PayPalFieldEditorTabs: Updating field", {
-          updates,
-          selectedFieldId: fieldId,
-        });
-        onUpdateField(fieldId, { subFields: updatedSubFields });
-      }
-    },
-    [subFields, fieldId, onUpdateField]
-  );
-
-  // No cleanup needed since we removed debouncing
-
-  // Get form items with memoization
-  const getFormItems = useCallback(
-    (type) => {
-      const formItems = subFields.formItems || {};
-      return Object.values(formItems).filter((item) => item.type === type);
-    },
-    [subFields.formItems]
-  );
-
-  // Memoized event handlers - NOW updateField is available
-  const handleMerchantChange = useCallback(
-    (merchantId) => {
-      if (merchantId !== selectedMerchantId) {
-        const previousMerchantId = selectedMerchantId;
-        setSelectedMerchantId(merchantId);
-        setMerchantDataLoaded(true); // Mark that merchant data has been loaded
-
-        // Clear previous account status when merchant changes
-        setAccountStatus(null);
-        setCapabilities(null);
-
-        updateField({
-          merchantAccountId: merchantId,
-          previousMerchantId: previousMerchantId || undefined,
-        });
-      }
-    },
-    [selectedMerchantId, updateField]
-  );
-
-  const handleCapabilitiesChange = useCallback((caps) => {
-    setCapabilities(caps);
-  }, []);
-
-  const handlePaymentTypeChange = useCallback(
-    (e) => {
-      const newPaymentType = e.target.value;
-      console.log(
-        "🔍 Payment type change triggered:",
-        paymentType,
-        "->",
-        newPaymentType
-      );
-
-      if (newPaymentType !== paymentType) {
-        // Update local state immediately for responsive UI
-        setPaymentType(newPaymentType);
-
-        // Update field data
-        updateField({ paymentType: newPaymentType });
-
-        // Removed automatic tab switching - let user navigate manually
-      }
-    },
-    [paymentType, updateField]
-  );
-
-  const handleAmountTypeChange = useCallback(
-    (e) => {
-      const newAmountType = e.target.value;
-      if (newAmountType !== amountType) {
-        // Update local state immediately
-        setAmountType(newAmountType);
-
-        // Update field data
-        updateField({
-          amount: {
-            ...subFields.amount,
-            type: newAmountType,
-          },
-        });
-      }
-    },
-    [amountType, subFields.amount, updateField]
-  );
-
-  const handleCurrencyChange = useCallback(
-    (e) => {
-      const newCurrency = e.target.value;
-      if (newCurrency !== currency) {
-        // Update local state immediately
-        setCurrency(newCurrency);
-
-        // Update field data
-        updateField({
-          amount: {
-            ...subFields.amount,
-            currency: newCurrency,
-          },
-        });
-      }
-    },
-    [currency, subFields.amount, updateField]
-  );
-
-  const handleAmountValueChange = useCallback(
-    (e) => {
-      const newValue = parseFloat(e.target.value) || 0;
-      if (newValue !== amountValue) {
-        // Update local state immediately
-        setAmountValue(newValue);
-
-        // Update field data
-        updateField({
-          amount: {
-            ...subFields.amount,
-            value: newValue,
-          },
-        });
-      }
-    },
-    [amountValue, subFields.amount, updateField]
-  );
-
-  // Optimized account status check with proper caching
-  const checkAccountStatus = useCallback(async () => {
-    if (!selectedMerchantId) return;
-
-    // If capabilities already present (from child selector), treat as active and skip network calls
-    if (capabilities && Object.keys(capabilities).length > 0) {
-      setAccountStatus({
-        status: "active",
-        lastChecked: new Date().toISOString(),
-        capabilities,
-        merchantId: selectedMerchantId,
-      });
-      return;
-    }
-
-    // Check cache first using ref
-    const cacheKey = selectedMerchantId;
-    const cachedData = capabilitiesCache.current[cacheKey];
-    if (cachedData && Date.now() - cachedData.timestamp < 10 * 60 * 1000) {
-      setCapabilities(cachedData.capabilities);
-      setAccountStatus({
-        status: "active",
-        lastChecked: new Date(cachedData.timestamp).toISOString(),
-        capabilities: cachedData.capabilities,
-        merchantId: selectedMerchantId,
-      });
-      return;
-    }
-
-    setStatusLoading(true);
-    try {
-      // If merchant credentials endpoint is not configured, skip resolving
-      const isCredsEndpointConfigured = !(
-        (API_ENDPOINTS?.MERCHANT_CREDENTIALS || "").includes(
-          "YOUR_API_GATEWAY_URL"
-        ) || !API_ENDPOINTS?.MERCHANT_CREDENTIALS
-      );
-
-      let resolvedMerchantId = null;
-
-      if (isCredsEndpointConfigured) {
-        try {
-          const cred = await fetchMerchantCredentialsWithCache(
-            selectedMerchantId
-          );
-          if (cred?.success && cred.credentials?.merchantId) {
-            resolvedMerchantId = cred.credentials.merchantId;
-          }
-        } catch (e) {
-          console.warn(
-            "Failed to resolve merchantId from merchantAccountId",
-            e
-          );
-        }
-      }
-
-      // If we still don't have merchantId but capabilities may arrive from child, don't surface an error
-      if (!resolvedMerchantId) {
-        // Defer to capabilities coming from child; just mark status as unknown without UI error
-        setAccountStatus((prev) => ({
-          status: "checking",
-          lastChecked: new Date().toISOString(),
-          capabilities: prev?.capabilities || null,
-          merchantId: undefined,
-        }));
-        return;
-      }
-
-      const result = await makePaymentApiRequest(
-        API_ENDPOINTS.UNIFIED_PAYMENT_API,
-        "POST",
-        {
-          action: "get-merchant-capabilities",
-          merchantId: resolvedMerchantId,
-        },
-        "Failed to get merchant capabilities"
-      );
-
-      if (result.success) {
-        const loadedCaps = result.data?.capabilities || result.capabilities;
-        capabilitiesCache.current[cacheKey] = {
-          capabilities: loadedCaps,
-          timestamp: Date.now(),
-        };
-        setCapabilities(loadedCaps);
-        setAccountStatus({
-          status: "active",
-          lastChecked: new Date().toISOString(),
-          capabilities: loadedCaps,
-          merchantId: resolvedMerchantId,
-        });
-      } else {
-        // Only show error if we have no capabilities to fall back on
-        setAccountStatus({
-          status: "error",
-          error: result.error,
-          lastChecked: new Date().toISOString(),
-          merchantId: resolvedMerchantId,
-        });
-      }
-    } finally {
-      setStatusLoading(false);
-    }
-  }, [selectedMerchantId, capabilities, makePaymentApiRequest]);
-
-  // Only check account status when merchant actually changes (not on tab switch)
-  useEffect(() => {
-    if (selectedMerchantId) {
-      // Check if we already have status for this merchant
-      if (accountStatus && accountStatus.merchantId === selectedMerchantId) {
-        console.log(
-          "🔍 Using existing account status for:",
-          selectedMerchantId
-        );
-        return; // Don't fetch again if we already have data for this merchant
-      }
-
-      // Only fetch if we don't have status for this merchant
-      console.log("🔍 Need to fetch account status for:", selectedMerchantId);
-      const timeoutId = setTimeout(() => {
-        checkAccountStatus();
-      }, 300);
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [selectedMerchantId]); // Only depend on selectedMerchantId
-
-  // Handle payment type changes - Simplified to prevent rendering issues
-  useEffect(() => {
-    // Only run when payment type actually changes from subFields
-    const currentPaymentType = subFields.paymentType;
-    if (currentPaymentType !== paymentType) {
-      console.log(
-        "🔍 Payment type changed:",
-        currentPaymentType,
-        "->",
-        paymentType
-      );
-
-      if (paymentType === "donation" && amountType !== "custom_amount") {
-        setAmountType("custom_amount");
-        updateField({
-          paymentType,
-          amount: {
-            ...subFields.amount,
-            type: "custom_amount",
-          },
-        });
-      } else if (paymentType === "donation_button") {
-        updateField({
-          paymentType,
-          donationButtonId: subFields.donationButtonId || "",
-        });
-      } else if (
-        paymentType === "custom_amount" &&
-        amountType !== "static" &&
-        amountType !== "variable"
-      ) {
-        setAmountType("static");
-        updateField({
-          paymentType,
-          amount: {
-            ...subFields.amount,
-            type: "static",
-          },
-        });
-      } else if (paymentType === "subscription") {
-        updateField({
-          paymentType,
-          subscriptionManaged: true,
-        });
-      } else {
-        // For other types, just update the payment type
-        updateField({
-          paymentType,
-        });
-      }
-    }
-  }, [paymentType]); // Only depend on paymentType to prevent loops
-
-  // Sync local state with selectedField changes (for external updates) - Optimized
-  useEffect(() => {
-    if (fieldId && subFields) {
-      // Batch state updates to prevent multiple renders
-      const updates = {};
-
-      if (subFields.merchantAccountId !== selectedMerchantId) {
-        updates.merchantId = subFields.merchantAccountId || "";
-      }
-      if (subFields.paymentType !== paymentType) {
-        updates.paymentType = subFields.paymentType || "product_wise";
-      }
-      if (subFields.amount?.type !== amountType) {
-        updates.amountType = subFields.amount?.type || "fixed";
-      }
-      if (subFields.amount?.value !== amountValue) {
-        updates.amountValue = subFields.amount?.value || 0;
-      }
-      if (subFields.amount?.currency !== currency) {
-        updates.currency = subFields.amount?.currency || "USD";
-      }
-      if (subFields.amount?.minAmount !== minAmount) {
-        updates.minAmount = subFields.amount?.minAmount || "";
-      }
-      if (subFields.amount?.maxAmount !== maxAmount) {
-        updates.maxAmount = subFields.amount?.maxAmount || "";
-      }
-
-      // Apply all updates at once
-      if (Object.keys(updates).length > 0) {
-        console.log("🔍 Syncing state with subFields:", updates);
-
-        if (updates.merchantId !== undefined)
-          setSelectedMerchantId(updates.merchantId);
-        if (updates.paymentType !== undefined)
-          setPaymentType(updates.paymentType);
-        if (updates.amountType !== undefined) setAmountType(updates.amountType);
-        if (updates.amountValue !== undefined)
-          setAmountValue(updates.amountValue);
-        if (updates.currency !== undefined) setCurrency(updates.currency);
-        if (updates.minAmount !== undefined) setMinAmount(updates.minAmount);
-        if (updates.maxAmount !== undefined) setMaxAmount(updates.maxAmount);
-      }
-    }
-  }, [
+  // Debug logging
+  console.log("🔍 PayPalFieldEditorTabsRefactored render:", {
     fieldId,
-    subFields.merchantAccountId,
-    subFields.paymentType,
-    subFields.amount,
-  ]); // Only depend on actual subField values
+    isInitialized,
+    state: state,
+    activeTab,
+    timestamp: new Date().toISOString(),
+  });
 
-  // Toggle accordion sections with useCallback
+  // Modal handlers
+  const handleOpenManager = useCallback(
+    (type) => {
+      console.log("🔍 Opening manager modal:", type);
+      performanceMonitor.trackModalOpen(type);
+
+      if (type === "product") {
+        setShowProductModal(true);
+      } else if (type === "subscription") {
+        setShowSubscriptionModal(true);
+      }
+    },
+    [performanceMonitor]
+  );
+
+  // Toggle accordion sections
   const toggleSection = useCallback((section) => {
     setExpandedSections((prev) => ({
       ...prev,
@@ -515,7 +108,54 @@ const PayPalFieldEditorTabsInternal = ({
     }));
   }, []);
 
-  // Tab definitions - memoized to prevent re-creation
+  // Event handlers with proper state management
+  const handleMerchantChange = useCallback(
+    (merchantId) => {
+      console.log("🔍 Merchant changed:", merchantId);
+      performanceMonitor.trackStateChange("UPDATE_MERCHANT", { merchantId });
+      actions.updateMerchant(merchantId);
+    },
+    [actions, performanceMonitor]
+  );
+
+  const handlePaymentTypeChange = useCallback(
+    (e) => {
+      const newPaymentType = e.target.value;
+      console.log("🔍 Payment type changed:", newPaymentType);
+      performanceMonitor.trackStateChange("UPDATE_PAYMENT_TYPE", {
+        paymentType: newPaymentType,
+      });
+      actions.updatePaymentType(newPaymentType);
+    },
+    [actions, performanceMonitor]
+  );
+
+  const handleAmountConfigChange = useCallback(
+    (updates) => {
+      console.log("🔍 Amount config changed:", updates);
+      performanceMonitor.trackStateChange("UPDATE_AMOUNT_CONFIG", updates);
+      actions.updateAmountConfig(updates);
+    },
+    [actions, performanceMonitor]
+  );
+
+  const handlePaymentMethodChange = useCallback(
+    (method, enabled) => {
+      console.log("🔍 Payment method changed:", method, enabled);
+      actions.updatePaymentMethods({ [method]: enabled });
+    },
+    [actions]
+  );
+
+  const handleBehaviorChange = useCallback(
+    (updates) => {
+      console.log("🔍 Behavior changed:", updates);
+      actions.updateBehavior(updates);
+    },
+    [actions]
+  );
+
+  // Tab definitions
   const tabs = useMemo(
     () => [
       {
@@ -540,12 +180,22 @@ const PayPalFieldEditorTabsInternal = ({
     []
   );
 
-  if (!selectedField || selectedField.type !== "paypal_payment") {
-    return null;
+  // Don't render until state is initialized
+  if (
+    !selectedField ||
+    selectedField.type !== "paypal_payment" ||
+    !isInitialized
+  ) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <FaSpinner className="animate-spin mr-2" />
+        <span>Loading payment configuration...</span>
+      </div>
+    );
   }
 
   return (
-    <div className={`paypal-field-editor-tabs ${className}`}>
+    <div className={`paypal-field-editor-tabs-refactored ${className}`}>
       {/* Header */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-2">
@@ -566,6 +216,24 @@ const PayPalFieldEditorTabsInternal = ({
         <p className="text-sm text-blue-700">
           Configure your PayPal payment field with organized settings sections
         </p>
+
+        {/* State debug info (remove in production) */}
+        <div className="mt-2 text-xs text-blue-600">
+          Last updated:{" "}
+          {state.lastUpdated
+            ? new Date(state.lastUpdated).toLocaleTimeString()
+            : "Never"}{" "}
+          | Dirty: {state.isDirty ? "Yes" : "No"}
+          {(() => {
+            const validationResults = validator.validateState(state, "Header");
+            const summary = validator.getSummary(validationResults);
+            return summary.errors > 0
+              ? ` | ❌ ${summary.errors} errors`
+              : summary.warnings > 0
+              ? ` | ⚠️ ${summary.warnings} warnings`
+              : " | ✅ Valid";
+          })()}
+        </div>
       </div>
 
       {/* Tab Navigation */}
@@ -575,7 +243,11 @@ const PayPalFieldEditorTabsInternal = ({
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                const previousTab = activeTab;
+                performanceMonitor.trackTabSwitch(previousTab, tab.id);
+                setActiveTab(tab.id);
+              }}
               className={`flex-1 py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === tab.id
                   ? "text-blue-600 border-blue-600 bg-blue-50"
@@ -595,829 +267,698 @@ const PayPalFieldEditorTabsInternal = ({
       <div className="tab-content">
         {/* Account & Payment Type Tab */}
         {activeTab === "account" && (
-          <div className="space-y-6">
-            {/* Merchant Account Section */}
-            <div className="bg-white border border-gray-200 rounded-lg">
-              <button
-                onClick={() => toggleSection("account")}
-                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-              >
-                <div className="flex items-center gap-3">
-                  <FaCog className="text-blue-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                      Merchant Account
-                      <HelpTooltip
-                        title="Merchant Account Setup"
-                        content="Connect your verified PayPal business account to accept payments. You'll need a business account with completed verification."
-                      />
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Select and verify your PayPal merchant account
-                    </p>
-                  </div>
-                </div>
-                {expandedSections.account ? (
-                  <FaChevronDown />
-                ) : (
-                  <FaChevronRight />
-                )}
-              </button>
-
-              {expandedSections.account && (
-                <div className="px-4 pb-4 border-t border-gray-100">
-                  <MerchantAccountSelector
-                    selectedMerchantId={selectedMerchantId}
-                    onMerchantChange={handleMerchantChange}
-                    onCapabilitiesChange={handleCapabilitiesChange}
-                    className="mt-4"
-                    userId={userId}
-                    formId={formId}
-                  />
-
-                  {/* Account Status Display */}
-                  {selectedMerchantId && (
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">
-                          Account Status
-                        </span>
-                        <button
-                          onClick={checkAccountStatus}
-                          disabled={statusLoading}
-                          className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50"
-                        >
-                          {statusLoading ? (
-                            <FaSpinner className="animate-spin" />
-                          ) : (
-                            "Refresh"
-                          )}
-                        </button>
-                      </div>
-
-                      {statusLoading ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <FaSpinner className="animate-spin" />
-                          <span>Checking account status...</span>
-                        </div>
-                      ) : accountStatus ? (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            {accountStatus.status === "active" ? (
-                              <FaCheckCircle className="text-green-600" />
-                            ) : (
-                              <FaExclamationTriangle className="text-red-600" />
-                            )}
-                            <span
-                              className={`text-sm font-medium ${
-                                accountStatus.status === "active"
-                                  ? "text-green-700"
-                                  : "text-red-700"
-                              }`}
-                            >
-                              {accountStatus.status === "active"
-                                ? "Connected & Active"
-                                : "Connection Issue"}
-                            </span>
-                          </div>
-
-                          {accountStatus.error && (
-                            <p className="text-xs text-red-600">
-                              {accountStatus.error}
-                            </p>
-                          )}
-
-                          <p className="text-xs text-gray-500">
-                            Last checked:{" "}
-                            {new Date(
-                              accountStatus.lastChecked
-                            ).toLocaleString()}
-                          </p>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Payment Type Section */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <FaCreditCard className="text-blue-600" />
-                <div>
-                  <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                    Payment Type
-                    <HelpTooltip
-                      title="Payment Types"
-                      content="One-time: Single payments for products/services. Subscription: Recurring payments for memberships. Donation: Flexible amounts for charitable giving."
-                    />
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    Choose the type of payment to accept
-                  </p>
-                </div>
-              </div>
-
-              <select
-                value={paymentType}
-                onChange={handlePaymentTypeChange}
-                className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="product_wise">Product-wise Payment</option>
-                <option value="custom_amount">Custom Amount</option>
-                <option
-                  value="subscription"
-                  disabled={!capabilities?.subscriptions}
-                >
-                  Subscription{" "}
-                  {!capabilities?.subscriptions ? "(Not Available)" : ""}
-                </option>
-                <option value="donation" disabled={!capabilities?.donations}>
-                  Donation (Custom Amount){" "}
-                  {!capabilities?.donations ? "(Not Available)" : ""}
-                </option>
-                <option
-                  value="donation_button"
-                  disabled={!capabilities?.donations}
-                >
-                  Donation (with Button ID){" "}
-                  {!capabilities?.donations ? "(Not Available)" : ""}
-                </option>
-              </select>
-
-              {paymentType !== "product_wise" && (
-                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <FaInfoCircle className="inline text-green-600 mr-2" />
-                  <span className="text-sm text-green-700">
-                    <strong>Payment type selected!</strong> Now go to the
-                    "Payment Configuration" tab to set up your{" "}
-                    {paymentType === "donation_button"
-                      ? "donation button"
-                      : paymentType.replace("_", " ")}{" "}
-                    details.
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+          <AccountTab
+            state={state}
+            actions={actions}
+            expandedSections={expandedSections}
+            toggleSection={toggleSection}
+            onMerchantChange={handleMerchantChange}
+            onPaymentTypeChange={handlePaymentTypeChange}
+            userId={userId}
+            formId={formId}
+          />
         )}
 
         {/* Payment Configuration Tab */}
         {activeTab === "configuration" && (
-          <div className="space-y-6">
-            {/* Configuration based on payment type */}
-            {paymentType === "product_wise" && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <FaReceipt className="text-green-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Product-wise Payment
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Configure your product list and pricing. Users will select
-                      products and totals will be calculated automatically.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">
-                        Products
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Add, edit, import, and manage products for this form
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleOpenManager("product")}
-                      className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Manage Products
-                    </button>
-                  </div>
-
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <FaInfoCircle className="inline text-blue-600 mr-2" />
-                    <span className="text-sm text-blue-700">
-                      Products are stored with your form and can include price,
-                      currency, SKU, and inventory. This works similar to
-                      Jotform's product configuration.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {paymentType === "custom_amount" && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <FaReceipt className="text-green-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Custom Amount Configuration
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Configure how users can enter custom amounts
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Amount Type
-                    </label>
-                    <select
-                      value={amountType}
-                      onChange={handleAmountTypeChange}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="static">Static Amount</option>
-                      <option value="variable">
-                        Variable Amount (User Choice)
-                      </option>
-                    </select>
-                  </div>
-
-                  {amountType === "static" && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Fixed Amount
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={amountValue}
-                        onChange={handleAmountValueChange}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
-
-                  {amountType === "variable" && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Min Amount
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={minAmount}
-                          onChange={(e) => {
-                            setMinAmount(e.target.value);
-                            updateField({
-                              amount: {
-                                ...subFields.amount,
-                                minAmount: e.target.value,
-                              },
-                            });
-                          }}
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Max Amount
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={maxAmount}
-                          onChange={(e) => {
-                            setMaxAmount(e.target.value);
-                            updateField({
-                              amount: {
-                                ...subFields.amount,
-                                maxAmount: e.target.value,
-                              },
-                            });
-                          }}
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="1000.00"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Currency
-                    </label>
-                    <select
-                      value={currency}
-                      onChange={handleCurrencyChange}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="CAD">CAD</option>
-                      <option value="AUD">AUD</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {paymentType === "subscription" && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <FaReceipt className="text-purple-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Subscription Management
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Manage subscription plans and settings
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">
-                        Subscription Plans
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Create and manage recurring payment plans
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleOpenManager("subscription")}
-                      className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
-                    >
-                      Manage Subscriptions
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {paymentType === "donation" && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <FaHeart className="text-red-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Donation (Custom Amount)
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Configure custom amount donation settings
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Suggested Amount
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={amountValue}
-                        onChange={handleAmountValueChange}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="25.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Currency
-                      </label>
-                      <select
-                        value={currency}
-                        onChange={handleCurrencyChange}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="USD">USD</option>
-                        <option value="EUR">EUR</option>
-                        <option value="GBP">GBP</option>
-                        <option value="CAD">CAD</option>
-                        <option value="AUD">AUD</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Min Amount (Optional)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={minAmount}
-                        onChange={(e) => {
-                          setMinAmount(e.target.value);
-                          updateField({
-                            amount: {
-                              ...subFields.amount,
-                              minAmount: e.target.value,
-                            },
-                          });
-                        }}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="1.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Max Amount (Optional)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={maxAmount}
-                        onChange={(e) => {
-                          setMaxAmount(e.target.value);
-                          updateField({
-                            amount: {
-                              ...subFields.amount,
-                              maxAmount: e.target.value,
-                            },
-                          });
-                        }}
-                        className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="1000.00"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">
-                        Donation Presets
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Manage donation presets and options
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleOpenManager("donation")}
-                      className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      Manage Donations
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {paymentType === "donation_button" && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <FaHeart className="text-red-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Donation (with Button ID)
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Use existing PayPal donation button
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      PayPal Button ID
-                    </label>
-                    <input
-                      type="text"
-                      value={subFields.donationButtonId || ""}
-                      onChange={(e) => {
-                        updateField({
-                          donationButtonId: e.target.value,
-                        });
-                      }}
-                      className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter PayPal donation button ID"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Get this ID from your PayPal business account donation
-                      button
-                    </p>
-                  </div>
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <FaInfoCircle className="inline text-blue-600 mr-2" />
-                    <span className="text-sm text-blue-700">
-                      No additional configuration needed. The button will use
-                      the settings from your PayPal account.
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <ConfigurationTab
+            state={state}
+            actions={actions}
+            selectedField={selectedField}
+            onUpdateField={onUpdateField}
+            onAmountConfigChange={handleAmountConfigChange}
+            onPaymentMethodChange={handlePaymentMethodChange}
+            onOpenManager={handleOpenManager}
+            expandedSections={expandedSections}
+            toggleSection={toggleSection}
+          />
         )}
 
-        {/* Payment Methods - Only show for types that support multiple methods */}
-        {paymentType !== "donation_button" &&
-          paymentType !== "subscription" && (
-            <div className="bg-white border border-gray-200 rounded-lg">
-              <button
-                onClick={() => toggleSection("paymentMethods")}
-                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-              >
-                <div className="flex items-center gap-3">
-                  <FaCreditCard className="text-green-600" />
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Payment Methods
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Choose which payment methods to accept
-                    </p>
-                  </div>
-                </div>
-                {expandedSections.paymentMethods ? (
-                  <FaChevronDown />
-                ) : (
-                  <FaChevronRight />
-                )}
-              </button>
+        {/* Advanced Settings Tab */}
+        {activeTab === "advanced" && (
+          <AdvancedTab
+            state={state}
+            actions={actions}
+            onBehaviorChange={handleBehaviorChange}
+            expandedSections={expandedSections}
+            toggleSection={toggleSection}
+          />
+        )}
+      </div>
 
-              {expandedSections.paymentMethods && (
-                <div className="px-4 pb-4 border-t border-gray-100">
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={paypalEnabled}
-                        onChange={(e) => {
-                          setPaypalEnabled(e.target.checked);
-                          updateField({
-                            paymentMethods: {
-                              ...selectedField.subFields.paymentMethods,
-                              paypal: e.target.checked,
-                            },
-                          });
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">PayPal</span>
-                    </label>
+      {/* Modals */}
+      <ProductManagementModal
+        isOpen={showProductModal}
+        onClose={() => setShowProductModal(false)}
+        selectedField={selectedField}
+        onUpdateField={onUpdateField}
+        selectedMerchantId={state.selectedMerchantId}
+      />
 
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={cardsEnabled}
-                        onChange={(e) => {
-                          setCardsEnabled(e.target.checked);
-                          updateField({
-                            paymentMethods: {
-                              ...selectedField.subFields.paymentMethods,
-                              cards: e.target.checked,
-                            },
-                          });
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">
-                        Credit/Debit Cards
-                      </span>
-                    </label>
+      <SubscriptionManagementModal
+        isOpen={showSubscriptionModal}
+        onClose={() => setShowSubscriptionModal(false)}
+        selectedField={selectedField}
+        onUpdateField={onUpdateField}
+        selectedMerchantId={state.selectedMerchantId}
+      />
+    </div>
+  );
+};
 
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={venmoEnabled}
-                        disabled={!capabilities?.venmo}
-                        onChange={(e) => {
-                          setVenmoEnabled(e.target.checked);
-                          updateField({
-                            paymentMethods: {
-                              ...selectedField.subFields.paymentMethods,
-                              venmo: e.target.checked,
-                            },
-                          });
-                        }}
-                        className="mr-2"
-                      />
-                      <span
-                        className={`text-sm ${
-                          !capabilities?.venmo
-                            ? "text-gray-400"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        Venmo {!capabilities?.venmo ? "(Not Available)" : ""}
-                      </span>
-                    </label>
-
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={googlePayEnabled}
-                        disabled={!capabilities?.googlePay}
-                        onChange={(e) => {
-                          setGooglePayEnabled(e.target.checked);
-                          updateField({
-                            paymentMethods: {
-                              ...selectedField.subFields.paymentMethods,
-                              googlePay: e.target.checked,
-                            },
-                          });
-                        }}
-                        className="mr-2"
-                      />
-                      <span
-                        className={`text-sm ${
-                          !capabilities?.googlePay
-                            ? "text-gray-400"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        Google Pay{" "}
-                        {!capabilities?.googlePay ? "(Not Available)" : ""}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              )}
+// Account Tab Component
+const AccountTab = React.memo(
+  ({
+    state,
+    actions,
+    expandedSections,
+    toggleSection,
+    onMerchantChange,
+    onPaymentTypeChange,
+    userId,
+    formId,
+  }) => (
+    <div className="space-y-6">
+      {/* Merchant Account Section */}
+      <div className="bg-white border border-gray-200 rounded-lg">
+        <button
+          onClick={() => toggleSection("account")}
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <FaCog className="text-blue-600" />
+            <div>
+              <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                Merchant Account
+                <HelpTooltip
+                  title="Merchant Account Setup"
+                  content="Connect your verified PayPal business account to accept payments."
+                />
+              </h4>
+              <p className="text-sm text-gray-600">
+                Select and verify your PayPal merchant account
+              </p>
             </div>
-          )}
+          </div>
+          {expandedSections.account ? <FaChevronDown /> : <FaChevronRight />}
+        </button>
 
-        {/* PayPal Only Notice for donation_button and subscription */}
-        {(paymentType === "donation_button" ||
-          paymentType === "subscription") && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <FaCreditCard className="text-blue-600" />
-              <div>
-                <h4 className="font-medium text-gray-900">Payment Method</h4>
-                <p className="text-sm text-gray-600">
-                  PayPal button only - no other payment methods available
-                </p>
+        {expandedSections.account && (
+          <div className="px-4 pb-4 border-t border-gray-100">
+            <MerchantAccountSelector
+              selectedMerchantId={state.selectedMerchantId}
+              onMerchantChange={onMerchantChange}
+              onCapabilitiesChange={actions.updateCapabilities}
+              className="mt-4"
+              userId={userId}
+              formId={formId}
+            />
+
+            {/* Account Status Display */}
+            {state.selectedMerchantId && state.accountStatus && (
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  {state.accountStatus.status === "active" ? (
+                    <FaCheckCircle className="text-green-600" />
+                  ) : (
+                    <FaExclamationTriangle className="text-red-600" />
+                  )}
+                  <span
+                    className={`text-sm font-medium ${
+                      state.accountStatus.status === "active"
+                        ? "text-green-700"
+                        : "text-red-700"
+                    }`}
+                  >
+                    {state.accountStatus.status === "active"
+                      ? "Connected & Active"
+                      : "Connection Issue"}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <FaInfoCircle className="inline text-blue-600 mr-2" />
-              <span className="text-sm text-blue-700">
-                {paymentType === "donation_button"
-                  ? "Donation buttons use PayPal's hosted button configuration."
-                  : "Subscription payments are processed through PayPal only."}
-              </span>
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Advanced Settings Tab */}
-      {activeTab === "advanced" && (
-        <div className="space-y-6">
-          {/* Field Behavior */}
-          <div className="bg-white border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection("behavior")}
-              className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-3">
-                <FaCog className="text-purple-600" />
+      {/* Payment Type Section */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <FaCreditCard className="text-blue-600" />
+          <div>
+            <h4 className="font-medium text-gray-900 flex items-center gap-2">
+              Payment Type
+              <HelpTooltip
+                title="Payment Types"
+                content="Choose the type of payment to accept: products, subscriptions, donations, or custom amounts."
+              />
+            </h4>
+            <p className="text-sm text-gray-600">
+              Choose the type of payment to accept
+            </p>
+          </div>
+        </div>
+
+        <select
+          value={state.paymentType}
+          onChange={onPaymentTypeChange}
+          className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="product_wise">Product-wise Payment</option>
+          <option value="custom_amount">Custom Amount</option>
+          <option
+            value="subscription"
+            disabled={!state.capabilities?.subscriptions}
+          >
+            Subscription{" "}
+            {!state.capabilities?.subscriptions ? "(Not Available)" : ""}
+          </option>
+          <option value="donation" disabled={!state.capabilities?.donations}>
+            Donation (Custom Amount){" "}
+            {!state.capabilities?.donations ? "(Not Available)" : ""}
+          </option>
+          <option
+            value="donation_button"
+            disabled={!state.capabilities?.donations}
+          >
+            Donation (with Button ID){" "}
+            {!state.capabilities?.donations ? "(Not Available)" : ""}
+          </option>
+        </select>
+
+        {/* Payment type guidance */}
+        {state.paymentType === "product_wise" && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <FaInfoCircle className="inline text-green-600 mr-2" />
+            <span className="text-sm text-green-700">
+              <strong>Product-wise payment selected!</strong> Go to the "Payment
+              Configuration" tab to manage your products and set up pricing.
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+);
+
+// Configuration Tab Component
+const ConfigurationTab = React.memo(
+  ({
+    state,
+    actions,
+    selectedField,
+    onUpdateField,
+    onAmountConfigChange,
+    onPaymentMethodChange,
+    onOpenManager,
+    expandedSections,
+    toggleSection,
+  }) => (
+    <div className="space-y-6">
+      {/* Product-wise Payment Configuration */}
+      {state.paymentType === "product_wise" && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <FaReceipt className="text-green-600" />
+            <div>
+              <h4 className="font-medium text-gray-900">
+                Product-wise Payment
+              </h4>
+              <p className="text-sm text-gray-600">
+                Configure your product list and pricing. Users will select
+                products and totals will be calculated automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Enhanced Product Management Section */}
+            <div className="border-2 border-green-200 rounded-lg p-4 bg-green-50">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <FaReceipt className="text-green-600 text-lg" />
+                  <div>
+                    <span className="text-sm font-semibold text-green-800">
+                      Product Management
+                    </span>
+                    <p className="text-xs text-green-600">
+                      Add, edit, import, and manage products for this form
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onOpenManager("product")}
+                  disabled={!state.selectedMerchantId}
+                  title={
+                    !state.selectedMerchantId
+                      ? "Select a merchant account first"
+                      : undefined
+                  }
+                  className={`px-6 py-3 text-white text-sm font-medium rounded-lg transition-colors shadow-md ${
+                    !state.selectedMerchantId
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700 hover:shadow-lg"
+                  }`}
+                >
+                  Manage Products
+                </button>
+              </div>
+              <div className="text-xs text-green-700">
+                Click "Manage Products" to add products, set prices, configure
+                SKUs, and import from PayPal
+              </div>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <FaInfoCircle className="inline text-blue-600 mr-2" />
+              <span className="text-sm text-blue-700">
+                Products are stored with your form and can include price,
+                currency, SKU, and inventory.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Amount Configuration */}
+      {state.paymentType === "custom_amount" && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <FaReceipt className="text-green-600" />
+            <div>
+              <h4 className="font-medium text-gray-900">
+                Custom Amount Configuration
+              </h4>
+              <p className="text-sm text-gray-600">
+                Configure how users can enter custom amounts
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Amount Type
+              </label>
+              <select
+                value={state.amount.type}
+                onChange={(e) => onAmountConfigChange({ type: e.target.value })}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="static">Static Amount (Fixed Price)</option>
+                <option value="variable">Variable Amount (User Choice)</option>
+              </select>
+            </div>
+
+            {state.amount.type === "static" && (
+              <div className="border-2 border-blue-200 rounded-lg p-4 bg-blue-50">
+                <label className="block text-sm font-semibold text-blue-800 mb-2">
+                  Fixed Amount *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
+                    min={isZeroDecimal(state.amount.currency) ? 1 : 0}
+                    value={state.amount.value || ""}
+                    onChange={(e) =>
+                      onAmountConfigChange({
+                        value: isZeroDecimal(state.amount.currency)
+                          ? parseInt(e.target.value || 0, 10)
+                          : parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full pl-8 pr-16 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    placeholder="Enter amount (e.g., 25.00)"
+                    required
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">
+                      {state.amount.currency}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
+                  This is the fixed amount users will pay. Enter the exact price
+                  for your product or service.
+                </p>
+
+                {/* Currency is configured once below; duplicate selector removed */}
+              </div>
+            )}
+
+            {state.amount.type === "variable" && (
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-medium text-gray-900">Field Behavior</h4>
-                  <p className="text-sm text-gray-600">
-                    Configure additional field behavior and data collection
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Min Amount
+                  </label>
+                  <input
+                    type="number"
+                    step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
+                    min={isZeroDecimal(state.amount.currency) ? 1 : 0}
+                    value={state.amount.minAmount}
+                    onChange={(e) =>
+                      onAmountConfigChange({
+                        minAmount: isZeroDecimal(state.amount.currency)
+                          ? parseInt(e.target.value || 0, 10)
+                          : e.target.value,
+                      })
+                    }
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max Amount
+                  </label>
+                  <input
+                    type="number"
+                    step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
+                    min={isZeroDecimal(state.amount.currency) ? 1 : 0}
+                    value={state.amount.maxAmount}
+                    onChange={(e) =>
+                      onAmountConfigChange({
+                        maxAmount: isZeroDecimal(state.amount.currency)
+                          ? parseInt(e.target.value || 0, 10)
+                          : e.target.value,
+                      })
+                    }
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="1000.00"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Currency
+              </label>
+              <select
+                value={state.amount.currency}
+                onChange={(e) =>
+                  onAmountConfigChange({ currency: e.target.value })
+                }
+                className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {getSupportedCurrencies().map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {formatCurrencyLabel(c)}
+                  </option>
+                ))}
+              </select>
+              {isInCountryOnly(state.amount.currency) && (
+                <p className="text-xs text-amber-700 mt-1">
+                  Note: {state.amount.currency} is supported only for merchants
+                  in-country.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription Configuration */}
+      {state.paymentType === "subscription" && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <FaReceipt className="text-purple-600" />
+            <div>
+              <h4 className="font-medium text-gray-900">Subscriptions</h4>
+              <p className="text-sm text-gray-600">
+                Create and manage subscription plans for this form
+              </p>
+            </div>
+          </div>
+
+          <div className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <FaReceipt className="text-purple-600 text-lg" />
+                <div>
+                  <span className="text-sm font-semibold text-purple-800">
+                    Subscription Management
+                  </span>
+                  <p className="text-xs text-purple-700">
+                    Add, edit, import, and manage subscription plans
                   </p>
                 </div>
               </div>
-              {expandedSections.behavior ? (
+              <button
+                onClick={() => onOpenManager("subscription")}
+                disabled={!state.selectedMerchantId}
+                title={
+                  !state.selectedMerchantId
+                    ? "Select a merchant account first"
+                    : undefined
+                }
+                className={`px-6 py-3 text-white text-sm font-medium rounded-lg transition-colors shadow-md ${
+                  !state.selectedMerchantId
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-purple-600 hover:bg-purple-700 hover:shadow-lg"
+                }`}
+              >
+                Manage Subscriptions
+              </button>
+            </div>
+            <div className="text-xs text-purple-800">
+              Click "Manage Subscriptions" to create plans, set billing cycles,
+              prices, and import existing PayPal plans
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Methods - Only show for types that support multiple methods */}
+      {state.paymentType !== "donation_button" &&
+        state.paymentType !== "subscription" && (
+          <div className="bg-white border border-gray-200 rounded-lg">
+            <button
+              onClick={() => toggleSection("paymentMethods")}
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+            >
+              <div className="flex items-center gap-3">
+                <FaCreditCard className="text-green-600" />
+                <div>
+                  <h4 className="font-medium text-gray-900">Payment Methods</h4>
+                  <p className="text-sm text-gray-600">
+                    Choose which payment methods to accept
+                  </p>
+                </div>
+              </div>
+              {expandedSections.paymentMethods ? (
                 <FaChevronDown />
               ) : (
                 <FaChevronRight />
               )}
             </button>
 
-            {expandedSections.behavior && (
+            {expandedSections.paymentMethods && (
               <div className="px-4 pb-4 border-t border-gray-100">
-                <div className="space-y-3 mt-4">
+                <div className="grid grid-cols-2 gap-4 mt-4">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={collectBillingAddress}
-                      onChange={(e) => {
-                        setCollectBillingAddress(e.target.checked);
-                        updateField({
-                          behavior: {
-                            ...selectedField.subFields.behavior,
-                            collectBillingAddress: e.target.checked,
-                          },
-                        });
-                      }}
-                      className="mr-3"
+                      checked={state.paymentMethods.paypal}
+                      onChange={(e) =>
+                        onPaymentMethodChange("paypal", e.target.checked)
+                      }
+                      className="mr-2"
                     />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">
-                        Collect Billing Address
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Request billing address during payment
-                      </p>
-                    </div>
+                    <span className="text-sm text-gray-700">PayPal</span>
                   </label>
 
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={collectShippingAddress}
-                      onChange={(e) => {
-                        setCollectShippingAddress(e.target.checked);
-                        updateField({
-                          behavior: {
-                            ...selectedField.subFields.behavior,
-                            collectShippingAddress: e.target.checked,
-                          },
-                        });
-                      }}
-                      className="mr-3"
+                      checked={state.paymentMethods.cards}
+                      onChange={(e) =>
+                        onPaymentMethodChange("cards", e.target.checked)
+                      }
+                      className="mr-2"
                     />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">
-                        Collect Shipping Address
-                      </span>
-                      <p className="text-xs text-gray-500">
-                        Request shipping address during payment
-                      </p>
-                    </div>
+                    <span className="text-sm text-gray-700">
+                      Credit/Debit Cards
+                    </span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={state.paymentMethods.venmo}
+                      disabled={!state.capabilities?.venmo}
+                      onChange={(e) =>
+                        onPaymentMethodChange("venmo", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    <span
+                      className={`text-sm ${
+                        !state.capabilities?.venmo
+                          ? "text-gray-400"
+                          : "text-gray-700"
+                      }`}
+                    >
+                      Venmo{" "}
+                      {!state.capabilities?.venmo ? "(Not Available)" : ""}
+                    </span>
+                  </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={state.paymentMethods.googlePay}
+                      disabled={!state.capabilities?.googlePay}
+                      onChange={(e) =>
+                        onPaymentMethodChange("googlePay", e.target.checked)
+                      }
+                      className="mr-2"
+                    />
+                    <span
+                      className={`text-sm ${
+                        !state.capabilities?.googlePay
+                          ? "text-gray-400"
+                          : "text-gray-700"
+                      }`}
+                    >
+                      Google Pay{" "}
+                      {!state.capabilities?.googlePay ? "(Not Available)" : ""}
+                    </span>
                   </label>
                 </div>
               </div>
             )}
           </div>
-
-          {/* Information Panel */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <FaInfoCircle className="text-yellow-600 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-yellow-800">
-                <strong>Important Notes:</strong>
-                <ul className="mt-2 space-y-1 list-disc list-inside">
-                  <li>Only one payment field is allowed per form</li>
-                  <li>
-                    Payment methods availability depends on your merchant
-                    account capabilities
-                  </li>
-                  <li>
-                    Test your payment configuration before publishing the form
-                  </li>
-                  <li>All payment data is processed securely through PayPal</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Form Product Manager Modal */}
-      {showManager && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={(e) => e.target === e.currentTarget && handleCloseManager()}
-        >
-          <div className="bg-white rounded-lg max-w-5xl w-full m-4 max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex justify-between items-center p-6 border-b">
-              <h2 className="text-xl font-semibold">
-                Manage Form{" "}
-                {managerType.charAt(0).toUpperCase() + managerType.slice(1)}s
-              </h2>
-              <button
-                onClick={handleCloseManager}
-                className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              <FormProductManager
-                selectedField={selectedField}
-                onUpdateField={onUpdateField}
-                selectedMerchantId={selectedMerchantId}
-                typeFilter={managerType}
-                onClose={handleCloseManager}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+        )}
     </div>
-  );
-};
+  )
+);
+
+// Advanced Tab Component
+const AdvancedTab = React.memo(
+  ({ state, actions, onBehaviorChange, expandedSections, toggleSection }) => (
+    <div className="space-y-6">
+      {/* Field Behavior */}
+      <div className="bg-white border border-gray-200 rounded-lg">
+        <button
+          onClick={() => toggleSection("behavior")}
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+        >
+          <div className="flex items-center gap-3">
+            <FaCog className="text-purple-600" />
+            <div>
+              <h4 className="font-medium text-gray-900">Field Behavior</h4>
+              <p className="text-sm text-gray-600">
+                Configure additional field behavior and data collection
+              </p>
+            </div>
+          </div>
+          {expandedSections.behavior ? <FaChevronDown /> : <FaChevronRight />}
+        </button>
+
+        {expandedSections.behavior && (
+          <div className="px-4 pb-4 border-t border-gray-100">
+            <div className="space-y-3 mt-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={state.behavior.collectBillingAddress}
+                  onChange={(e) =>
+                    onBehaviorChange({
+                      collectBillingAddress: e.target.checked,
+                    })
+                  }
+                  className="mr-3"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Collect Billing Address
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    Request billing address during payment
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={state.behavior.collectShippingAddress}
+                  onChange={(e) =>
+                    onBehaviorChange({
+                      collectShippingAddress: e.target.checked,
+                    })
+                  }
+                  className="mr-3"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Collect Shipping Address
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    Request shipping address during payment
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Information Panel */}
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <FaInfoCircle className="text-yellow-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-yellow-800">
+            <strong>Important Notes:</strong>
+            <ul className="mt-2 space-y-1 list-disc list-inside">
+              <li>Only one payment field is allowed per form</li>
+              <li>
+                Payment methods availability depends on your merchant account
+                capabilities
+              </li>
+              <li>
+                Test your payment configuration before publishing the form
+              </li>
+              <li>All payment data is processed securely through PayPal</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Debug Information (remove in production) */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+        <h5 className="text-sm font-medium text-gray-700 mb-2">
+          Debug Information
+        </h5>
+        <div className="text-xs text-gray-600 space-y-1">
+          <div>State Initialized: {state.isInitialized ? "Yes" : "No"}</div>
+          <div>State Dirty: {state.isDirty ? "Yes" : "No"}</div>
+          <div>
+            Last Updated:{" "}
+            {state.lastUpdated
+              ? new Date(state.lastUpdated).toLocaleString()
+              : "Never"}
+          </div>
+          <div>Merchant ID: {state.selectedMerchantId || "Not set"}</div>
+          <div>Payment Type: {state.paymentType}</div>
+          <div>
+            Payment Methods:{" "}
+            {Object.entries(state.paymentMethods)
+              .filter(([_, enabled]) => enabled)
+              .map(([method]) => method)
+              .join(", ")}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+);
 
 // Wrapper component with PaymentProvider
 const PayPalFieldEditorTabs = ({
@@ -1429,7 +970,7 @@ const PayPalFieldEditorTabs = ({
 }) => {
   return (
     <PaymentProvider userId={userId} formId={formId}>
-      <PayPalFieldEditorTabsInternal
+      <PayPalFieldEditorTabsRefactored
         selectedField={selectedField}
         onUpdateField={onUpdateField}
         className={className}

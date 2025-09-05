@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormName from './FormName';
 import Datatable from '../Datatable/ShowPage';
@@ -22,7 +22,9 @@ const Home = () => {
     error: contextError,
     fetchSalesforceData,
     userProfile,
-    Fieldset
+    Fieldset,
+    Folders,
+    googleData
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -116,6 +118,9 @@ console.log('Cloning ',cloningFormData);
       });
 
       const data = await response.json();
+      if(data.newAccessToken){
+        settoken(data.newAccessToken);
+      }
       if (!response.ok) {
         throw new Error(data.error || 'Failed to clone form');
       }
@@ -236,6 +241,9 @@ console.log('Cloning ',cloningFormData);
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete form');
+      }
+      if(data.newAccessToken){
+        settoken(data.newAccessToken);
       }
     } catch (error) {
       console.error('Error deleting form:', error);
@@ -368,6 +376,9 @@ console.log('Cloning ',cloningFormData);
         if (!response.ok) {
           throw new Error(data.error || 'Failed to create/update folder');
         }
+        if(data.newAccessToken){
+          settoken(data.newAccessToken);
+        }
         // Optionally, refresh data or show success message here
       } catch (error) {
         console.error('Error creating/updating folder:', error);
@@ -402,6 +413,10 @@ console.log('Cloning ',cloningFormData);
       if (!response.ok) {
         console.error('Favorite form toggle failed:', result?.error || 'Unknown error');
         return;
+      }
+
+      if(result.newAccessToken){
+        settoken(result.newAccessToken);
       }
   
       console.log(`Form ${formId} favorite status toggled successfully`, result);
@@ -476,7 +491,7 @@ console.log('Cloning ',cloningFormData);
       />
       <div className={`flex-1 transition-all  duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         {selectedNav === 'integration' ? (
-          <Integrations token={token} />
+          <Integrations token={token} GoogleData ={googleData} />
         ) : selectedNav === 'folders' ? (
           <div className=' flex flex-col'>
             {/* <RecentFilesSlider
@@ -491,6 +506,10 @@ console.log('Cloning ',cloningFormData);
               onEditForm={handleEditForm}
               onDeleteForm={handleDeleteForm}
               onToggleStatus={handleToggleStatus}
+              SFfolders={Folders}
+              token={token}
+              fetchSalesforceData={fetchSalesforceData}
+              isLoading ={contextLoading} 
             />
           </div>
         ) : selectedNav === 'fieldset' ? (
@@ -544,7 +563,7 @@ console.log('Cloning ',cloningFormData);
             <div className="mt-5">
               {/* <AnimatePresence> */}
               <motion.div
-                style={{ padding: '26px 26px 0 26px' }}
+                style={{ padding: '8px 26px 0 26px' }}
                 key="datatable"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, y: 0 }}

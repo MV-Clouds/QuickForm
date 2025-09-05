@@ -74,13 +74,13 @@ export const SalesforceDataProvider = ({ children }) => {
       const userProfileData = data?.UserProfile || {};
       const folderData = typeof data?.Folders === 'string' ? JSON.parse(data?.Folders) : data?.Folders || [];
       const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
-      const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
+      // const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
       setFieldset(parsedFieldset);
-      setdeletedData(parsedDeletedData);
+      // setdeletedData(parsedDeletedData);
       setfavoriteData(favoriteRecords);
       setFolders(folderData);
       console.log('Metadata fetched successfully:', data);

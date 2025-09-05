@@ -31,7 +31,7 @@ const Login = () => {
     if (!url) return false;
     const trimmedUrl = url.trim();
     return (
-       trimmedUrl.startsWith('https://') &&
+      !trimmedUrl.startsWith('https://') &&
       trimmedUrl.endsWith('.my.salesforce.com') &&
       trimmedUrl.length > '.my.salesforce.com'.length
     );
@@ -39,9 +39,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    sessionStorage.setItem('isLoggedIn', 'true');
-    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    // sessionStorage.setItem('isLoggedIn', 'true');
+    // sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
+    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -76,6 +76,12 @@ const Login = () => {
           sessionStorage.setItem('userId', event.data.userId); // Store userId
           sessionStorage.setItem('instanceUrl', event.data.instanceUrl); // Store instanceUrl
           navigate('/guest'); // Redirect to home
+        }
+        else if (event.data.type === 'setup_required') {
+          if (popup && !popup.closed) {
+            popup.close(); // Close popup
+          }
+          navigate('/setup'); // Redirect to setup page
         } else if (event.data === 'login_failed') {
           alert('Login failed. Please try again.'); // Show error
         }

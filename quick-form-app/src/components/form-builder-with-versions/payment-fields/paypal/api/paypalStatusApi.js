@@ -1,4 +1,4 @@
-import { API_ENDPOINTS } from "../../../config";
+import { API_ENDPOINTS } from "../../../../../config";
 
 /**
  * PayPal Status API Functions
@@ -15,7 +15,7 @@ export const checkPayPalAccountStatus = async (merchantId) => {
       `🔍 Checking PayPal account status for merchant: ${merchantId}`
     );
 
-    const response = await fetch(API_ENDPOINTS.PAYMENT_API, {
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -48,21 +48,19 @@ export const checkPayPalAccountStatus = async (merchantId) => {
     return {
       success: false,
       error: error.message,
-      connected: false,
-      status: "error",
       lastChecked: new Date().toISOString(),
     };
   }
 };
 
 /**
- * Refresh merchant account capabilities
+ * Refresh merchant capabilities
  */
 export const refreshMerchantCapabilities = async (merchantId) => {
   try {
     console.log(`🔄 Refreshing capabilities for merchant: ${merchantId}`);
 
-    const response = await fetch(API_ENDPOINTS.PAYMENT_API, {
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -85,61 +83,28 @@ export const refreshMerchantCapabilities = async (merchantId) => {
     return {
       success: true,
       capabilities: data.capabilities,
-      lastUpdated: new Date().toISOString(),
+      refreshed: true,
+      lastRefreshed: new Date().toISOString(),
     };
   } catch (error) {
     console.error(`❌ Error refreshing capabilities:`, error);
     return {
       success: false,
       error: error.message,
+      refreshed: false,
+      lastRefreshed: new Date().toISOString(),
     };
   }
 };
 
 /**
- * Update account status in form data
- */
-export const updateAccountStatusInForm = async (
-  fieldId,
-  merchantId,
-  statusData,
-  onUpdateField
-) => {
-  try {
-    // Get current field data
-    const currentField = document.querySelector(`[data-field-id="${fieldId}"]`);
-    if (!currentField) {
-      throw new Error("Field not found");
-    }
-
-    // Update the field with new status data
-    const updatedSubFields = {
-      merchantId: merchantId,
-      accountStatus: {
-        ...statusData,
-        lastUpdated: new Date().toISOString(),
-      },
-    };
-
-    // Call the update function
-    onUpdateField(fieldId, { subFields: updatedSubFields });
-
-    console.log(`✅ Updated account status in form for field: ${fieldId}`);
-    return { success: true };
-  } catch (error) {
-    console.error(`❌ Error updating account status in form:`, error);
-    return { success: false, error: error.message };
-  }
-};
-
-/**
- * Validate merchant account connection
+ * Validate merchant connection
  */
 export const validateMerchantConnection = async (merchantId) => {
   try {
     console.log(`🔐 Validating merchant connection: ${merchantId}`);
 
-    const response = await fetch(API_ENDPOINTS.PAYMENT_API, {
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -161,8 +126,8 @@ export const validateMerchantConnection = async (merchantId) => {
 
     return {
       success: true,
-      isValid: data.isValid,
-      connectionDetails: data.connectionDetails,
+      valid: data.valid,
+      connectionStatus: data.connectionStatus,
       validatedAt: new Date().toISOString(),
     };
   } catch (error) {
@@ -170,19 +135,20 @@ export const validateMerchantConnection = async (merchantId) => {
     return {
       success: false,
       error: error.message,
-      isValid: false,
+      valid: false,
+      validatedAt: new Date().toISOString(),
     };
   }
 };
 
 /**
- * Get merchant account health score
+ * Get merchant health score
  */
 export const getMerchantHealthScore = async (merchantId) => {
   try {
     console.log(`📈 Getting health score for merchant: ${merchantId}`);
 
-    const response = await fetch(API_ENDPOINTS.PAYMENT_API, {
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -207,13 +173,15 @@ export const getMerchantHealthScore = async (merchantId) => {
       healthScore: data.healthScore,
       factors: data.factors,
       recommendations: data.recommendations,
-      checkedAt: new Date().toISOString(),
+      calculatedAt: new Date().toISOString(),
     };
   } catch (error) {
     console.error(`❌ Error getting health score:`, error);
     return {
       success: false,
       error: error.message,
+      healthScore: 0,
+      calculatedAt: new Date().toISOString(),
     };
   }
 };
@@ -225,7 +193,7 @@ export const batchCheckAccounts = async (merchantIds) => {
   try {
     console.log(`📊 Batch checking accounts:`, merchantIds);
 
-    const response = await fetch(API_ENDPOINTS.PAYMENT_API, {
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -255,45 +223,55 @@ export const batchCheckAccounts = async (merchantIds) => {
     return {
       success: false,
       error: error.message,
+      results: [],
+      checkedAt: new Date().toISOString(),
     };
   }
 };
 
 /**
- * Schedule automatic status checks
+ * Get real-time account metrics
  */
-export const scheduleStatusCheck = (merchantId, intervalMinutes = 30) => {
-  const intervalId = setInterval(async () => {
-    console.log(`⏰ Scheduled status check for merchant: ${merchantId}`);
-    const result = await checkPayPalAccountStatus(merchantId);
-
-    // Emit custom event for status update
-    window.dispatchEvent(
-      new CustomEvent("paypal-status-update", {
-        detail: { merchantId, status: result },
-      })
+export const getAccountMetrics = async (merchantId, timeRange = "7d") => {
+  try {
+    console.log(
+      `📊 Getting account metrics for merchant: ${merchantId}, range: ${timeRange}`
     );
-  }, intervalMinutes * 60 * 1000);
 
-  // Return cleanup function
-  return () => {
-    clearInterval(intervalId);
-    console.log(`🛑 Stopped scheduled checks for merchant: ${merchantId}`);
-  };
-};
+    const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "get-account-metrics",
+        merchantId: merchantId,
+        timeRange: timeRange,
+      }),
+    });
 
-/**
- * Listen for status updates
- */
-export const onStatusUpdate = (callback) => {
-  const handleStatusUpdate = (event) => {
-    callback(event.detail);
-  };
+    const data = await response.json();
+    console.log(`📊 Account metrics response:`, data);
 
-  window.addEventListener("paypal-status-update", handleStatusUpdate);
+    if (!response.ok) {
+      throw new Error(
+        data.error || `HTTP ${response.status}: ${response.statusText}`
+      );
+    }
 
-  // Return cleanup function
-  return () => {
-    window.removeEventListener("paypal-status-update", handleStatusUpdate);
-  };
+    return {
+      success: true,
+      metrics: data.metrics,
+      timeRange: timeRange,
+      retrievedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error(`❌ Error getting account metrics:`, error);
+    return {
+      success: false,
+      error: error.message,
+      metrics: null,
+      retrievedAt: new Date().toISOString(),
+    };
+  }
 };

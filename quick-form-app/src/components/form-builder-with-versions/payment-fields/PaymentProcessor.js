@@ -165,6 +165,10 @@ class PaymentProcessor {
         return await this.processDonationButton(field, provider);
       case "product":
         return await this.processProduct(field, provider);
+      case "product_wise":
+        return await this.processProductWise(field, provider);
+      case "custom_amount":
+        return await this.processCustomAmount(field, provider);
       default:
         throw new Error(`Unsupported payment type: ${paymentConfig.type}`);
     }
@@ -531,6 +535,46 @@ class PaymentProcessor {
     throw new Error(
       "Merchant account not configured. Please select a merchant account."
     );
+  }
+
+  /**
+   * Process product-wise payment field
+   */
+  async processProductWise(field, provider) {
+    // Product-wise payments don't need upfront processing
+    // Products are stored in field configuration and used during payment
+    const subFields = field.subFields || {};
+
+    return {
+      action: "configured",
+      type: "product_wise",
+      provider: provider.name.toLowerCase(),
+      merchantId:
+        field.paymentConfig?.merchantId ||
+        subFields.merchantId ||
+        (await this.resolveMerchantId(field.paymentConfig)),
+      products: subFields.products || [],
+    };
+  }
+
+  /**
+   * Process custom amount payment field
+   */
+  async processCustomAmount(field, provider) {
+    // Custom amount payments don't need upfront processing
+    // Amount configuration is stored in field and used during payment
+    const subFields = field.subFields || {};
+
+    return {
+      action: "configured",
+      type: "custom_amount",
+      provider: provider.name.toLowerCase(),
+      merchantId:
+        field.paymentConfig?.merchantId ||
+        subFields.merchantId ||
+        (await this.resolveMerchantId(field.paymentConfig)),
+      amountConfig: subFields.amount || {},
+    };
   }
 
   /**

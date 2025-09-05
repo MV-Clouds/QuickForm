@@ -54,7 +54,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
 
   // Filtered fieldsets for search
   const filteredFieldsets = useMemo(() =>
-    fieldsets.filter(f =>
+    fieldsets?.filter(f =>
       f.Name.toLowerCase().includes(search.toLowerCase())
     ), [fieldsets, search]);
 
@@ -396,10 +396,11 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
   // 2. Modify handleEdit
   const handleEdit = (fieldsetId) => {
     const fieldset = fieldsets.find(f => f.Id === fieldsetId);
+    console.log('Fieldset' , fieldset)
     if (!fieldset) return;
     let fields = [];
     try {
-      fields = JSON.parse(fieldset.Fields__c || '[]');
+      fields = typeof fieldset.Fieldset_Fields__c === 'string' ? JSON.parse(fieldset.Fieldset_Fields__c) : fieldset.Fieldset_Fields__c;
     } catch {
       fields = [];
     }
@@ -411,7 +412,6 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       heading: fieldset.Name || 'Fieldset',
       alignment: 'center',
     };
-    console.log('header ==> ', headerField)
     const pages = {};
     fields.forEach((field) => {
       const pageNumber = field.Page_Number__c || 1;
@@ -494,6 +494,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       const data = await resp.json();
       console.log('PATCH response =>', data);
       if (!resp.ok) throw new Error(data.error || 'Failed to update fieldset');
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
 
       setSuccess('Fieldset updated successfully!');
       setModalOpen(false);
@@ -527,6 +530,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
         }),
       });
       const data = await resp.json();
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
       console.log('Deletion => ', data);
       fetchMetadata(userId, instanceUrl);
     } catch (error) {
@@ -569,6 +575,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       const data = await resp.json();
       console.log('Response from Lambda==> ', data)
       if (!resp.ok) throw new Error(data.error || 'Failed to create fieldset');
+      if(data.newAccessToken){
+        token = data.newAccessToken;
+      }
 
       setSuccess('Fieldset created successfully!');
       setModalOpen(false);

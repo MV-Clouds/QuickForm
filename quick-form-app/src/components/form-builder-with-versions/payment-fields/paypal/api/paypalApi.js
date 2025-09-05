@@ -428,6 +428,9 @@ export const getPaymentStatus = async (paymentId) => {
 
 // Generate onboarding URL
 export const generateOnboardingUrl = async (returnUrl, cancelUrl) => {
+  console.log("Return Url  ", returnUrl);
+  console.log("Cancel Url  ", cancelUrl);
+  
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
@@ -438,6 +441,8 @@ export const generateOnboardingUrl = async (returnUrl, cancelUrl) => {
     },
     "Failed to generate onboarding URL"
   );
+
+    console.log("💀 generateOnboardingUrl response:", response);
 
   return {
     ...response,

@@ -100,6 +100,9 @@ const CreateFormWizard = ({ onClose }) => {
       if (!metadataResponse.ok) throw new Error('Failed to fetch metadata');
 
       const metadataData = await metadataResponse.json();
+      if(metadataData.newAccessToken){
+        setAccessToken(metadataData.newAccessToken);
+      }
       if (metadataData.metadata) {
         setMetadata(JSON.parse(metadataData.metadata));
       } else {
@@ -147,6 +150,9 @@ const CreateFormWizard = ({ onClose }) => {
       }
 
       const data = await response.json();
+      if(data.newAccessToken){
+        setAccessToken(data.newAccessToken);
+      }
       
       // Assuming your state structure expects something like:
       setFieldsData((prev) => ({
@@ -201,6 +207,9 @@ const CreateFormWizard = ({ onClose }) => {
       }
 
       const data = await response.json(); // Parse response JSON
+      if(data.newAccessToken){
+        setAccessToken(data.newAccessToken); // Update access token if a new one is provided
+      }
 
       const fields = data.fields || []; // Extract fields or default to empty array
       setFieldsData((prev) => ({ ...prev, [objectName]: fields })); // Update fieldsData state with new fields

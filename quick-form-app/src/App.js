@@ -15,7 +15,7 @@ import GuestPageD from './components/LandingPage/GuestPageD';
 import NotificationPage from './components/NotificationSettings/NotificationSettingsModal';
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
-
+import LargeFileUpload from './components/file-upload/large-file-upload';
 function App() {
   return (
     // Set up the router for navigation
@@ -27,6 +27,7 @@ function App() {
             <Routes>
               {/* Public route for login */}
               <Route path="/" element={<Login />} />
+              <Route path='/upload' element ={<LargeFileUpload/>}/>
               <Route path="/guest" element={<ProtectedRoute element={< GuestPageD />} />} />
               {/* Protected route for form creation wizard */}
               <Route
@@ -58,12 +59,24 @@ function App() {
               />
               <Route path="/public-form/:linkId" element={<PublicFormViewer />} />
               <Route
+                path="/public-form/prefill/:linkId"
+                element={<PublicFormViewer runPrefill={true} />}
+              />
+              <Route
                 path="/conditions/:formVersionId"
                 element={<ProtectedRoute element={<MainFormBuilder showCondition/>} />}
               />
                <Route
                 path="/notifications/:formVersionId"
                 element={<ProtectedRoute element={<MainFormBuilder showNotification />} />}
+              />
+                <Route
+                path="/submissions/:formVersionId"
+                element={
+                  <ProtectedRoute
+                    element={<MainFormBuilder showSubmission />}
+                  />
+                }
               />
               <Route
                 path="/mapping/:formVersionId"
@@ -77,6 +90,14 @@ function App() {
                 element={
                   <ProtectedRoute element={
                     <MainFormBuilder showShare />
+                  }/>
+                }
+              />
+               <Route 
+                path="/prefill/:formVersionId"
+                element={
+                  <ProtectedRoute element={
+                    <MainFormBuilder showPrefill />
                   }/>
                 }
               />

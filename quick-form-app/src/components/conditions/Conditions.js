@@ -16,6 +16,20 @@ import './Conditions.css';
 
 const { TabPane } = Tabs;
 const { Option } = Select;
+// Utility: Generate 100 distinct bracket colors (as background)
+const BRACKET_COLORS = [
+  '#FF4500', '#FF6EB4', '#32CD32', '#FFD700', '#800080', '#FF1493', '#00CED1', '#FF8C00', '#8B0000', '#006400',
+  '#8B008B', '#00BFFF', '#228B22', '#DAA520', '#4B0082', '#FF69B4', '#48D1CC', '#FF7F50', '#A52A2A', '#228B22',
+  '#BA55D3', '#87CEFA', '#9ACD32', '#FF6347', '#9400D3', '#FF00FF', '#40E0D0', '#FF4500', '#A52A2A', '#2E8B57',
+  '#D2691E', '#7B68EE', '#00FA9A', '#FFA07A', '#8A2BE2', '#FF6EB4', '#20B2AA', '#FF6347', '#B22222', '#556B2F',
+  '#9932CC', '#ADD8E6', '#7FFF00', '#FF69B4', '#800000', '#48D1CC', '#DA70D6', '#00BFFF', '#9ACD32', '#FF4500',
+  '#4B0082', '#66CDAA', '#FF8C00', '#8B0000', '#00FF7F', '#FF1493', '#2E8B57', '#D2691E', '#7B68EE', '#00FA9A',
+  '#FFA07A', '#8A2BE2',  '#B22222', '#20B2AA', '#FF6347', '#B22222', '#556B2F', '#9932CC', '#ADD8E6', '#7FFF00',
+  '#FF69B4', '#800000', '#48D1CC', '#DA70D6', '#00BFFF', '#9ACD32', '#FF4500', '#4B0082', '#66CDAA', '#FF8C00',
+  '#8B0000', '#00FF7F', '#FF1493', '#2E8B57', '#D2691E', '#7B68EE', '#00FA9A', '#FFA07A', '#8A2BE2', '#FF6EB4',
+  '#20B2AA', '#FF6347', '#1E90FF', '#556B2F', '#9932CC', '#ADD8E6', '#7FFF00', '#FF69B4', '#800000', '#48D1CC'
+];
+
 
 const Conditions = ({ formVersionId }) => {
   const navigate = useNavigate();
@@ -57,7 +71,33 @@ const Conditions = ({ formVersionId }) => {
   const [calcFields, setCalcFields] = useState([]); // fields list for Add Field dropdown
   const [calcFieldToAdd, setCalcFieldToAdd] = useState(''); // selected field to add
   const [fieldPills, setFieldPills] = React.useState([]);
+  const [isShowHideModalVisible, setIsShowHideModalVisible] = React.useState(false);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const [logicValidationError, setLogicValidationError] = useState(null);
+  const canShowPreview = newCondition.logic === 'Custom' && !logicValidationError && newCondition.logicExpression.trim().length > 0;
 
+  // Show preview icon only if logic is Custom and expression valid
+  const handleLogicExpressionBlur = () => {
+    
+    if (newCondition.logic === 'Custom') {
+      const validationError = validateCustomLogic(newCondition.logicExpression, newCondition.conditions.length);
+      setLogicValidationError(validationError);
+    } else {
+      setLogicValidationError(null);
+    }
+  };
+
+
+  // Handler for preview icon click
+  const openPreview = () => {
+    setIsPreviewVisible(true);
+    setIsShowHideModalVisible(false); // hide editing modal
+  };
+
+  const closePreview = () => {
+    setIsPreviewVisible(false);
+    setIsShowHideModalVisible(true); // show editing modal back
+  };
   // Animation variants for Framer Motion
   const containerVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -613,6 +653,9 @@ const Conditions = ({ formVersionId }) => {
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to save condition');
+      if(data.newAccessToken){
+        setToken(data.newAccessToken);
+      }
 
       setConditions((prev) =>
         conditionId
@@ -760,6 +803,7 @@ const Conditions = ({ formVersionId }) => {
         setSelectedNode(null);
         setIsModalVisible(false);
       }
+      setIsShowHideModalVisible(false);
     } catch (err) {
       setError(err.message);
     }
@@ -789,7 +833,11 @@ const Conditions = ({ formVersionId }) => {
         }),
       });
 
+      const data = await response.json();
       if (!response.ok) throw new Error('Failed to delete condition');
+      if(data.newAccessToken) {
+        setToken(data.newAccessToken);
+      }
       setConditions(conditions.filter((c) => c.Id !== conditionId));
       setEdges((prevEdges) => {
         const updatedEdges = prevEdges.map((edge) => {
@@ -871,6 +919,12 @@ const Conditions = ({ formVersionId }) => {
     }
   };
 
+  useEffect(() => {
+  if (newCondition.logicExpression !== undefined) {
+    handleLogicExpressionBlur();
+  }
+}, [newCondition.logicExpression]);
+
   const handleFieldChange = (field, value, conditionIndex = null) => {
     setNewCondition((prev) => {
       if (prev.type === 'dependent') {
@@ -887,6 +941,7 @@ const Conditions = ({ formVersionId }) => {
           ...updatedConditions[conditionIndex],
           [field]: value,
           ...(field === 'ifField' ? { operator: '', value: '' } : {}), // Reset operator and value when ifField changes
+          ...(field === 'operator' && ['is null', 'is not null'].includes(value) ? { value: '' } : {}),
         };
         return {
           ...prev,
@@ -898,7 +953,7 @@ const Conditions = ({ formVersionId }) => {
         [field]: value,
         ...(field === 'thenFields' ? { thenFields: value } : {}),
         ...(field === 'thenAction' && !['set mask', 'unmask'].includes(value) ? { maskPattern: '' } : {}),
-        ...(field === 'logic' ? { logic: value } : {}),
+        ...(field === 'logic' ? { logic: value, logicExpression: '' } : {}),
         ...(field === 'logicExpression' ? { logicExpression: value } : {}),
       };
     });
@@ -1573,8 +1628,123 @@ const Conditions = ({ formVersionId }) => {
     return evaluateCalculation(calcExpression, defaultFieldValues);
   }, [calcExpression, fields]); // no dependency on formRecords since no real input yet
 
+  function parseLogicExpression(logicExpression) {
+    if (!logicExpression) return null;
+    const tokens = logicExpression.match(/\d+|AND|OR|\(|\)/g);
+    if (!tokens) return null;
+    let i = 0;
+
+    function parseGroup() {
+      const group = [];
+      while (i < tokens.length) {
+        const token = tokens[i];
+        if (token === '(') {
+          i++;
+          group.push(parseGroup());
+        } else if (token === ')') {
+          i++;
+          break;
+        } else if (/^\d+$/.test(token)) {
+          group.push({ type: 'condition', idx: Number(token) });
+          i++;
+        } else if (token === 'AND' || token === 'OR') {
+          group.push(token);
+          i++;
+        } else {
+          i++;
+        }
+      }
+      return group;
+    }
+    i = 0;
+    return parseGroup();
+  }
+
+
+  const ConditionChip = ({ label, value }) => (
+    <span className="condition-chip">
+      <span className="chip-label">{label}</span>
+      {value !== undefined && value !== null && value !== '' && (
+        <span className="chip-value">{value}</span>
+      )}
+    </span>
+  );
+  
+
+  function renderLogicGroup({
+    group,
+    conditions,
+    fields,
+    bracketColorIndex = 0,
+  }) {
+    if (!Array.isArray(group)) return null;
+    const bracketColor = BRACKET_COLORS[bracketColorIndex % 100];
+
+    return (
+      <>
+        <span
+          className="logic-bracket"
+          style={{
+            color: bracketColor,
+            fontSize: '20px',
+            fontWeight: 700,
+          }}
+        >
+          {'{'}
+        </span>
+        {group.map((item, idx) => {
+          if (item === 'AND' || item === 'OR') {
+            return (
+              <span key={idx} className="logic-connector">
+                {item}
+              </span>
+            );
+          }
+          if (Array.isArray(item)) {
+            // Recursively render with increased color index
+            return renderLogicGroup({
+              group: item,
+              conditions,
+              fields,
+              bracketColorIndex: bracketColorIndex + 1,
+            
+            });
+          }
+          if (item.type === 'condition') {
+            const cond = conditions[item.idx - 1]; // 1-based index
+            const fieldObj = fields.find((f) => f.Unique_Key__c === cond.ifField);
+            return (
+              <span className="condition-item" key={idx} style={{ margin: '0 4px', whiteSpace: 'nowrap' }}>
+                <span className="condition-field" style={{ fontWeight: '600' }}>
+                  {fieldObj ? fieldObj.Name : 'Unknown'}
+                </span>{' '}
+                <span className="condition-operator" style={{ fontWeight: '500' }}>
+                  {cond.operator}
+                </span>{' '}
+                <span className="condition-value" style={{ fontStyle: 'italic' }}>
+                  {cond.value !== undefined && cond.value !== null && cond.value !== '' ? cond.value : 'N/A'}
+                </span>
+              </span>
+            );
+          }
+          return null;
+        })}
+        <span
+          className="logic-bracket"
+          style={{
+            color: bracketColor,
+            fontSize: '20px',
+            fontWeight: 700,
+          }}
+        >
+          {'}'}
+        </span>
+      </>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="conditions-wrapper">
       {/* {showSidebar && (
         <motion.div
           className="w-64 bg-white shadow-lg"
@@ -1582,15 +1752,35 @@ const Conditions = ({ formVersionId }) => {
           <MainMenuBar formVersionId={formVersionId} />
         </motion.div>
       )} */}
+      
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="flex-1 p-6 overflow-y-auto"
+        className="conditions-main-container"
       >
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">Form Conditions</h1>
+        <div className='heading-container'>
+          <div className='svg-container'>
+            <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="50" height="50" rx="8" fill="#5F6165"/>
+              <rect x="24.6011" y="18.8008" width="14.9501" height="14.9501" transform="rotate(45 24.6011 18.8008)" fill="white"/>
+              <path d="M12.7408 29.375H6.76074V34.2587" stroke="white" stroke-width="0.797341"/>
+              <path d="M37.259 29.375H43.239V34.2587" stroke="white" stroke-width="0.797341"/>
+              <line x1="24.7009" y1="14.3262" x2="24.7009" y2="17.5155" stroke="white" stroke-width="0.797341"/>
+              <circle cx="24.7008" cy="9.14249" r="3.18936" fill="white"/>
+              <circle cx="6.76065" cy="39.4394" r="3.18936" fill="white"/>
+              <path d="M5.5647 38.2441L7.95672 40.6362M5.5647 40.6362L7.95672 38.2441" stroke="#5F6165" stroke-width="0.717607" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="43.2389" cy="39.4394" r="3.18936" fill="white"/>
+              <path d="M41.8435 39.7392L42.5412 40.6362L44.9332 38.2441" stroke="#5F6165" stroke-width="0.717607" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div className='heading-container-text'>
+            <p className='heading-conditions-text'>CONDITIONS</p>
+            <p className='heading-desc-text'>Make your form interactive with conditional display.</p>
+          </div>
+        </div>
+        <div className="tabs-container">
           {error && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -1630,7 +1820,7 @@ const Conditions = ({ formVersionId }) => {
               }}
             >
               <TabPane tab="Show/Hide Fields" key="show_hide">
-                <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
+                {/* <motion.div variants={containerVariants} className="bg-white p-4 rounded shadow">
                   <h2 className="text-xl font-semibold mb-3">Add Show/Hide Condition</h2>
                   <div className="mb-4">
                     {newCondition.conditions?.map((condition, index) => (
@@ -1839,64 +2029,172 @@ const Conditions = ({ formVersionId }) => {
                       )}
                     </div>
                   </div>
-                </motion.div>
-                <motion.div variants={containerVariants} className="mt-4">
-                  <h2 className="text-xl font-semibold mb-3">Existing Conditions</h2>
-                  <AnimatePresence>
-                    {conditions
-                      .filter((c) => c.type === 'show_hide')
-                      .map((condition) => (
-                        <motion.div
-                          key={condition.Id}
-                          variants={itemVariants}
-                          initial="hidden"
-                          animate="visible"
-                          exit="exit"
-                          className="bg-white p-4 rounded shadow mb-4 flex justify-between items-center"
-                        >
-                          <div>
-                            {condition.logic === 'Custom' ? (
-                              <>
-                                <p><strong>If:</strong></p>
-                                {condition.conditions?.map((cond, index) => (
-                                  <p key={index}>
-                                    <strong>Condition {index + 1}:</strong>{' '}
-                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                    {cond.value || 'N/A'}
-                                  </p>
-                                ))}
-                                <p><strong>Logic:</strong> {condition.logicExpression || 'N/A'}</p>
-                              </>
-                            ) : (
-                              <p>
-                                <strong>If:</strong>{' '}
-                                {condition.conditions?.map((cond, index) => (
-                                  <span key={index}>
-                                    {fields.find((f) => f.Unique_Key__c === cond.ifField)?.Name || 'Unknown'} {cond.operator}{' '}
-                                    {cond.value || 'N/A'}
-                                    {index < condition.conditions.length - 1 && ` ${condition.logic} `}
-                                  </span>
-                                ))}
-                              </p>
-                            )}
-                            <p>
-                              <strong>Then:</strong> {condition.thenAction}{' '}
-                              {(Array.isArray(condition.thenFields)
-                                ? condition.thenFields.map((id) => fields.find((f) => f.Unique_Key__c === id)?.Name).filter(Boolean)?.join(', ')
-                                : fields.find((f) => f.Unique_Key__c === condition.thenFields)?.Name) || 'None'}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button size="small" onClick={() => editCondition(condition)}>
-                              <FaEdit />
-                            </Button>
-                            <Button size="small" onClick={() => deleteCondition(condition.Id)}>
-                              <FaTrash />
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
-                  </AnimatePresence>
+                </motion.div> */}
+                <motion.div variants={containerVariants} className="existing-conditions-container">
+                  <div className='conditions-heading-container'>
+                    <div><p className="existing-condition-text">Existing Conditions</p></div>
+                    <div>
+                      <button className='login-button'
+                        onClick={() => {
+                          setNewCondition({
+                            type: 'show_hide',
+                            conditions: [{ ifField: '', operator: '', value: '' }],
+                            logic: 'AND',
+                            logicExpression: '',
+                            thenAction: 'show',
+                            thenFields: [],
+                            dependentField: '',
+                            dependentValues: [],
+                            maskPattern: '',
+                            sourcePage: '',
+                            targetPage: [],
+                            ifField: '',
+                            value: '',
+                          });
+                          setEditingConditionId(null);
+                          setIsShowHideModalVisible(true);  // OPEN MODAL HERE
+                        }}
+
+                      >
+                        <svg className='plus-icon-svg' width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M8.57153 12H15.4287" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M12 8.57227V15.4294" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Add New Rule 
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {conditions.filter((c) => c.type === 'show_hide').length === 0 ? (
+                    <div className="no-conditions-container">
+                      <p className="no-conditions-text">No conditions added yet</p>
+                    </div>
+                  ) : (
+                    <div className="conditions-list">
+                      <AnimatePresence>
+                        {conditions
+                          .filter((c) => c.type === 'show_hide')
+                          .map((condition, idx) => {
+                            const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
+                            const conds = conditionData.conditions || [];
+
+                            const logicTree =
+                              conditionData.logic === 'Custom' && conditionData.logicExpression
+                                ? parseLogicExpression(conditionData.logicExpression)
+                                : null;
+
+                            return (
+                              <motion.div
+                                key={condition.Id}
+                                variants={itemVariants}
+                                initial="hidden"
+                                animate="visible"
+                                exit="exit"
+                                className="condition-card"
+                              >
+                                <div className="condition-content">
+                                  <div className="condition-header">
+                                    <div className="condition-numbering">{idx + 1}</div>
+                                    <div className="condition-actions">
+                                      <button
+                                        className="icon-btn edit-btn"
+                                        onClick={() => {
+                                          editCondition(condition);
+                                          setIsShowHideModalVisible(true);  // OPEN MODAL ON EDIT
+                                        }}
+                                        aria-label="Edit condition"
+                                      >
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M11.2171 5.62695H5.6509C5.22911 5.62695 4.8246 5.79451 4.52635 6.09276C4.2281 6.39101 4.06055 6.79552 4.06055 7.21731V18.3498C4.06055 18.7716 4.2281 19.1761 4.52635 19.4743C4.8246 19.7726 5.22911 19.9401 5.6509 19.9401H16.7834C17.2052 19.9401 17.6097 19.7726 17.9079 19.4743C18.2062 19.1761 18.3737 18.7716 18.3737 18.3498V12.7835" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M17.1811 4.43351C17.4975 4.11717 17.9265 3.93945 18.3739 3.93945C18.8213 3.93945 19.2503 4.11717 19.5667 4.43351C19.883 4.74985 20.0607 5.1789 20.0607 5.62628C20.0607 6.07365 19.883 6.5027 19.5667 6.81904L12.0125 14.3732L8.83179 15.1684L9.62696 11.9877L17.1811 4.43351Z" stroke="#5F6165" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+
+                                      </button>
+                                      <button
+                                        className="icon-btn delete-btn"
+                                        onClick={() => deleteCondition(condition.Id)}
+                                        aria-label="Delete condition"
+                                      >
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.19826 8.7046C7.05895 8.7046 6.95304 8.82979 6.97613 8.96717L8.62132 18.7568H15.3786L17.0238 8.96717C17.0469 8.82979 16.941 8.7046 16.8017 8.7046H7.19826ZM17.4058 6.35909C17.5302 6.35909 17.631 6.45994 17.631 6.58434V7.25076C17.631 7.37515 17.5302 7.476 17.4058 7.476H6.59414C6.46974 7.476 6.3689 7.37515 6.3689 7.25076V6.58434C6.3689 6.45994 6.46974 6.35909 6.59414 6.35909H9.5848C10.0916 6.35909 10.5032 5.74535 10.5032 5.24219H13.4967C13.4967 5.74535 13.9078 6.35909 14.4151 6.35909H17.4058Z" fill="#5F6165"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="condition-body">
+                                    <div className="condition-logic">
+                                      <div className="logic-label">Condition: </div>
+
+                                      {logicTree ? (
+                                        <div className="logic-display">
+                                          {renderLogicGroup({
+                                            group: logicTree,
+                                            conditions: conds,
+                                            fields: fields,
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="logic-display">
+                                          {conds.map((cond, index) => {
+                                            const fieldObj = fields.find((f) => f.Unique_Key__c === cond.ifField);
+                                            return (
+                                              <React.Fragment key={index}>
+                                                <div className="condition-item">
+                                                  <span className="condition-field"><b>{fieldObj ? fieldObj.Name : 'Unknown'}</b></span>
+                                                  <span className="condition-operator">{cond.operator}</span>
+                                                  <span className="condition-value">{cond.value || 'N/A'}</span>
+                                                </div>
+                                                {index < conds.length - 1 && (
+                                                  <span className="logic-connector">{conditionData.logic}</span>
+                                                )}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                  </div>
+                                  <div className='condition-body'>
+                                    <div className="condition-logic">
+                                      <div className="logic-label">Outcome</div>
+                                      <div>
+                                        <span className="action-label">
+                                          Action:
+                                        </span>
+                                        <span className='action-text'>{conditionData.thenAction}</span>
+                                      </div>
+                                      <div className='field-container'>
+                                        <span className="field-label">
+                                          Fields:
+                                        </span>
+                                        {Array.isArray(conditionData.thenFields) && conditionData.thenFields.length > 0
+                                          ? conditionData.thenFields.map((id) => {
+                                              const field = fields.find((f) => f.Unique_Key__c === id);
+                                              return field ? (
+                                                <span key={id} className="field-pill">{field.Name}</span>
+                                              ) : null;
+                                            })
+                                          : (
+                                            fields.find((f) => f.Unique_Key__c === conditionData.thenFields)
+                                              ? <span className="field-pill">{fields.find((f) => f.Unique_Key__c === conditionData.thenFields).Name}</span>
+                                              : 'None'
+                                          )
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+
+
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </motion.div>
               </TabPane>
               <TabPane tab="Dependent Picklist" key="dependent">
@@ -3326,6 +3624,358 @@ const Conditions = ({ formVersionId }) => {
           </div>
         </Modal>
           </motion.div>
+          {isShowHideModalVisible && (
+            <div className="showhide-modal-bg" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+              <motion.div
+                className="showhide-modal-box"
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.85, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              >
+                <div className="showhide-modal-header">
+                  <h2 className="showhide-modal-title">{editingConditionId ? 'Edit Show/Hide Condition' : 'Add Show/Hide Condition'}</h2>
+                  <button
+                    onClick={() => {
+                      setIsShowHideModalVisible(false);
+                      setEditingConditionId(null);
+                      setNewCondition(prev => ({
+                        ...prev,
+                        conditions: [{ ifField: '', operator: '', value: '' }],
+                        thenFields: [],
+                        logic: 'AND',
+                        logicExpression: '',
+                        thenAction: 'show',
+                      }));
+                      setError(null);
+                    }}
+                    className="showhide-modal-close"
+                    aria-label="Close"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M11 2.00714L9.99286 1L6 4.99286L2.00714 1L1 2.00714L4.99286 6L1 9.99286L2.00714 11L6 7.00714L9.99286 11L11 9.99286L7.00714 6L11 2.00714Z" fill="#5F6165"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="showhide-modal-content">
+                  <div className="showhide-form-container">
+                    {error && <div className="showhide-modal-error">{error}</div>}
+                    
+                    {/* Condition Section Header */}
+                    <div className="condition-section-header">
+                      <p>Condition these conditions are met:</p>
+                    </div>
+                    
+                    {/* Conditions Container with Scroll */}
+                    <div className="modal-conditions-container">
+                      <label className="showhide-modal-label">When</label>
+                      <div className='modal-overflow-container'>
+                      {newCondition.conditions?.map((condition, index) => (
+                        <div key={index} className="condition-block">
+                            <div className="modal-condition-row">
+                              <div className="modal-condition-field">
+                                <Select
+                                  value={condition.ifField || undefined}
+                                  onChange={value => {
+                                    handleFieldChange('ifField', value, index);
+                                    setError(null);
+                                  }}
+                                  placeholder="Select field"
+                                  className="showhide-modal-select"
+                                  style={{ width: '100%' }}
+                                >
+                                  {validIfFields.map(field => (
+                                    <Select.Option key={field.Unique_Key__c} value={field.Unique_Key__c}>
+                                      {field.Name}
+                                    </Select.Option>
+                                  ))}
+                                </Select>
+                              </div>
+
+                              
+                                <>
+                                  <div className="modal-condition-operator">
+                                    <Select
+                                      value={condition.operator || undefined}
+                                      onChange={value => {
+                                        handleFieldChange('operator', value, index);
+                                        setError(null);
+                                      }}
+                                      placeholder="Select operator"
+                                      className="showhide-modal-select"
+                                      style={{ width: '100%' }}
+                                    >
+                                      {getOperators(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map(op => (
+                                        <Select.Option key={op} value={op}>{op}</Select.Option>
+                                      ))}
+                                    </Select>
+                                  </div>
+                                  <div className="modal-condition-value">
+                                    {['checkbox', 'radio', 'dropdown'].includes(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c) ? (
+                                      <Select
+                                        value={condition.value || undefined}
+                                        onChange={value => handleFieldChange('value', value, index)}
+                                        placeholder="Select value"
+                                        className="showhide-modal-select"
+                                        style={{ width: '100%' }}
+                                      >
+                                        {getFieldOptions(condition.ifField).map(option => (
+                                          <Select.Option key={option} value={option}>{option}</Select.Option>
+                                        ))}
+                                      </Select>
+                                    ) : ['date', 'datetime', 'date-time', 'time'].includes(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c) ? (
+                                      <Input
+                                        type={
+                                          fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                            ? 'date'
+                                            : fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                            ? 'time'
+                                            : 'datetime-local'
+                                        }
+                                        value={condition.value}
+                                        onChange={e => handleFieldChange('value', e.target.value, index)}
+                                        placeholder={
+                                          fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
+                                            ? 'YYYY-MM-DD'
+                                            : fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
+                                            ? 'HH:MM'
+                                            : 'YYYY-MM-DD HH:MM'
+                                        }
+                                        className="showhide-modal-input"
+                                        style={{ width: '100%' }}
+                                      />
+                                    ) : (
+                                      <Input
+                                        value={['is null','is not null'].includes(condition.operator) ? ' ' : condition.value}
+                                        disabled={['is null','is not null'].includes(condition.operator)}
+                                        onChange={e => handleFieldChange('value', e.target.value, index)}
+                                        placeholder="Enter value"
+                                        className="showhide-modal-input"
+                                      />
+                                    )}
+                                  </div>
+                                </>
+                                {newCondition.conditions?.length > 1 && (
+                                  <button
+                                    className="condition-delete-btn"
+                                    onClick={() => removeCondition(index)}
+                                    aria-label="Delete condition"
+                                  >
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M16.9722 8.70703L15.2241 19.1074H8.49268L6.74561 8.70703H16.9722ZM13.0259 4.60742C13.1079 4.82217 13.2196 5.02429 13.354 5.19922C13.5135 5.40685 13.7353 5.6114 14.0083 5.75195H9.7085C9.98149 5.61137 10.2033 5.40675 10.3628 5.19922C10.4973 5.02424 10.6098 4.82235 10.6919 4.60742H13.0259Z" stroke="#5F6165" stroke-width="1.5"/>
+                                    </svg>
+                                  </button>
+                                )}
+                            </div>
+                          
+                          {/* Delete button for each condition */}
+                          
+                        </div>
+                      ))}
+                      </div>
+                      {/* Add Condition Button */}
+                      <button
+                        type="primary"
+                        onClick={addCondition}
+                        className="add-condition-btn"
+                      >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="#028AB0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8.57129 12H15.4284" stroke="#028AB0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 8.57227V15.4294" stroke="#028AB0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+
+                         <span className='add-condition-text'>Add Condition</span>
+                      </button>
+                    </div>
+
+                    
+
+                    {/* Logic Selection Area */}
+                    {newCondition.conditions?.length > 1 && (
+                      <div className="logic-selection-area">
+                        <label className="showhide-modal-label">Apply this logic to all conditions:</label>
+                        <Select
+                          value={newCondition.logic}
+                          onChange={value => {
+                            handleFieldChange('logic', value);
+                            setError(null);
+                          }}
+                          className="showhide-modal-select logic-select"
+                          style={{ width: '100%' }}
+                        >
+                          <Select.Option value="AND">AND</Select.Option>
+                          <Select.Option value="OR">OR</Select.Option>
+                          <Select.Option value="Custom">Custom</Select.Option>
+                        </Select>
+
+                        {newCondition.logic === 'Custom' && (
+                          <div className="modal-custom-logic-input">
+                            <label className="showhide-modal-label">
+                              Custom Logic Expression{' '}
+                              
+                            </label>
+                            <Input
+                              value={newCondition.logicExpression}
+                              onChange={e => handleFieldChange('logicExpression', e.target.value)}
+                              placeholder={`e.g., 1 OR (2 AND 3)`}
+                              className="showhide-modal-input"
+                              style={{ width: '100%' }}
+                            />
+                            {canShowPreview && (
+                              <button
+                                onClick={openPreview}
+                                title="Preview Logic"
+                                className='preview-button'
+                                aria-label="Open logic preview"
+                              >
+                                {/* Eye icon SVG or similar */}
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="11.9999" cy="11.9989" r="2.80556" stroke="#028AB0" stroke-width="1.5"/>
+                                <path d="M19.2782 11.052C19.6233 11.471 19.7958 11.6804 19.7958 11.9993C19.7958 12.3183 19.6233 12.5277 19.2782 12.9466C18.0159 14.4792 15.2318 17.3327 12 17.3327C8.76824 17.3327 5.98405 14.4792 4.72175 12.9466C4.37672 12.5277 4.2042 12.3183 4.2042 11.9993C4.2042 11.6804 4.37672 11.471 4.72175 11.052C5.98405 9.51947 8.76824 6.66602 12 6.66602C15.2318 6.66602 18.0159 9.51947 19.2782 11.052Z" stroke="#028AB0" stroke-width="1.5"/>
+                                </svg> <span className='add-condition-text'>Preview</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Result Section Header */}
+                    <div className="modal-result-section-header">
+                      <p>Result perform these actions:</p>
+                    </div>
+                    
+                    {/* Then Action Section */}
+                    <div className="modal-then-action-section">
+                      <label className="showhide-modal-label">Then</label>
+                      <div className="modal-then-action-row">
+                        <div className="modal-then-action-type">
+                          <Select
+                            value={newCondition.thenAction}
+                            onChange={value => handleFieldChange('thenAction', value)}
+                            className="showhide-modal-select"
+                            style={{ width: '100%' }}
+                          >
+                            <Select.Option value="show">Show</Select.Option>
+                            <Select.Option value="hide">Hide</Select.Option>
+                          </Select>
+                        </div>
+                        
+                        <div className="then-action-field">
+                          <Select
+                          mode='multiple'
+                            value={newCondition.thenFields || undefined}
+                            onChange={value => {
+                              handleFieldChange('thenFields', value);
+                              setError(null);
+                            }}
+                            placeholder="Select field(s) to show/hide"
+                            disabled={!(newCondition.conditions?.[0]?.ifField)}
+                            style={{ width: '100%' }}
+                          >
+                            {validIfFields
+                              .filter(f => !newCondition.conditions?.some(c => c.ifField === f.Unique_Key__c))
+                              .map(f => (
+                                <Select.Option key={f.Unique_Key__c} value={f.Unique_Key__c}>
+                                  {f.Name}
+                                </Select.Option>
+                              ))}
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="showhide-modal-footer">
+                  <div className='cancel-button'>
+                    <button
+                      className="wizard-btn wizard-btn-secondary"
+                      onClick={() => {
+                        setIsShowHideModalVisible(false);
+                        setEditingConditionId(null);
+                      }}
+                    >
+                      Back
+                    </button>
+                  </div>
+                  <div className={` ${!newCondition.conditions?.every(c => c.ifField && c.operator) ||
+                        !newCondition.thenFields.length ? 'next-button' : 'next-button-enabled'}`}>
+              
+                    <button
+                      type="primary"
+                      onClick={() => saveCondition(editingConditionId)}
+                      disabled={
+                        !newCondition.conditions?.every(c => c.ifField && c.operator) ||
+                        !newCondition.thenFields.length
+                      }
+                      className="wizard-btn wizard-btn-primary"
+                    >
+                      {editingConditionId ? 'Update Condition' : 'Save Condition'}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            
+            </div>
+          )}
+          {isPreviewVisible && (
+          <div className="showhide-modal-bg" role="dialog" aria-modal="true" aria-labelledby="preview-modal-title">
+            <motion.div
+              className="showhide-modal-box"
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              style={{ maxWidth: 900, width: '90%' }}
+            >
+              <div className="showhide-modal-header">
+                <p id="preview-modal-title" className="showhide-modal-title">Logic Preview</p>
+                <button
+                  aria-label="Close Preview"
+                  className="showhide-modal-close"
+                  onClick={closePreview}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M11 2.00714L9.99286 1L6 4.99286L2.00714 1L1 2.00714L4.99286 6L1 9.99286L2.00714 11L6 7.00714L9.99286 11L11 9.99286L7.00714 6L11 2.00714Z" fill="#5F6165"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="showhide-modal-content">
+                <div className="showhide-form-container">
+                  <p className="showhide-modal-label">Custom Logic Expression:</p>
+                  <div className="preview-expression">
+                    {newCondition.logicExpression}
+                  </div>
+                  
+                  <p className="showhide-modal-label">Visual Representation:</p>
+                  <div className="logic-preview-display">
+                    {renderLogicGroup({
+                      group: parseLogicExpression(newCondition.logicExpression),
+                      conditions: newCondition.conditions,
+                      fields: fields,
+                    })}
+                  </div> 
+                </div>
+              </div>
+
+              <div className="showhide-modal-footer">
+                <div className='cancel-button'>
+                    <button
+                      className="wizard-btn wizard-btn-secondary"
+                      onClick={closePreview}
+                    >
+                      Back
+                    </button>
+                  </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
     </div>
   );
 };

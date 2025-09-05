@@ -568,6 +568,125 @@ export const handler = async (event) => {
       };
     }
 
+    // 5. Get merchant credentials by account ID
+    if (action === "get-merchant-credentials") {
+      const { merchantAccountId } = body;
+
+      if (!merchantAccountId) {
+        return {
+          statusCode: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: JSON.stringify({
+            success: false,
+            error: "Merchant Account ID is required",
+            timestamp: new Date().toISOString(),
+          }),
+        };
+      }
+
+      // Validate Salesforce ID format
+      const salesforceIdPattern = /^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/;
+      if (!salesforceIdPattern.test(merchantAccountId)) {
+        return {
+          statusCode: 400,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: JSON.stringify({
+            success: false,
+            error: "Invalid Merchant Account ID format",
+            timestamp: new Date().toISOString(),
+          }),
+        };
+      }
+
+      try {
+        const accessToken = await getSalesforceAccessToken();
+
+        // Query merchant credentials from Salesforce
+        const credentialsQuery = `SELECT Id, Name, Merchant_ID__c, Payment_Provider__c, Status__c, CreatedDate, LastModifiedDate FROM Merchant_Onboarding__c WHERE Id = '${merchantAccountId}' AND Status__c = 'Active' LIMIT 1`;
+
+        const response = await fetch(
+          `${SALESFORCE_INSTANCE_URL}/services/data/v60.0/query?q=${encodeURIComponent(
+            credentialsQuery
+          )}`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.message || "Failed to query merchant credentials"
+          );
+        }
+
+        if (!result.records || result.records.length === 0) {
+          return {
+            statusCode: 404,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+            body: JSON.stringify({
+              success: false,
+              error: "Merchant account not found or inactive",
+              timestamp: new Date().toISOString(),
+            }),
+          };
+        }
+
+        const merchantRecord = result.records[0];
+
+        return {
+          statusCode: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: JSON.stringify({
+            success: true,
+            merchantAccountId: merchantAccountId,
+            credentials: {
+              provider: merchantRecord.Payment_Provider__c || "paypal",
+              merchantId: merchantRecord.Merchant_ID__c,
+              environment: "sandbox", // Default to sandbox
+              isActive: merchantRecord.Status__c === "Active",
+              accountName: merchantRecord.Name,
+            },
+            metadata: {
+              recordId: merchantRecord.Id,
+              lastModified: merchantRecord.LastModifiedDate,
+              createdDate: merchantRecord.CreatedDate,
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        };
+      } catch (error) {
+        console.error("❌ Error fetching merchant credentials:", error);
+        return {
+          statusCode: 500,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+          body: JSON.stringify({
+            success: false,
+            error: "Failed to fetch merchant credentials",
+            details: error.message,
+            timestamp: new Date().toISOString(),
+          }),
+        };
+      }
+    }
+
     // Fallback for unsupported routes
     return {
       statusCode: 404,

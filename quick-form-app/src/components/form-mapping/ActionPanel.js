@@ -6,7 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import timezones from "timezones-list";
 import countries from "i18n-iso-countries";
 import currencyCodes from "currency-codes";
-
+import { ArrowRightOutlined } from "@ant-design/icons";
+import CreatableSelect from "react-select/creatable";
+import { Select as AntSelect, Spin, Button, message, Input, Switch } from "antd";
+const { Option } = AntSelect;
 countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
 
 const ActionPanel = ({
@@ -22,6 +25,7 @@ const ActionPanel = ({
   nodeLabel,
   nodes,
   edges,
+  sfToken
 }) => {
   const isFindNode = nodeType === "Find";
   const isCreateUpdateNode = nodeType === "Create/Update";
@@ -30,7 +34,11 @@ const ActionPanel = ({
   const isFormatterNode = nodeType === "Formatter";
   const isFilterNode = nodeType === "Filter";
   const isConditionNode = nodeType === "Condition";
-  const [selectedObject, setSelectedObject] = useState("");
+  const isGoogleSheet = nodeType === 'Google Sheet'
+  const isFindGoogleSheet = nodeType === 'FindGoogleSheet'
+  // const [selectedObject, setSelectedObject] = useState("");
+  const selectedObject = mappings[nodeId]?.salesforceObject || "";
+
   const [localMappings, setLocalMappings] = useState([{ formFieldId: "", fieldType: "", salesforceField: "", picklistValue: "" }]);
   const [conditions, setConditions] = useState([{ field: "", operator: "=", value: "", value2: "" }]);
   const [logicType, setLogicType] = useState("AND");
@@ -56,6 +64,27 @@ const ActionPanel = ({
   const [sortField, setSortField] = useState("");
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
+  const [sheetName, setSheetName] = useState("");
+  const [spreadsheetId , setSpreadsheetId] = useState();
+  const [sheetLink , setSheetLink] = useState("");
+  const [fieldMappings, setFieldMappings] = useState([]);
+  const [sheetConditions , setsheetConditions] = useState([]);
+  const [conditionsLogic, setConditionsLogic] = useState('AND');
+  const [sheetcustomLogic, setsheetCustomLogic] = useState(''); // custom logic string e.g. "(1 AND 2) OR 3"
+  const instanceUrl = sessionStorage.getItem('instanceUrl');
+  const userId = sessionStorage.getItem('userId');
+  const [updateMultiple, setUpdateMultiple] = useState(false); // New state variable
+  const [findsortField , setfindsortfield] = useState('')
+  const [findsortOrder , setfindsortOrder] = useState('ASC');
+  const [findreturnLimit , setfindreturnLimit] = useState("");
+  const [findSheetConditions, setFindSheetConditions] = useState([]); // New state for FindGoogleSheet conditions
+  const [findConditionsLogic, setFindConditionsLogic] = useState('AND'); // New state for FindGoogleSheet conditions logic
+  const [findSheetCustomLogic, setFindSheetCustomLogic] = useState(''); // New state for FindGoogleSheet custom logic
+  const [findNodeName, setFindNodeName] = useState(''); // New state for FindGoogleSheet name
+  const [findSpreadsheetId, setFindSpreadsheetId] = useState(''); // New state for FindGoogleSheet spreadsheetId
+  const [findSelectedSheetName, setFindSelectedSheetName] = useState(''); // New state for FindGoogleSheet selectedSheetName
+  const [findUpdateMultiple, setFindUpdateMultiple] = useState(false); // New state for FindGoogleSheet updateMultiple
+  const [findGoogleSheetColumns, setFindGoogleSheetColumns] = useState([]); // New state for FindGoogleSheet columns
 
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
@@ -74,11 +103,12 @@ const ActionPanel = ({
     time: ["time"],
   };
 
+  const selectedFindNode = mappings[nodeId]?.selectedFindNode || "";
+
   useEffect(() => {
     // Load node-specific mappings if they exist
     const nodeMapping = mappings[nodeId] || {};
 
-    setSelectedObject(nodeMapping.salesforceObject || "");
     setLocalMappings(nodeMapping.fieldMappings?.length > 0 ? nodeMapping.fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
     setConditions(
       nodeMapping.conditions?.length > 0
@@ -94,9 +124,14 @@ const ActionPanel = ({
     setSortField(nodeMapping.sortField || "");
     setSortOrder(nodeMapping.sortOrder || "ASC");
     setPathOption(nodeMapping.pathOption || (isConditionNode ? "Rules" : undefined));
-
+    setFieldMappings(nodeMapping?.fieldMappings || []);
+    setSheetName(nodeMapping?.selectedSheetName || "");
+    setSpreadsheetId(nodeMapping?.spreadsheetId || "")
+    setsheetConditions(nodeMapping?.sheetConditions || []);
+    setConditionsLogic(nodeMapping?.conditionsLogic || 'AND');
+    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || ''); 
     const loopConfig = nodeMapping.loopConfig || {};
-    setCurrentItemVariableName(loopConfig.currentItemVariableName || "");
+    setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
     setMaxIterations(loopConfig.maxIterations || "");
     setExitConditions(
@@ -119,26 +154,38 @@ const ActionPanel = ({
     });
 
     const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
-      .filter((node) => node.data.action === "Find")
+      .filter((node) => node.data.action === "Find" || node.data.action === 'FindGoogleSheet')
       .map((node) => node.id);
-    if (loopConfig.loopCollection && validCollectionOptions.includes(loopConfig.loopCollection)) {
-      setLoopCollection(loopConfig.loopCollection);
-    } else {
-      setLoopCollection("");
-      if (loopConfig.loopCollection) {
-        setSaveError("Selected loop collection is no longer valid. Please select a valid Find node.");
-        setMappings((prev) => ({
-          ...prev,
-          [nodeId]: {
-            ...prev[nodeId],
-            loopConfig: {
-              ...(prev[nodeId]?.loopConfig || {}),
-              loopCollection: "",
-            },
-          },
-        }));
+
+    // Handle loop collection
+    if (isLoopNode) {
+      const loopConfig = nodeMapping.loopConfig || {};
+      if (loopConfig.loopCollection && validCollectionOptions.includes(loopConfig.loopCollection)) {
+        setLoopCollection(loopConfig.loopCollection);
+      } else {
+        setLoopCollection("");
+        if (loopConfig.loopCollection) {
+          setSaveError("Selected loop collection is no longer valid. Please select a valid Find node.");
+        }
       }
     }
+    setUpdateMultiple(nodeMapping.updateMultiple || false); // Initialize updateMultiple
+    // Initialize FindGoogleSheet specific states
+    setfindreturnLimit(nodeMapping.googleSheetReturnLimit || "");
+    setfindsortOrder(nodeMapping.googleSheetSortOrder || "ASC");
+    setfindsortfield(nodeMapping.googleSheetSortField || "");
+    setFindSheetConditions(nodeMapping.findSheetConditions || []);
+    setFindConditionsLogic(nodeMapping.logicType || "AND");
+    setFindSheetCustomLogic(nodeMapping.customLogic || "");
+    setFindNodeName(nodeMapping.findNodeName || "");
+    setFindSpreadsheetId(nodeMapping.spreadsheetId || "");
+    setFindSelectedSheetName(nodeMapping.selectedSheetName || "");
+    setFindUpdateMultiple(nodeMapping.updateMultiple || false);
+    setFindGoogleSheetColumns(nodeMapping.columns || []); // Initialize FindGoogleSheet columns
+
+    // setfindreturnLimit(nodeMapping.findreturnLimit);
+    // setfindsortOrder(nodeMapping.findsortOrder);
+    // setfindsortfield(nodeMapping.findsortField);
   }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
@@ -160,7 +207,7 @@ const ActionPanel = ({
           setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
         });
     }
-  }, [selectedObject, salesforceObjects, fetchSalesforceFields]);
+  }, []);
 
   const operatorGroups = {
     text: [
@@ -374,6 +421,55 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
+  const handleSave = (spreadsheetId = null) => {
+    if (isGoogleSheet) {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          selectedSheetName: sheetName,
+          fieldMappings,
+          spreadsheetId,
+          sheetConditions,
+          conditionsLogic,
+          sheetcustomLogic,
+          updateMultiple,
+          googleSheetReturnLimit: returnLimit, // Note: using general returnLimit here
+          googleSheetSortField: sortField,     // Note: using general sortField here
+          googleSheetSortOrder: sortOrder,     // Note: using general sortOrder here
+        },
+      }));
+    } else if (isFindGoogleSheet) {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          findNodeName: findNodeName,
+          selectedSheetName: findSelectedSheetName, // Using specific state
+          spreadsheetId: findSpreadsheetId, // Using specific state
+          findSheetConditions: findSheetConditions, // Using specific state
+          findConditionsLogic: findConditionsLogic, // Using specific state
+          findSheetCustomLogic: findSheetCustomLogic, // Using specific state
+          findUpdateMultiple: findUpdateMultiple, // Using specific state
+          googleSheetReturnLimit: findreturnLimit, // Using specific state
+          googleSheetSortField: findsortField, // Using specific state
+          googleSheetSortOrder: findsortOrder, // Using specific state
+          columns : findGoogleSheetColumns
+        },
+      }));
+    } else {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          returnLimit,
+          sortField,
+          sortOrder,
+        },
+      }));
+    }
+    onClose();
+  };
 
   const handleMappingChange = (index, key, value, extra = {}) => {
     const newMappings = [...localMappings];
@@ -453,6 +549,43 @@ const ActionPanel = ({
     );
   };
 
+  const handleFindNodeChange = (selected, isLoop = false) => {
+    const findNodeId = selected ? selected.value : "";
+    console.log('isLoop:', isLoop, 'findNodeId:', findNodeId);
+    
+    if (isLoop) {
+      console.log('Setting loop collection to:', findNodeId);
+      
+      setLoopCollection(findNodeId);
+      // Update mappings state for loop collection
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          loopConfig: {
+            ...(prev[nodeId]?.loopConfig || {}),
+            loopCollection: findNodeId,
+          },
+        },
+      }));
+    } else {
+      setMappings((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          selectedFindNode: findNodeId,
+        },
+      }));
+    }
+
+    // Get the Salesforce object from the selected Find node
+    if (findNodeId && mappings[findNodeId] && mappings[findNodeId].salesforceObject) {
+      handleObjectChange(mappings[findNodeId].salesforceObject);
+    } else {
+      handleObjectChange("");
+    }
+  };
+
   const addMapping = () => {
     setLocalMappings((prev) => [...prev, { formFieldId: "", fieldType: "", salesforceField: "" }]);
   };
@@ -492,45 +625,26 @@ const ActionPanel = ({
     }));
   };
 
-  // const handleObjectSelect = (selectedOption) => {
-  //   if (!selectedOption) {
-  //     setSelectedObject("");
-  //     return;
-  //   }
-
-  //   const selectedObjectName = selectedOption.value;
-  //   setSelectedObject(selectedObjectName);
-
-  //   const shouldFetchFields =
-  //     selectedObjectName &&
-  //     (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
-
-  //   if (!shouldFetchFields) return;
-
-  //   fetchSalesforceFields(selectedObjectName)
-  //     .then((data) => {
-  //       const newFields = data.fields;
-
-  //       setSalesforceObjects(prev => [
-  //         ...prev.filter(obj => obj.name !== selectedObjectName), // remove old entry if any
-  //         { name: selectedObjectName, fields: newFields }          // add fresh entry
-  //       ]);
-  //     })
-  //     .catch((error) => {
-  //       setSaveError(`Failed to fetch fields for ${selectedObjectName}: ${error.message}`);
-  //     });
-  // };
+  const handleObjectChange = (objectName) => {
+    setMappings((prev) => ({
+      ...prev,
+      [nodeId]: {
+        ...prev[nodeId],
+        salesforceObject: objectName,
+      },
+    }));
+  };
 
   const handleObjectSelect = (selectedOption) => {
     if (!selectedOption) {
-      setSelectedObject("");
+      handleObjectChange("");
       setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
       return;
     }
 
     const selectedObjectName = selectedOption.value;
-    setSelectedObject(selectedObjectName);
 
+    handleObjectChange(selectedObjectName);
     const shouldFetchFields =
       selectedObjectName &&
       (isFindNode || isFilterNode || isCreateUpdateNode || (isConditionNode && pathOption === "Rules"));
@@ -583,19 +697,31 @@ const ActionPanel = ({
   };
 
   const collectionOptions = getAncestorNodes(nodeId, edges, nodes)
-    .filter((node) => node.data.action === "Find")
+    .filter((node) => node.data.action === "Find" || node.data.action === 'FindGoogleSheet')
     .map((node) => ({
       value: node.id,
-      label: `${node.data.label}.records`,
+      label: `${node.data.label}`,
     }));
 
   const saveLocalMappings = () => {
     console.log("Saving mappings for node:", nodeId, "Formatter Config:", formatterConfig);
 
-    if ((isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
-      setSaveError("Please select a Salesforce object.");
+    // For Filter nodes, validate that a Find node is selected
+    if (isFilterNode && !selectedFindNode) {
+      setSaveError("Please select a Find node.");
       return;
     }
+
+    // For Filter nodes, validate that we have an object from the Find node
+    // if (isFilterNode && !selectedObject) {
+    //   setSaveError("The selected Find node does not have a Salesforce object configured.");
+    //   return;
+    // }
+
+    // if ((isCreateUpdateNode || isFindNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
+    //   setSaveError("Please select a Salesforce object.");
+    //   return;
+    // }
 
     // Check if required fields are mapped
     if (isCreateUpdateNode && selectedObject) {
@@ -812,6 +938,7 @@ const ActionPanel = ({
         ...prev,
         [nodeId]: {
           actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
+          selectedFindNode: isFilterNode || isConditionNode || isLoopNode ? selectedFindNode : '',
           salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
           fieldMappings: isCreateUpdateNode ? validMappings.map(m => ({
             formFieldId: m.formFieldId,
@@ -972,13 +1099,46 @@ const ActionPanel = ({
 
   const renderConditions = (conditionType = "conditions", isExit = false) => {
     const conditionsList = isExit ? exitConditions : conditions;
-
+     // Helper function to get field options based on node type and loop collection
+    const getFieldOptionsForConditions = () => {
+      if (isExit && isLoopNode && loopCollection) {
+        const loopCollectionNode = nodes.find(node => node.id === loopCollection);
+        console.log('loop node' , loopCollectionNode)
+        if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
+          const googleSheetNodeMapping = mappings[loopCollection] || {};
+          console.log('sheet', googleSheetNodeMapping)
+          return (googleSheetNodeMapping.sheetColumns).map(col => ({ value: col, label: col }));
+        }
+      }
+      // New logic for Filter node conditions
+    if (isFilterNode && selectedFindNode) {
+        const findNode = nodes.find(node => node.id === selectedFindNode);
+        if (findNode && findNode.data.action === 'FindGoogleSheet') {
+          const googleSheetNodeMapping = mappings[selectedFindNode] || {};
+          return (googleSheetNodeMapping.sheetColumns || []).map(col => ({ value: col, label: col }));
+        }
+      }
+      return fieldOptions; // Default to Salesforce field options
+    };
     // Helper function to get operators for a condition
     const getOperatorsForCondition = (conditionIndex) => {
       if (isExit) {
         return operatorGroups.default; // For exit conditions, use default operators
       }
-
+      if (isExit && isLoopNode && loopCollection) {
+         const loopCollectionNode = nodes.find(node => node.id === loopCollection);
+         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
+           // For Google Sheet columns, assume string operators for now
+          return operatorGroups.text;
+         }
+       }
+         // New logic for Filter node conditions
+    if (isFilterNode && selectedFindNode) {
+        const findNode = nodes.find(node => node.id === selectedFindNode);
+        if (findNode && findNode.data.action === 'FindGoogleSheet') {
+          return operatorGroups.text;
+        }
+      }
       const condition = conditionsList[conditionIndex];
       if (!condition.field || !selectedObject) {
         return operatorGroups.default;
@@ -1067,41 +1227,54 @@ const ActionPanel = ({
             <div className="grid grid-cols-12 gap-3">
               <div className="col-span-5">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Field</label>
-                {isExit ? (
-                  <input
-                    type="text"
-                    value={condition.field}
-                    onChange={(e) => handleConditionChange(index, "field", e.target.value, conditionType)}
-                    placeholder={`e.g., ${currentItemVariableName || "currentRecord"}.Email`}
-                    className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
-                ) : (
-                  <Select
-                    value={fieldOptions.find((opt) => opt.value === condition.field) || null}
-                    onChange={(selected) => handleConditionChange(index, "field", selected ? selected.value : "", conditionType)}
-                    options={fieldOptions}
-                    placeholder="Select Field"
-                    styles={{
-                      container: (base) => ({
-                        ...base,
-                        borderRadius: "0.375rem",
-                        borderColor: "#e5e7eb",
-                        fontSize: "0.875rem",
-                      }),
-                      control: (base) => ({
-                        ...base,
-                        minHeight: "34px",
-                      }),
-                      menu: (base) => ({
-                        ...base,
-                        zIndex: 9999,
-                      }),
-                    }}
-                    isDisabled={!selectedObject}
-                    isClearable
-                    classNamePrefix="select"
-                  />
-                )}
+                <Select
+                    value={
+                    getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
+                      ? {
+                        ...getFieldOptionsForConditions().find((opt) => opt.value === condition.field),
+                        label: isExit && currentItemVariableName && getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
+                          ? `${currentItemVariableName}.${getFieldOptionsForConditions().find((opt) => opt.value === condition.field).label}`
+                          : getFieldOptionsForConditions().find((opt) => opt.value === condition.field)?.label
+                      }
+                      : null
+                  }
+                  onChange={(selected) =>
+                    handleConditionChange(
+                      index,
+                      "field",
+                      selected ? selected.value : "",
+                      conditionType
+                    )
+                  }
+                  options={
+                    isExit && currentItemVariableName
+                      ? getFieldOptionsForConditions().map((opt) => ({
+                        ...opt,
+                        label: `${currentItemVariableName}.${opt.label}`,
+                      }))
+                      : getFieldOptionsForConditions()
+                  }
+                  placeholder="Select Field"
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                  }}
+                  isDisabled={!getFieldOptionsForConditions().length}
+                  isClearable
+                  classNamePrefix="select"
+                />
               </div>
 
               <div className="col-span-2">
@@ -1228,6 +1401,65 @@ const ActionPanel = ({
           )}
         </AnimatePresence>
 
+        {isGoogleSheet && (
+          <motion.div
+            className=""
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+          >
+          <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
+            sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns}/>
+          </motion.div>
+        )}
+        {isFindGoogleSheet && (
+          <motion.div
+          className=""
+          initial={{ x: 300, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 300, opacity: 0 }}
+        >
+          <GoogleSheetFindPanel
+                onSave={(config) => {
+                console.log(mappings[nodeId] , 'insave')
+                setFindSelectedSheetName(config.selectedSheetName); // Use new state
+                setFindSpreadsheetId(config.spreadsheetId); // Use new state
+                setFindSheetConditions(config.findSheetConditions); // Use new state
+                setFindConditionsLogic(config.logicType); // Use new state
+                setFindGoogleSheetColumns(config.columns || []); // Update parent state with columns
+                setFindSheetCustomLogic(config.customLogic); // Use new state
+                setfindreturnLimit(config.googleSheetReturnLimit);
+                setfindsortfield(config.googleSheetSortField); // Corrected this line
+                setfindsortOrder(config.googleSheetSortOrder); // Corrected this line
+                setFindNodeName(config.findNodeName); // Use new state
+                setFindUpdateMultiple(config.updateMultiple); // Use new state
+                setFindGoogleSheetColumns(config.sheetColumns)
+                // ✅ Persist unified config
+                setMappings(prev => ({
+                  ...prev,
+                  [nodeId]: {
+                    ...prev[nodeId],
+                    findNodeName: config.findNodeName,
+                    selectedSheetName: config.selectedSheetName,
+                    spreadsheetId: config.spreadsheetId,
+                    findSheetConditions: config.findSheetConditions,
+                    updateMultiple: config.updateMultiple,
+                    googleSheetReturnLimit: config.googleSheetReturnLimit,
+                    googleSheetSortOrder: config.googleSheetSortOrder,
+                    googleSheetSortField : config.googleSheetSortField,
+                    logicType : config.logicType,
+                    customLogic : config.customLogic,
+                    sheetColumns : config.sheetColumns
+                  }
+                }));
+              }}
+              initialConfig={mappings[nodeId]}
+          userId={userId}
+          instanceUrl={instanceUrl} 
+          token={sfToken}  
+          sheetsApiUrl={'https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch'}/>
+        </motion.div>
+        )}
         <div className="space-y-6">
           {(isPathNode || isConditionNode) && (
             <motion.div
@@ -1265,51 +1497,10 @@ const ActionPanel = ({
                   classNamePrefix="select"
                 />
               </div>
-              {pathOption === "Rules" && (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="bg-gray-50 p-4 rounded-lg border border-gray-200"
-                  >
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Object</label>
-                    <Select
-                      value={objectOptions.find((opt) => opt.value === selectedObject) || null}
-                      onChange={handleObjectSelect}
-                      options={objectOptions}
-                      placeholder={objectOptions.length ? "Select Salesforce Object" : "No Objects Available"}
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          marginTop: "4px",
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          borderColor: "#e5e7eb",
-                          minHeight: "42px",
-                          "&:hover": {
-                            borderColor: "#d1d5db",
-                          },
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      isClearable
-                      isDisabled={!objectOptions.length}
-                      classNamePrefix="select"
-                    />
-                  </motion.div>
-                  {renderConditions("conditions")}
-                </>
-              )}
             </motion.div>
           )}
 
-          {(isCreateUpdateNode || isFindNode || isFilterNode) && (
+          {(isCreateUpdateNode || isFindNode) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1348,19 +1539,28 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {isLoopNode && (
+          {(isFilterNode || (isConditionNode && pathOption == 'Rules') || isLoopNode) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="space-y-6"
+              className="p-4 rounded-lg border border-gray-200"
             >
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Loop Collection</label>
+              <div className="">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {isLoopNode ? "Select Collection Node" : "Select Find Node"}
+                </label>
+                
                 <Select
-                  value={collectionOptions.find((opt) => opt.value === loopCollection) || null}
-                  onChange={(selected) => setLoopCollection(selected ? selected.value : "")}
+                  value={
+                    collectionOptions.find(
+                      (opt) =>
+                        opt.value === (isLoopNode ? loopCollection : selectedFindNode)
+                    ) || null
+                  }
+                 
+                  onChange={(selected) => handleFindNodeChange(selected, isLoopNode)}
                   options={collectionOptions}
-                  placeholder={collectionOptions.length ? "Select Collection" : "No data collection available"}
+                  placeholder={collectionOptions.length ? "Select Find Node" : "No Find Nodes Available"}
                   styles={{
                     container: (base) => ({
                       ...base,
@@ -1376,12 +1576,6 @@ const ActionPanel = ({
                         borderColor: "#d1d5db",
                       },
                     }),
-                    placeholder: (base) => ({
-                      ...base,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }),
                     menu: (base) => ({
                       ...base,
                       zIndex: 9999,
@@ -1391,11 +1585,21 @@ const ActionPanel = ({
                   isDisabled={!collectionOptions.length}
                   classNamePrefix="select"
                 />
-                {!collectionOptions.length && (
-                  <p className="text-red-500 text-xs mt-2">No data collection available. Please add a Find node upstream.</p>
+                {selectedObject && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Using Salesforce object: <span className="font-medium">{selectedObject}</span>
+                  </p>
                 )}
               </div>
+            </motion.div>
+          )}
 
+          {isLoopNode && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-6"
+            >
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Current Item Variable Name</label>
                 <input
@@ -1493,7 +1697,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          {(isFindNode || isFilterNode) && (
+          {(isFindNode || isFilterNode || (isConditionNode &&  pathOption == 'Rules')) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1501,79 +1705,83 @@ const ActionPanel = ({
             >
               {renderConditions("conditions")}
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Return Limit (optional, max 100)</label>
-                <input
-                  type="number"
-                  value={returnLimit}
-                  onChange={(e) => setReturnLimit(e.target.value)}
-                  placeholder="Leave blank for all records"
-                  className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                  min="1"
-                  max="100"
-                />
-                <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
-              </div>
+              {(!isConditionNode) && (
+                <>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Limit (optional, max 100)</label>
+                    <input
+                      type="number"
+                      value={returnLimit}
+                      onChange={(e) => setReturnLimit(e.target.value)}
+                      placeholder="Leave blank for all records"
+                      className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                      min="1"
+                      max="100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
+                  </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Sort Records (optional)</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
-                    <Select
-                      value={fieldOptions.find((opt) => opt.value === sortField) || null}
-                      onChange={(selected) => setSortField(selected ? selected.value : "")}
-                      options={fieldOptions}
-                      placeholder="Select Field"
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                          fontSize: "0.875rem",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          minHeight: "34px",
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      isDisabled={!selectedObject}
-                      isClearable
-                      classNamePrefix="select"
-                    />
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Sort Records (optional)</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
+                        <Select
+                          value={fieldOptions.find((opt) => opt.value === sortField) || null}
+                          onChange={(selected) => setSortField(selected ? selected.value : "")}
+                          options={fieldOptions}
+                          placeholder="Select Field"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          isDisabled={!selectedObject}
+                          isClearable
+                          classNamePrefix="select"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Sort Order</label>
+                        <Select
+                          value={sortOrderOptions.find((opt) => opt.value === sortOrder) || null}
+                          onChange={(selected) => setSortOrder(selected ? selected.value : "ASC")}
+                          options={sortOrderOptions}
+                          placeholder="Select Order"
+                          styles={{
+                            container: (base) => ({
+                              ...base,
+                              borderRadius: "0.375rem",
+                              borderColor: "#e5e7eb",
+                              fontSize: "0.875rem",
+                            }),
+                            control: (base) => ({
+                              ...base,
+                              minHeight: "34px",
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              zIndex: 9999,
+                            }),
+                          }}
+                          classNamePrefix="select"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Sort Order</label>
-                    <Select
-                      value={sortOrderOptions.find((opt) => opt.value === sortOrder) || null}
-                      onChange={(selected) => setSortOrder(selected ? selected.value : "ASC")}
-                      options={sortOrderOptions}
-                      placeholder="Select Order"
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                          fontSize: "0.875rem",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          minHeight: "34px",
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                      }}
-                      classNamePrefix="select"
-                    />
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </motion.div>
           )}
 
@@ -1584,12 +1792,11 @@ const ActionPanel = ({
               className="space-y-6"
             >
               <div className="space-y-4">
-               
+
                 {localMappings.map((mapping, index) => {
                   const isRequiredField = selectedObject && safeSalesforceObjects
                     .find(obj => obj.name === selectedObject)
                     ?.fields?.find(f => f.name === mapping.salesforceField && f.required);
-
                   return (
                     <motion.div
                       key={index}
@@ -1785,7 +1992,7 @@ const ActionPanel = ({
             </motion.div>
           )}
 
-          
+
           {isFormatterNode && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -2485,6 +2692,790 @@ const ActionPanel = ({
             </button>
           </div>
         </div>
+      </div>
+    </motion.div>
+  );
+};
+const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
+  const STRING_OPERATORS = [
+    { label: "Equals", value: "=" },
+    { label: "Not Equals", value: "!=" },
+    { label: "Contains", value: "LIKE" },
+    { label: "Not Contains", value: "NOT LIKE" },
+    { label: "Starts With", value: "STARTS WITH" },
+    { label: "Ends With", value: "ENDS WITH" }
+  ];
+  
+  const colType = condition.fieldType || 'string';
+  const operators = STRING_OPERATORS;
+
+  return (
+    <motion.div 
+      key={index} 
+      layout 
+      initial={{ opacity: 0, x: -20 }} 
+      animate={{ opacity: 1, x: 0 }} 
+      exit={{ opacity: 0, x: 20 }}
+      style={{ display:'flex', gap:12, alignItems:'center', marginBottom:10 }}
+    >
+      {/* Left: Column select */}
+      <AntSelect
+        style={{ width: 150 }}
+        placeholder="Select Column"
+        value={condition.field || undefined}
+        onChange={value => {
+          onChange(index, { 
+            field: value, 
+            operator: '', 
+            value: '' 
+          });
+        }}
+        options={columns.map(c => ({ label: c, value: c }))}
+      />
+
+       {/* Center: Operator select */}
+       <AntSelect
+        style={{ width: 180 }}
+        placeholder="Select Operator"
+        value={condition.operator || undefined}
+        onChange={operator => onChange(index, { ...condition, operator })}
+        options={operators.map(op => ({ label: op.label, value: op.value }))}
+        disabled={!condition.field}
+      />
+
+      {/* Right: Value input (conditional) */}
+       {/* Right: Value input */}
+       <Input
+        style={{ width: 150 }}
+        placeholder="Enter Value"
+        value={condition.value || ''}
+        onChange={e => onChange(index, {...condition, value: e.target.value })}
+        disabled={!condition.operator}
+      />
+
+      {/* Remove button */}
+      <Button danger size="small" onClick={() => onRemove(index)}>-</Button>
+    </motion.div>
+  );
+};
+
+const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, setsheetLogicType ,customLogic,setCustomLogic ,updateMultiple ,setUpdateMultiple }) => {
+  const selectedLogic = sheetlogicType || 'AND';
+  console.log('selectedlogic', selectedLogic)
+  const onConditionChange = (index, updatedCondition) => {
+    setConditions(conds => conds.map((c,i) => i === index ? updatedCondition : c));
+  };
+
+  const onAddCondition = () => {
+    setConditions(conds => [...conds, {field:'', operator:'', value:'', fieldType:''}]);
+  };
+
+  const onRemoveCondition = (index) => {
+    setConditions(conds => conds.filter((_,i) => i !== index));
+  };
+  const validateCustomLogic = (logic, conditionsLength) => {
+    // Tokenize input
+    const tokens = logic
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ");
+  
+    let errors = [];
+  
+    // Validate individual tokens
+    tokens.forEach((token, i) => {
+      if (/^\d+$/.test(token)) {
+        const num = parseInt(token, 10);
+        if (num < 1 || num > conditionsLength) {
+          errors.push(`Condition ${num} does not exist.`);
+        }
+      } else if (!["AND", "OR", "(", ")", ""].includes(token)) {
+        errors.push(`Invalid token "${token}"`);
+      }
+    });
+  
+    // Check for invalid operator sequences
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (
+        ["AND", "OR"].includes(tokens[i]) &&
+        ["AND", "OR"].includes(tokens[i + 1])
+      ) {
+        errors.push(`Operators '${tokens[i]}' and '${tokens[i + 1]}' cannot be together—must be separated by a condition.`);
+      }
+    }
+  
+    // Check brackets balance
+    let balance = 0;
+    for (let ch of logic) {
+      if (ch === "(") balance++;
+      else if (ch === ")") balance--;
+      if (balance < 0) {
+        errors.push("Too many closing brackets");
+        break;
+      }
+    }
+    if (balance > 0) errors.push("Unclosed brackets");
+  
+    // Optionally check if logic starts/ends with AND/OR (which is usually invalid)
+    if (["AND", "OR"].includes(tokens[0])) {
+      errors.push("Logic cannot start with an operator.");
+    }
+    if (["AND", "OR"].includes(tokens[tokens.length - 1])) {
+      errors.push("Logic cannot end with an operator.");
+    }
+  
+    return errors;
+  };
+  
+  const handleKeyDown = (e) => {
+    if (e.key === " " || e.key === "Enter") {
+      // Use the value just before space is added
+      let val = e.target.value;
+      // Match the last word before the cursor (just typed)
+      const match = val.split(' ')[val.split(' ').length - 1];
+      if (match) {
+        let num = match[1];
+        let op = match.toString().toUpperCase() === 'A' ? 'AND' : 'OR';
+        // Replace last word with AND/OR
+        val = val.replace(/([AO])$/, op);
+        setCustomLogic(val + " "); // add a space after, for continued typing
+        e.preventDefault(); // prevents doubling space
+      }
+    }
+  };
+  
+  if (!columns || columns?.length === 0) {
+    // If no columns, do not show condition panel
+    setsheetLogicType('AND')
+    return null;
+  }
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <Switch 
+        checked={conditions?.length > 0} 
+        onChange={enabled => {
+          if (!enabled) setConditions([]);
+          else onAddCondition();
+        }}
+        style={{ marginBottom: 12 }}
+      /> Enable Conditions
+      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+        <label className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            checked={updateMultiple}
+            onChange={() => setUpdateMultiple(!updateMultiple)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <span className="text-sm font-medium text-gray-700">Update Multiple Records</span>
+        </label>
+      </div>
+      {/* New AND/OR selector */}
+      {conditions.length > 1 && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ marginRight: 10, fontWeight: 600 }}>Conditions Logic:</label>
+          <Select
+            style={{ width: 160 }}
+            value={selectedLogic}
+            onChange={value => {
+              setsheetLogicType(value.value);
+              if (value !== 'Custom') setCustomLogic('');
+            }}
+            options={[
+              { label: 'AND', value: 'AND' },
+              { label: 'OR', value: 'OR' },
+              { label: 'Custom', value: 'Custom' }
+            ]}
+          />
+        </div>
+      )}  
+       {sheetlogicType === 'Custom' && conditions.length > 1  && (
+      <div style={{ marginBottom:16 }}>
+        <textarea
+          value={customLogic}
+          onChange={e => {
+            const newLogic = e.target.value;
+            console.log('NEw logic',newLogic)
+            setCustomLogic(newLogic);
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder='e.g., (1 AND 2) OR 3'
+          style={{
+            width: '100%',
+            minHeight: 60,
+            padding: 8,
+            fontSize: 14,
+            borderRadius: 4,
+            borderColor: '#ccc',
+            marginBottom: 8,
+            fontFamily: 'monospace',
+            resize: 'vertical'
+          }}
+        />
+
+        {/* Validation */}
+        {customLogic && (
+          validateCustomLogic(customLogic, conditions.length).length > 0 ? (
+            <div style={{ color: "red", fontSize: 13 }}>
+              {validateCustomLogic(customLogic, conditions.length).map((err, idx) => (
+                <div key={idx}>⚠ {err}</div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: "green", fontSize: 13 }}>
+              ✅ Logic looks good
+            </div>
+          )
+        )}
+      </div>
+    )}
+
+      <AnimatePresence>
+      {conditions.length > 0 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            style={{ overflow: 'hidden' }}
+          >
+            {conditions.map((cond, i) => (
+              <ConditionRow
+                key={i}
+                index={i}
+                condition={cond}
+                onChange={(idx, updatedCond) =>
+                  setConditions(conds => conds.map((c, ii) => (ii === idx ? updatedCond : c)))
+                }
+                onRemove={idx => setConditions(conds => conds.filter((_, ii) => ii !== idx))}
+                columns={columns}
+              />
+            ))}
+
+            <Button type="dashed" onClick={() => setConditions(conds => [...conds, { field: '', operator: '', value: '', fieldType: '' }])}>
+              + Add Condition
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave , sheetconditions , setsheetConditions , instanceUrl , userId,sfToken ,conditionsLogic , setConditionsLogic ,sheetcustomLogic , setsheetCustomLogic ,spreadsheetId , setSpreadsheetId , updateMultiple , setUpdateMultiple , setFindGoogleSheetColumns}) => {
+  const [error, setError] = useState("");
+  const [spreadsheets, setSpreadsheets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState([]);
+  const [conditionsEnabled, setConditionsEnabled] = useState(false);
+  
+  
+  async function fetchSpreadsheets({ instanceUrl, sfToken, userId }) {
+    const apiUrl = "https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch";
+
+    if (!instanceUrl || !sfToken || !userId) {
+      throw new Error("Missing required parameters: instanceUrl, sfToken, userId");
+    }
+
+    // Build URL with query parameters
+    const url = new URL(apiUrl);
+    url.searchParams.append("instanceUrl", instanceUrl);
+    url.searchParams.append("sfToken", sfToken);
+    url.searchParams.append("userId", userId);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        // Try to parse error details from response body if JSON
+        let errorBody;
+        try {
+          errorBody = await response.json();
+        } catch {
+          errorBody = await response.text();
+        }
+        throw new Error(`API Error ${response.status}: ${JSON.stringify(errorBody)}`);
+      }
+
+      const data = await response.json();
+      return data; // expected to contain { spreadsheets: [...] }
+    } catch (error) {
+      // Network error or other unexpected error
+      console.error("Fetch spreadsheets failed:", error);
+      throw new Error(`Failed to fetch spreadsheets: ${error.message}`);
+    }
+  }
+
+  useEffect(() => {
+    async function loadSpreadsheets() {
+      try {
+        setLoading(true);
+        const result = await fetchSpreadsheets({ instanceUrl, sfToken, userId });
+        setSpreadsheets(result.spreadsheets);
+        if (spreadsheetId) {
+          const selected = result.spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+          if (selected) {
+            setSheetName(selected.spreadsheetName);
+            setSelectedColumns(selected.columns || []);
+            setFindGoogleSheetColumns(selected.columns[0])
+            if (selected.columns[0]) {
+              const newMappings = selected.columns[0].map(col => ({
+                column: col,
+                id: "",
+                name: "",
+                label: col
+              }));
+              // Only update fieldMappings if there are no existing ones from saved state
+              if (fieldMappings.length === 0) {
+                setFieldMappings(newMappings);
+              }
+            } else if (fieldMappings.length === 0) {
+              setSelectedColumns([]);
+              setFieldMappings([]);
+            }
+          }
+        }
+        setError(null);
+        console.log('Results ==>', result.spreadsheets)
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+   // Only fetch if spreadsheetId not set — else skip to avoid unnecessary API call
+   // Only fetch spreadsheets if they are not already loaded or if spreadsheetId exists but columns are not loaded
+     if (spreadsheets.length === 0 || (spreadsheetId && selectedColumns.length === 0)) {
+      loadSpreadsheets();
+    } 
+  }, [instanceUrl, sfToken, userId , fieldMappings.length, spreadsheets.length, selectedColumns.length]);
+  // Handler when spreadsheet is selected
+ // When a spreadsheet is selected, update sheetName and set its columns
+ const onSpreadsheetChange = (spreadsheetId) => {
+  const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+  if (selected) {
+    setSheetName(selected.spreadsheetName);
+    setSelectedColumns(selected.columns || []);
+    setSpreadsheetId(selected.spreadsheetId)
+    setsheetConditions([]); // Clear conditions when changing spreadsheet
+    setsheetCustomLogic(''); // Reset custom logic
+    // setConditionsEnabled(true); // Enable conditions when a new spreadsheet is selected
+    if(selected.columns[0]){
+       // Populate fieldMappings automatically based on columns
+       setsheetConditions([])
+    const newMappings = selected.columns[0]
+    .map(col => ({
+      column: col,
+      id: "",     // no form field selected yet
+      name: "",
+      label: col  // keep label as trimmed column
+    }));
+      setFieldMappings(newMappings);
+    } else {
+      setSheetName("");
+      setSelectedColumns([]);
+      setSpreadsheetId(undefined);
+      setFieldMappings([]);
+      setsheetConditions([]);
+      setConditionsLogic('AND');
+      setsheetCustomLogic('');
+      // setConditionsEnabled(false);
+    }
+    }
+  };
+  // Add a new mapping entry
+  const addFieldMapping = () => {
+    setFieldMappings([...fieldMappings, { column: "", id: "", name: "" }]);
+    setError("");
+  };
+
+  // Remove a mapping entry
+  const removeFieldMapping = (index) => {
+    setFieldMappings(fieldMappings.filter((_, i) => i !== index));
+    setError("");
+  };
+
+  // Handle column name (left side): select or create
+  const handleColumnChange = (index, val) => {
+    const updated = [...fieldMappings];
+    updated[index].column = val?.value || "";
+    updated[index].label = val?.label || "Label";
+    console.log(val)
+    setFieldMappings(updated);
+  };
+
+  // Handle form field (right side)
+  const handleFieldChange = (index, val) => {
+    const field = formFields.find(f => f.id === val.value);
+    const updated = [...fieldMappings];
+    updated[index].id = field.id;
+    updated[index].name = field.name;
+    setFieldMappings(updated);
+  };
+
+  // Validation & Save
+  const handleSave = () => {
+    if (!sheetName) {
+      setError("Please provide a sheet name.");
+      return;
+    }
+    const hasError = fieldMappings.some(m => !m.column || !m.id);
+    if (hasError) {
+      setError("Please map all columns and form fields.");
+      return;
+    }
+    const columnNames = fieldMappings.map(m => m.column);
+    if (new Set(columnNames).size !== columnNames.length) {
+      setError("Sheet column names must be unique.");
+      return;
+    }
+    setError("");
+    message.success("Mapping config saved!");
+    console.log('SpreadsheetId', spreadsheetId);
+    onSave(spreadsheetId);
+  };
+
+  // For left-side column suggestions (show already used columns + allow new)
+  const usedColumns = fieldMappings.map(m => m.column).filter(n => !!n);
+  const columnOptions = usedColumns.map(col => ({ value: col, label: col }));
+
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        {/* <label style={{ fontWeight: 600 }}>Sheet Name</label>
+        <input
+          style={{ marginTop: 4, maxWidth: 300, padding: 8, border: "1px solid #eee", borderRadius: 4 }}
+          value={sheetName}
+          onChange={e => setSheetName(e.target.value)}
+          placeholder="Google Sheet Name"
+        /> */}
+        <label style={{ fontWeight: 600, marginRight: 10 }}>Select Spreadsheet</label>
+        {loading ? (
+          <Spin />
+        ) : (
+          <AntSelect
+            style={{ width: 300 }}
+            placeholder="Select a spreadsheet"
+            value={sheetName || undefined}
+            onChange={onSpreadsheetChange}
+            allowClear
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().includes(input.toLowerCase())
+            }
+          >
+            {spreadsheets?.map(sheet => (
+              <Option key={sheet.spreadsheetId} value={sheet.spreadsheetId}>
+                {sheet.spreadsheetName}
+              </Option>
+            ))}
+          </AntSelect>
+        )}
+
+      </div>
+      <div>
+        <label style={{ fontWeight: 600 }}>Column &rarr; Form Field Mapping</label>
+        <AnimatePresence>
+          {fieldMappings.map((mapping, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              style={{
+                display: "flex",
+                gap: 16,
+                alignItems: "center",
+                marginBottom: 12,
+                background: "#f9fafb",
+                padding: 12,
+                borderRadius: 8,
+                border: error && (!mapping.column || !mapping.id) ? "1px solid #ff4d4f" : "1px solid #e5e7eb",
+                boxShadow: "0 2px 8px 0 rgba(0,0,0,0.03)",
+              }}
+            >
+              <CreatableSelect
+                style={{ width: 170 }}
+                placeholder="Sheet Column"
+                value={mapping.column ? { value: mapping.column, label: mapping.label } : null}
+                onChange={val => handleColumnChange(index, val)}
+                options={formFields
+                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                  .map(f => ({ value: f.id, label: f.name }))}
+                isClearable
+                size="middle"
+
+                // Prevent duplication of column names already chosen elsewhere
+                isOptionDisabled={option =>
+                  fieldMappings.some((m, i) => m.column === option.value && i !== index)
+                }
+              />
+              <motion.div
+                initial={{ scale: 0.67, opacity: 0.7 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", duration: 0.45 }}
+                style={{ pointerEvents: "none" }}
+              >
+                <ArrowRightOutlined style={{ fontSize: 22, color: "#1890ff" }} />
+              </motion.div>
+              <Select
+                style={{ width: 170 }}
+                placeholder="Form Field"
+                value={mapping.id ? { value: mapping.id, label: mapping.name } : null}
+                onChange={val => handleFieldChange(index, val)}
+                options={formFields
+                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                  .map(f => ({ value: f.id, label: f.name }))
+                }
+                showSearch
+                allowClear
+                size="middle"
+              />
+              <Button
+                danger
+                onClick={() => removeFieldMapping(index)}
+                disabled={fieldMappings.length <= 1}
+                type="default"
+              >
+                Remove
+              </Button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <Button onClick={addFieldMapping} type="primary" style={{ marginTop: 6 }}>
+          Add More Fields
+        </Button>
+      </div>
+      {error && <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{ color: "#ff4d4f", marginTop: 16, fontWeight: 500 }}
+      >
+        {error}
+      </motion.div>}
+       {spreadsheetId && (
+        <ConditionsPanel 
+          columns={selectedColumns.flat()} 
+          conditions={sheetconditions} 
+          setConditions={setsheetConditions} 
+          sheetlogicType={conditionsLogic}
+          setsheetLogicType={setConditionsLogic}
+          customLogic={sheetcustomLogic}
+          setCustomLogic={setsheetCustomLogic}
+          updateMultiple={updateMultiple}
+          setUpdateMultiple={setUpdateMultiple}
+        />
+      )}
+      <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-end", gap: 12 }}>
+        <Button onClick={handleSave} type="primary">Save</Button>
+      </div>
+    </div>
+  );
+};
+
+const GoogleSheetFindPanel = ({
+  instanceUrl, userId, token,
+  sheetsApiUrl, // API endpoint for list of sheets
+  onSave, // callback with config
+  initialConfig // { spreadsheetId, sheetName, columnMappings, conditions, returnLimit, sortField, sortOrder }
+}) => {
+  const [spreadsheets, setSpreadsheets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [spreadsheetId, setSpreadsheetId] = useState(initialConfig?.spreadsheetId || "");
+  const [sheetName, setSheetName] = useState(initialConfig?.sheetName || "");
+  const [columns, setColumns] = useState(initialConfig?.columns || []);
+  const [columnMappings, setColumnMappings] = useState(initialConfig?.columnMappings || []);
+  const [findconditions, setConditions] = useState(initialConfig?.conditions || []);
+  const [findlogicType, setLogicType] = useState(initialConfig?.logicType || "AND");
+  const [findcustomLogic, setCustomLogic] = useState(initialConfig?.customLogic || "");
+  const [findreturnLimit, setReturnLimit] = useState(initialConfig?.googleSheetReturnLimit || "");
+  const [findsortField, setSortField] = useState(initialConfig?.googleSheetSortField || "");
+  const [findsortOrder, setSortOrder] = useState(initialConfig?.googleSheetSortOrder || "ASC");
+  const [findupdateMultiple , setupdateMultiple] = useState(initialConfig?.updateMultiple);
+  const [error, setError] = useState("");
+  const [findname , setfindname] = useState(initialConfig?.findNodeName || "Default")
+  // Fetch spreadsheets on mount or when dependencies change
+  useEffect(() => {
+    if (!instanceUrl || !userId || !token || !sheetsApiUrl) return;
+    const url = new URL(sheetsApiUrl);
+    url.searchParams.append("instanceUrl", instanceUrl);
+    url.searchParams.append("sfToken", token);
+    url.searchParams.append("userId", userId);
+    setLoading(true);
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        setSpreadsheets(data.spreadsheets || []);
+      })
+      .catch(err => {
+        setError("Failed to fetch Google Sheets: " + err.message);
+      })
+      .finally(() => setLoading(false));
+  }, [instanceUrl, userId, token, sheetsApiUrl]);
+
+  // When spreadsheet is selected, populate sheetName and columns
+  useEffect(() => {
+    if (!spreadsheetId) {
+      setSheetName("");
+      setColumns([]);
+      return;
+    }
+    const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+    if (selected) {
+      setSheetName(selected.spreadsheetName);
+      setColumns(selected.columns[0] || []);
+    }
+  }, [spreadsheetId, spreadsheets]);
+
+  // Column options for selects
+  const columnOptions = columns.map(col => ({
+    value: col,
+    label: col
+  }));
+
+  // Validation and save handler
+  const handleSave = () => {
+    if (!spreadsheetId || !sheetName) {
+      setError("Please select a Google Sheet.");
+      return;
+    }
+    if (findreturnLimit && (isNaN(findreturnLimit) || findreturnLimit < 1 || findreturnLimit > 100)) {
+      setError("Return Limit must be a number between 1 and 100.");
+      return;
+    }
+    if (findsortField && !columns.includes(findsortField)) {
+      setError("Sort field must correspond to a column in the selected sheet.");
+      return;
+    }
+    // You can add more validations as needed
+
+    const config = {
+      findNodeName: findname,                  // name entered by user
+      selectedSheetName: sheetName,            // sheet display name
+      findSheetConditions: findconditions ,   // array of conditions
+      updateMultiple: findupdateMultiple , // boolean flag
+      googleSheetReturnLimit: findreturnLimit ,    // limit on rows
+      googleSheetSortOrder: findsortOrder,       // field/column to sort by
+      googleSheetSortField : findsortField,
+      spreadsheetId,
+      logicType : findlogicType,
+      customLogic : findcustomLogic,
+      sheetColumns : columns
+    };
+    console.log(config)
+    onSave(config);
+    // Hand off to parent handler for storage (e.g., ActionPanel)
+    message.success("FindGoogleSheet configuration saved!");
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 60 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-white p-6 rounded-xl border border-gray-200 shadow-xl w-full max-w-lg"
+    >
+      {/* Sheet selection */}
+      <div className="mb-4">
+      <motion.div layout className="mb-4">
+        <label className="font-medium block mb-1">Name : </label>
+        <Input type="text" onChange={(e) => setfindname(e.target.value)} placeholder="Enter Name.." value={findname}/>
+        </motion.div>
+        <label className="font-medium mb-2 block">Select Google Sheet</label>
+        {loading ? (
+          <Spin />
+        ) : (
+          <Select
+            value={spreadsheetId ? { value: spreadsheetId, label: sheetName } : null}
+            onChange={opt => setSpreadsheetId(opt?.value || "")}
+            options={spreadsheets.map(s => ({ value: s.spreadsheetId, label: s.spreadsheetName }))}
+            placeholder="Choose Google Sheet"
+            isClearable
+          />
+        )}
+        {error && !spreadsheetId && (
+          <div className="text-red-500 mt-1">{error}</div>
+        )}
+      </div>
+
+      {/* Conditions Panel placeholder */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
+        <label className="font-medium mb-2 block">Find Conditions</label>
+        <ConditionsPanel columns={columns} conditions={findconditions} setConditions={setConditions}
+         logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
+         {columns.length === 0 && (
+         <motion.div
+           initial={{ opacity: 0, y: 10 }}
+           animate={{ opacity: 1, y: 0 }}
+           exit={{ opacity: 0, y: 10 }}
+           className="text-gray-400 text-sm flex items-center gap-2 py-2"
+         >
+           <span>🔎</span>
+           <span>No columns available. Select a Google Sheet to begin.</span>
+         </motion.div>
+         )}
+      </motion.div>
+
+      {/* Return Limit */}
+      <motion.div layout className="mb-4">
+        <label className="font-medium block mb-1">Return Limit (max 100)</label>
+        <Input
+          type="number"
+          value={findreturnLimit}
+          min={1} max={100}
+          onChange={e => setReturnLimit(e.target.value)}
+          placeholder="Optional"
+        />
+      </motion.div>
+
+      {/* Sort Records */}
+      <motion.div layout className="mb-4">
+        <label className="font-medium block mb-1">Sort Records</label>
+        <div className="flex gap-3">
+          <Select
+            value={findsortField ? { value: findsortField, label: findsortField } : null}
+            onChange={opt => setSortField(opt?.value || "")}
+            options={columnOptions}
+            isClearable
+            placeholder="Sort Field"
+          />
+          <AntSelect
+            value={{ value: findsortOrder, label: findsortOrder === "ASC" ? "Ascending" : "Descending" }}
+            onChange={opt => setSortOrder(opt)}
+            options={[
+              { value: "ASC", label: "Ascending" },
+              { value: "DESC", label: "Descending" }
+            ]}
+            placeholder="Sort Order"
+          />
+        </div>
+      </motion.div>
+
+      {/* Error Message */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="text-red-500 bg-red-50 p-2 rounded mb-4"
+          >
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button type="primary" onClick={handleSave}>Save Find Config</Button>
       </div>
     </motion.div>
   );

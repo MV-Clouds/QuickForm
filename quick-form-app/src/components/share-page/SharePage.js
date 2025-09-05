@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import './SharePage.css';
 import { QRCodeCanvas } from "qrcode.react";
 import { motion, AnimatePresence } from 'framer-motion';
 
 
-const SharePage = () => {
-  const location = useLocation();
-  const publishLink = location.state?.publishLink || 'https://forms.quickform.com/t/wrQqTLgaLRus';
+const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
 
   const [copiedLink, setCopiedLink] = useState(false); // for copy link button
   const [copiedEmbed, setCopiedEmbed] = useState(false); // for copy embed button
@@ -20,10 +18,20 @@ const SharePage = () => {
   const [qrHover, setQrHover] = useState(false);
   const [twitterHover, setTwitterHover] = useState(false);
   const [selectedTab, setSelectedTab] = useState('html'); // or 'css'
+  const [linkTab, setLinkTab] = useState('publish');
+  const [currentLink, setCurrentLink] = useState(publishLink);
+
+  useEffect(() => {
+    setCurrentLink(
+      linkTab === 'publish'
+        ? publishLink
+        : publishLink.replace('/public-form/', '/public-form/prefill/')
+    );
+  }, [linkTab, publishLink]);
 
   const handleCopyLink = async () => {
     try {
-      await navigator.clipboard.writeText(publishLink);
+      await navigator.clipboard.writeText(currentLink);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
@@ -33,7 +41,7 @@ const SharePage = () => {
 
   const handleCopyEmbed = async () => {
     try {
-      const textToCopy = selectedTab === 'html' ? embedHtmlCode(publishLink) : embedCssCode;
+      const textToCopy = selectedTab === 'html' ? embedHtmlCode(currentLink) : embedCssCode;
       await navigator.clipboard.writeText(textToCopy);
       setCopiedEmbed(true);
       setTimeout(() => setCopiedEmbed(false), 2000);
@@ -44,32 +52,32 @@ const SharePage = () => {
 
   const shareOnTwitter = () => {
     const text = encodeURIComponent('Check out this form!');
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const twitterUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
     openCenteredPopup(twitterUrl, 'Share on Twitter', 600, 600);
   };
 
   const shareOnFacebook = () => {
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
     openCenteredPopup(facebookUrl, 'Share on Facebook', 600, 600);
   };
 
   const shareOnLinkedIn = () => {
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${url}`;
     openCenteredPopup(linkedInUrl, 'Share on LinkedIn', 600, 600);
   };
 
   const shareOnWhatsApp = () => {
-    const text = encodeURIComponent(`Check out this form! ${publishLink}`);
+    const text = encodeURIComponent(`Check out this form! ${currentLink}`);
     const whatsappUrl = `https://wa.me/?text=${text}`;
     openCenteredPopup(whatsappUrl, 'Share on WhatsApp', 600, 600);
   };
 
   const shareOnReddit = () => {
     const title = encodeURIComponent('Check out this form!');
-    const url = encodeURIComponent(publishLink);
+    const url = encodeURIComponent(currentLink);
     const redditUrl = `https://www.reddit.com/submit?url=${url}&title=${title}`;
     openCenteredPopup(redditUrl, 'Share on Reddit', 600, 600);
   };
@@ -138,9 +146,9 @@ const SharePage = () => {
     }
   };
 
-  const embedHtmlCode = (publishLink) => `<div class="custom-form-wrapper">
+  const embedHtmlCode = (currentLink) => `<div class="custom-form-wrapper">
   <iframe
-    src="${publishLink}"
+    src="${currentLink}"
     class="custom-form-iframe"
     allowfullscreen
     title="Shared Form"
@@ -180,20 +188,63 @@ const SharePage = () => {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
     >
-        <div className="share-container">
+    <div className="share-container">
+          {noPublishLink && (
+        <>
+          <div className="no-publish-link-modal">
+            <p className='no-publish-title'>Publish your form and start collecting responses!</p>
+            <p className='no-publish-content'>You're one click away from going live</p>
+            <div className='button-container'>
+              <button className="login-button" onClick={onPublish}>
+                <div className='button-text-container'>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.35031 7.64885L5.76031 8.11885C6.69231 8.42885 7.15731 8.58485 7.49131 8.91885C7.82531 9.25285 7.98131 9.71885 8.29131 10.6489L8.76131 12.0589C9.54531 14.4129 9.93731 15.5889 10.6583 15.5889C11.3783 15.5889 11.7713 14.4129 12.5553 12.0589L15.3933 3.54685C15.9453 1.89085 16.2213 1.06285 15.7843 0.625853C15.3473 0.188853 14.5193 0.464853 12.8643 1.01585L4.34931 3.85585C1.99831 4.63885 0.820312 5.03085 0.820312 5.75185C0.820312 6.47285 1.99731 6.86485 4.35031 7.64885Z" fill="white"></path><path d="M6.1841 9.59379L4.1221 8.90679C3.97781 8.85869 3.82445 8.84414 3.67369 8.86424C3.52293 8.88434 3.37874 8.93857 3.2521 9.02279L2.1621 9.74879C2.03307 9.83476 1.9318 9.95636 1.87061 10.0988C1.80941 10.2413 1.79094 10.3985 1.81742 10.5512C1.84391 10.704 1.91421 10.8458 2.01979 10.9593C2.12537 11.0729 2.26166 11.1533 2.4121 11.1908L4.3671 11.6788C4.45508 11.7008 4.53542 11.7462 4.59954 11.8103C4.66366 11.8745 4.70914 11.9548 4.7311 12.0428L5.2191 13.9978C5.25661 14.1482 5.33703 14.2845 5.45058 14.3901C5.56413 14.4957 5.7059 14.566 5.85867 14.5925C6.01144 14.619 6.16861 14.6005 6.31107 14.5393C6.45353 14.4781 6.57513 14.3768 6.6611 14.2478L7.3871 13.1578C7.47132 13.0311 7.52555 12.887 7.54565 12.7362C7.56575 12.5854 7.5512 12.4321 7.5031 12.2878L6.8161 10.2258C6.76699 10.0786 6.68433 9.94494 6.57464 9.83525C6.46495 9.72556 6.33124 9.6429 6.1841 9.59379Z" fill="white"></path></svg>
+
+                <span className='publish-text'>Publish</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+      <div className={`main-share-content${noPublishLink ? ' blurred' : ''}`}>
         <h2 className="share-title">Share</h2>
         {/* Share Link Section */}
         <div className="share-section">
             <div className="share-label">Form Link</div>
+            <div className="tabs">
+                {['publish', 'prefill'].map(tab => (
+                  <motion.button
+                    key={tab}
+                    type="button"
+                    onClick={() => setLinkTab(tab)}
+                    initial={false}
+                    animate={linkTab === tab ? "selected" : "rest"}
+                    whileHover="hover"
+                    variants={{
+                      rest: { background: 'transparent', color: '#0B0A0A', fontWeight: 500, borderBottom: '2px solid #E4E7EC' },
+                      selected: { background: 'linear-gradient(0deg, rgba(0, 138, 176, 0.12) 0%, rgba(143, 220, 241, 0) 100%)', color: '#0B0A0A', fontWeight: 700, borderBottom: '2px solid #028AB0' },
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 400,
+                      damping: 15
+                    }}
+                    className="tab-button"
+                  >
+                    {tab === 'publish' ? 'Publish' : 'Prefill'}
+                  </motion.button>
+                ))}
+              </div>
             <div className="share-row">
-            <input className="share-input" readOnly value={publishLink} />
+
+            <input className="share-input" readOnly value={currentLink} />
             <motion.div className="open-link"
               whileTap={{ scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             >
               <motion.button
                 className="open-link-button"
-                onClick={() => window.open(publishLink, '_blank', 'noopener,noreferrer')}
+                onClick={() => window.open(currentLink, '_blank', 'noopener,noreferrer')}
                 aria-label="Open public link"
                 type="button"
                 whileTap={{ scale: 0.95 }}
@@ -473,7 +524,7 @@ const SharePage = () => {
                 key={selectedTab}
                 className="share-embed-code"
                 rows={4}
-                value={selectedTab === 'html' ? embedHtmlCode(publishLink) : embedCssCode}
+                value={selectedTab === 'html' ? embedHtmlCode(currentLink) : embedCssCode}
                 readOnly
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -481,7 +532,7 @@ const SharePage = () => {
                 transition={{ duration: 0.25 }}
               />
             </AnimatePresence>
-            
+            </div>
         </div>
         
         </div>
@@ -531,7 +582,7 @@ const SharePage = () => {
               <div className="form-container qr-modal-content">
                 <QRCodeCanvas
                   id="share-qr-canvas"
-                  value={publishLink}
+                  value={currentLink}
                   size={300}
                   includeMargin
                   className="qr-canvas"

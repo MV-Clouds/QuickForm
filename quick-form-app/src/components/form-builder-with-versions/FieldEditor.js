@@ -15,6 +15,8 @@ import EmojiPicker from "emoji-picker-react";
 import { getCountryList } from "./getCountries";
 import ToggleSwitch from "./ToggleSwitch";
 import { DatePicker } from "rsuite";
+import { ColorPicker } from "antd";
+import PaymentFieldEditor from "./payment-fields/PaymentFieldEditor";
 
 // FieldEditor component for editing form fields and footer buttons
 function FieldEditor({
@@ -24,6 +26,12 @@ function FieldEditor({
   onDeleteField,
   onClose,
   fields,
+  fieldsets,
+  onAddFieldsFromFieldset,
+  footerConfigs,
+  setFooterConfigs,
+  userId = null, // Add userId prop
+  formId = null,
 }) {
   // State for common properties
   const [label, setLabel] = useState(selectedField?.label || "");
@@ -39,8 +47,10 @@ function FieldEditor({
 
   // State for additional properties (field-specific)
   const [options, setOptions] = useState(selectedField?.options || []);
-  const [rows, setRows] = useState(selectedField?.rows || []);
-  const [columns, setColumns] = useState(selectedField?.columns || []);
+  const [rows, setRows] = useState(selectedField?.rows || ["Criteria 1", "Criteria 2", "Criteria 3"]);
+  const [columns, setColumns] = useState(selectedField?.columns || ["1", "2", "3", "4", "5"]);
+
+  // State for rating-specific properties
   const [ratingType, setRatingType] = useState(
     selectedField?.ratingType || "emoji"
   );
@@ -49,15 +59,15 @@ function FieldEditor({
   );
   const [ratingValues, setRatingValues] = useState(
     selectedField?.ratingValues ||
-      Array(selectedField?.ratingRange || 5)
-        .fill("")
-        .map((_, i) => `Rating ${i + 1}`)
+    Array(selectedField?.ratingRange || 5)
+      .fill("")
+      .map((_, i) => `Rating ${i + 1}`)
   );
   const [ratingEmojis, setRatingEmojis] = useState(
     selectedField?.ratingEmojis ||
-      Array(selectedField?.ratingRange || 5)
-        .fill("")
-        .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
+    Array(selectedField?.ratingRange || 5)
+      .fill("")
+      .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
   );
   const [showEmojiPicker, setShowEmojiPicker] = useState(null);
 
@@ -211,42 +221,6 @@ function FieldEditor({
   );
   const [helpText, setHelpText] = useState(selectedField?.helpText || "");
 
-  // State for header and footer properties
-  // const [headerText, setHeaderText] = useState('Form');
-  // const [headerAlignment, setHeaderAlignment] = useState(selectedField?.alignment || 'center');
-  const [footerText, setFooterText] = useState(
-    selectedFooter
-      ? fields.find(
-          (f) =>
-            f.id ===
-            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-        )?.text ||
-          selectedFooter.buttonType.charAt(0).toUpperCase() +
-            selectedFooter.buttonType.slice(1)
-      : ""
-  );
-  const [footerBgColor, setFooterBgColor] = useState(
-    selectedFooter
-      ? fields.find(
-          (f) =>
-            f.id ===
-            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-        )?.bgColor ||
-          (selectedFooter.buttonType === "previous"
-            ? "bg-gray-600"
-            : "bg-blue-600")
-      : ""
-  );
-  const [footerTextColor, setFooterTextColor] = useState(
-    selectedFooter
-      ? fields.find(
-          (f) =>
-            f.id ===
-            `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`
-        )?.textColor || "white"
-      : "white"
-  );
-
   // State for terms-specific properties
   const [makeAsLink, setMakeAsLink] = useState(
     selectedField?.makeAsLink || false
@@ -380,7 +354,7 @@ function FieldEditor({
   );
   const [dragIndex, setDragIndex] = useState(null);
   const [dropdownRelatedValues, setDropdownRelatedValues] = useState(
-    selectedField?.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'}
+    selectedField?.dropdownRelatedValues || { "Option 1": "Option 1", "Option 2": "Option 2", 'Option 3': 'Option 3' }
   );
 
   // NEW : Default value / Hidden Feature / Unique Name
@@ -401,6 +375,27 @@ function FieldEditor({
   const [columnCount, setColumnCount] = useState(
     selectedField?.columnCount || 1
   );
+  const [minSelection, setMinSelection] = useState(selectedField?.minSelection || 0);
+  const [maxSelection, setMaxSelection] = useState(selectedField?.maxSelection || 0);
+
+
+  useEffect(() => {
+    if (
+      selectedField &&
+      selectedField.type === "scalerating" &&
+      (
+        !selectedField.rows ||
+        !selectedField.columns ||
+        !selectedField.inputType
+      )
+    ) {
+      onUpdateField(selectedField.id, {
+        rows: selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"],
+        columns: selectedField.columns || ["1", "2", "3", "4", "5"],
+        inputType: selectedField.inputType || "radio",
+      });
+    }
+  }, [selectedField, onUpdateField]);
 
   useEffect(() => {
     if (selectedField) {
@@ -414,19 +409,21 @@ function FieldEditor({
       setRows(selectedField.rows || ["Criteria 1", "Criteria 2", "Criteria 3"]);
       setColumns(selectedField.columns || ["1", "2", "3", "4", "5"]);
       setOptions(selectedField.options || ["Option 1", "Option 2", "Option 3"]);
+      setMinSelection(selectedField.minSelection || 0);
+      setMaxSelection(selectedField.maxSelection || 0);
       setRatingType(selectedField.ratingType || "emoji");
       setRatingRange(selectedField.ratingRange || 5);
       setRatingValues(
         selectedField.ratingValues ||
-          Array(selectedField.ratingRange || 5)
-            .fill("")
-            .map((_, i) => `Rating ${i + 1}`)
+        Array(selectedField.ratingRange || 5)
+          .fill("")
+          .map((_, i) => `Rating ${i + 1}`)
       );
       setRatingEmojis(
         selectedField.ratingEmojis ||
-          Array(selectedField.ratingRange || 5)
-            .fill("")
-            .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
+        Array(selectedField.ratingRange || 5)
+          .fill("")
+          .map((_, i) => ["😞", "🙁", "😐", "🙂", "😀"][i % 5])
       );
       setMaxChars(selectedField.maxChars || "");
       setAllowedDomains(selectedField.allowedDomains || "");
@@ -528,7 +525,7 @@ function FieldEditor({
         selectedField.allowMultipleSelections || false
       );
       setShuffleOptions(selectedField.shuffleOptions || false);
-      setDropdownRelatedValues(selectedField.dropdownRelatedValues || {"Option 1" : "Option 1" , "Option 2" : "Option 2" , 'Option 3' : 'Option 3'});
+      setDropdownRelatedValues(selectedField.dropdownRelatedValues || { "Option 1": "Option 1", "Option 2": "Option 2", 'Option 3': 'Option 3' });
       // NEW: Set default value / Hidden Feature / Unique Name
       setDefaultValue(selectedField.defaultValue || "");
       setIsHidden(selectedField.isHidden || false);
@@ -551,9 +548,6 @@ function FieldEditor({
       } else {
         setPredefinedOptionSet("");
       }
-    }
-    if (selectedFooter) {
-      setFooterText(selectedFooter.text || "");
     }
   }, [selectedField, selectedFooter, fields]);
 
@@ -1012,30 +1006,6 @@ function FieldEditor({
     setHeadingAlignment(e.target.value);
     onUpdateField(selectedField.id, { alignment: e.target.value });
   };
-  const handleFooterTextChange = (e) => {
-    setFooterText(e.target.value);
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onUpdateField(footerId, { text: e.target.value });
-  };
-
-  const handleFooterBgColorChange = (e) => {
-    setFooterBgColor(e.target.value);
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onUpdateField(footerId, { bgColor: e.target.value });
-  };
-
-  const handleFooterTextColorChange = (e) => {
-    setFooterTextColor(e.target.value);
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onUpdateField(footerId, { textColor: e.target.value });
-  };
-
-  const handleDeleteFooter = () => {
-    const footerId = `footer-${selectedFooter.buttonType}-${selectedFooter.pageIndex}`;
-    onDeleteField(footerId);
-    onClose();
-  };
-
   // Toggle expandable sections (allow multiple sections to be open)
   const toggleSection = (section) => {
     setExpandedSections((prev) =>
@@ -1427,9 +1397,87 @@ function FieldEditor({
   const isShortTextSupported = selectedField?.type === "shorttext";
   const isDatetime = selectedField?.type === "datetime";
   const isMatrix = selectedField?.type === "matrix";
+  const isPayPalPayment = selectedField?.type === "paypal_payment";
 
   // Get dynamic country list
   const countries = getCountryList();
+   let footerEditor = null;
+   
+  if (
+    selectedFooter &&
+    typeof selectedFooter.pageIndex === "number"
+  ) {
+    const pageIndex = selectedFooter.pageIndex;
+    const pageBreakCount = fields.filter(f => f.type === 'pagebreak').length;
+    const buttons = [];
+    if (pageIndex > 0) buttons.push("previous");
+    if (pageIndex < pageBreakCount) buttons.push("next");
+    if (pageIndex === pageBreakCount) buttons.push("submit");
+
+    footerEditor = (
+      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+        <h3 className="font-semibold mb-2">Footer Configuration (Page {pageIndex + 1})</h3>
+        {buttons.map(buttonType => (
+          <div key={buttonType} className="mb-4">
+            <label className="block text-sm font-medium mb-1">{buttonType.charAt(0).toUpperCase() + buttonType.slice(1)} Button Text</label>
+            <input
+              type="text"
+              value={footerConfigs[pageIndex]?.[buttonType]?.text || ""}
+              onChange={e =>
+                setFooterConfigs(prev => ({
+                  ...prev,
+                  [pageIndex]: {
+                    ...prev[pageIndex],
+                    [buttonType]: {
+                      ...prev[pageIndex]?.[buttonType],
+                      text: e.target.value
+                    }
+                  }
+                }))
+              }
+              className="w-full p-2 border rounded mb-2"
+              placeholder={`Enter ${buttonType} button text`}
+            />
+            <label className="block text-sm font-medium mb-1">Background Color</label>
+            <input
+              type="color"
+              value={footerConfigs[pageIndex]?.[buttonType]?.bgColor || "#6B7280"}
+              onChange={e =>
+                setFooterConfigs(prev => ({
+                  ...prev,
+                  [pageIndex]: {
+                    ...prev[pageIndex],
+                    [buttonType]: {
+                      ...prev[pageIndex]?.[buttonType],
+                      bgColor: e.target.value
+                    }
+                  }
+                }))
+              }
+              className="mb-2"
+            />
+            <label className="block text-sm font-medium mb-1">Text Color</label>
+            <input
+              type="color"
+              value={footerConfigs[pageIndex]?.[buttonType]?.textColor || "#FFFFFF"}
+              onChange={e =>
+                setFooterConfigs(prev => ({
+                  ...prev,
+                  [pageIndex]: {
+                    ...prev[pageIndex],
+                    [buttonType]: {
+                      ...prev[pageIndex]?.[buttonType],
+                      textColor: e.target.value
+                    }
+                  }
+                }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="custom-builder-card">
@@ -1468,9 +1516,8 @@ function FieldEditor({
         <div className="flex border-b mx-4 mt-4 mb-4">
           <div className="relative">
             <button
-              className={`px-4 py-2 font-medium text-sm relative z-10 ${
-                activeTab === "settings" ? "text-gray-900" : "text-gray-500"
-              }`}
+              className={`px-4 py-2 font-medium text-sm relative z-10 ${activeTab === "settings" ? "text-gray-900" : "text-gray-500"
+                }`}
               onClick={() => setActiveTab("settings")}
             >
               Settings
@@ -1483,9 +1530,8 @@ function FieldEditor({
           {isFormCalculation && (
             <div className="relative">
               <button
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === "widget" ? "text-gray-900" : "text-gray-500"
-                }`}
+                className={`px-4 py-2 font-medium text-sm ${activeTab === "widget" ? "text-gray-900" : "text-gray-500"
+                  }`}
                 onClick={() => setActiveTab("widget")}
               >
                 Widget
@@ -2139,8 +2185,8 @@ function FieldEditor({
                               />
                               <input
                                 type="text"
-                                value={dropdownRelatedValues[opt] }
-                                defaultValue = {`Option ${idx + 1}`}
+                                value={dropdownRelatedValues[opt]}
+                                defaultValue={`Option ${idx + 1}`}
                                 onChange={(e) =>
                                   handleDropdownRelatedValueChange(
                                     opt,
@@ -2186,6 +2232,42 @@ function FieldEditor({
                           </div>
                         </div>
                       )}
+                    {isOptionsSupported && ["checkbox", "dropdown"].includes(selectedField.type) && (
+                      <div className="mb-4">
+                        <div className="flex gap-4 mt-2">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Min Selection</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={options.length}
+                              value={minSelection}
+                              onChange={e => {
+                                const value = Math.max(0, Math.min(options.length, Number(e.target.value)));
+                                setMinSelection(value);
+                                onUpdateField(selectedField.id, { minSelection: value });
+                              }}
+                              className="w-20 p-2 border rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Max Selection</label>
+                            <input
+                              type="number"
+                              min={minSelection}
+                              max={options.length}
+                              value={maxSelection}
+                              onChange={e => {
+                                const value = Math.max(minSelection, Math.min(options.length, Number(e.target.value)));
+                                setMaxSelection(value);
+                                onUpdateField(selectedField.id, { maxSelection: value });
+                              }}
+                              className="w-20 p-2 border rounded"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {isScaleRating && (
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2356,11 +2438,10 @@ function FieldEditor({
                                 ratingType: "emoji",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "emoji"
+                            className={`text-2xl ${ratingType === "emoji"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             😀
                           </button>
@@ -2371,11 +2452,10 @@ function FieldEditor({
                                 ratingType: "star",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "star"
+                            className={`text-2xl ${ratingType === "star"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <AiOutlineStar />
                           </button>
@@ -2386,11 +2466,10 @@ function FieldEditor({
                                 ratingType: "heart",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "heart"
+                            className={`text-2xl ${ratingType === "heart"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <AiOutlineHeart />
                           </button>
@@ -2401,11 +2480,10 @@ function FieldEditor({
                                 ratingType: "bulb",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "bulb"
+                            className={`text-2xl ${ratingType === "bulb"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <FaRegLightbulb />
                           </button>
@@ -2416,11 +2494,10 @@ function FieldEditor({
                                 ratingType: "lightning",
                               });
                             }}
-                            className={`text-2xl ${
-                              ratingType === "lightning"
+                            className={`text-2xl ${ratingType === "lightning"
                                 ? "text-blue-600"
                                 : "text-gray-400"
-                            } hover:text-blue-500`}
+                              } hover:text-blue-500`}
                           >
                             <BiBoltCircle />
                           </button>
@@ -2967,13 +3044,13 @@ function FieldEditor({
                                 onChange={(e) =>
                                   isDateTime
                                     ? handleDatetimeRangeChange(
-                                        "start",
-                                        e.target.value
-                                      )
+                                      "start",
+                                      e.target.value
+                                    )
                                     : handleDateRangeChange(
-                                        "start",
-                                        e.target.value
-                                      )
+                                      "start",
+                                      e.target.value
+                                    )
                                 }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="Start date"
@@ -2986,13 +3063,13 @@ function FieldEditor({
                                 onChange={(e) =>
                                   isDateTime
                                     ? handleDatetimeRangeChange(
-                                        "end",
-                                        e.target.value
-                                      )
+                                      "end",
+                                      e.target.value
+                                    )
                                     : handleDateRangeChange(
-                                        "end",
-                                        e.target.value
-                                      )
+                                      "end",
+                                      e.target.value
+                                    )
                                 }
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                                 placeholder="End date"
@@ -3247,7 +3324,7 @@ function FieldEditor({
                                     enabled: e.target.checked,
                                     value: e.target.checked
                                       ? phoneSubFields.countryCode?.value ||
-                                        "US"
+                                      "US"
                                       : "",
                                   },
                                   phoneNumber: {
@@ -3259,10 +3336,10 @@ function FieldEditor({
                                     ...(e.target.checked
                                       ? {}
                                       : {
-                                          phoneMask:
-                                            phoneSubFields.phoneNumber
-                                              ?.phoneMask || "(999) 999-9999",
-                                        }),
+                                        phoneMask:
+                                          phoneSubFields.phoneNumber
+                                            ?.phoneMask || "(999) 999-9999",
+                                      }),
                                   },
                                 };
                                 setPhoneSubFields(newSubFields);
@@ -3475,9 +3552,8 @@ function FieldEditor({
                       type="text"
                       defaultValue={uniqueName}
                       onChange={handleUniqueNameChange}
-                      className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${
-                        uniqueNameError ? "border-red-500" : ""
-                      }`}
+                      className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? "border-red-500" : ""
+                        }`}
                       placeholder="{uniqueName}"
                       maxLength={50}
                     />
@@ -3494,75 +3570,62 @@ function FieldEditor({
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "settings" && selectedFooter && (
-          <div className="px-4 pb-4">
-            <div className="mb-4">
-              <button
-                className="flex justify-between w-full p-3 bg-gray-50 hover:bg-gray-100 rounded-lg items-center transition-colors duration-200 border border-gray-200"
-                onClick={() => toggleSection("footer")}
-              >
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Footer Button Properties
-                </h3>
-                {expandedSections.includes("footer") ? (
-                  <FaChevronUp className="text-gray-600" />
-                ) : (
-                  <FaChevronDown className="text-gray-600" />
-                )}
-              </button>
-              {expandedSections.includes("footer") && (
-                <div className="p-4 mt-1 bg-gray-50 rounded-b-lg">
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Button Text
-                    </label>
-                    <input
-                      type="text"
-                      value={footerText}
-                      onChange={handleFooterTextChange}
-                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                      placeholder="Enter button text"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Background Color
-                    </label>
-                    <input
-                      type="color"
-                      value={footerBgColor}
-                      onChange={handleFooterBgColorChange}
-                      className="w-full p-2 border rounded-lg bg-white text-gray-800"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Text Color
-                    </label>
-                    <input
-                      type="color"
-                      value={footerTextColor}
-                      onChange={handleFooterTextColorChange}
-                      className="w-full p-2 border rounded-lg bg-white text-gray-800"
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <button
-                      onClick={handleDeleteFooter}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                    >
-                      Delete Footer Button
-                    </button>
-                  </div>
-                </div>
+              {/* Payment Field Configuration */}
+              {isPayPalPayment && (
+                <PaymentFieldEditor
+                  selectedField={selectedField}
+                  onUpdateField={onUpdateField}
+                  className="mb-4"
+                  userId={userId}
+                  formId={formId}
+                />
               )}
             </div>
           </div>
         )}
+{/* 
+         {activeTab === "settings" && (selectedFooter.buttonType==null) && (
+    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+      <h3 className="font-semibold mb-2">Footer Configuration</h3>
+      <div className="mb-2">
+        <label className="block text-sm font-medium mb-1">Footer Text</label>
+        <input
+          type="text"
+          value={footerConfigs.text}
+          onChange={handleFooterButtonTextChange}
+          className="w-full p-2 border rounded"
+          placeholder="Enter footer text"
+        />
+      </div>
+      <div className="mb-2">
+        <label className="block text-sm font-medium mb-1">Footer Alignment</label>
+        <select
+          value={footerConfigs.alignment}
+          onChange={handleFooterAlignmentChange}
+          className="w-full p-2 border rounded"
+        >
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+          <option value="split">Split (for 2 buttons)</option>
+        </select>
+      </div>
+      <div className="mb-2 flex gap-4 items-center">
+        <label className="block text-sm font-medium mb-1">Button Background</label>
+        <ColorPicker
+          value={footerConfigs.buttonBg}
+          onChange={handleFooterButtonBgChange}
+        />
+        <label className="block text-sm font-medium mb-1">Button Text Color</label>
+        <ColorPicker
+          value={footerConfigs.buttonTextColor}
+          onChange={handleFooterButtonTextColorChange}
+        />
+      </div>
+    </div>
+  )} */}
+
+  {footerEditor}
 
         {activeTab === "widget" && isFormCalculation && (
           <div className="px-4 py-2 bg-gray-50 rounded-b-lg">

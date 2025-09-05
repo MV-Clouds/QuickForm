@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { FaInfoCircle, FaPlus, FaSpinner } from "react-icons/fa";
 import MerchantOnboardingModal from "../MerchantOnboardingModal";
 import {
-  initiatePayment,
   fetchOnboardedAccounts,
   fetchMerchantCapabilities,
   setUserContext,
@@ -36,123 +35,8 @@ const MerchantAccountSelector = ({
   const [capabilitiesError, setCapabilitiesError] = useState("");
   const lastFetchedMerchantRef = useRef(null);
 
-  // Fetch onboarded accounts following Main1.js fetchOnboardedAccount pattern
-  const fetchOnboardedAccount = async () => {
-    setLoading(true);
-    setError("");
-    setNoAccountsWarning("");
-
-    try {
-      const result = await fetchOnboardedAccounts();
-      // const result = data.data;
-      // result.hasAccounts = result?.count > 0;
-      // result.success = result?.count > 0;
-      console.log(
-        "🔍 MerchantAccountSelector - fetchOnboardedAccount result:",
-        result
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.success:",
-        result.success
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.hasAccounts:",
-        result.hasAccounts
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.accounts:",
-        result.accounts
-      );
-      console.log(
-        "🔍 MerchantAccountSelector - result.accounts.length:",
-        result.accounts?.length
-      );
-
-      if (result.success) {
-        setAccounts(result.accounts);
-        if (result.hasAccounts) {
-          // Auto-select first account (Salesforce record Id) if none selected
-          if (!selectedMerchantId && result.accounts?.length > 0) {
-            const firstAccountId = result.accounts[0].Id;
-            onMerchantChange(firstAccountId);
-            // Also fetch capabilities using the PayPal merchant id from the account
-            const firstPaypalMerchantId = result.accounts[0].Merchant_ID__c;
-            fetchCapabilities(firstPaypalMerchantId);
-          }
-          setNoAccountsWarning("");
-        } else {
-          setNoAccountsWarning(
-            "No merchant accounts found. Please onboard a merchant to continue."
-          );
-        }
-      } else {
-        console.error("Fetch accounts error:", result.error);
-        setError("Failed to load merchant accounts.");
-        setNoAccountsWarning(
-          "Failed to load merchant accounts. Please try again."
-        );
-      }
-    } catch (err) {
-      console.error("Fetch accounts error:", err);
-      setError("Failed to load merchant accounts.");
-      setNoAccountsWarning(
-        "Failed to load merchant accounts. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Set user context if provided
-  useEffect(() => {
-    if (userId || formId) {
-      setUserContext(userId, formId);
-      console.log("🔍 MerchantAccountSelector: User context set", {
-        userId,
-        formId,
-      });
-    }
-  }, [userId, formId]);
-
-  // Load accounts on component mount
-  useEffect(() => {
-    fetchOnboardedAccount();
-  }, []);
-
-  // Fetch capabilities when selected account (Salesforce Id) changes
-  useEffect(() => {
-    if (
-      selectedMerchantId &&
-      selectedMerchantId !== lastFetchedMerchantRef.current
-    ) {
-      console.log(
-        "🔍 MerchantAccountSelector: selected account changed, fetching capabilities:",
-        selectedMerchantId,
-        "Previous:",
-        lastFetchedMerchantRef.current
-      );
-      lastFetchedMerchantRef.current = selectedMerchantId;
-      // Map selected account Id to PayPal merchant id for capability fetch
-      const selected = accounts.find((acc) => acc.Id === selectedMerchantId);
-      const paypalMerchantId = selected?.Merchant_ID__c;
-      if (paypalMerchantId) {
-        fetchCapabilities(paypalMerchantId);
-      }
-    } else if (selectedMerchantId === lastFetchedMerchantRef.current) {
-      console.log(
-        "🔍 MerchantAccountSelector: Skipping capabilities fetch - same account:",
-        selectedMerchantId
-      );
-    }
-  }, [selectedMerchantId, accounts]);
-
-  // Add this function to refresh accounts after onboarding
-  const refreshAccounts = () => {
-    fetchOnboardedAccount();
-  };
-
-  // Fetch capabilities function
-  const fetchCapabilities = async (merchantId) => {
+  // Fetch capabilities function - memoized to prevent unnecessary re-renders
+  const fetchCapabilities = useCallback(async (merchantId) => {
     if (!merchantId) return;
 
     // Prevent duplicate calls for the same merchant
@@ -182,17 +66,129 @@ const MerchantAccountSelector = ({
         const capabilities = result.capabilities || {};
         console.log("🔍 Processed capabilities:", capabilities);
         setCapabilities(capabilities);
+        lastFetchedMerchantRef.current = merchantId; // Update ref on successful fetch
       } else {
         throw new Error(result.error || "Failed to fetch capabilities");
       }
     } catch (err) {
       console.error("❌ Error fetching capabilities:", err);
       setCapabilitiesError(err.message);
+      // Clear capabilities on error to force refresh
       setCapabilities(null);
     } finally {
       setCapabilitiesLoading(false);
     }
-  };
+  }, []); // Empty dependencies to prevent infinite loops
+
+  // Fetch onboarded accounts following Main1.js fetchOnboardedAccount pattern
+  const fetchOnboardedAccount = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    setNoAccountsWarning("");
+
+    try {
+      const result = await fetchOnboardedAccounts();
+      console.log(
+        "🔍 MerchantAccountSelector - fetchOnboardedAccount result:",
+        result
+      );
+
+      if (result.success) {
+        setAccounts(result.accounts);
+        if (result.hasAccounts) {
+          // Auto-select first account (Salesforce record Id) if none selected
+          // Only auto-select if no merchant is currently selected
+          if (!selectedMerchantId && result.accounts?.length > 0) {
+            const firstAccountId = result.accounts[0].Id;
+            console.log(
+              "🎯 Auto-selecting first merchant account:",
+              firstAccountId
+            );
+            onMerchantChange(firstAccountId);
+            // Also fetch capabilities using the PayPal merchant id from the account
+            const firstPaypalMerchantId = result.accounts[0].Merchant_ID__c;
+            if (firstPaypalMerchantId) {
+              fetchCapabilities(firstPaypalMerchantId);
+            }
+          } else if (selectedMerchantId) {
+            console.log(
+              "🎯 Merchant already selected, skipping auto-selection:",
+              selectedMerchantId
+            );
+            // If merchant is already selected, just fetch capabilities for the selected one
+            const selectedAccount = result.accounts?.find(
+              (acc) => acc.Id === selectedMerchantId
+            );
+            if (selectedAccount) {
+              fetchCapabilities(selectedAccount.Merchant_ID__c);
+            }
+          }
+          setNoAccountsWarning("");
+        } else {
+          setNoAccountsWarning(
+            "No merchant accounts found. Please onboard a merchant to continue."
+          );
+        }
+      } else {
+        console.error("Fetch accounts error:", result.error);
+        setError("Failed to load merchant accounts.");
+        setNoAccountsWarning(
+          "Failed to load merchant accounts. Please try again."
+        );
+      }
+    } catch (err) {
+      console.error("Fetch accounts error:", err);
+      setError("Failed to load merchant accounts.");
+      setNoAccountsWarning(
+        "Failed to load merchant accounts. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchCapabilities, selectedMerchantId]);
+
+  // Set user context if provided
+  useEffect(() => {
+    if (userId || formId) {
+      setUserContext(userId, formId);
+      console.log("🔍 MerchantAccountSelector: User context set", {
+        userId,
+        formId,
+      });
+    }
+  }, [userId, formId]);
+
+  // Load accounts on component mount
+  useEffect(() => {
+    fetchOnboardedAccount();
+  }, [fetchOnboardedAccount]);
+
+  // Fetch capabilities when selected account (Salesforce Id) changes
+  useEffect(() => {
+    if (
+      selectedMerchantId &&
+      selectedMerchantId !== lastFetchedMerchantRef.current &&
+      accounts.length > 0 // Only proceed if accounts are loaded
+    ) {
+      console.log(
+        "🔍 MerchantAccountSelector: selected account changed, fetching capabilities:",
+        selectedMerchantId,
+        "Previous:",
+        lastFetchedMerchantRef.current
+      );
+      // Map selected account Id to PayPal merchant id for capability fetch
+      const selected = accounts.find((acc) => acc.Id === selectedMerchantId);
+      const paypalMerchantId = selected?.Merchant_ID__c;
+      if (paypalMerchantId) {
+        fetchCapabilities(paypalMerchantId);
+      }
+    } else if (selectedMerchantId === lastFetchedMerchantRef.current) {
+      console.log(
+        "🔍 MerchantAccountSelector: Skipping capabilities fetch - same account:",
+        selectedMerchantId
+      );
+    }
+  }, [selectedMerchantId, accounts, fetchCapabilities]);
 
   // Handle merchant change and fetch capabilities
   const handleMerchantChange = (accountId) => {
@@ -215,7 +211,11 @@ const MerchantAccountSelector = ({
   // Retry button
   const handleRetryCapabilities = () => {
     if (selectedMerchantId) {
-      fetchCapabilities(selectedMerchantId);
+      const selected = accounts.find((acc) => acc.Id === selectedMerchantId);
+      const paypalMerchantId = selected?.Merchant_ID__c;
+      if (paypalMerchantId) {
+        fetchCapabilities(paypalMerchantId);
+      }
     }
   };
 
@@ -229,7 +229,7 @@ const MerchantAccountSelector = ({
     if (onCapabilitiesChange) {
       onCapabilitiesChange(capabilities);
     }
-  }, [capabilities, onCapabilitiesChange]);
+  }, [capabilities]);
 
   return (
     <div className={`merchant-account-selector ${className}`}>
