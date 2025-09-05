@@ -247,6 +247,97 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   };
 
+  const calculateNodeOrders = useCallback((currentNodes, currentEdges) => {
+    // Build graph ignoring loop self-edges to avoid skewed ordering
+    const updatedNodes = [...currentNodes];
+    const idToIndex = new Map();
+    updatedNodes.forEach((n, i) => idToIndex.set(n.id, i));
+
+    const filteredEdges = currentEdges.filter(
+      (e) => e.source !== e.target && e.sourceHandle !== "loop" && e.targetHandle !== "loop-back"
+    );
+
+    const adjacency = new Map();
+    const inDegree = new Map();
+    currentNodes.forEach((n) => {
+      adjacency.set(n.id, []);
+      inDegree.set(n.id, 0);
+    });
+
+    filteredEdges.forEach((e) => {
+      if (adjacency.has(e.source) && inDegree.has(e.target)) {
+        adjacency.get(e.source).push(e.target);
+        inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
+      }
+    });
+
+    // Priority based on on-screen position: top-to-bottom then left-to-right
+    const sortByPosition = (a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x);
+
+    const queue = currentNodes
+      .filter((n) => (inDegree.get(n.id) || 0) === 0)
+      .sort(sortByPosition);
+
+    const visited = new Set();
+    const nodeOrders = new Map();
+    orderCounterRef.current = 1;
+
+    // Count per action for display labels
+    const actionCounts = {};
+    const nextDisplayLabel = (node) => {
+      const actionKey = node.data.action || "Action";
+      actionCounts[actionKey] = (actionCounts[actionKey] || 0) + 1;
+      return node.data.displayLabel || node.data.action || `Action ${actionCounts[actionKey]}`;
+    };
+
+    // Kahn's algorithm
+    while (queue.length) {
+      const node = queue.shift();
+      if (visited.has(node.id)) continue;
+      visited.add(node.id);
+
+      const order = orderCounterRef.current++;
+      nodeOrders.set(node.id, order);
+
+      const idx = idToIndex.get(node.id);
+      const displayLabel = nextDisplayLabel(updatedNodes[idx]);
+      updatedNodes[idx] = {
+        ...updatedNodes[idx],
+        data: { ...updatedNodes[idx].data, order, displayLabel },
+      };
+
+      const children = adjacency.get(node.id) || [];
+      for (const childId of children) {
+        inDegree.set(childId, (inDegree.get(childId) || 1) - 1);
+        if ((inDegree.get(childId) || 0) === 0) {
+          const childNode = currentNodes.find((n) => n.id === childId);
+          if (childNode) {
+            queue.push(childNode);
+            queue.sort(sortByPosition);
+          }
+        }
+      }
+    }
+
+    // Remaining nodes (disconnected or in cycles) by position
+    const remaining = currentNodes
+      .filter((n) => !visited.has(n.id))
+      .sort(sortByPosition);
+
+    for (const node of remaining) {
+      const order = orderCounterRef.current++;
+      nodeOrders.set(node.id, order);
+      const idx = idToIndex.get(node.id);
+      const displayLabel = nextDisplayLabel(updatedNodes[idx]);
+      updatedNodes[idx] = {
+        ...updatedNodes[idx],
+        data: { ...updatedNodes[idx].data, order, displayLabel },
+      };
+    }
+
+    return updatedNodes;
+  }, []);
+  
   const saveAllConfiguration = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
@@ -286,12 +377,53 @@ const MappingFields = ({ onSaveCallback }) => {
       }
     }
 
+    // Recalculate node orders just before saving to ensure correctness
+    const recalculatedNodes = calculateNodeOrders(nodes, edges);
+    setNodes(recalculatedNodes);
+    const nodesForSave = recalculatedNodes;
+
+    // Build order map to guarantee sequential topological order for save payload
+    const buildOrderMap = (ns, es) => {
+      const filtered = es.filter((e) => e.source !== e.target && e.sourceHandle !== 'loop' && e.targetHandle !== 'loop-back');
+      const adj = new Map();
+      const indeg = new Map();
+      ns.forEach(n => { adj.set(n.id, []); indeg.set(n.id, 0); });
+      filtered.forEach(e => {
+        if (adj.has(e.source) && indeg.has(e.target)) {
+          adj.get(e.source).push(e.target);
+          indeg.set(e.target, (indeg.get(e.target) || 0) + 1);
+        }
+      });
+      const sortByPos = (a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x);
+      const q = ns.filter(n => (indeg.get(n.id) || 0) === 0).sort(sortByPos);
+      const orderMap = new Map();
+      let counter = 1;
+      const visited = new Set();
+      while (q.length) {
+        const node = q.shift();
+        if (visited.has(node.id)) continue;
+        visited.add(node.id);
+        orderMap.set(node.id, counter++);
+        const children = adj.get(node.id) || [];
+        for (const c of children) {
+          indeg.set(c, (indeg.get(c) || 1) - 1);
+          if ((indeg.get(c) || 0) === 0) {
+            const childNode = ns.find(n => n.id === c);
+            if (childNode) { q.push(childNode); q.sort(sortByPos); }
+          }
+        }
+      }
+      const remaining = ns.filter(n => !visited.has(n.id)).sort(sortByPos);
+      for (const n of remaining) orderMap.set(n.id, counter++);
+      return orderMap;
+    };
+    const orderMap = buildOrderMap(nodesForSave, edges);
 
     const allMappings = [];
     let maxOrder = 0;
-    console.log('nodes==> ', nodes);
+    console.log('nodes==> ', nodesForSave);
 
-    for (const node of nodes) {
+    for (const node of nodesForSave) {
       const nodeMapping = mappings[node.id] || {};
       const incomingEdge = edges.find((e) => e.target === node.id);
       const outgoingEdges = edges.filter((e) => e.source === node.id);
@@ -310,7 +442,8 @@ const MappingFields = ({ onSaveCallback }) => {
       else if (actionType === "Condition") actionType = "Condition";
       else if (!actionType) actionType = node.data.action || "Unknown";
 
-      const order = node.data.order || ++maxOrder;
+      const computedOrder = orderMap.get(node.id);
+      const order = (computedOrder != null ? computedOrder : ++maxOrder);
       maxOrder = Math.max(maxOrder, order);
 
       const mappingData = {
@@ -397,7 +530,7 @@ const MappingFields = ({ onSaveCallback }) => {
         userId,
         instanceUrl,
         flowId,
-        nodes,
+        nodes: nodesForSave,
         edges,
         mappings: allMappings,
       };
@@ -445,7 +578,7 @@ const MappingFields = ({ onSaveCallback }) => {
     } finally {
       setIsSaving(false);
     }
-  }, [nodes, edges, mappings, token, formVersionId]);
+  }, [nodes, edges, mappings, token, formVersionId, calculateNodeOrders]);
 
   // Register the save callback when component mounts
   useEffect(() => {
@@ -624,77 +757,6 @@ const MappingFields = ({ onSaveCallback }) => {
     initializeData();
   }, [formVersionId, formRecords]);
 
-  const calculateNodeOrders = useCallback((currentNodes, currentEdges) => {
-    const updatedNodes = [...currentNodes];
-    const visited = new Set();
-    const nodeOrders = new Map();
-    const nodeLevels = new Map();
-    orderCounterRef.current = 1;
-    const levelNodeCounts = {};
-
-    const calculateLevels = (nodeId, level = 1) => {
-      if (!nodeId || visited.has(nodeId)) return;
-      visited.add(nodeId);
-      const currentLevel = nodeLevels.get(nodeId) || 0;
-      nodeLevels.set(nodeId, Math.max(currentLevel, level));
-      const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
-      for (const edge of outgoingEdges) {
-        calculateLevels(edge.target, level + 1);
-      }
-    };
-
-    // calculate levels for all nodes
-    visited.clear();
-    for (const node of currentNodes) {
-      if (!visited.has(node.id)) {
-        calculateLevels(node.id);
-      }
-    }
-
-    visited.clear();
-    const assignOrders = (nodeId, targetLevel = null) => {
-      if (!nodeId || visited.has(nodeId)) return;
-      const nodeIndex = updatedNodes.findIndex(n => n.id === nodeId);
-      if (nodeIndex === -1) return;
-      const node = updatedNodes[nodeIndex];
-      const level = targetLevel !== null ? targetLevel : (nodeLevels.get(nodeId) || 1);
-      visited.add(nodeId);
-
-      let order;
-      if (nodeOrders.has(nodeId)) {
-        order = nodeOrders.get(nodeId);
-      } else {
-        order = orderCounterRef.current++;
-        nodeOrders.set(nodeId, order);
-      }
-
-      if (!levelNodeCounts[level]) levelNodeCounts[level] = {};
-      const actionKey = node.data.action || "Action";
-      levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
-      const index = levelNodeCounts[level][actionKey];
-
-      let displayLabel = node.data.action || `Action ${index}`;
-
-      updatedNodes[nodeIndex] = {
-        ...node,
-        data: { ...node.data, order, label: `${displayLabel} Node`, displayLabel },
-      };
-
-      const childEdges = currentEdges.filter(edge => edge.source === nodeId);
-      for (const edge of childEdges) {
-        assignOrders(edge.target);
-      }
-    };
-
-    // assign orders for all nodes
-    for (const node of currentNodes) {
-      if (!visited.has(node.id)) {
-        assignOrders(node.id);
-      }
-    }
-
-    return updatedNodes;
-  }, []);
 
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
     const reactFlowWrapper = document.querySelector('.react-flow');
