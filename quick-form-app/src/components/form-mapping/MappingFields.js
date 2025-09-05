@@ -912,64 +912,64 @@ const MappingFields = ({ onSaveCallback }) => {
       updatedNodes = [...nds, newNode];
 
       // Check if source node is a Path node
-      if (sourceNode && sourceNode.data.action === "Path") {
-        // Create a condition node in between
-        const conditionNodeId = `condition_${randomNum}`;
+    if (sourceNode && sourceNode.data.action === "Path") {
+      // Create a condition node in between
+      const conditionNodeId = `condition_${randomNum}`;
 
-        // Position condition node between source and target (newly added node)
-        const midX = (sourceNode.position.x + centerX) / 2;
-        const midY = (sourceNode.position.y + centerY) / 2;
+      // Position condition node between source and target (newly added node)
+      const midX = (sourceNode.position.x + centerX) / 2;
+      const midY = (sourceNode.position.y + centerY) / 2;
 
-        const conditionNode = {
-          id: conditionNodeId,
-          type: "custom",
-          position: { x: midX, y: midY },
-          data: {
-            label: "Condition",
-            displayLabel: "Condition",
-            action: "Condition",
-            type: "condition",
-            order: null,
-            pathNodeId: sourceNodeId,
-            targetNodeId: newNodeId,
-            pathOption: "Rules",
-            conditions: [],
-            logicType: "AND",
-            customLogic: "",
+      const conditionNode = {
+        id: conditionNodeId,
+        type: "custom",
+        position: { x: midX, y: midY },
+        data: {
+          label: "Condition",
+          displayLabel: "Condition",
+          action: "Condition",
+          type: "condition",
+          order: null,
+          pathNodeId: sourceNodeId,
+          targetNodeId: newNodeId,
+          pathOption: "Rules",
+          conditions: [],
+          logicType: "AND",
+          customLogic: "",
+        },
+        draggable: true,
+      };
+
+      updatedNodes = [...updatedNodes, conditionNode];
+
+      setEdges((eds) => {
+        const newEdges = [
+          {
+            id: `e${sourceNodeId}-${conditionNodeId}`,
+            source: sourceNodeId,
+            sourceHandle: connectionType === 'top' ? "top" : "bottom",
+            target: conditionNodeId,
+            targetHandle: "top",
+            type: "default",
+            conditionNodeId,
           },
-          draggable: true,
-        };
+          {
+            id: `e${conditionNodeId}-${newNodeId}`,
+            source: conditionNodeId,
+            sourceHandle: "bottom",
+            target: newNodeId,
+            targetHandle: "top",
+            type: "default",
+            conditionNodeId,
+          }
+        ];
 
-        updatedNodes = [...updatedNodes, conditionNode];
-
-        setEdges((eds) => {
-          const newEdges = [
-            {
-              id: `e${sourceNodeId}-${conditionNodeId}`,
-              source: sourceNodeId,
-              sourceHandle: connectionType === 'top' ? "top" : "bottom",
-              target: conditionNodeId,
-              targetHandle: "top",
-              type: "default",
-              conditionNodeId,
-            },
-            {
-              id: `e${conditionNodeId}-${newNodeId}`,
-              source: conditionNodeId,
-              sourceHandle: "bottom",
-              target: newNodeId,
-              targetHandle: "top",
-              type: "default",
-              conditionNodeId,
-            }
-          ];
-
-          const updatedEdges = [...eds, ...newEdges];
-          const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-          setNodes(recalculatedNodes);
-          return updatedEdges;
-        });
-      } else {
+        const updatedEdges = [...eds, ...newEdges];
+        const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+        setNodes(recalculatedNodes);
+        return updatedEdges;
+      });
+    }  else {
         // Regular connection for non-Path nodes
         let newEdge;
 

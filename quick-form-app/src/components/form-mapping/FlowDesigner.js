@@ -75,6 +75,10 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
       (edge.sourceHandle === "bottom" || edge.sourceHandle == null)
   );
 
+    // For Path nodes, always show + buttons regardless of connections
+  const isPathNode = data.action === "Path";
+  const showBottomButton = isPathNode || !hasBottomConnection;
+
   const getButtonPosition = (e, isTop) => {
     if (!nodeRef.current) return { x: 0, y: 0 };
 
@@ -205,7 +209,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
         </div>
 
         {/* Bottom Add Button - only show if no connection */}
-        {!hasBottomConnection && (
+        {showBottomButton && (
           <button
             onClick={handleAddBottom}
             className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-blue-600 z-10 shadow-md"
@@ -274,7 +278,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   );
 };
 
-const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges = [], onAddNode, onEdgeDelete }) => {
+const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges = [],nodes=[], onAddNode, onEdgeDelete, source, target }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const path = `M${sourceX},${sourceY} L${targetX},${targetY}`;
@@ -286,6 +290,14 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges 
     setShowSettings(!showSettings);
   };
 
+  // Check if this is a path-to-condition connection
+  const isPathToConditionEdge = () => {
+    const sourceNode = nodes.find(n => n.id === source);
+    const targetNode = nodes.find(n => n.id === target);
+    return sourceNode?.data.action === "Path" && targetNode?.data.action === "Condition";
+  };
+
+  const shouldShowSettings = !isPathToConditionEdge();
   return (
     <g
       className="pointer-events-auto"
@@ -308,24 +320,28 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges 
         d={path}
       />
 
-      {/* Settings Gear Icon */}
-      <AnimatePresence>
-        <motion.g
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
-          className="cursor-pointer"
-          onClick={handleSettingsClick}
-        >
-          <g transform={`translate(${midX - 11}, ${midY - 11})`}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect width="24" height="24" rx="12" fill="#CCECFF" />
-              <path d="M12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z" stroke="#5F6165" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M4.005 12.7041V11.2968C4.005 10.4652 4.68467 9.77758 5.52425 9.77758C6.97152 9.77758 7.56323 8.7541 6.83559 7.49872C6.4198 6.77908 6.66767 5.84355 7.39531 5.42776L8.77862 4.63615C9.4103 4.26034 10.2259 4.48423 10.6017 5.11591L10.6897 5.26784C11.4093 6.52321 12.5927 6.52321 13.3203 5.26784L13.4083 5.11591C13.7841 4.48423 14.5997 4.26034 15.2314 4.63615L16.6147 5.42776C17.3423 5.84355 17.5902 6.77908 17.1744 7.49872C16.4468 8.7541 17.0385 9.77758 18.4858 9.77758C19.3173 9.77758 20.005 10.4572 20.005 11.2968V12.7041C20.005 13.5357 19.3253 14.2234 18.4858 14.2234C17.0385 14.2234 16.4468 15.2468 17.1744 16.5022C17.5902 17.2299 17.3423 18.1574 16.6147 18.5732L15.2314 19.3648C14.5997 19.7406 13.7841 19.5167 13.4083 18.885L13.3203 18.7331C12.6007 17.4777 11.4173 17.4777 10.6897 18.7331L10.6017 18.885C10.2259 19.5167 9.4103 19.7406 8.77862 19.3648L7.39531 18.5732C6.66767 18.1574 6.4198 17.2219 6.83559 16.5022C7.56323 15.2468 6.97152 14.2234 5.52425 14.2234C4.68467 14.2234 4.005 13.5357 4.005 12.7041Z" stroke="#5F6165" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </g>
-        </motion.g>
-      </AnimatePresence>
+      {shouldShowSettings && (
+        <>
+        {/* Settings Gear Icon */}
+        <AnimatePresence>
+          <motion.g
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="cursor-pointer"
+            onClick={handleSettingsClick}
+          >
+            <g transform={`translate(${midX - 11}, ${midY - 11})`}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="24" height="24" rx="12" fill="#CCECFF" />
+                <path d="M12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z" stroke="#5F6165" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M4.005 12.7041V11.2968C4.005 10.4652 4.68467 9.77758 5.52425 9.77758C6.97152 9.77758 7.56323 8.7541 6.83559 7.49872C6.4198 6.77908 6.66767 5.84355 7.39531 5.42776L8.77862 4.63615C9.4103 4.26034 10.2259 4.48423 10.6017 5.11591L10.6897 5.26784C11.4093 6.52321 12.5927 6.52321 13.3203 5.26784L13.4083 5.11591C13.7841 4.48423 14.5997 4.26034 15.2314 4.63615L16.6147 5.42776C17.3423 5.84355 17.5902 6.77908 17.1744 7.49872C16.4468 8.7541 17.0385 9.77758 18.4858 9.77758C19.3173 9.77758 20.005 10.4572 20.005 11.2968V12.7041C20.005 13.5357 19.3253 14.2234 18.4858 14.2234C17.0385 14.2234 16.4468 15.2468 17.1744 16.5022C17.5902 17.2299 17.3423 18.1574 16.6147 18.5732L15.2314 19.3648C14.5997 19.7406 13.7841 19.5167 13.4083 18.885L13.3203 18.7331C12.6007 17.4777 11.4173 17.4777 10.6897 18.7331L10.6017 18.885C10.2259 19.5167 9.4103 19.7406 8.77862 19.3648L7.39531 18.5732C6.66767 18.1574 6.4198 17.2219 6.83559 16.5022C7.56323 15.2468 6.97152 14.2234 5.52425 14.2234C4.68467 14.2234 4.005 13.5357 4.005 12.7041Z" stroke="#5F6165" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </g>
+          </motion.g>
+        </AnimatePresence>
+        </>
+      )}
 
       {/* Settings Popup */}
       {showSettings && (
@@ -824,9 +840,9 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
     custom: (props) => <CustomNode {...props} edges={edges} onAddNode={onAddNode} />
   }), [edges, onAddNode]);
 
-  const edgeTypes = useMemo(() => ({
-    default: (props) => <CustomEdge {...props} edges={edges} onAddNode={onAddNode} onEdgeDelete={onEdgeDelete} />
-  }), [onEdgeDelete, edges, onAddNode]);
+const edgeTypes = useMemo(() => ({
+  default: (props) => <CustomEdge {...props} nodes={nodes} edges={edges} onAddNode={onAddNode} onEdgeDelete={onEdgeDelete} source={props.source} target={props.target} />
+}), [onEdgeDelete, edges, onAddNode]);
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
