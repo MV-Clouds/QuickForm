@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSalesforceData } from '../Context/MetadataContext';
 import './FormName.css'
 import { motion, AnimatePresence } from 'framer-motion';
+import Loader from '../Loader';
 
 const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
   const initialName = fields.find(f => f.id === 'name')?.defaultValue || '';
@@ -521,6 +522,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
     exit={{ opacity: 0 }}
     transition={{ duration: 0.3 }}
   >
+    {isSaving && <Loader text="Creating form" />}
     <motion.div 
       className="formdetails-modal-box"
       initial={{ scale: 0.85, opacity: 0 }}

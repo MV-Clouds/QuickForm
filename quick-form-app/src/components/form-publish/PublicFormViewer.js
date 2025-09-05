@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { decrypt } from "../form-builder-with-versions/crypto";
@@ -20,7 +21,7 @@ import {
   parsePhoneNumberFromString,
   getExampleNumber,
 } from "libphonenumber-js";
-import { Select, Tooltip } from "antd";
+import { Select, Tooltip , message} from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
 import { evaluateFormula } from './FormulaEvaluator';
@@ -60,7 +61,8 @@ function PublicFormViewer({ runPrefill = false }) {
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-
+  const [notificationData , setNotificationData] = useState([]);
+  const [twilioData , setTwilioData] = useState([]);
   // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
@@ -108,6 +110,8 @@ function PublicFormViewer({ runPrefill = false }) {
         if (!response.ok) {
           throw new Error(data.error || 'Failed to fetch form');
         }
+        setNotificationData(data?.Notifications)
+        setTwilioData(data?.TwilioData);
         const formVersion = data.formVersion;
         let thankyouRecord = formVersion?.ThankYou;
         setThankyouData(thankyouRecord);
@@ -187,7 +191,6 @@ function PublicFormViewer({ runPrefill = false }) {
           ) : c
         );
         setFormConditions(parsedConditions);
-
         const mappingsResponse = await fetch(process.env.REACT_APP_FETCH_MAPPINGS_URL, {
           method: 'POST',
           headers: {
@@ -994,6 +997,10 @@ function PublicFormViewer({ runPrefill = false }) {
     });
     const fieldType = field.Field_Type__c || field.type;
     const fieldLabel = properties.label || field.Name || field.id || properties.id;
+    const conditionalState = uiState?.[properties.id || field.Id || field.id] || {};
+    if (conditionalState.hidden) {
+      return null;
+    }
     const isRequired = properties.isRequired || uiState?.[properties.id || field.Id || field.id]?.required || false;
     // Required logic (handles most types including special cases)
     if (
@@ -1494,8 +1501,75 @@ function PublicFormViewer({ runPrefill = false }) {
         }
         throw new Error(flowData.error || 'Failed to execute flow');
       }
+      console.log('formData exist ',notificationData)
+     if(notificationData.length > 0){
+      if(notificationData){
+          console.log("Twilio SMS sending started");
+          try {
+            const smsResponse = await fetch(
+              "https://nozffru2y1.execute-api.us-east-1.amazonaws.com/sms",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  userId: linkData.userId,
+                  instanceUrl,
+                  to: JSON.parse(notificationData[0].Receipe__c || '{}')?.to,
+                  message : notificationData[0].Body__c,
+                  formId: formData.Form__c,
+                  twilioConnected : true
+                }),
+              }
+            );
+        
+            if (!smsResponse.ok) {
+              const smsErrorData = await smsResponse.json().catch(() => ({}));
+              console.error(
+                "Error sending Twilio SMS:",
+                smsErrorData.error || smsResponse.statusText
+              );
+            } else {
+              const smsResult = await smsResponse.json();
+              console.log("Twilio SMS result:", smsResult);
+            }
+          } catch (smsError) {
+            console.error("Exception during Twilio SMS fetch:", smsError);
+          }
+      }else{
+        console.log('Message sending started ')
+        try {
+          const mailResponse = await fetch('https://0oue66drzd.execute-api.us-east-1.amazonaws.com/sendMail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userId: linkData.userId,
+              instanceUrl,
+              submissionData: updatedSubmissionData,
+              sftoken: accessToken,
+              formId : formData.Form__c,
+            }),
+          });
+  
+          if (!mailResponse.ok) {
+            const mailErrorData = await mailResponse.json().catch(() => ({}));
+            console.error('Error sending mail:', mailErrorData.error || mailResponse.statusText);
+          } else {
+            // Optionally handle success, e.g. log or ignore
+            const mailResult = await mailResponse.json();
+            console.log('Mail result' , mailResult)
+          }
+        } catch (mailError) {
+          console.error('Exception during sendMail fetch:', mailError);
+        }
+      }
 
       alert('Form submitted and flow executed successfully!');
+     }
+     
 
       // Set to show thank you page
       setThankyouData(formData?.ThankYou || null);
@@ -1542,32 +1616,7 @@ function PublicFormViewer({ runPrefill = false }) {
       setToggles({});
       setCurrentPage(0);
     } catch (error) {
-      // if (error.message.includes('INVALID_JWT_FORMAT')) {
-      //   let decrypted;
-      //   try {
-      //     decrypted = decrypt(linkId);
-      //   } catch (e) {
-      //     throw new Error(e.message || 'Invalid link format');
-      //   }
-
-      //   const [userId, formId] = decrypted.split('$');
-      //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ userId }),
-      //   });
-
-      //   const tokenData = await tokenResponse.json();
-      //   if (!tokenResponse.ok || tokenData.error) {
-      //     throw new Error(tokenData.error || 'Failed to fetch access token');
-      //   }
-      //   const token = tokenData.access_token;
-      //   setAccessToken(token);
-      //   handleSubmit(e);
-      // } else {
-      //   console.error('Error submitting form:', error);
-      //   setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
-      // }
+      console.error(error)
     } finally {
       setIsSubmitting(false);
     }
@@ -1683,7 +1732,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
 
   const getFieldUiState = (fieldId, formValues) => {
-    let state = { hidden: false, required: false, mask: null, disabled: false };
+    let state = { hidden: false, required: undefined, mask: null, disabled: undefined };
     formConditions.forEach(c => {
       if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
@@ -1716,7 +1765,36 @@ function PublicFormViewer({ runPrefill = false }) {
         const targetIdx = pages.findIndex(
           arr => `page_${arr[0].Page_Number__c}` === cond.targetPage[0]
         );
-        if (targetIdx !== -1) return targetIdx;
+        if (targetIdx !== -1) {
+          // Check for required fields (not dynamically set to "don't require") in intermediate pages
+          const start = Math.min(currentIdx, targetIdx) + 1;
+          const end = Math.max(currentIdx, targetIdx);
+          let blockSkip = false;
+          for (let i = start; i < end; i++) {
+            const intermediatePageFields = pages[i];
+            for (const field of intermediatePageFields) {
+              const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
+              const fieldId =  properties.id || field.Id;
+              // Get UI state from conditions (required/don't require)
+              const uiState = getFieldUiState(fieldId, formValues);
+              const required = properties.isRequired || uiState.required;
+              
+              if (required) {
+                // Dynamically don't require
+                const dontRequire = uiState && uiState.required === false && properties.isRequired;
+                
+                // Only block if not dynamically set to "don't require"
+                if (!dontRequire && (formValues[fieldId] === undefined || formValues[fieldId] === "" ||
+                    (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
+                  blockSkip = true;
+                  break;
+                }
+              }
+            }
+            if (blockSkip) break;
+          }
+          if (!blockSkip) return targetIdx; // Only skip if all checks pass
+        }
       }
     }
     // Normal next, just +1 for visible pages
@@ -2137,8 +2215,16 @@ function PublicFormViewer({ runPrefill = false }) {
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
-    const isDisabled = properties.isDisabled || state.disabled || false;
-    const isRequired = properties.isRequired || state.required;
+    const isDisabled = 
+      typeof state.disabled === 'boolean'
+        ? state.disabled
+        : !!properties.isDisabled;
+
+    const isRequired = 
+      typeof state.required === 'boolean'
+        ? state.required
+        : !!properties.isRequired;
+
     const hasError = !!errors[fieldId];
     const helpText = properties.showHelpText ? properties.helpText : null;
     const labelAlignment = properties.labelAlignment || 'top';

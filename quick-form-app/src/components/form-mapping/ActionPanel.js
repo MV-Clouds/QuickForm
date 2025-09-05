@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Select from "react-select";
 import { getCountryList } from "../form-builder-with-versions/getCountries";
@@ -8,9 +7,65 @@ import countries from "i18n-iso-countries";
 import currencyCodes from "currency-codes";
 import { ArrowRightOutlined } from "@ant-design/icons";
 import CreatableSelect from "react-select/creatable";
+import ToggleSwitch from "../form-builder-with-versions/ToggleSwitch";
 import { Select as AntSelect, Spin, Button, message, Input, Switch } from "antd";
-const { Option } = AntSelect;
+const { Option, OptGroup } = AntSelect;
 countries.registerLocale(require("i18n-iso-countries/langs/en.json"));
+
+const validateCustomLogic = (logic, conditionsLength) => {
+  // Tokenize input
+  const tokens = logic
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ");
+
+  let errors = [];
+
+  // Validate individual tokens
+  tokens.forEach((token, i) => {
+    if (/^\d+$/.test(token)) {
+      const num = parseInt(token, 10);
+      if (num < 1 || num > conditionsLength) {
+        errors.push(`Condition ${num} does not exist.`);
+      }
+    } else if (!["AND", "OR", "(", ")", ""].includes(token)) {
+      errors.push(`Invalid token "${token}"`);
+    }
+  });
+
+  // Check for invalid operator sequences
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (
+      ["AND", "OR"].includes(tokens[i]) &&
+      ["AND", "OR"].includes(tokens[i + 1])
+    ) {
+      errors.push(`Operators '${tokens[i]}' and '${tokens[i + 1]}' cannot be together—must be separated by a condition.`);
+    }
+  }
+
+  // Check brackets balance
+  let balance = 0;
+  for (let ch of logic) {
+    if (ch === "(") balance++;
+    else if (ch === ")") balance--;
+    if (balance < 0) {
+      errors.push("Too many closing brackets");
+      break;
+    }
+  }
+  if (balance > 0) errors.push("Unclosed brackets");
+
+  // Optionally check if logic starts/ends with AND/OR (which is usually invalid)
+  if (["AND", "OR"].includes(tokens[0])) {
+    errors.push("Logic cannot start with an operator.");
+  }
+  if (["AND", "OR"].includes(tokens[tokens.length - 1])) {
+    errors.push("Logic cannot end with an operator.");
+  }
+
+  return errors;
+};
 
 const ActionPanel = ({
   nodeId,
@@ -23,6 +78,7 @@ const ActionPanel = ({
   onClose,
   fetchSalesforceFields,
   nodeLabel,
+  setNodeLabel,
   nodes,
   edges,
   sfToken
@@ -49,7 +105,6 @@ const ActionPanel = ({
   const [currentItemVariableName, setCurrentItemVariableName] = useState("");
   const [loopVariables, setLoopVariables] = useState({ currentIndex: false, indexBase: "0", counter: false });
   const [maxIterations, setMaxIterations] = useState("");
-  const [loopDescription, setLoopDescription] = useState("");
   const [formatterConfig, setFormatterConfig] = useState({
     formatType: "date",
     operation: "",
@@ -65,26 +120,36 @@ const ActionPanel = ({
   const [sortOrder, setSortOrder] = useState("ASC");
   const [pathOption, setPathOption] = useState("Rules");
   const [sheetName, setSheetName] = useState("");
-  const [spreadsheetId , setSpreadsheetId] = useState();
-  const [sheetLink , setSheetLink] = useState("");
+  const [spreadsheetId, setSpreadsheetId] = useState();
+  const [sheetLink, setSheetLink] = useState("");
   const [fieldMappings, setFieldMappings] = useState([]);
-  const [sheetConditions , setsheetConditions] = useState([]);
+  const [sheetConditions, setsheetConditions] = useState([]);
   const [conditionsLogic, setConditionsLogic] = useState('AND');
   const [sheetcustomLogic, setsheetCustomLogic] = useState(''); // custom logic string e.g. "(1 AND 2) OR 3"
   const instanceUrl = sessionStorage.getItem('instanceUrl');
   const userId = sessionStorage.getItem('userId');
   const [updateMultiple, setUpdateMultiple] = useState(false); // New state variable
-  const [findsortField , setfindsortfield] = useState('')
-  const [findsortOrder , setfindsortOrder] = useState('ASC');
-  const [findreturnLimit , setfindreturnLimit] = useState("");
+  const [findsortField, setfindsortfield] = useState('')
+  const [findsortOrder, setfindsortOrder] = useState('ASC');
+  const [findreturnLimit, setfindreturnLimit] = useState("");
   const [findSheetConditions, setFindSheetConditions] = useState([]); // New state for FindGoogleSheet conditions
   const [findConditionsLogic, setFindConditionsLogic] = useState('AND'); // New state for FindGoogleSheet conditions logic
   const [findSheetCustomLogic, setFindSheetCustomLogic] = useState(''); // New state for FindGoogleSheet custom logic
-  const [findNodeName, setFindNodeName] = useState(''); // New state for FindGoogleSheet name
   const [findSpreadsheetId, setFindSpreadsheetId] = useState(''); // New state for FindGoogleSheet spreadsheetId
   const [findSelectedSheetName, setFindSelectedSheetName] = useState(''); // New state for FindGoogleSheet selectedSheetName
   const [findUpdateMultiple, setFindUpdateMultiple] = useState(false); // New state for FindGoogleSheet updateMultiple
   const [findGoogleSheetColumns, setFindGoogleSheetColumns] = useState([]); // New state for FindGoogleSheet columns
+  const [customLabel, setCustomLabel] = useState(nodeLabel || mappings[nodeId]?.label || "");
+  const [storeAsContentDocument, setStoreAsContentDocument] = useState(false);
+  const [selectedFileUploadFields, setSelectedFileUploadFields] = useState([]);
+
+  const [accordionOpen, setAccordionOpen] = useState({
+    variables: false,
+    iterations: false,
+    exitConditions: false,
+    returnLimit: false,
+    sortRecords: false
+  });
 
   const typeMapping = {
     string: ["shorttext", "fullname", "section", "address", "longtext", "number", "price", "date", "datetime", "time", "email", "phone", "dropdown", "checkbox", "radio", "picklist"],
@@ -105,11 +170,20 @@ const ActionPanel = ({
 
   const selectedFindNode = mappings[nodeId]?.selectedFindNode || "";
 
+// Clear error state when switching nodes to prevent stale messages
+  useEffect(() => {
+    setSaveError(null);
+  }, [nodeId]);
+
   useEffect(() => {
     // Load node-specific mappings if they exist
     const nodeMapping = mappings[nodeId] || {};
 
-    setLocalMappings(nodeMapping.fieldMappings?.length > 0 ? nodeMapping.fieldMappings : [{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+    setLocalMappings(
+      nodeMapping.fieldMappings?.length > 0
+        ? nodeMapping.fieldMappings.filter((fm) => fm && (fm.salesforceField || fm.formFieldId))
+        : [{ formFieldId: "", fieldType: "", salesforceField: "" }]
+    );
     setConditions(
       nodeMapping.conditions?.length > 0
         ? nodeMapping.conditions.map(c => ({ ...c, logic: undefined }))
@@ -129,7 +203,7 @@ const ActionPanel = ({
     setSpreadsheetId(nodeMapping?.spreadsheetId || "")
     setsheetConditions(nodeMapping?.sheetConditions || []);
     setConditionsLogic(nodeMapping?.conditionsLogic || 'AND');
-    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || ''); 
+    setsheetCustomLogic(nodeMapping?.sheetcustomLogic || '');
     const loopConfig = nodeMapping.loopConfig || {};
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
@@ -139,7 +213,6 @@ const ActionPanel = ({
         ? loopConfig.exitConditions.map(c => ({ ...c, logic: undefined }))
         : [{ field: "", operator: "=", value: "", value2: "" }]
     );
-    setLoopDescription(loopConfig.loopDescription || "");
 
     const formatterConfigData = nodeMapping.formatterConfig || {};
     setFormatterConfig({
@@ -177,16 +250,14 @@ const ActionPanel = ({
     setFindSheetConditions(nodeMapping.findSheetConditions || []);
     setFindConditionsLogic(nodeMapping.logicType || "AND");
     setFindSheetCustomLogic(nodeMapping.customLogic || "");
-    setFindNodeName(nodeMapping.findNodeName || "");
     setFindSpreadsheetId(nodeMapping.spreadsheetId || "");
     setFindSelectedSheetName(nodeMapping.selectedSheetName || "");
     setFindUpdateMultiple(nodeMapping.updateMultiple || false);
     setFindGoogleSheetColumns(nodeMapping.columns || []); // Initialize FindGoogleSheet columns
-
-    // setfindreturnLimit(nodeMapping.findreturnLimit);
-    // setfindsortOrder(nodeMapping.findsortOrder);
-    // setfindsortfield(nodeMapping.findsortField);
-  }, [nodeId, mappings, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
+    setCustomLabel((mappings[nodeId]?.label ?? nodeLabel) || "");
+    setStoreAsContentDocument(nodeMapping.storeAsContentDocument || false);
+    setSelectedFileUploadFields(nodeMapping.selectedFileUploadFields || []);
+  }, [nodeId, mappings, nodeLabel, nodes, edges, setMappings, isFindNode, isFilterNode, isCreateUpdateNode, isConditionNode]);
 
   useEffect(() => {
     if (!selectedObject) return;
@@ -207,7 +278,7 @@ const ActionPanel = ({
           setSaveError(`Failed to fetch fields for ${selectedObject}: ${error.message}`);
         });
     }
-  }, []);
+  }, [selectedObject]);
 
   const operatorGroups = {
     text: [
@@ -263,6 +334,13 @@ const ActionPanel = ({
       { value: "IS NOT NULL", label: "Is Not Null" }
     ]
   };
+
+  const operationOptions = [
+    { value: "add", label: "Add" },
+    { value: "subtract", label: "Subtract" },
+    { value: "multiply", label: "Multiply" },
+    { value: "divide", label: "Divide" },
+  ];
 
   // Map Salesforce field types to our operator groups
   const fieldTypeToOperatorGroup = {
@@ -421,59 +499,23 @@ const ActionPanel = ({
     { value: "Always Run", label: "Always Run" },
     { value: "Fallback", label: "Fallback" },
   ];
-  const handleSave = (spreadsheetId = null) => {
-    if (isGoogleSheet) {
-      setMappings((prev) => ({
-        ...prev,
-        [nodeId]: {
-          ...prev[nodeId],
-          selectedSheetName: sheetName,
-          fieldMappings,
-          spreadsheetId,
-          sheetConditions,
-          conditionsLogic,
-          sheetcustomLogic,
-          updateMultiple,
-          googleSheetReturnLimit: returnLimit, // Note: using general returnLimit here
-          googleSheetSortField: sortField,     // Note: using general sortField here
-          googleSheetSortOrder: sortOrder,     // Note: using general sortOrder here
-        },
-      }));
-    } else if (isFindGoogleSheet) {
-      setMappings((prev) => ({
-        ...prev,
-        [nodeId]: {
-          ...prev[nodeId],
-          findNodeName: findNodeName,
-          selectedSheetName: findSelectedSheetName, // Using specific state
-          spreadsheetId: findSpreadsheetId, // Using specific state
-          findSheetConditions: findSheetConditions, // Using specific state
-          findConditionsLogic: findConditionsLogic, // Using specific state
-          findSheetCustomLogic: findSheetCustomLogic, // Using specific state
-          findUpdateMultiple: findUpdateMultiple, // Using specific state
-          googleSheetReturnLimit: findreturnLimit, // Using specific state
-          googleSheetSortField: findsortField, // Using specific state
-          googleSheetSortOrder: findsortOrder, // Using specific state
-          columns : findGoogleSheetColumns
-        },
-      }));
-    } else {
-      setMappings((prev) => ({
-        ...prev,
-        [nodeId]: {
-          ...prev[nodeId],
-          returnLimit,
-          sortField,
-          sortOrder,
-        },
-      }));
-    }
-    onClose();
+
+  const handleLabelBlur = () => {
+    const val = (customLabel || "").trim();
+    if (setNodeLabel) setNodeLabel(nodeId, val || undefined);
+    setMappings(prev => ({
+      ...prev,
+      [nodeId]: { ...prev[nodeId], label: val || undefined },
+    }));
   };
 
   const handleMappingChange = (index, key, value, extra = {}) => {
     const newMappings = [...localMappings];
     const currentMapping = newMappings[index];
+
+    console.log(`handleMappingChange called with index=${index}, key=${key}, value=${value}`);
+    console.log(`Current mapping before change:`, currentMapping);
+    console.log('localmapping ', localMappings);
 
     // Handle picklist value selection
     if (key === 'picklistValue') {
@@ -543,6 +585,8 @@ const ActionPanel = ({
   };
 
   const handleConditionChange = (index, key, value, conditionType = "conditions") => {
+    console.log(`handleConditionChange called with index=${index}, key=${key}, value=${value}`);
+
     const setState = conditionType === "exitConditions" ? setExitConditions : setConditions;
     setState((prev) =>
       prev.map((condition, i) => (i === index ? { ...condition, [key]: value } : condition))
@@ -550,12 +594,12 @@ const ActionPanel = ({
   };
 
   const handleFindNodeChange = (selected, isLoop = false) => {
-    const findNodeId = selected ? selected.value : "";
+    const findNodeId = typeof selected === "string" ? selected : (selected && typeof selected === "object" && "value" in selected ? selected.value : "");
     console.log('isLoop:', isLoop, 'findNodeId:', findNodeId);
-    
+
     if (isLoop) {
       console.log('Setting loop collection to:', findNodeId);
-      
+
       setLoopCollection(findNodeId);
       // Update mappings state for loop collection
       setMappings((prev) => ({
@@ -579,10 +623,16 @@ const ActionPanel = ({
     }
 
     // Get the Salesforce object from the selected Find node
-    if (findNodeId && mappings[findNodeId] && mappings[findNodeId].salesforceObject) {
+    if (!findNodeId) {
+      setSaveError(null);
+      handleObjectChange("");
+      return;
+    }
+    if (mappings[findNodeId]?.salesforceObject) {
+      setSaveError(null);
       handleObjectChange(mappings[findNodeId].salesforceObject);
     } else {
-      handleObjectChange("");
+      setSaveError("Selected Find node has no Salesforce object configured. Open and save that Find node first.");
     }
   };
 
@@ -639,6 +689,7 @@ const ActionPanel = ({
     if (!selectedOption) {
       handleObjectChange("");
       setLocalMappings([{ formFieldId: "", fieldType: "", salesforceField: "" }]);
+      setSaveError(null);
       return;
     }
 
@@ -703,75 +754,93 @@ const ActionPanel = ({
       label: `${node.data.label}`,
     }));
 
-  const saveLocalMappings = () => {
-    console.log("Saving mappings for node:", nodeId, "Formatter Config:", formatterConfig);
-
-    // For Filter nodes, validate that a Find node is selected
-    if (isFilterNode && !selectedFindNode) {
-      setSaveError("Please select a Find node.");
-      return;
+  const validateSave = (localMappings, conditions, exitConditions) => {
+    // Common validations for all node types
+    if (logicType === "Custom" && !customLogic) {
+      return { error: "Please provide a custom logic expression." };
     }
 
-    // For Filter nodes, validate that we have an object from the Find node
-    // if (isFilterNode && !selectedObject) {
-    //   setSaveError("The selected Find node does not have a Salesforce object configured.");
-    //   return;
-    // }
-
-    // if ((isCreateUpdateNode || isFindNode || (isConditionNode && pathOption === "Rules")) && !selectedObject) {
-    //   setSaveError("Please select a Salesforce object.");
-    //   return;
-    // }
-
-    // Check if required fields are mapped
-    if (isCreateUpdateNode && selectedObject) {
-      const requiredFields = safeSalesforceObjects
-        .find(obj => obj.name === selectedObject)
-        ?.fields?.filter(f => f.required) || [];
-
-      const missingRequiredFields = requiredFields.filter(reqField => {
-        return !localMappings.some(mapping =>
-          mapping.salesforceField === reqField.name &&
-          (mapping.formFieldId || mapping.picklistValue)
-        );
-      });
-
-      if (missingRequiredFields.length > 0) {
-        setSaveError(`Please map all required fields: ${missingRequiredFields.map(f => f.label || f.name).join(', ')}`);
-        return;
+    // Filter specific validations
+    if (isFilterNode) {
+      if (!selectedFindNode) {
+        return { error: "Please select a Find node." };
       }
     }
 
-    if (isLoopNode && (!loopCollection || !currentItemVariableName)) {
-      setSaveError("Please provide a loop collection and a current item variable name.");
-      return;
+    // Create Update node validations
+    if (isCreateUpdateNode) {
+      if (selectedObject) {
+        const requiredFields = safeSalesforceObjects
+          .find(obj => obj.name === selectedObject)
+          ?.fields?.filter(f => f.required) || [];
+
+        const missingRequiredFields = requiredFields.filter(reqField => {
+          return !localMappings.some(mapping =>
+            mapping.salesforceField === reqField.name &&
+            (mapping.formFieldId || mapping.picklistValue)
+          );
+        });
+
+        if (missingRequiredFields.length > 0) {
+          return { error: `Please map all required fields: ${missingRequiredFields.map(f => f.label || f.name).join(', ')}` };
+        }
+      }
+
+      const validMappings = localMappings.filter((m) => {
+        if (!m.salesforceField) return false;
+        return m.formFieldId || m.picklistValue;
+      });
+
+      if (validMappings.length !== localMappings.length) {
+        return { error: "Some field mappings have type mismatches. Please correct them before saving." };
+      }
+
+      if (validMappings.length === 0) {
+        return { error: "Please add at least one complete mapping." };
+      }
+
+      if (storeAsContentDocument && selectedFileUploadFields.length === 0) {
+        return { error: "Please select at least one file upload field for Content Document storage" };
+      }
     }
 
-    if (isLoopNode && maxIterations && (isNaN(maxIterations) || maxIterations < 1)) {
-      setSaveError("Max iterations must be a positive number.");
-      return;
+    // Loop node validations
+    if (isLoopNode) {
+      if (!loopCollection) {
+        return { error: "Please provide a loop collection." };
+      }
+
+      if (maxIterations && (isNaN(maxIterations) || maxIterations < 1)) {
+        return { error: "Max iterations must be a positive number." };
+      }
+
+      const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
+        .filter((node) => node.data.action === "Find")
+        .map((node) => node.id);
+      if (loopCollection && !validCollectionOptions.includes(loopCollection)) {
+        return { error: `Invalid loop collection: ${loopCollection}. Please select a valid Find node.` };
+      }
     }
 
-    if ((isFindNode || isFilterNode) && returnLimit && (isNaN(returnLimit) || returnLimit < 1 || returnLimit > 100)) {
-      setSaveError("Return limit must be a number between 1 and 100.");
-      return;
+    // Find and Filter node validations
+    if (isFindNode || isFilterNode) {
+      if (returnLimit && (isNaN(returnLimit) || returnLimit < 1 || returnLimit > 100)) {
+        return { error: "Return limit must be a number between 1 and 100." };
+      }
     }
 
-    if (isConditionNode && pathOption === "Rules" && conditions.length === 0) {
-      setSaveError("Please add at least one complete condition for Condition node.");
-      return;
+    // Condition node validations
+    if (isConditionNode) {
+      if (pathOption === "Rules" && conditions.length === 0) {
+        return { error: "Please add at least one complete condition for Condition node." };
+      }
     }
 
-    if (logicType === "Custom" && !customLogic) {
-      setSaveError("Please provide a custom logic expression.");
-      return;
-    }
-
+    // Formatter node validations
     if (isFormatterNode) {
       if (!formatterConfig.inputField || !formatterConfig.operation) {
-        setSaveError("Please provide input field and operation.");
         console.log("Validation failed: Missing inputField or operation");
-        return;
+        return { error: "Please provide input field and operation." };
       }
 
       // Validate input field type compatibility
@@ -779,143 +848,154 @@ const ActionPanel = ({
       if (selectedField) {
         const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
         if (compatibleTypes.length > 0 && !compatibleTypes.includes(selectedField.type)) {
-          setSaveError(`Selected input field type (${selectedField.type}) is not compatible with operation ${formatterConfig.operation}.`);
-          return;
+          return { error: `Selected input field type (${selectedField.type}) is not compatible with operation ${formatterConfig.operation}.` };
         }
       }
 
+      // Date format validations
       if (formatterConfig.formatType === "date") {
         if (formatterConfig.operation === "format_date" && !formatterConfig.options.format) {
-          setSaveError("Please provide date format.");
-          return;
+          return { error: "Please provide date format." };
         }
         if ((formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (!formatterConfig.options.format || !formatterConfig.options.timezone)) {
-          setSaveError("Please provide format and timezone.");
-          return;
+          return { error: "Please provide format and timezone." };
         }
         if (formatterConfig.operation === "timezone_conversion" && (!formatterConfig.options.timezone || !formatterConfig.options.targetTimezone)) {
-          setSaveError("Please provide source and target timezone.");
-          return;
+          return { error: "Please provide source and target timezone." };
         }
         if ((formatterConfig.operation === "add_date" || formatterConfig.operation === "subtract_date") && (!formatterConfig.options.unit || formatterConfig.options.value === undefined)) {
-          setSaveError("Please provide date unit and value.");
-          return;
+          return { error: "Please provide date unit and value." };
         }
         if (formatterConfig.operation === "date_difference") {
           if (!formatterConfig.useCustomInput && !formatterConfig.inputField2) {
-            setSaveError("Please provide a second input field or enable custom input.");
-            return;
+            return { error: "Please provide a second input field or enable custom input." };
           }
           if (formatterConfig.useCustomInput && !formatterConfig.customValue) {
-            setSaveError("Please provide a custom compare date.");
-            return;
+            return { error: "Please provide a custom compare date." };
           }
           if (formatterConfig.inputField2) {
             const secondField = safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2);
             if (secondField) {
               const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
               if (compatibleTypes.length > 0 && !compatibleTypes.includes(secondField.type)) {
-                setSaveError(`Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.`);
-                return;
+                return { error: `Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.` };
               }
             }
           }
         }
       }
+
+      // Number format validations
       if (formatterConfig.formatType === "number") {
         if (formatterConfig.operation === "locale_format" && !formatterConfig.options.locale) {
-          setSaveError("Please provide locale.");
-          return;
+          return { error: "Please provide locale." };
         }
         if (formatterConfig.operation === "currency_format" && (!formatterConfig.options.currency || !formatterConfig.options.locale)) {
-          setSaveError("Please provide currency and locale.");
-          return;
+          return { error: "Please provide currency and locale." };
         }
         if (formatterConfig.operation === "round_number" && formatterConfig.options.decimals === undefined) {
-          setSaveError("Please provide number of decimals.");
-          return;
+          return { error: "Please provide number of decimals." };
         }
         if (formatterConfig.operation === "phone_format" && (!formatterConfig.options.countryCode || !formatterConfig.options.format)) {
-          setSaveError("Please provide country code and format.");
-          return;
+          return { error: "Please provide country code and format." };
         }
         if (formatterConfig.operation === "math_operation") {
           if (!formatterConfig.useCustomInput && !formatterConfig.inputField2) {
-            setSaveError("Please provide a second input field or enable custom input.");
-            return;
+            return { error: "Please provide a second input field or enable custom input." };
           }
           if (formatterConfig.useCustomInput && formatterConfig.customValue === undefined) {
-            setSaveError("Please provide a custom value.");
-            return;
+            return { error: "Please provide a custom value." };
           }
           if (!formatterConfig.options.operation) {
-            setSaveError("Please provide math operation.");
-            return;
+            return { error: "Please provide math operation." };
           }
           if (formatterConfig.inputField2) {
             const secondField = safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2);
             if (secondField) {
               const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[formatterConfig.operation] || [];
               if (compatibleTypes.length > 0 && !compatibleTypes.includes(secondField.type)) {
-                setSaveError(`Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.`);
-                return;
+                return { error: `Second input field type (${secondField.type}) is not compatible with operation ${formatterConfig.operation}.` };
               }
             }
           }
         }
       }
+
+      // Text format validations
       if (formatterConfig.formatType === "text") {
         if (formatterConfig.operation === "replace" && (!formatterConfig.options.searchValue || !formatterConfig.options.replaceValue)) {
-          setSaveError("Please provide search and replace values.");
-          return;
+          return { error: "Please provide search and replace values." };
         }
         if (formatterConfig.operation === "split" && (!formatterConfig.options.delimiter || !formatterConfig.options.index)) {
-          setSaveError("Please provide delimiter and index.");
-          return;
+          return { error: "Please provide delimiter and index." };
         }
       }
     }
 
-    const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
-      .filter((node) => node.data.action === "Find")
-      .map((node) => node.id);
-    if (isLoopNode && loopCollection && !validCollectionOptions.includes(loopCollection)) {
-      setSaveError(`Invalid loop collection: ${loopCollection}. Please select a valid Find node.`);
-      return;
-    }
-
-    const validMappings = localMappings.filter((m) => {
-      if (!m.salesforceField) return false;
-
-      // Either form field or picklist value must be set
-      return m.formFieldId || m.picklistValue;
-    });
-
-    if (isCreateUpdateNode && validMappings.length !== localMappings.length) {
-      setSaveError("Some field mappings have type mismatches. Please correct them before saving.");
-      return;
-    }
-
+    // Conditions validation for multiple node types
     const validConditions = conditions.filter((c) =>
       c.field &&
       c.operator &&
       (["IS NULL", "IS NOT NULL"].includes(c.operator) || (c.operator === "BETWEEN" ? c.value && c.value2 : c.value))
     );
+
+    // Exit conditions validation (primarily for Loop nodes)
     const validExitConditions = exitConditions.filter((c) =>
       c.field &&
       c.operator &&
       (["IS NULL", "IS NOT NULL"].includes(c.operator) || (c.operator === "BETWEEN" ? c.value && c.value2 : c.value))
     );
 
-    if (isCreateUpdateNode && validMappings.length === 0) {
-      setSaveError("Please add at least one complete mapping.");
+    if ((isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) && validConditions.length === 0) {
+      return { error: "Please add at least one complete condition." };
+    }
+
+    // Google Sheets validations
+    if (isGoogleSheet) {
+      if (!sheetName) {
+        return { error: "Please provide a sheet name." };
+      }
+      if (fieldMappings.some(m => !m.column || !m.id)) {
+        return { error: "Please map all columns and form fields." };
+      }
+      const columnNames = fieldMappings.map(m => m.column);
+      if (new Set(columnNames).size !== columnNames.length) {
+        return { error: "Sheet column names must be unique." };
+      }
+    }
+
+    // FindGoogleSheet validations
+    if (isFindGoogleSheet) {
+      if (!findSpreadsheetId) {
+        return { error: "Please select a Google Sheet." };
+      }
+      if (findreturnLimit && (isNaN(findreturnLimit) || findreturnLimit < 1 || findreturnLimit > 100)) {
+        return { error: "Return Limit must be a number between 1 and 100." };
+      }
+    }
+
+    // If we reach here, validation passed
+    const validMappings = isCreateUpdateNode ? localMappings.filter((m) => {
+      if (!m.salesforceField) return false;
+      return m.formFieldId || m.picklistValue;
+    }) : [];
+
+    return { validMappings, validConditions, validExitConditions, error: null };
+  };
+
+  const saveLocalMappings = () => {
+    console.log("Saving mappings for node:", nodeId, "Formatter Config:", formatterConfig);
+
+    // Validate using the separate validation function
+    const validationResult = validateSave(localMappings, conditions, exitConditions);
+
+    if (validationResult.error) {
+      setSaveError(validationResult.error);
       return;
     }
 
-    if ((isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) && validConditions.length === 0) {
-      setSaveError("Please add at least one complete condition.");
-      return;
-    }
+    // Extract the validated data
+    const { validMappings, validConditions, validExitConditions } = validationResult;
 
     const loopConfig = isLoopNode
       ? {
@@ -924,7 +1004,6 @@ const ActionPanel = ({
         ...(loopVariables.currentIndex || loopVariables.counter ? { loopVariables } : {}),
         ...(maxIterations ? { maxIterations } : {}),
         ...(validExitConditions.length > 0 ? { exitConditions: validExitConditions } : {}),
-        ...(loopDescription ? { loopDescription } : {}),
       }
       : undefined;
 
@@ -933,19 +1012,52 @@ const ActionPanel = ({
     const outgoingEdges = edges.filter((e) => e.source === nodeId);
     const nextNodeIds = outgoingEdges.map((e) => e.target).filter((id, index, self) => self.indexOf(id) === index);
 
+    // Add Google Sheets specific data to the mappings
+    const googleSheetData = isGoogleSheet ? {
+      selectedSheetName: sheetName,
+      fieldMappings,
+      spreadsheetId,
+      sheetConditions,
+      conditionsLogic,
+      sheetcustomLogic,
+      updateMultiple,
+      googleSheetReturnLimit: returnLimit,
+      googleSheetSortField: sortField,
+      googleSheetSortOrder: sortOrder,
+    } : {};
+
+    const findGoogleSheetData = isFindGoogleSheet ? {
+      selectedSheetName: findSelectedSheetName,
+      spreadsheetId: findSpreadsheetId,
+      findSheetConditions,
+      findConditionsLogic,
+      findSheetCustomLogic,
+      findUpdateMultiple,
+      googleSheetReturnLimit: findreturnLimit,
+      googleSheetSortField: findsortField,
+      googleSheetSortOrder: findsortOrder,
+      columns: findGoogleSheetColumns
+    } : {};
+
     setMappings((prev) => {
       const updatedMappings = {
         ...prev,
         [nodeId]: {
           actionType: isCreateUpdateNode ? "CreateUpdate" : isLoopNode ? "Loop" : isFormatterNode ? "Formatter" : isFilterNode ? "Filter" : isPathNode ? "Path" : isConditionNode ? "Condition" : nodeType,
-          selectedFindNode: isFilterNode || isConditionNode || isLoopNode ? selectedFindNode : '',
+          selectedFindNode: isLoopNode ? loopCollection : (isFilterNode || isConditionNode ? selectedFindNode : ''),
           salesforceObject: isCreateUpdateNode || isFindNode || isFilterNode || (isConditionNode && pathOption === "Rules") ? selectedObject : "",
-          fieldMappings: isCreateUpdateNode ? validMappings.map(m => ({
-            formFieldId: m.formFieldId,
-            fieldType: m.fieldType,
-            salesforceField: m.salesforceField,
-            picklistValue: m.picklistValue || undefined
-          })) : [],
+          fieldMappings: isCreateUpdateNode ? [
+            ...validMappings.map(m => ({
+              formFieldId: m.formFieldId,
+              fieldType: m.fieldType,
+              salesforceField: m.salesforceField,
+              picklistValue: m.picklistValue || undefined
+            })),
+            {
+              storeAsContentDocument: storeAsContentDocument,
+              selectedFileUploadFields: selectedFileUploadFields
+            }
+          ] : [],
           conditions: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? validConditions : [],
           logicType: (isFindNode || isFilterNode || (isCreateUpdateNode && enableConditions) || (isConditionNode && pathOption === "Rules")) ? logicType : undefined,
           customLogic: logicType === "Custom" ? customLogic : undefined,
@@ -956,9 +1068,13 @@ const ActionPanel = ({
           sortField: (isFindNode || isFilterNode) ? sortField : undefined,
           sortOrder: (isFindNode || isFilterNode) ? sortOrder : undefined,
           pathOption: isConditionNode ? pathOption : undefined,
+          storeAsContentDocument: isCreateUpdateNode ? storeAsContentDocument : undefined,
+          selectedFileUploadFields: isCreateUpdateNode ? selectedFileUploadFields : [],
           previousNodeId,
           nextNodeIds,
           label: nodes.find((n) => n.id === nodeId)?.data.label || `${nodeType}_Level0`,
+          ...googleSheetData,
+          ...findGoogleSheetData,
         },
       };
       return updatedMappings;
@@ -1099,23 +1215,23 @@ const ActionPanel = ({
 
   const renderConditions = (conditionType = "conditions", isExit = false) => {
     const conditionsList = isExit ? exitConditions : conditions;
-     // Helper function to get field options based on node type and loop collection
+    // Helper function to get field options based on node type and loop collection
     const getFieldOptionsForConditions = () => {
       if (isExit && isLoopNode && loopCollection) {
         const loopCollectionNode = nodes.find(node => node.id === loopCollection);
-        console.log('loop node' , loopCollectionNode)
+        console.log('loop node', loopCollectionNode)
         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
           const googleSheetNodeMapping = mappings[loopCollection] || {};
           console.log('sheet', googleSheetNodeMapping)
-          return (googleSheetNodeMapping.sheetColumns).map(col => ({ value: col, label: col }));
+          return (googleSheetNodeMapping.sheetColumns || googleSheetNodeMapping.columns || []).map(col => ({ value: col, label: col }));
         }
       }
       // New logic for Filter node conditions
-    if (isFilterNode && selectedFindNode) {
+      if (isFilterNode && selectedFindNode) {
         const findNode = nodes.find(node => node.id === selectedFindNode);
         if (findNode && findNode.data.action === 'FindGoogleSheet') {
           const googleSheetNodeMapping = mappings[selectedFindNode] || {};
-          return (googleSheetNodeMapping.sheetColumns || []).map(col => ({ value: col, label: col }));
+          return (googleSheetNodeMapping.sheetColumns || googleSheetNodeMapping.columns || []).map(col => ({ value: col, label: col }));
         }
       }
       return fieldOptions; // Default to Salesforce field options
@@ -1126,14 +1242,14 @@ const ActionPanel = ({
         return operatorGroups.default; // For exit conditions, use default operators
       }
       if (isExit && isLoopNode && loopCollection) {
-         const loopCollectionNode = nodes.find(node => node.id === loopCollection);
-         if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
-           // For Google Sheet columns, assume string operators for now
+        const loopCollectionNode = nodes.find(node => node.id === loopCollection);
+        if (loopCollectionNode && loopCollectionNode.data.action === 'FindGoogleSheet') {
+          // For Google Sheet columns, assume string operators for now
           return operatorGroups.text;
-         }
-       }
-         // New logic for Filter node conditions
-    if (isFilterNode && selectedFindNode) {
+        }
+      }
+      // New logic for Filter node conditions
+      if (isFilterNode && selectedFindNode) {
         const findNode = nodes.find(node => node.id === selectedFindNode);
         if (findNode && findNode.data.action === 'FindGoogleSheet') {
           return operatorGroups.text;
@@ -1155,207 +1271,228 @@ const ActionPanel = ({
       return operatorGroups[operatorGroup] || operatorGroups.default;
     };
 
-
     return (
       <div className="space-y-4">
+        {/* Combine Conditions Section */}
         {conditionsList.length > 1 && (
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Combine Conditions Using</label>
-            <Select
-              value={logicOptions.find((opt) => opt.value === logicType) || null}
-              onChange={(selected) => {
-                setLogicType(selected ? selected.value : "AND");
-                if (selected?.value !== "Custom") {
-                  setCustomLogic("");
-                }
-              }}
-              options={logicOptions}
-              placeholder="Select Logic"
-              styles={{
-                container: (base) => ({
-                  ...base,
-                  borderRadius: "0.375rem",
-                  borderColor: "#e5e7eb",
-                  fontSize: "0.875rem",
-                }),
-                control: (base) => ({
-                  ...base,
-                  minHeight: "34px",
-                }),
-                menu: (base) => ({
-                  ...base,
-                  zIndex: 9999,
-                }),
-              }}
-              classNamePrefix="select"
-            />
-            {logicType === "Custom" && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="mt-2"
-              >
-                <input
-                  type="text"
-                  value={customLogic}
-                  onChange={(e) => setCustomLogic(e.target.value)}
-                  placeholder="e.g., (1 AND 2) OR 3"
-                  className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+          <div className="overflow-visible">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="col-span-1">
+                <Select
+                  value={logicOptions.find((opt) => opt.value === logicType) || null}
+                  onChange={(selected) => {
+                    setLogicType(selected ? selected.value : "AND");
+                    if (selected?.value !== "Custom") {
+                      setCustomLogic("");
+                    }
+                  }}
+                  options={logicOptions}
+                  placeholder="Select Logic"
+                  styles={{
+                    container: (base) => ({
+                      ...base,
+                      borderRadius: "0.375rem",
+                      borderColor: "#e5e7eb",
+                      fontSize: "0.875rem",
+                    }),
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "34px",
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                    }),
+                  }}
+                  classNamePrefix="select"
                 />
-              </motion.div>
+              </div>
+
+              {logicType === "Custom" && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  className="col-span-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Custom Logic</label>
+                  <input
+                    type="text"
+                    value={customLogic}
+                    onChange={(e) => setCustomLogic(e.target.value)}
+                    placeholder="e.g., (1 AND 2) OR 3"
+                    className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500 h-9"
+                  />
+                </motion.div>
+              )}
+            </div>
+            {/* Validation */}
+            {logicType === "Custom" && customLogic && (
+              validateCustomLogic(customLogic, conditionsList.length).length > 0 ? (
+                <div className="text-red-600 text-sm mt-2">
+                  {validateCustomLogic(customLogic, conditionsList.length).map((err, idx) => (
+                    <div key={idx}>⚠ {err}</div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-green-600 text-sm mt-2">
+                  ✅ Logic looks good
+                </div>
+              )
             )}
           </div>
         )}
-        {conditionsList.map((condition, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
-          >
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-medium text-gray-700">{isExit ? `Exit Condition ${index + 1}` : `Condition ${index + 1}`}</h3>
-              {conditionsList.length > 1 && (
-                <button
-                  onClick={() => removeCondition(index, conditionType)}
-                  className="text-red-500 hover:text-red-700 text-sm"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-12 gap-3">
-              <div className="col-span-5">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Field</label>
-                <Select
-                    value={
-                    getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
-                      ? {
-                        ...getFieldOptionsForConditions().find((opt) => opt.value === condition.field),
-                        label: isExit && currentItemVariableName && getFieldOptionsForConditions().find((opt) => opt.value === condition.field)
-                          ? `${currentItemVariableName}.${getFieldOptionsForConditions().find((opt) => opt.value === condition.field).label}`
-                          : getFieldOptionsForConditions().find((opt) => opt.value === condition.field)?.label
-                      }
-                      : null
-                  }
-                  onChange={(selected) =>
-                    handleConditionChange(
-                      index,
-                      "field",
-                      selected ? selected.value : "",
-                      conditionType
-                    )
-                  }
-                  options={
-                    isExit && currentItemVariableName
-                      ? getFieldOptionsForConditions().map((opt) => ({
-                        ...opt,
-                        label: `${currentItemVariableName}.${opt.label}`,
-                      }))
-                      : getFieldOptionsForConditions()
-                  }
-                  placeholder="Select Field"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                  isDisabled={!getFieldOptionsForConditions().length}
-                  isClearable
-                  classNamePrefix="select"
-                />
-              </div>
+        {/* Conditions Container */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-visible relative z-10">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              {isExit ? "Exit Conditions" : "Conditions"}
+            </h3>
+          </div>
 
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Operator</label>
-                <Select
-                  value={getOperatorsForCondition(index).find((opt) => opt.value === condition.operator) || null}
-                  onChange={(selected) => handleConditionChange(index, "operator", selected ? selected.value : "=", conditionType)}
-                  options={getOperatorsForCondition(index)}
-                  placeholder="Op"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                      paddingLeft: "4px",
-                    }),
-                    dropdownIndicator: (base) => ({
-                      ...base,
-                      padding: "4px",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                      minWidth: "120px",
-                    }),
-                    option: (base) => ({
-                      ...base,
-                      padding: "4px 8px",
-                      fontSize: "0.75rem",
-                    }),
-                    singleValue: (base) => ({
-                      ...base,
-                      fontSize: "0.75rem",
-                    }),
-                  }}
-                  classNamePrefix="select"
-                />
+          <div className="p-4 space-y-1 relative">
+            {/* Condition labels header (shown only once) */}
+            {conditionsList.length > 0 && (
+              <div className="grid grid-cols-12 gap-3 items-center pb-2 mb-2 border-b border-gray-100">
+                <div className="col-span-1">
+                  <span className="text-xs font-medium text-gray-500"></span>
+                </div>
+                <div className="col-span-4">
+                  <label className="block text-xs font-medium text-gray-500 uppercase">Field</label>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-500 uppercase">Operator</label>
+                </div>
+                <div className="col-span-4">
+                  <label className="block text-xs font-medium text-gray-500 uppercase">Value</label>
+                </div>
+                <div className="col-span-1">
+                  {/* Empty header for actions column */}
+                </div>
               </div>
-              {condition.operator !== "IS NULL" && condition.operator !== "IS NOT NULL" && (
-                <div className="col-span-5">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">
-                    {condition.operator === "BETWEEN" ? "Value (From)" : "Value"}
-                  </label>
-                  <input
-                    type="text"
-                    value={condition.value}
-                    onChange={(e) => handleConditionChange(index, "value", e.target.value, conditionType)}
-                    placeholder={condition.operator === "BETWEEN" ? "From Value" : "Enter Value"}
-                    className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            )}
+
+            {conditionsList.map((condition, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="group relative grid grid-cols-12 gap-3 items-center py-2 hover:bg-gray-50 rounded-md transition-colors duration-150"
+              >
+                {/* Numbering column */}
+                <div className="col-span-1 flex items-center justify-center">
+                  <div className="condition-number">{index + 1})</div>
+                </div>
+
+                {/* Field column */}
+                <div className="col-span-4">
+                  <AntSelect
+                    style={{ width: "100%" }}
+                    placeholder="Select Field"
+                    value={condition.field || undefined}
+                    onChange={(value) =>
+                      handleConditionChange(index, "field", value, conditionType)
+                    }
+                    options={
+                      isExit && currentItemVariableName
+                        ? getFieldOptionsForConditions().map((opt) => ({
+                          ...opt,
+                          label: `${currentItemVariableName}.${opt.label}`,
+                        }))
+                        : getFieldOptionsForConditions()
+                    }
+                    disabled={!getFieldOptionsForConditions().length}
+                    allowClear
+                    size="small"
                   />
                 </div>
-              )}
-              {condition.operator === "BETWEEN" && (
-                <div className="col-span-5 col-start-8">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Value (To)</label>
-                  <input
-                    type="text"
-                    value={condition.value2}
-                    onChange={(e) => handleConditionChange(index, "value2", e.target.value, conditionType)}
-                    placeholder="To Value"
-                    className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+
+                {/* Operator column */}
+                <div className="col-span-2">
+                  <AntSelect
+                    style={{ width: "100%" }}
+                    placeholder="Op"
+                    value={condition.operator || undefined}
+                    onChange={(value) =>
+                      handleConditionChange(index, "operator", value, conditionType)
+                    }
+                    options={getOperatorsForCondition(index)}
+                    size="small"
                   />
                 </div>
-              )}
-            </div>
-          </motion.div>
-        ))}
-        <button
-          onClick={() => addCondition(conditionType)}
-          className="flex items-center justify-center w-full bg-blue-50 text-blue-600 px-4 py-2 rounded-md hover:bg-blue-100 border border-blue-200 text-sm font-medium"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          {isExit ? "Add Exit Condition" : "Add Condition"}
-        </button>
+
+
+                {/* Value column */}
+                {condition.operator !== "IS NULL" && condition.operator !== "IS NOT NULL" && (
+                  <div className="col-span-4">
+                    <Input
+                      style={{ width: 150 }}
+                      value={condition.value}
+                      onChange={(e) => handleConditionChange(index, "value", e.target.value, conditionType)}
+                      placeholder={condition.operator === "BETWEEN" ? "From Value" : "Enter Value"}
+                      disabled={!condition.operator}
+                    />
+                  </div>
+                )}
+
+                {/* Delete button column */}
+                <div className="col-span-1 flex justify-center opacity-30 group-hover:opacity-100 transition-opacity duration-150">
+                  {conditionsList.length > 1 && (
+                    <button
+                      onClick={() => removeCondition(index, conditionType)}
+                      className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                      title="Remove condition"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M11.7601 1C11.8925 1 12 1.09029 12 1.20166V1.79833C12 1.90971 11.8925 2 11.7601 2H0.240001C0.107452 2 0 1.90971 0 1.79833V1.20166C0 1.09029 0.107452 1 0.240001 1H3.42661C3.96661 1 4.40521 0.450497 4.40521 0H7.59482C7.59482 0.450497 8.03282 1 8.57343 1H11.7601Z" fill="#0B0A0A" />
+                        <path d="M11.4678 4.4502L9.61816 15.5498H2.38184L0.532227 4.4502H11.4678Z" fill="white" stroke="#262626ff" stroke-width="0.89999" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+
+            {/* Second row for BETWEEN operator */}
+            {conditionsList.some(condition => condition.operator === "BETWEEN") && (
+              conditionsList.map((condition, index) => (
+                condition.operator === "BETWEEN" && (
+                  <motion.div
+                    key={`between-${index}`}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="grid grid-cols-12 gap-3 mt-1 mb-2"
+                  >
+                    <div className="col-span-1"></div>
+                    <div className="col-span-4 col-start-2">
+                      <input
+                        type="text"
+                        value={condition.value2}
+                        onChange={(e) => handleConditionChange(index, "value2", e.target.value, conditionType)}
+                        placeholder="To Value"
+                        className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500 h-9"
+                      />
+                    </div>
+                  </motion.div>
+                )
+              ))
+            )}
+
+            {/* Add Condition Button */}
+            <button
+              onClick={() => addCondition(conditionType)}
+              className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium mt-3"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {isExit ? "Add Exit Condition" : "Add Condition"}
+            </button>
+          </div>
+        </div>
+
       </div>
     );
   };
@@ -1366,7 +1503,7 @@ const ActionPanel = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
-      className="absolute right-0 h-full w-1/3 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-10"
+      className="absolute right-0 h-full w-2/4 bg-white shadow-xl border-l border-gray-200 overflow-y-auto z-10"
     >
 
       <div className="p-6">
@@ -1376,10 +1513,13 @@ const ActionPanel = ({
             animate={{ opacity: 1, y: 0 }}
             className="text-xl font-semibold text-gray-800"
           >
-            {`Configuration for ${nodeLabel}`}
+            Node Configuration
           </motion.h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              setSaveError(null);
+              if (onClose) onClose();
+            }}
             className="text-gray-500 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-gray-100"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1387,6 +1527,7 @@ const ActionPanel = ({
             </svg>
           </button>
         </div>
+
 
         <AnimatePresence>
           {saveError && (
@@ -1401,6 +1542,33 @@ const ActionPanel = ({
           )}
         </AnimatePresence>
 
+        <div className="mb-6">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Label field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
+              <Input
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+                onBlur={handleLabelBlur}
+                maxLength={25}
+                placeholder="Enter node label"
+                className="mt-1"
+              />
+            </div>
+
+            {/* Type field (read-only) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+              <Input
+                value={mappings[nodeId]?.actionType || nodeType}
+                readOnly
+                className="mt-1 bg-gray-100 text-gray-700"
+              />
+            </div>
+          </div>
+        </div>
+
         {isGoogleSheet && (
           <motion.div
             className=""
@@ -1408,57 +1576,25 @@ const ActionPanel = ({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 300, opacity: 0 }}
           >
-          <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} onSave={handleSave} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
-            sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns}/>
+            <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
+              sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns} />
           </motion.div>
         )}
         {isFindGoogleSheet && (
           <motion.div
-          className=""
-          initial={{ x: 300, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 300, opacity: 0 }}
-        >
-          <GoogleSheetFindPanel
-                onSave={(config) => {
-                console.log(mappings[nodeId] , 'insave')
-                setFindSelectedSheetName(config.selectedSheetName); // Use new state
-                setFindSpreadsheetId(config.spreadsheetId); // Use new state
-                setFindSheetConditions(config.findSheetConditions); // Use new state
-                setFindConditionsLogic(config.logicType); // Use new state
-                setFindGoogleSheetColumns(config.columns || []); // Update parent state with columns
-                setFindSheetCustomLogic(config.customLogic); // Use new state
-                setfindreturnLimit(config.googleSheetReturnLimit);
-                setfindsortfield(config.googleSheetSortField); // Corrected this line
-                setfindsortOrder(config.googleSheetSortOrder); // Corrected this line
-                setFindNodeName(config.findNodeName); // Use new state
-                setFindUpdateMultiple(config.updateMultiple); // Use new state
-                setFindGoogleSheetColumns(config.sheetColumns)
-                // ✅ Persist unified config
-                setMappings(prev => ({
-                  ...prev,
-                  [nodeId]: {
-                    ...prev[nodeId],
-                    findNodeName: config.findNodeName,
-                    selectedSheetName: config.selectedSheetName,
-                    spreadsheetId: config.spreadsheetId,
-                    findSheetConditions: config.findSheetConditions,
-                    updateMultiple: config.updateMultiple,
-                    googleSheetReturnLimit: config.googleSheetReturnLimit,
-                    googleSheetSortOrder: config.googleSheetSortOrder,
-                    googleSheetSortField : config.googleSheetSortField,
-                    logicType : config.logicType,
-                    customLogic : config.customLogic,
-                    sheetColumns : config.sheetColumns
-                  }
-                }));
-              }}
+            className=""
+            initial={{ x: 300, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 300, opacity: 0 }}
+          >
+            <GoogleSheetFindPanel
               initialConfig={mappings[nodeId]}
-          userId={userId}
-          instanceUrl={instanceUrl} 
-          token={sfToken}  
-          sheetsApiUrl={'https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch'}/>
-        </motion.div>
+              userId={userId}
+              instanceUrl={instanceUrl}
+              token={sfToken}
+              sheetsApiUrl={process.env.REACT_APP_GOOGLE_SHEET}
+            />
+          </motion.div>
         )}
         <div className="space-y-6">
           {(isPathNode || isConditionNode) && (
@@ -1467,34 +1603,16 @@ const ActionPanel = ({
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Path Option</label>
-                <Select
-                  value={pathOptions.find((opt) => opt.value === pathOption) || null}
-                  onChange={(selected) => setPathOption(selected ? selected.value : "Rules")}
+                <AntSelect
+                  value={pathOption || undefined}
+                  onChange={(value) => setPathOption(value || "Rules")}
                   options={pathOptions}
                   placeholder="Select Path Option"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      marginTop: "4px",
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      borderColor: "#e5e7eb",
-                      minHeight: "42px",
-                      "&:hover": {
-                        borderColor: "#d1d5db",
-                      },
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                  classNamePrefix="select"
+                  size="middle"
+                  style={{ width: "100%", marginTop: "4px" }}
+                  allowClear
                 />
               </div>
             </motion.div>
@@ -1504,38 +1622,26 @@ const ActionPanel = ({
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-gray-50 p-4 rounded-lg border border-gray-200"
             >
               <label className="block text-sm font-medium text-gray-700 mb-1">Salesforce Object</label>
-              <Select
-                value={objectOptions.find((opt) => opt.value === selectedObject) || null}
-                onChange={handleObjectSelect}
-                options={objectOptions}
+              <AntSelect
+                style={{ marginTop: 10 }}
                 placeholder={objectOptions.length ? "Select Salesforce Object" : "No Objects Available"}
-                styles={{
-                  container: (base) => ({
-                    ...base,
-                    marginTop: "4px",
-                    borderRadius: "0.375rem",
-                    borderColor: "#e5e7eb",
-                  }),
-                  control: (base) => ({
-                    ...base,
-                    borderColor: "#e5e7eb",
-                    minHeight: "42px",
-                    "&:hover": {
-                      borderColor: "#d1d5db",
-                    },
-                  }),
-                  menu: (base) => ({
-                    ...base,
-                    zIndex: 9999,
-                  }),
-                }}
-                isClearable
-                isDisabled={!objectOptions.length}
-                classNamePrefix="select"
+                labelInValue
+                value={
+                  selectedObject
+                    ? { value: selectedObject, label: objectOptions.find(o => o.value === selectedObject)?.label }
+                    : undefined
+                }
+                onChange={handleObjectSelect}
+                allowClear
+                showSearch
+                options={objectOptions}
+                optionFilterProp="label"
+                disabled={!objectOptions.length}
+                getPopupContainer={(t) => document.body}
               />
+
             </motion.div>
           )}
 
@@ -1543,47 +1649,26 @@ const ActionPanel = ({
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="p-4 rounded-lg border border-gray-200"
             >
               <div className="">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {isLoopNode ? "Select Collection Node" : "Select Find Node"}
                 </label>
-                
-                <Select
+
+                <AntSelect
                   value={
-                    collectionOptions.find(
-                      (opt) =>
-                        opt.value === (isLoopNode ? loopCollection : selectedFindNode)
-                    ) || null
+                    (isLoopNode ? loopCollection : selectedFindNode) || undefined
                   }
-                 
-                  onChange={(selected) => handleFindNodeChange(selected, isLoopNode)}
+                  onChange={(value) => handleFindNodeChange(value, isLoopNode)}
                   options={collectionOptions}
-                  placeholder={collectionOptions.length ? "Select Find Node" : "No Find Nodes Available"}
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      marginTop: "4px",
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      borderColor: "#e5e7eb",
-                      minHeight: "42px",
-                      "&:hover": {
-                        borderColor: "#d1d5db",
-                      },
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                  isClearable
-                  isDisabled={!collectionOptions.length}
-                  classNamePrefix="select"
+                  placeholder={
+                    collectionOptions.length
+                      ? "Select Find Node"
+                      : "No Find Nodes Available"
+                  }
+                  size="middle"
+                  style={{ width: "100%", marginTop: "4px" }}
+                  allowClear
                 />
                 {selectedObject && (
                   <p className="text-sm text-gray-600 mt-2">
@@ -1600,185 +1685,186 @@ const ActionPanel = ({
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Current Item Variable Name</label>
-                <input
-                  type="text"
-                  value={currentItemVariableName}
-                  onChange={(e) => setCurrentItemVariableName(e.target.value)}
-                  placeholder="e.g., currentRecord, loopItem"
-                  className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Index/Counter Variables (optional)</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={loopVariables.currentIndex}
-                      onChange={() => handleLoopVariableChange("currentIndex", !loopVariables.currentIndex)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm text-gray-700">Current Index</span>
-                  </label>
-                  {loopVariables.currentIndex && (
+              <div>
+                {/* Max Iterations Accordion */}
+                <div className="">
+                  <button
+                    className="w-full flex justify-between items-center px-1 py-2  text-left font-medium text-gray-700"
+                    onClick={() => setAccordionOpen(prev => ({ ...prev, iterations: !prev.iterations }))}
+                  >
+                    <span>Max Iterations (optional)</span>
+                    <svg
+                      className={`w-5 h-5 transition-transform ${accordionOpen.iterations ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {accordionOpen.iterations && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
-                      className="ml-6 space-y-2"
+                      exit={{ opacity: 0, height: 0 }}
+                      className="px-1 pb-4"
                     >
-                      <label className="block text-sm font-medium text-gray-700">Index Base</label>
-                      <Select
-                        value={[{ value: "0", label: "0-based" }, { value: "1", label: "1-based" }].find((opt) => opt.value === loopVariables.indexBase) || null}
-                        onChange={(selected) => handleLoopVariableChange("indexBase", selected ? selected.value : "0")}
-                        options={[{ value: "0", label: "0-based" }, { value: "1", label: "1-based" }]}
-                        placeholder="Select Index Base"
-                        styles={{
-                          container: (base) => ({
-                            ...base,
-                            marginTop: "4px",
-                            borderRadius: "0.375rem",
-                            borderColor: "#e5e7eb",
-                          }),
-                          control: (base) => ({
-                            ...base,
-                            minHeight: "42px",
-                          }),
-                          menu: (base) => ({
-                            ...base,
-                            zIndex: 9999,
-                          }),
-                        }}
-                        classNamePrefix="select"
+                      <input
+                        type="number"
+                        value={maxIterations}
+                        onChange={(e) => setMaxIterations(e.target.value)}
+                        placeholder="Enter max iterations (e.g., 3)"
+                        className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="1"
                       />
                     </motion.div>
                   )}
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={loopVariables.counter}
-                      onChange={() => handleLoopVariableChange("counter", !loopVariables.counter)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm text-gray-700">Counter (Total records processed)</span>
-                  </label>
                 </div>
-              </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Max Iterations (optional)</label>
-                <input
-                  type="number"
-                  value={maxIterations}
-                  onChange={(e) => setMaxIterations(e.target.value)}
-                  placeholder="Enter max iterations (e.g., 3)"
-                  className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                  min="1"
-                />
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Exit Conditions (optional)</h3>
-                {renderConditions("exitConditions", true)}
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Loop Description / Notes (optional)</label>
-                <textarea
-                  value={loopDescription}
-                  onChange={(e) => setLoopDescription(e.target.value)}
-                  placeholder="Describe the purpose of this loop"
-                  className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  rows="3"
-                />
+                {/* Exit Conditions Accordion */}
+                <div className="">
+                  <button
+                    className="w-full flex justify-between items-center px-1 py-2  text-left font-medium text-gray-700"
+                    onClick={() => setAccordionOpen(prev => ({ ...prev, exitConditions: !prev.exitConditions }))}
+                  >
+                    <span>Exit Conditions (optional)</span>
+                    <svg
+                      className={`w-5 h-5 transition-transform ${accordionOpen.exitConditions ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {accordionOpen.exitConditions && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="px-1 pb-4"
+                    >
+                      {renderConditions("exitConditions", true)}
+                    </motion.div>
+                  )}
+                </div>
               </div>
             </motion.div>
           )}
 
-          {(isFindNode || isFilterNode || (isConditionNode &&  pathOption == 'Rules')) && (
+          {(isFindNode || isFilterNode || (isConditionNode && pathOption == 'Rules')) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="space-y-6"
+              className="space-y-2"
             >
               {renderConditions("conditions")}
 
               {(!isConditionNode) && (
                 <>
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Limit (optional, max 100)</label>
-                    <input
-                      type="number"
-                      value={returnLimit}
-                      onChange={(e) => setReturnLimit(e.target.value)}
-                      placeholder="Leave blank for all records"
-                      className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                      min="1"
-                      max="100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
+                  {/* Return Limit Accordion */}
+                  <div className="pt-2">
+                    <button
+                      className="w-full flex justify-between items-center px-2 py-3 text-left font-medium text-gray-700"
+                      onClick={() => setAccordionOpen(prev => ({ ...prev, returnLimit: !prev.returnLimit }))}
+                    >
+                      <span>Return Limit (optional)</span>
+                      <svg
+                        className={`w-5 h-5 transition-transform ${accordionOpen.returnLimit ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {accordionOpen.returnLimit && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="px-1 pb-4"
+                      >
+                        <div>
+                          <Input
+                            type="number"
+                            value={returnLimit}
+                            onChange={(e) => setReturnLimit(e.target.value)}
+                            placeholder="Leave blank for all records"
+                            min="1"
+                            max="100"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <h3 className="text-sm font-medium text-gray-700 mb-3">Sort Records (optional)</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
-                        <Select
-                          value={fieldOptions.find((opt) => opt.value === sortField) || null}
-                          onChange={(selected) => setSortField(selected ? selected.value : "")}
-                          options={fieldOptions}
-                          placeholder="Select Field"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          isDisabled={!selectedObject}
-                          isClearable
-                          classNamePrefix="select"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Sort Order</label>
-                        <Select
-                          value={sortOrderOptions.find((opt) => opt.value === sortOrder) || null}
-                          onChange={(selected) => setSortOrder(selected ? selected.value : "ASC")}
-                          options={sortOrderOptions}
-                          placeholder="Select Order"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
-                      </div>
-                    </div>
+                  {/* Sort Records Accordion */}
+                  <div className="">
+                    <button
+                      className="w-full flex justify-between items-center px-2 py-3 text-left font-medium text-gray-700"
+                      onClick={() => setAccordionOpen(prev => ({ ...prev, sortRecords: !prev.sortRecords }))}
+                    >
+                      <span>Sort Records (optional)</span>
+                      <svg
+                        className={`w-5 h-5 transition-transform ${accordionOpen.sortRecords ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {accordionOpen.sortRecords && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="px-2 pb-4"
+                      >
+                        <div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500">Sort Field</label>
+                              <AntSelect
+                                value={sortField || undefined}
+                                onChange={(value) => setSortField(value)}
+                                placeholder="Select Field"
+                                disabled={!selectedObject}
+                                allowClear
+                                showSearch={false} // disables search
+                                style={{ width: "100%", marginTop: 4 }}
+                              >
+                                {fieldOptions.map((opt) => (
+                                  <Option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </Option>
+                                ))}
+                              </AntSelect>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500">Sort Order</label>
+                              <AntSelect
+                                value={sortOrder || undefined}
+                                onChange={(value) => setSortOrder(value || "ASC")}
+                                placeholder="Select Order"
+                                allowClear
+                                showSearch={false} // disables search
+                                style={{ width: "100%", marginTop: 4 }}
+                              >
+                                {sortOrderOptions.map((opt) => (
+                                  <Option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </Option>
+                                ))}
+                              </AntSelect>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
                   </div>
                 </>
               )}
@@ -1791,207 +1877,257 @@ const ActionPanel = ({
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              <div className="space-y-4">
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-visible relative z-10">
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-700 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Form Fields Mapping with Salesforce Object Fields
+                  </h3>
+                </div>
 
-                {localMappings.map((mapping, index) => {
-                  const isRequiredField = selectedObject && safeSalesforceObjects
-                    .find(obj => obj.name === selectedObject)
-                    ?.fields?.find(f => f.name === mapping.salesforceField && f.required);
-                  return (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Salesforce Field
-                            {isRequiredField && (
-                              <span className="ml-1 text-red-500">*</span>
-                            )}
-                          </label>
-                          <Select
-                            value={fieldOptions.find((opt) => opt.value === mapping.salesforceField) || null}
-                            onChange={(selected) => handleMappingChange(index, "salesforceField", selected ? selected.value : "")}
-                            options={fieldOptions}
-                            placeholder="Select Field"
-                            styles={{
-                              container: (base) => ({
-                                ...base,
-                                borderRadius: "0.375rem",
-                                borderColor: "#e5e7eb",
-                                fontSize: "0.875rem",
-                              }),
-                              control: (base) => ({
-                                ...base,
-                                minHeight: "34px",
-                                backgroundColor: isRequiredField ? '#f5f5f5' : base.backgroundColor,
-                              }),
-                              placeholder: (base) => ({
-                                ...base,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }),
-                              menu: (base) => ({
-                                ...base,
-                                zIndex: 9999,
-                              }),
+                <div className="p-4 space-y-1 relative">
+                  {/* Header row with labels - only shown once */}
+                  <div className="grid grid-cols-12 gap-3 items-center pb-2 mb-2 border-b border-gray-100">
+                    <div className="col-span-5">
+                      <label className="block text-xs font-medium text-gray-500 uppercase">
+                        Salesforce Field
+                      </label>
+                    </div>
+                    <div className="col-span-6">
+                      <label className="block text-xs font-medium text-gray-500 uppercase">
+                        Form Field
+                      </label>
+                    </div>
+                    <div className="col-span-1">
+                      {/* Empty header for actions column */}
+                    </div>
+                  </div>
+
+                  {localMappings.map((mapping, index) => {
+                    const isRequiredField = selectedObject && safeSalesforceObjects
+                      .find(obj => obj.name === selectedObject)
+                      ?.fields?.find(f => f.name === mapping.salesforceField && f.required);
+
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="group relative grid grid-cols-12 gap-3 items-center py-2 hover:bg-gray-50 rounded-md transition-colors duration-150"
+                      >
+                        {/* Salesforce Field */}
+                        <div className="col-span-5 relative">
+                          <AntSelect
+                            style={{
+                              width: "100%",
+                              minHeight: 36,
+                              marginTop: 2,
+                              backgroundColor: isRequiredField ? "#f0f9ff" : "white",
+                              borderColor: isRequiredField ? "#3b82f6" : "#e5e7eb",
+                              borderRadius: "0.375rem",
+                              fontSize: "0.875rem"
                             }}
-                            isDisabled={!selectedObject || isRequiredField}
-                            isClearable={!isRequiredField}
-                            classNamePrefix="select"
-                          />
+                            placeholder="Select field"
+                            value={mapping.salesforceField || undefined}
+                            onChange={(value) => handleMappingChange(index, "salesforceField", value || "")}
+                            allowClear={!isRequiredField}
+                            disabled={!selectedObject || isRequiredField}
+                            dropdownStyle={{ zIndex: 9999 }}
+                            getPopupContainer={(trigger) => document.body} // prevents clipping
+                            showSearch={false} // 🔹 disables search
+                          >
+                            {fieldOptions.map(opt => (
+                              <AntSelect.Option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </AntSelect.Option>
+                            ))}
+                          </AntSelect>
+
+                          {isRequiredField && (
+                            <p className="text-xs text-blue-600 mt-1 flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              Required field
+                            </p>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Form Field
-                            {isRequiredField && (
-                              <span className="ml-1 text-red-500">*</span>
-                            )}
-                          </label>
-                          <Select
-                            value={
-                              mapping.picklistValue
-                                ? {
-                                  value: mapping.picklistValue,
-                                  label: mapping.picklistValue,
-                                  isPicklistValue: true
-                                }
-                                : safeFormFields.find(f => f.id === mapping.formFieldId || f.Unique_Key__c === mapping.formFieldId)
-                                  ? {
-                                    value: mapping.formFieldId,
-                                    label: safeFormFields.find(f => f.id === mapping.formFieldId || f.Unique_Key__c === mapping.formFieldId).name || 'Unknown',
-                                    isFormField: true,
-                                    isSubField: !!safeFormFields.find(f => f.id === mapping.formFieldId || f.Unique_Key__c === mapping.formFieldId)?.parentFieldId
-                                  }
-                                  : null
-                            }
-                            onChange={(selected) => {
-                              if (!selected) {
-                                handleMappingChange(index, 'formFieldId', '', { fieldType: '' });
+
+
+                        {/* Form Field */}
+                        <div className="col-span-6 relative">
+                          <AntSelect
+                            style={{
+                              width: "100%",
+                              minHeight: 36,
+                              borderRadius: "0.375rem",
+                              fontSize: "0.875rem"
+                            }}
+                            placeholder={formFieldOptions(index).length ? "Select field" : "No options"}
+                            value={(mapping.picklistValue || mapping.formFieldId) || undefined}
+                            onChange={(value, option) => {
+                              if (!value) {
+                                handleMappingChange(index, "formFieldId", "", { fieldType: "" });
                                 return;
                               }
-                              if (selected.isPicklistValue) {
-                                handleMappingChange(index, 'picklistValue', selected.value);
+                              const isPick = option?.isPicklistValue;
+                              if (isPick) {
+                                handleMappingChange(index, "picklistValue", value);
                               } else {
-                                const field = safeFormFields.find(f => f.id === selected.value || f.Unique_Key__c === selected.value);
-                                handleMappingChange(index, 'formFieldId', selected.value, { fieldType: field ? field.type : '' });
+                                const field = safeFormFields.find(
+                                  f => f.id === value || f.Unique_Key__c === value
+                                );
+                                handleMappingChange(index, "formFieldId", value, { fieldType: field ? field.type : "" });
                               }
                             }}
-                            options={formFieldOptions(index)}
-                            placeholder={formFieldOptions(index).length ? "Select Form Field or Picklist Value" : "No Options Available"}
-                            styles={{
-                              container: (base) => ({
-                                ...base,
-                                borderRadius: "0.375rem",
-                                borderColor: "#e5e7eb",
-                                fontSize: "0.875rem",
-                              }),
-                              control: (base) => ({
-                                ...base,
-                                minHeight: "34px",
-                              }),
-                              placeholder: (base) => ({
-                                ...base,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }),
-                              menu: (base) => ({
-                                ...base,
-                                zIndex: 9999,
-                              }),
-                              groupHeading: (base) => ({
-                                ...base,
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold',
-                                textTransform: 'uppercase',
-                                color: '#1f2937',
-                                backgroundColor: '#f9fafb',
-                                padding: '8px 12px',
-                                borderBottom: '1px solid #e5e7eb',
-                              }),
-                              option: (base, { data, isDisabled }) => ({
-                                ...base,
-                                backgroundColor: data.isPicklistValue ? '#f0f9ff' : (data.isSubField ? '#f3f4f6' : base.backgroundColor),
-                                color: isDisabled ? '#ccc' : (data.isPicklistValue ? '#0369a1' : (data.isSubField ? '#374151' : base.color)),
-                                paddingLeft: data.isSubField ? '24px' : '12px',
-                                cursor: isDisabled ? 'not-allowed' : 'default',
-                                ':active': {
-                                  backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor)),
-                                },
-                                ':hover': {
-                                  backgroundColor: !isDisabled && (data.isPicklistValue ? '#e0f2fe' : (data.isSubField ? '#e5e7eb' : '#f3f4f6')),
-                                },
-                              }),
-                            }}
-                            isClearable
-                            isDisabled={!formFieldOptions(index).length}
-                            classNamePrefix="select"
-                            getOptionIsDisabled={(option) => option.isDisabled === true}
-                            formatGroupLabel={(group) => (
-                              <div className="flex items-center">
-                                <span>{group.label}</span>
-                              </div>
-                            )}
-                          />
-                        </div>
-                        {localMappings.length > 1 && !isRequiredField && (
-                          <button
-                            onClick={() => removeMapping(index)}
-                            className="text-red-500 hover:text-red-700 mt-7"
+                            allowClear
+                            disabled={!formFieldOptions(index).length}
+                            showSearch={false} // 🔹 disables search
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                      {isRequiredField && (
-                        <p className="text-xs text-gray-500 mt-1">This is a required field in Salesforce</p>
-                      )}
-                    </motion.div>
-                  );
-                })}
-                <button
-                  onClick={addMapping}
-                  className="flex items-center justify-center w-full bg-blue-50 text-blue-600 px-4 py-2 rounded-md hover:bg-blue-100 border border-blue-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={safeSalesforceObjects.length === 0 || !selectedObject}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add More Fields
-                </button>
+                            {formFieldOptions(index).flatMap(group =>
+                              group.options.map(opt => (
+                                <Option
+                                  key={opt.value}
+                                  value={opt.value}
+                                  isPicklistValue={opt.isPicklistValue}
+                                  isSubField={opt.isSubField}
+                                  disabled={opt.isDisabled}
+                                >
+                                  <span
+                                    style={{
+                                      paddingLeft: opt.isSubField ? "24px" : "12px",
+                                      color: opt.isPicklistValue ? "#0369a1" : undefined
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </span>
+                                </Option>
+                              ))
+                            )}
+
+                          </AntSelect>
+                        </div>
+
+                        {/* Remove Button - Only shown on hover and if not required */}
+                        <div className="col-span-1 flex justify-center opacity-30 group-hover:opacity-100 transition-opacity duration-150">
+                          {localMappings.length > 1 && !isRequiredField && (
+                            <button
+                              onClick={() => removeMapping(index)}
+                              className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                              title="Remove mapping"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M11.7601 1C11.8925 1 12 1.09029 12 1.20166V1.79833C12 1.90971 11.8925 2 11.7601 2H0.240001C0.107452 2 0 1.90971 0 1.79833V1.20166C0 1.09029 0.107452 1 0.240001 1H3.42661C3.96661 1 4.40521 0.450497 4.40521 0H7.59482C7.59482 0.450497 8.03282 1 8.57343 1H11.7601Z" fill="#0B0A0A" />
+                                <path d="M11.4678 4.4502L9.61816 15.5498H2.38184L0.532227 4.4502H11.4678Z" fill="white" stroke="#262626ff" stroke-width="0.89999" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+
+                  {/* Add More Fields Button */}
+                  <button
+                    onClick={addMapping}
+                    className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={safeSalesforceObjects.length === 0 || !selectedObject}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Field Mapping
+                  </button>
+                </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={enableConditions}
-                    onChange={() => setEnableConditions(!enableConditions)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              {/* File Upload to Content Document Toggle */}
+              <div className="overflow-visible relative z-10">
+                <div className="flex items-center">
+                  <ToggleSwitch
+                    checked={storeAsContentDocument}
+                    onChange={() => setStoreAsContentDocument(!storeAsContentDocument)}
+                    id="content-document-toggle"
                   />
-                  <span className="text-sm font-medium text-gray-700">Enable Conditions</span>
-                </label>
+                  <div className="ml-3">
+                    <label htmlFor="content-document-toggle" className="text-sm font-medium text-gray-700">
+                      Store File Uploads as Content Documents
+                    </label>
+                  </div>
+                </div>
+
+                {storeAsContentDocument && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="mt-4"
+                  >
+                    <AntSelect
+                      mode="multiple"
+                      value={selectedFileUploadFields}
+                      onChange={(value) => setSelectedFileUploadFields(value)}
+                      placeholder="Select file upload fields"
+                      style={{ width: "100%" }}
+                      allowClear
+                    >
+                      {safeFormFields
+                        .filter(field => field.type === 'fileupload')
+                        .map(field => (
+                          <Option key={field.id} value={field.id}>
+                            {field.name}
+                          </Option>
+                        ))}
+                    </AntSelect>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Selected files will be uploaded as Salesforce Content Documents and linked to the record
+                    </p>
+                  </motion.div>
+                )}
               </div>
 
-              {enableConditions && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="space-y-4"
-                >
-                  {renderConditions("conditions")}
-                </motion.div>
-              )}
+              {/* Enable Conditions Toggle */}
+              <div className="overflow-visible relative z-10">
+                <div className="p-1">
+                  <div className="flex items-center">
+                    <div className="mb-4 flex items-center">
+                      <ToggleSwitch
+                        checked={enableConditions}
+                        onChange={() => {
+                          if (enableConditions) {
+                            setConditions([{ field: "", operator: "=", value: "", value2: "" }]);
+                          }
+                          setEnableConditions(!enableConditions);
+                        }}
+                        id="conditions-input-toggle"
+                      />
+
+                      <div className="ml-1">
+                        <span className="text-sm font-medium text-gray-700">
+                          Enable Conditions
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Only execute this action if the specified conditions are met
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {enableConditions && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="pt-4 border-t border-gray-100"
+                    >
+                      {renderConditions("conditions")}
+                    </motion.div>
+                  )}
+                </div>
+              </div>
             </motion.div>
           )}
-
 
           {isFormatterNode && (
             <motion.div
@@ -1999,253 +2135,183 @@ const ActionPanel = ({
               animate={{ opacity: 1 }}
               className="space-y-4"
             >
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Formatter Type</label>
-                <Select
-                  value={formatterTypes.find((opt) => opt.value === formatterConfig.formatType) || null}
-                  onChange={(selected) => handleFormatterChange("formatType", selected ? selected.value : "date")}
-                  options={formatterTypes}
-                  placeholder="Select Formatter Type"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                  classNamePrefix="select"
-                />
-              </div>
+              {/* Formatter Type and Operation in one row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Formatter Type</label>
+                  <AntSelect
+                    value={formatterConfig.formatType || undefined}
+                    onChange={(value) => {
+                      handleFormatterChange("formatType", value || "date");
+                      handleFormatterChange("inputField", "");
+                      handleFormatterChange("inputField2", "");
+                    }}
+                    placeholder="Select Formatter Type"
+                    allowClear
+                    showSearch={false}
+                    style={{ width: "100%", marginTop: 4 }}
+                  >
+                    {formatterTypes.map((opt) => (
+                      <Option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </Option>
+                    ))}
+                  </AntSelect>
+                </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
-                <Select
-                  value={
-                    formatterOperations[formatterConfig.formatType]
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
+                  <AntSelect
+                    value={
+                      formatterOperations[formatterConfig.formatType]
+                        .filter(opt => {
+                          const compatibleTypes =
+                            operationFieldTypeCompatibility[formatterConfig.formatType]?.[opt.value] || [];
+                          const selectedField = safeFormFields.find(
+                            f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField
+                          );
+                          return !selectedField || compatibleTypes.includes(selectedField.type);
+                        })
+                        .find(opt => opt.value === formatterConfig.operation)?.value
+                    }
+                    onChange={(value) => handleFormatterChange("operation", value || "")}
+                    placeholder="Select Operation"
+                    disabled={!formatterConfig.formatType}
+                    allowClear
+                    showSearch={false}   // 🔹 disables search
+                    style={{ width: "100%", marginTop: 4 }}
+                  >
+                    {formatterOperations[formatterConfig.formatType]
                       .filter(opt => {
-                        const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[opt.value] || [];
-                        const selectedField = safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField);
+                        const compatibleTypes =
+                          operationFieldTypeCompatibility[formatterConfig.formatType]?.[opt.value] || [];
+                        const selectedField = safeFormFields.find(
+                          f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField
+                        );
                         return !selectedField || compatibleTypes.includes(selectedField.type);
                       })
-                      .find((opt) => opt.value === formatterConfig.operation) || null
-                  }
-                  onChange={(selected) => handleFormatterChange("operation", selected ? selected.value : "")}
-                  options={formatterOperations[formatterConfig.formatType].filter(opt => {
-                    const compatibleTypes = operationFieldTypeCompatibility[formatterConfig.formatType]?.[opt.value] || [];
-                    const selectedField = safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField);
-                    return !selectedField || compatibleTypes.includes(selectedField.type);
-                  })}
-                  placeholder="Select Operation"
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                  }}
-                  isDisabled={!formatterConfig.formatType}
-                  classNamePrefix="select"
-                />
+                      .map(opt => (
+                        <Option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </Option>
+                      ))}
+                  </AntSelect>
+                </div>
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
-                <Select
-                  value={
-                    safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField)
-                      ? {
-                        value: formatterConfig.inputField,
-                        label: safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField).name || 'Unknown',
-                        isFormField: true,
-                        isSubField: !!safeFormFields.find(f => f.id === formatterConfig.inputField || f.Unique_Key__c === formatterConfig.inputField)?.parentFieldId,
-                      }
-                      : null
-                  }
-                  onChange={(selected) => handleFormatterChange("inputField", selected ? selected.value : "")}
-                  options={formFieldOptions()}
-                  placeholder={formFieldOptions().length ? "Select Form Field" : "No Form Fields Available"}
-                  styles={{
-                    container: (base) => ({
-                      ...base,
-                      borderRadius: "0.375rem",
-                      borderColor: "#e5e7eb",
-                      fontSize: "0.875rem",
-                    }),
-                    control: (base) => ({
-                      ...base,
-                      minHeight: "34px",
-                    }),
-                    placeholder: (base) => ({
-                      ...base,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                    }),
-                    groupHeading: (base) => ({
-                      ...base,
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                      textTransform: 'uppercase',
-                      color: '#1f2937',
-                      backgroundColor: '#f9fafb',
-                      padding: '8px 12px',
-                      borderBottom: '1px solid #e5e7eb',
-                    }),
-                    option: (base, { data, isDisabled }) => ({
-                      ...base,
-                      backgroundColor: data.isSubField ? '#f3f4f6' : base.backgroundColor,
-                      color: isDisabled ? '#ccc' : (data.isSubField ? '#374151' : base.color),
-                      paddingLeft: data.isSubField ? '24px' : '12px',
-                      cursor: isDisabled ? 'not-allowed' : 'default',
-                      ':active': {
-                        backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor),
-                      },
-                      ':hover': {
-                        backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : '#f3f4f6'),
-                      },
-                    }),
-                  }}
-                  isClearable
-                  classNamePrefix="select"
-                  formatGroupLabel={(group) => (
-                    <div className="flex items-center">
-                      <span>{group.label}</span>
+              {/* Input Fields Section */}
+              <div className={`grid gap-4 ${formatterConfig.operation === "date_difference" || formatterConfig.operation === "math_operation" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"}`}>
+                {/* First Input Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Input Field</label>
+                  <AntSelect
+                    value={formatterConfig.inputField || undefined}
+                    onChange={(value) => handleFormatterChange("inputField", value || "")}
+                    placeholder={
+                      formFieldOptions().length
+                        ? "Select Form Field"
+                        : "No Form Fields Available"
+                    }
+                    allowClear
+                    showSearch={false}
+                    style={{ width: "100%", marginTop: 4 }}
+                  >
+                    {formFieldOptions().map((group) => (
+                      <OptGroup key={group.label} label={group.label}>
+                        {group.options.map((opt) => (
+                          <Option key={opt.value} value={opt.value}>
+                            <span
+                              style={{
+                                paddingLeft: opt.isSubField ? "16px" : "0px",
+                                color: opt.isSubField ? "#374151" : "#111827",
+                                fontSize: "0.875rem",
+                              }}
+                            >
+                              {opt.label}
+                            </span>
+                          </Option>
+                        ))}
+                      </OptGroup>
+                    ))}
+                  </AntSelect>
+                </div>
+
+                {/* Second Input Field + Toggle (only visible if operation requires it) */}
+                {["date_difference", "math_operation"].includes(formatterConfig.operation) && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
+                      <AntSelect
+                        value={formatterConfig.inputField2 || undefined}
+                        onChange={(value) => handleFormatterChange("inputField2", value || "")}
+                        placeholder={
+                          formFieldOptions(undefined, true).length
+                            ? "Select Second Form Field"
+                            : "No Form Fields Available"
+                        }
+                        allowClear
+                        showSearch={false}
+                        disabled={formatterConfig.useCustomInput}
+                        style={{ width: "100%", marginTop: 4 }}
+                      >
+                        {formFieldOptions(undefined, true).map((group) => (
+                          <OptGroup key={group.label} label={group.label}>
+                            {group.options.map((opt) => (
+                              <Option key={opt.value} value={opt.value}>
+                                <span
+                                  style={{
+                                    paddingLeft: opt.isSubField ? "20px" : "0px",
+                                    color: opt.isSubField ? "#374151" : "#111827",
+                                    fontSize: "0.875rem",
+                                  }}
+                                >
+                                  {opt.label}
+                                </span>
+                              </Option>
+                            ))}
+                          </OptGroup>
+                        ))}
+                      </AntSelect>
                     </div>
-                  )}
-                />
+
+                  </motion.div>
+                )}
               </div>
 
-              {(formatterConfig.operation === "date_difference" || formatterConfig.operation === "math_operation") && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  className="space-y-4"
-                >
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Second Input Field</label>
-                    <Select
-                      value={
-                        safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2)
-                          ? {
-                            value: formatterConfig.inputField2,
-                            label: safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2).name || 'Unknown',
-                            isFormField: true,
-                            isSubField: !!safeFormFields.find(f => f.id === formatterConfig.inputField2 || f.Unique_Key__c === formatterConfig.inputField2)?.parentFieldId,
-                          }
-                          : null
-                      }
-                      onChange={(selected) => handleFormatterChange("inputField2", selected ? selected.value : "")}
-                      options={formFieldOptions(undefined, true)}
-                      placeholder={formFieldOptions(undefined, true).length ? "Select Second Form Field" : "No Form Fields Available"}
-                      styles={{
-                        container: (base) => ({
-                          ...base,
-                          borderRadius: "0.375rem",
-                          borderColor: "#e5e7eb",
-                          fontSize: "0.875rem",
-                        }),
-                        control: (base) => ({
-                          ...base,
-                          minHeight: "34px",
-                        }),
-                        placeholder: (base) => ({
-                          ...base,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }),
-                        menu: (base) => ({
-                          ...base,
-                          zIndex: 9999,
-                        }),
-                        groupHeading: (base) => ({
-                          ...base,
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                          textTransform: 'uppercase',
-                          color: '#1f2937',
-                          backgroundColor: '#f9fafb',
-                          padding: '8px 12px',
-                          borderBottom: '1px solid #e5e7eb',
-                        }),
-                        option: (base, { data, isDisabled }) => ({
-                          ...base,
-                          backgroundColor: data.isSubField ? '#f3f4f6' : base.backgroundColor,
-                          color: isDisabled ? '#ccc' : (data.isSubField ? '#374151' : base.color),
-                          paddingLeft: data.isSubField ? '24px' : '12px',
-                          cursor: isDisabled ? 'not-allowed' : 'default',
-                          ':active': {
-                            backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : base[':active'].backgroundColor),
-                          },
-                          ':hover': {
-                            backgroundColor: !isDisabled && (data.isSubField ? '#e5e7eb' : '#f3f4f6'),
-                          },
-                        }),
-                      }}
-                      isClearable
-                      isDisabled={!formFieldOptions(undefined, true).length || formatterConfig.useCustomInput}
-                      classNamePrefix="select"
-                      formatGroupLabel={(group) => (
-                        <div className="flex items-center">
-                          <span>{group.label}</span>
-                        </div>
-                      )}
+              {["date_difference", "math_operation"].includes(formatterConfig.operation) && (
+                <>
+                  <div className="flex items-center">
+                    <ToggleSwitch
+                      checked={formatterConfig.useCustomInput}
+                      onChange={(e) => handleFormatterChange("useCustomInput", e.target.checked)}
+                      id="custom-input-toggle"
                     />
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={formatterConfig.useCustomInput}
-                        onChange={(e) => handleFormatterChange("useCustomInput", e.target.checked)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Use Custom Input</span>
-                    </label>
+                    <span className="text-sm font-medium text-gray-700 ml-2">Use Custom Input</span>
                   </div>
 
                   {formatterConfig.useCustomInput && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
-                      className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                      className="mt-4"
                     >
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700">
                         {formatterConfig.operation === "date_difference" ? "Custom Compare Date" : "Custom Value"}
                       </label>
-                      <input
-                        type="text"
+                      <Input
                         value={formatterConfig.customValue}
                         onChange={(e) => handleFormatterChange("customValue", e.target.value)}
-                        placeholder={formatterConfig.operation === "date_difference" ? "e.g., 2025-06-20" : "e.g., 200"}
-                        className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder={
+                          formatterConfig.operation === "date_difference" ? "e.g., 2025-06-20" : "e.g., 200"
+                        }
                       />
                     </motion.div>
                   )}
-                </motion.div>
+                </>
               )}
 
               {formatterConfig.formatType === "date" && formatterConfig.operation && (
@@ -2255,159 +2321,122 @@ const ActionPanel = ({
                   className="space-y-4"
                 >
                   {(formatterConfig.operation === "format_date" || formatterConfig.operation === "format_datetime") && (
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
-                      <Select
-                        value={dateFormats.find((opt) => opt.value === formatterConfig.options.format) || null}
-                        onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
-                        options={formatterConfig.operation === "format_date" ? dateFormats : dateTimeFormats}
+                      <AntSelect
+                        value={formatterConfig.options.format || undefined}
+                        onChange={(val) => handleFormatterOptionChange("format", val)}
                         placeholder="Select Date Format"
-                        styles={{
-                          container: (base) => ({
-                            ...base,
-                            borderRadius: "0.375rem",
-                            borderColor: "#e5e7eb",
-                            fontSize: "0.875rem",
-                          }),
-                          control: (base) => ({
-                            ...base,
-                            minHeight: "34px",
-                          }),
-                          menu: (base) => ({
-                            ...base,
-                            zIndex: 9999,
-                          }),
-                        }}
-                        classNamePrefix="select"
-                      />
+                        style={{ width: "100%", marginTop: 4 }}
+                        showSearch={false}
+                        allowClear
+                      >
+                        {(formatterConfig.operation === "format_date" ? dateFormats : dateTimeFormats).map((opt) => (
+                          <Option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </Option>
+                        ))}
+                      </AntSelect>
                     </div>
+
                   )}
 
                   {formatterConfig.operation === "format_time" && (
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Time Format</label>
-                      <Select
-                        value={timeFormats.find((opt) => opt.value === formatterConfig.options.format) || null}
-                        onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
-                        options={timeFormats}
+                      <AntSelect
+                        value={formatterConfig.options.format || undefined}
+                        onChange={(val) => handleFormatterOptionChange("format", val)}
                         placeholder="Select Time Format"
-                        styles={{
-                          container: (base) => ({
-                            ...base,
-                            borderRadius: "0.375rem",
-                            borderColor: "#e5e7eb",
-                            fontSize: "0.875rem",
-                          }),
-                          control: (base) => ({
-                            ...base,
-                            minHeight: "34px",
-                          }),
-                          menu: (base) => ({
-                            ...base,
-                            zIndex: 9999,
-                          }),
-                        }}
-                        classNamePrefix="select"
-                      />
+                        style={{ width: "100%", marginTop: 4 }}
+                        showSearch={false}
+                        allowClear
+                      >
+                        {timeFormats.map((opt) => (
+                          <AntSelect.Option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </AntSelect.Option>
+                        ))}
+                      </AntSelect>
                     </div>
+
                   )}
 
                   {(formatterConfig.operation === "timezone_conversion" || formatterConfig.operation === "format_time" || formatterConfig.operation === "format_datetime") && (
-                    <>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Source Timezone */}
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Source Timezone</label>
-                        <Select
-                          value={timezoneOptions.find((opt) => opt.value === formatterConfig.options.timezone) || null}
-                          onChange={(selected) => handleFormatterOptionChange("timezone", selected ? selected.value : "")}
-                          options={timezoneOptions}
+                        <AntSelect
+                          value={formatterConfig.options.timezone || undefined}
+                          onChange={(val) => handleFormatterOptionChange("timezone", val)}
                           placeholder="Select Source Timezone"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch={false}
+                          allowClear
+                        >
+                          {timezoneOptions.map((opt) => (
+                            <AntSelect.Option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </AntSelect.Option>
+                          ))}
+                        </AntSelect>
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+
+                      {/* Target Timezone */}
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Target Timezone</label>
-                        <Select
-                          value={timezoneOptions.find((opt) => opt.value === formatterConfig.options.targetTimezone) || null}
-                          onChange={(selected) => handleFormatterOptionChange("targetTimezone", selected ? selected.value : "")}
-                          options={timezoneOptions}
+                        <AntSelect
+                          value={formatterConfig.options.targetTimezone || undefined}
+                          onChange={(val) => handleFormatterOptionChange("targetTimezone", val)}
                           placeholder="Select Target Timezone"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch={false}
+                          allowClear
+                        >
+                          {timezoneOptions.map((opt) => (
+                            <AntSelect.Option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </AntSelect.Option>
+                          ))}
+                        </AntSelect>
                       </div>
-                    </>
+                    </div>
+
                   )}
 
                   {(formatterConfig.operation === "add_date" || formatterConfig.operation === "subtract_date") && (
-                    <>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Unit */}
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                        <Select
-                          value={[{ value: "days", label: "Days" }, { value: "months", label: "Months" }, { value: "years", label: "Years" }].find((opt) => opt.value === formatterConfig.options.unit) || null}
-                          onChange={(selected) => handleFormatterOptionChange("unit", selected ? selected.value : "")}
-                          options={[{ value: "days", label: "Days" }, { value: "months", label: "Months" }, { value: "years", label: "Years" }]}
+                        <AntSelect
+                          value={formatterConfig.options.unit || undefined}
+                          onChange={(val) => handleFormatterOptionChange("unit", val)}
                           placeholder="Select Unit"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch={false}
+                          allowClear
+                        >
+                          <AntSelect.Option value="days">Days</AntSelect.Option>
+                          <AntSelect.Option value="months">Months</AntSelect.Option>
+                          <AntSelect.Option value="years">Years</AntSelect.Option>
+                        </AntSelect>
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Value</label>
-                        <input
+
+                      {/* Value */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Value</label>
+                        <Input
                           type="number"
-                          value={formatterConfig.options.value || ""}
-                          onChange={(e) => handleFormatterOptionChange("value", e.target.value)}
+                          value={formatterConfig.options.value || undefined}
+                          onChange={(val) => handleFormatterOptionChange("value", val)}
                           placeholder="e.g., 3"
-                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                          min={1}
+                          style={{ width: "100%" }}
                         />
                       </div>
-                    </>
+                    </div>
                   )}
                 </motion.div>
               )}
@@ -2419,183 +2448,117 @@ const ActionPanel = ({
                   className="space-y-4"
                 >
                   {formatterConfig.operation === "locale_format" && (
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Locale</label>
-                      <Select
-                        value={localeOptions.find((opt) => opt.value === formatterConfig.options.locale) || null}
-                        onChange={(selected) => handleFormatterOptionChange("locale", selected ? selected.value : "")}
-                        options={localeOptions}
+                      <AntSelect
+                        value={formatterConfig.options.locale || undefined}
+                        onChange={(val) => handleFormatterOptionChange("locale", val)}
                         placeholder="Select Locale"
-                        styles={{
-                          container: (base) => ({
-                            ...base,
-                            borderRadius: "0.375rem",
-                            borderColor: "#e5e7eb",
-                            fontSize: "0.875rem",
-                          }),
-                          control: (base) => ({
-                            ...base,
-                            minHeight: "34px",
-                          }),
-                          menu: (base) => ({
-                            ...base,
-                            zIndex: 9999,
-                          }),
-                        }}
-                        classNamePrefix="select"
-                      />
+                        style={{ width: "100%", marginTop: 4 }}
+                        showSearch={false}
+                        allowClear
+                      >
+                        {localeOptions.map((opt) => (
+                          <AntSelect.Option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </AntSelect.Option>
+                        ))}
+                      </AntSelect>
                     </div>
                   )}
                   {formatterConfig.operation === "currency_format" && (
-                    <>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Currency */}
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                        <Select
-                          value={currencyOptions.find((opt) => opt.value === formatterConfig.options.currency) || null}
-                          onChange={(selected) => handleFormatterOptionChange("currency", selected ? selected.value : "")}
-                          options={currencyOptions}
+                        <AntSelect
+                          value={formatterConfig.options.currency || undefined}
+                          onChange={(val) => handleFormatterOptionChange("currency", val)}
                           placeholder="Select Currency"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch
+                          allowClear
+                        >
+                          {currencyOptions.map((opt) => (
+                            <AntSelect.Option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </AntSelect.Option>
+                          ))}
+                        </AntSelect>
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+
+                      {/* Locale */}
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Locale</label>
-                        <Select
-                          value={localeOptions.find((opt) => opt.value === formatterConfig.options.locale) || null}
-                          onChange={(selected) => handleFormatterOptionChange("locale", selected ? selected.value : "")}
-                          options={localeOptions}
+                        <AntSelect
+                          value={formatterConfig.options.locale || undefined}
+                          onChange={(val) => handleFormatterOptionChange("locale", val)}
                           placeholder="Select Locale"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
-                        />
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch
+                          allowClear
+                        >
+                          {localeOptions.map((opt) => (
+                            <AntSelect.Option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </AntSelect.Option>
+                          ))}
+                        </AntSelect>
                       </div>
-                    </>
+                    </div>
+
                   )}
                   {formatterConfig.operation === "round_number" && (
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Decimals</label>
-                      <input
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Decimals</label>
+                      <Input
                         type="number"
-                        value={formatterConfig.options.decimals || ""}
-                        onChange={(e) => handleFormatterOptionChange("decimals", e.target.value)}
+                        value={formatterConfig.options.decimals ?? undefined}
+                        onChange={(val) => handleFormatterOptionChange("decimals", val ?? "")}
                         placeholder="e.g., 2"
-                        className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
-                        min="0"
+                        min={0}
+                        style={{ width: "100%" }}
                       />
                     </div>
+
                   )}
                   {formatterConfig.operation === "phone_format" && (
-                    <>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Country Code</label>
-                        <Select
-                          value={countryOptions.find((opt) => opt.value === formatterConfig.options.countryCode) || null}
-                          onChange={(selected) => handleFormatterOptionChange("countryCode", selected ? selected.value : "")}
+                        <AntSelect
+                          value={formatterConfig.options.countryCode || undefined}
+                          onChange={(val) => handleFormatterOptionChange("countryCode", val)}
                           options={countryOptions}
                           placeholder="Select Country Code"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch
+                          optionFilterProp="label"
                         />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                        <Select
-                          value={phoneFormatOptions.find((opt) => opt.value === formatterConfig.options.format) || null}
-                          onChange={(selected) => handleFormatterOptionChange("format", selected ? selected.value : "")}
+                        <AntSelect
+                          value={formatterConfig.options.format || undefined}
+                          onChange={(val) => handleFormatterOptionChange("format", val)}
                           options={phoneFormatOptions}
                           placeholder="Select Format"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
+                          style={{ width: "100%", marginTop: 4 }}
                         />
                       </div>
-                    </>
+
+                    </div>
                   )}
                   {formatterConfig.operation === "math_operation" && (
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
-                      <Select
-                        value={[{ value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "multiply", label: "Multiply" }, { value: "divide", label: "Divide" }].find((opt) => opt.value === formatterConfig.options.operation) || null}
-                        onChange={(selected) => handleFormatterOptionChange("operation", selected ? selected.value : "")}
-                        options={[{ value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "multiply", label: "Multiply" }, { value: "divide", label: "Divide" }]}
+                      <AntSelect
+                        value={formatterConfig.options.operation || undefined}
+                        onChange={(val) => handleFormatterOptionChange("operation", val)}
+                        options={operationOptions}
                         placeholder="Select Operation"
-                        styles={{
-                          container: (base) => ({
-                            ...base,
-                            borderRadius: "0.375rem",
-                            borderColor: "#e5e7eb",
-                            fontSize: "0.875rem",
-                          }),
-                          control: (base) => ({
-                            ...base,
-                            minHeight: "34px",
-                          }),
-                          menu: (base) => ({
-                            ...base,
-                            zIndex: 9999,
-                          }),
-                        }}
-                        classNamePrefix="select"
+                        style={{ width: "100%", marginTop: 4 }}
                       />
                     </div>
                   )}
@@ -2609,68 +2572,50 @@ const ActionPanel = ({
                   className="space-y-4"
                 >
                   {formatterConfig.operation === "replace" && (
-                    <>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Search Value</label>
-                        <input
-                          type="text"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Search Value</label>
+                        <Input
                           value={formatterConfig.options.searchValue || ""}
                           onChange={(e) => handleFormatterOptionChange("searchValue", e.target.value)}
                           placeholder="Text to replace"
-                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Replace Value</label>
-                        <input
-                          type="text"
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Replace Value</label>
+                        <Input
                           value={formatterConfig.options.replaceValue || ""}
                           onChange={(e) => handleFormatterOptionChange("replaceValue", e.target.value)}
                           placeholder="Replacement text"
-                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
-                    </>
+                    </div>
                   )}
                   {formatterConfig.operation === "split" && (
-                    <>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Delimiter</label>
-                        <input
-                          type="text"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Delimiter</label>
+                        <Input
                           value={formatterConfig.options.delimiter || ""}
                           onChange={(e) => handleFormatterOptionChange("delimiter", e.target.value)}
                           placeholder="e.g., ,"
-                          className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Index</label>
-                        <Select
-                          value={splitIndexOptions.find((opt) => opt.value === formatterConfig.options.index) || null}
-                          onChange={(selected) => handleFormatterOptionChange("index", selected ? selected.value : "")}
+                        <AntSelect
+                          value={formatterConfig.options.index || undefined}
+                          onChange={(value) => handleFormatterOptionChange("index", value)}
                           options={splitIndexOptions}
                           placeholder="Select Index"
-                          styles={{
-                            container: (base) => ({
-                              ...base,
-                              borderRadius: "0.375rem",
-                              borderColor: "#e5e7eb",
-                              fontSize: "0.875rem",
-                            }),
-                            control: (base) => ({
-                              ...base,
-                              minHeight: "34px",
-                            }),
-                            menu: (base) => ({
-                              ...base,
-                              zIndex: 9999,
-                            }),
-                          }}
-                          classNamePrefix="select"
+                          style={{ width: "100%", marginTop: 4 }}
+                          showSearch={false} // disables search
+                          allowClear
                         />
                       </div>
-                    </>
+
+                    </div>
                   )}
                 </motion.div>
               )}
@@ -2686,7 +2631,7 @@ const ActionPanel = ({
             </button>
             <button
               onClick={saveLocalMappings}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+              className="px-4 py-2 text-sm font-medium save-local"
             >
               Save
             </button>
@@ -2696,6 +2641,7 @@ const ActionPanel = ({
     </motion.div>
   );
 };
+
 const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
   const STRING_OPERATORS = [
     { label: "Equals", value: "=" },
@@ -2705,129 +2651,97 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
     { label: "Starts With", value: "STARTS WITH" },
     { label: "Ends With", value: "ENDS WITH" }
   ];
-  
-  const colType = condition.fieldType || 'string';
+
   const operators = STRING_OPERATORS;
 
   return (
-    <motion.div 
-      key={index} 
-      layout 
-      initial={{ opacity: 0, x: -20 }} 
-      animate={{ opacity: 1, x: 0 }} 
-      exit={{ opacity: 0, x: 20 }}
-      style={{ display:'flex', gap:12, alignItems:'center', marginBottom:10 }}
+    <motion.div
+      key={index}
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="group relative grid grid-cols-12 gap-3 items-center py-2 hover:bg-gray-50 rounded-md transition-colors duration-150"
     >
-      {/* Left: Column select */}
-      <AntSelect
-        style={{ width: 150 }}
-        placeholder="Select Column"
-        value={condition.field || undefined}
-        onChange={value => {
-          onChange(index, { 
-            field: value, 
-            operator: '', 
-            value: '' 
-          });
-        }}
-        options={columns.map(c => ({ label: c, value: c }))}
-      />
+      {/* Numbering column */}
+      <div className="col-span-1 flex items-center justify-center">
+        <div className="condition-number">{index + 1})</div>
+      </div>
 
-       {/* Center: Operator select */}
-       <AntSelect
-        style={{ width: 180 }}
-        placeholder="Select Operator"
-        value={condition.operator || undefined}
-        onChange={operator => onChange(index, { ...condition, operator })}
-        options={operators.map(op => ({ label: op.label, value: op.value }))}
-        disabled={!condition.field}
-      />
+      {/* Field column */}
+      <div className="col-span-4">
+        <AntSelect
+          style={{ width: "100%" }}
+          placeholder="Select Column"
+          value={condition.field || undefined}
+          onChange={(value) =>
+            onChange(index, {
+              field: value,
+              operator: "",
+              value: "",
+            })
+          }
+          options={columns.map((c) => ({ label: c, value: c }))}
+          allowClear
+          size="small"
+        />
+      </div>
 
-      {/* Right: Value input (conditional) */}
-       {/* Right: Value input */}
-       <Input
-        style={{ width: 150 }}
-        placeholder="Enter Value"
-        value={condition.value || ''}
-        onChange={e => onChange(index, {...condition, value: e.target.value })}
-        disabled={!condition.operator}
-      />
+      {/* Operator column */}
+      <div className="col-span-2">
+        <AntSelect
+          style={{ width: "100%" }}
+          placeholder="Operator"
+          value={condition.operator || undefined}
+          onChange={(operator) => onChange(index, { ...condition, operator })}
+          options={operators.map((op) => ({ label: op.label, value: op.value }))}
+          disabled={!condition.field}
+          size="small"
+        />
+      </div>
 
-      {/* Remove button */}
-      <Button danger size="small" onClick={() => onRemove(index)}>-</Button>
+      {/* Value column */}
+      <div className="col-span-4">
+        <Input
+          style={{ width: "100%" }}
+          placeholder={
+            condition.operator === "BETWEEN" ? "From Value" : "Enter Value"
+          }
+          value={condition.value || ""}
+          onChange={(e) =>
+            onChange(index, { ...condition, value: e.target.value })
+          }
+          disabled={!condition.operator}
+          size="small"
+        />
+      </div>
+
+      {/* Delete button column */}
+      <div className="col-span-1 flex justify-center opacity-30 group-hover:opacity-100 transition-opacity duration-150">
+        <button
+          onClick={() => onRemove(index)}
+          className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+          title="Remove condition"
+        >
+          <svg width="14" height="14" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M11.7601 1C11.8925 1 12 1.09029 12 1.20166V1.79833C12 1.90971 11.8925 2 11.7601 2H0.240001C0.107452 2 0 1.90971 0 1.79833V1.20166C0 1.09029 0.107452 1 0.240001 1H3.42661C3.96661 1 4.40521 0.450497 4.40521 0H7.59482C7.59482 0.450497 8.03282 1 8.57343 1H11.7601Z" fill="#0B0A0A" />
+            <path d="M11.4678 4.4502L9.61816 15.5498H2.38184L0.532227 4.4502H11.4678Z" fill="white" stroke="#262626ff" stroke-width="0.89999" />
+          </svg>
+        </button>
+      </div>
     </motion.div>
   );
+
 };
 
-const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, setsheetLogicType ,customLogic,setCustomLogic ,updateMultiple ,setUpdateMultiple }) => {
+const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, setsheetLogicType, customLogic, setCustomLogic, updateMultiple, setUpdateMultiple }) => {
   const selectedLogic = sheetlogicType || 'AND';
-  console.log('selectedlogic', selectedLogic)
-  const onConditionChange = (index, updatedCondition) => {
-    setConditions(conds => conds.map((c,i) => i === index ? updatedCondition : c));
-  };
+  const [conditionsEnabled, setConditionsEnabled] = useState(false);
 
   const onAddCondition = () => {
-    setConditions(conds => [...conds, {field:'', operator:'', value:'', fieldType:''}]);
+    setConditions(conds => [...conds, { field: '', operator: '', value: '', fieldType: '' }]);
   };
 
-  const onRemoveCondition = (index) => {
-    setConditions(conds => conds.filter((_,i) => i !== index));
-  };
-  const validateCustomLogic = (logic, conditionsLength) => {
-    // Tokenize input
-    const tokens = logic
-      .toUpperCase()
-      .replace(/\s+/g, " ")
-      .trim()
-      .split(" ");
-  
-    let errors = [];
-  
-    // Validate individual tokens
-    tokens.forEach((token, i) => {
-      if (/^\d+$/.test(token)) {
-        const num = parseInt(token, 10);
-        if (num < 1 || num > conditionsLength) {
-          errors.push(`Condition ${num} does not exist.`);
-        }
-      } else if (!["AND", "OR", "(", ")", ""].includes(token)) {
-        errors.push(`Invalid token "${token}"`);
-      }
-    });
-  
-    // Check for invalid operator sequences
-    for (let i = 0; i < tokens.length - 1; i++) {
-      if (
-        ["AND", "OR"].includes(tokens[i]) &&
-        ["AND", "OR"].includes(tokens[i + 1])
-      ) {
-        errors.push(`Operators '${tokens[i]}' and '${tokens[i + 1]}' cannot be together—must be separated by a condition.`);
-      }
-    }
-  
-    // Check brackets balance
-    let balance = 0;
-    for (let ch of logic) {
-      if (ch === "(") balance++;
-      else if (ch === ")") balance--;
-      if (balance < 0) {
-        errors.push("Too many closing brackets");
-        break;
-      }
-    }
-    if (balance > 0) errors.push("Unclosed brackets");
-  
-    // Optionally check if logic starts/ends with AND/OR (which is usually invalid)
-    if (["AND", "OR"].includes(tokens[0])) {
-      errors.push("Logic cannot start with an operator.");
-    }
-    if (["AND", "OR"].includes(tokens[tokens.length - 1])) {
-      errors.push("Logic cannot end with an operator.");
-    }
-  
-    return errors;
-  };
-  
   const handleKeyDown = (e) => {
     if (e.key === " " || e.key === "Enter") {
       // Use the value just before space is added
@@ -2844,7 +2758,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
       }
     }
   };
-  
+
   if (!columns || columns?.length === 0) {
     // If no columns, do not show condition panel
     setsheetLogicType('AND')
@@ -2853,126 +2767,228 @@ const ConditionsPanel = ({ columns, conditions, setConditions , sheetlogicType, 
 
   return (
     <div style={{ marginTop: 24 }}>
-      <Switch 
-        checked={conditions?.length > 0} 
-        onChange={enabled => {
-          if (!enabled) setConditions([]);
-          else onAddCondition();
-        }}
-        style={{ marginBottom: 12 }}
-      /> Enable Conditions
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-        <label className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            checked={updateMultiple}
-            onChange={() => setUpdateMultiple(!updateMultiple)}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-          />
-          <span className="text-sm font-medium text-gray-700">Update Multiple Records</span>
-        </label>
-      </div>
-      {/* New AND/OR selector */}
-      {conditions.length > 1 && (
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ marginRight: 10, fontWeight: 600 }}>Conditions Logic:</label>
-          <Select
-            style={{ width: 160 }}
-            value={selectedLogic}
-            onChange={value => {
-              setsheetLogicType(value.value);
-              if (value !== 'Custom') setCustomLogic('');
-            }}
-            options={[
-              { label: 'AND', value: 'AND' },
-              { label: 'OR', value: 'OR' },
-              { label: 'Custom', value: 'Custom' }
-            ]}
-          />
-        </div>
-      )}  
-       {sheetlogicType === 'Custom' && conditions.length > 1  && (
-      <div style={{ marginBottom:16 }}>
-        <textarea
-          value={customLogic}
-          onChange={e => {
-            const newLogic = e.target.value;
-            console.log('NEw logic',newLogic)
-            setCustomLogic(newLogic);
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder='e.g., (1 AND 2) OR 3'
-          style={{
-            width: '100%',
-            minHeight: 60,
-            padding: 8,
-            fontSize: 14,
-            borderRadius: 4,
-            borderColor: '#ccc',
-            marginBottom: 8,
-            fontFamily: 'monospace',
-            resize: 'vertical'
+      <div className="mb-4 flex items-center">
+        <ToggleSwitch
+          checked={conditionsEnabled}
+          onChange={() => {
+            if (conditionsEnabled) {
+              // Turning OFF
+              setConditions([]);
+              setConditionsEnabled(false);
+            } else {
+              // Turning ON
+              setConditionsEnabled(true);
+              if (conditions.length === 0) {
+                setConditions([{ field: '', operator: '', value: '', fieldType: '' }]);
+              }
+            }
           }}
         />
-
-        {/* Validation */}
-        {customLogic && (
-          validateCustomLogic(customLogic, conditions.length).length > 0 ? (
-            <div style={{ color: "red", fontSize: 13 }}>
-              {validateCustomLogic(customLogic, conditions.length).map((err, idx) => (
-                <div key={idx}>⚠ {err}</div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ color: "green", fontSize: 13 }}>
-              ✅ Logic looks good
-            </div>
-          )
-        )}
+        <span className="text-sm font-medium text-gray-700">
+          Enable Conditions
+        </span>
       </div>
-    )}
 
-      <AnimatePresence>
-      {conditions.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            style={{ overflow: 'hidden' }}
-          >
-            {conditions.map((cond, i) => (
-              <ConditionRow
-                key={i}
-                index={i}
-                condition={cond}
-                onChange={(idx, updatedCond) =>
-                  setConditions(conds => conds.map((c, ii) => (ii === idx ? updatedCond : c)))
-                }
-                onRemove={idx => setConditions(conds => conds.filter((_, ii) => ii !== idx))}
-                columns={columns}
-              />
-            ))}
+      <div className="mb-4 flex items-center">
+        <ToggleSwitch
+          checked={updateMultiple}
+          onChange={() => setUpdateMultiple(!updateMultiple)}
+          id="multiple-update-toggle"
+        />
+        <span className="text-sm font-medium text-gray-700">
+          Update Multiple Records
+        </span>
+      </div>
+      {conditionsEnabled && (
+        <>
+          {/* New AND/OR selector */}
+          {conditions.length > 1 && (
+            <div className="mb-4">
+              <label className="block font-semibold mb-2">
+                Conditions Logic
+              </label>
 
-            <Button type="dashed" onClick={() => setConditions(conds => [...conds, { field: '', operator: '', value: '', fieldType: '' }])}>
-              + Add Condition
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <div className="grid grid-cols-3 gap-3 items-center">
+                {/* Dropdown 1/3 */}
+                <div className="col-span-1">
+                  <Select
+                    className="w-full"
+                    value={
+                      selectedLogic
+                        ? { label: selectedLogic, value: selectedLogic }
+                        : null
+                    }
+                    onChange={(option) => {
+                      setsheetLogicType(option.value);
+                      if (option.value !== "Custom") setCustomLogic("");
+                    }}
+                    options={[
+                      { label: "AND", value: "AND" },
+                      { label: "OR", value: "OR" },
+                      { label: "Custom", value: "Custom" }
+                    ]}
+                    menuPortalTarget={document.body}
+                    styles={{
+                      menuPortal: base => ({ ...base, zIndex: 9999 })
+                    }}
+
+                  />
+                </div>
+
+                {/* Custom input 2/3 */}
+                {sheetlogicType === "Custom" && (
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={customLogic}
+                      onChange={(e) => setCustomLogic(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="e.g., (1 AND 2) OR 3"
+                      className="w-full px-2 py-2 text-sm font-mono border border-gray-300 rounded"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Validation */}
+              {sheetlogicType === "Custom" && customLogic && (
+                validateCustomLogic(customLogic, conditions.length).length > 0 ? (
+                  <div className="text-red-600 text-sm mt-2">
+                    {validateCustomLogic(customLogic, conditions.length).map((err, idx) => (
+                      <div key={idx}>⚠ {err}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-green-600 text-sm mt-2">
+                    ✅ Logic looks good
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          <AnimatePresence>
+            {conditions.length > 0 && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                style={{ overflow: 'hidden' }}
+              >
+                {/* Container */}
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-visible relative z-10">
+                  {/* Header */}
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <h3 className="text-sm font-medium text-gray-700 flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 mr-2 text-blue-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
+                        />
+                      </svg>
+                      Conditions
+                    </h3>
+                  </div>
+
+                  <div className="p-4 space-y-1 relative">
+                    {/* Column headers */}
+                    <div className="grid grid-cols-12 gap-3 items-center pb-2 mb-2 border-b border-gray-100">
+                      <div className="col-span-1">
+                        <span className="text-xs font-medium text-gray-500"></span>
+                      </div>
+                      <div className="col-span-4">
+                        <label className="block text-xs font-medium text-gray-500 uppercase">
+                          Field
+                        </label>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 uppercase">
+                          Operator
+                        </label>
+                      </div>
+                      <div className="col-span-4">
+                        <label className="block text-xs font-medium text-gray-500 uppercase">
+                          Value
+                        </label>
+                      </div>
+                      <div className="col-span-1"></div>
+                    </div>
+
+                    {/* Rows */}
+                    {conditions.map((cond, i) => (
+                      <ConditionRow
+                        key={i}
+                        index={i}
+                        condition={cond}
+                        onChange={(idx, updatedCond) =>
+                          setConditions(conds =>
+                            conds.map((c, ii) => (ii === idx ? updatedCond : c))
+                          )
+                        }
+                        onRemove={idx =>
+                          setConditions(conds => conds.filter((_, ii) => ii !== idx))
+                        }
+                        columns={columns}
+                      />
+                    ))}
+
+                    {/* Add Condition button */}
+                    <button
+                      onClick={() =>
+                        setConditions(conds => [
+                          ...conds,
+                          { field: '', operator: '', value: '', fieldType: '' }
+                        ])
+                      }
+                      className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium mt-3"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 mr-1"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      Add Condition
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        </>
+      )}
     </div>
   );
 };
 
-const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, onSave , sheetconditions , setsheetConditions , instanceUrl , userId,sfToken ,conditionsLogic , setConditionsLogic ,sheetcustomLogic , setsheetCustomLogic ,spreadsheetId , setSpreadsheetId , updateMultiple , setUpdateMultiple , setFindGoogleSheetColumns}) => {
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, sheetconditions, setsheetConditions, instanceUrl, userId, sfToken, conditionsLogic, setConditionsLogic, sheetcustomLogic, setsheetCustomLogic, spreadsheetId, setSpreadsheetId, updateMultiple, setUpdateMultiple, setFindGoogleSheetColumns }) => {
   const [error, setError] = useState("");
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedColumns, setSelectedColumns] = useState([]);
   const [conditionsEnabled, setConditionsEnabled] = useState(false);
-  
-  
+
+
   async function fetchSpreadsheets({ instanceUrl, sfToken, userId }) {
-    const apiUrl = "https://cf3u7v2ap9.execute-api.us-east-1.amazonaws.com/fetch";
+    const apiUrl = process.env.REACT_APP_GOOGLE_SHEET;
+    console.log(apiUrl);
 
     if (!instanceUrl || !sfToken || !userId) {
       throw new Error("Missing required parameters: instanceUrl, sfToken, userId");
@@ -3050,44 +3066,44 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
       }
     }
 
-   // Only fetch if spreadsheetId not set — else skip to avoid unnecessary API call
-   // Only fetch spreadsheets if they are not already loaded or if spreadsheetId exists but columns are not loaded
-     if (spreadsheets.length === 0 || (spreadsheetId && selectedColumns.length === 0)) {
+    // Only fetch if spreadsheetId not set — else skip to avoid unnecessary API call
+    // Only fetch spreadsheets if they are not already loaded or if spreadsheetId exists but columns are not loaded
+    if (spreadsheets.length === 0 || (spreadsheetId && selectedColumns.length === 0)) {
       loadSpreadsheets();
-    } 
-  }, [instanceUrl, sfToken, userId , fieldMappings.length, spreadsheets.length, selectedColumns.length]);
-  // Handler when spreadsheet is selected
- // When a spreadsheet is selected, update sheetName and set its columns
- const onSpreadsheetChange = (spreadsheetId) => {
-  const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
-  if (selected) {
-    setSheetName(selected.spreadsheetName);
-    setSelectedColumns(selected.columns || []);
-    setSpreadsheetId(selected.spreadsheetId)
-    setsheetConditions([]); // Clear conditions when changing spreadsheet
-    setsheetCustomLogic(''); // Reset custom logic
-    // setConditionsEnabled(true); // Enable conditions when a new spreadsheet is selected
-    if(selected.columns[0]){
-       // Populate fieldMappings automatically based on columns
-       setsheetConditions([])
-    const newMappings = selected.columns[0]
-    .map(col => ({
-      column: col,
-      id: "",     // no form field selected yet
-      name: "",
-      label: col  // keep label as trimmed column
-    }));
-      setFieldMappings(newMappings);
-    } else {
-      setSheetName("");
-      setSelectedColumns([]);
-      setSpreadsheetId(undefined);
-      setFieldMappings([]);
-      setsheetConditions([]);
-      setConditionsLogic('AND');
-      setsheetCustomLogic('');
-      // setConditionsEnabled(false);
     }
+  }, [instanceUrl, sfToken, userId, fieldMappings.length, spreadsheets.length, selectedColumns.length]);
+  // Handler when spreadsheet is selected
+  // When a spreadsheet is selected, update sheetName and set its columns
+  const onSpreadsheetChange = (spreadsheetId) => {
+    const selected = spreadsheets.find(s => s.spreadsheetId === spreadsheetId);
+    if (selected) {
+      setSheetName(selected.spreadsheetName);
+      setSelectedColumns(selected.columns || []);
+      setSpreadsheetId(selected.spreadsheetId)
+      setsheetConditions([]); // Clear conditions when changing spreadsheet
+      setsheetCustomLogic(''); // Reset custom logic
+      // setConditionsEnabled(true); // Enable conditions when a new spreadsheet is selected
+      if (selected.columns[0]) {
+        // Populate fieldMappings automatically based on columns
+        setsheetConditions([])
+        const newMappings = selected.columns[0]
+          .map(col => ({
+            column: col,
+            id: "",     // no form field selected yet
+            name: "",
+            label: col  // keep label as trimmed column
+          }));
+        setFieldMappings(newMappings);
+      } else {
+        setSheetName("");
+        setSelectedColumns([]);
+        setSpreadsheetId(undefined);
+        setFieldMappings([]);
+        setsheetConditions([]);
+        setConditionsLogic('AND');
+        setsheetCustomLogic('');
+        // setConditionsEnabled(false);
+      }
     }
   };
   // Add a new mapping entry
@@ -3120,28 +3136,6 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
     setFieldMappings(updated);
   };
 
-  // Validation & Save
-  const handleSave = () => {
-    if (!sheetName) {
-      setError("Please provide a sheet name.");
-      return;
-    }
-    const hasError = fieldMappings.some(m => !m.column || !m.id);
-    if (hasError) {
-      setError("Please map all columns and form fields.");
-      return;
-    }
-    const columnNames = fieldMappings.map(m => m.column);
-    if (new Set(columnNames).size !== columnNames.length) {
-      setError("Sheet column names must be unique.");
-      return;
-    }
-    setError("");
-    message.success("Mapping config saved!");
-    console.log('SpreadsheetId', spreadsheetId);
-    onSave(spreadsheetId);
-  };
-
   // For left-side column suggestions (show already used columns + allow new)
   const usedColumns = fieldMappings.map(m => m.column).filter(n => !!n);
   const columnOptions = usedColumns.map(col => ({ value: col, label: col }));
@@ -3149,19 +3143,14 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
-        {/* <label style={{ fontWeight: 600 }}>Sheet Name</label>
-        <input
-          style={{ marginTop: 4, maxWidth: 300, padding: 8, border: "1px solid #eee", borderRadius: 4 }}
-          value={sheetName}
-          onChange={e => setSheetName(e.target.value)}
-          placeholder="Google Sheet Name"
-        /> */}
-        <label style={{ fontWeight: 600, marginRight: 10 }}>Select Spreadsheet</label>
+        <label style={{ fontWeight: 600, marginRight: 15 }}>
+          {loading ? "Loading Spreadsheets..." : "Select Spreadsheet"}
+        </label>
         {loading ? (
           <Spin />
         ) : (
           <AntSelect
-            style={{ width: 300 }}
+            style={{ marginTop: 10 }}
             placeholder="Select a spreadsheet"
             value={sheetName || undefined}
             onChange={onSpreadsheetChange}
@@ -3181,79 +3170,112 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
         )}
 
       </div>
-      <div>
-        <label style={{ fontWeight: 600 }}>Column &rarr; Form Field Mapping</label>
-        <AnimatePresence>
-          {fieldMappings.map((mapping, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              style={{
-                display: "flex",
-                gap: 16,
-                alignItems: "center",
-                marginBottom: 12,
-                background: "#f9fafb",
-                padding: 12,
-                borderRadius: 8,
-                border: error && (!mapping.column || !mapping.id) ? "1px solid #ff4d4f" : "1px solid #e5e7eb",
-                boxShadow: "0 2px 8px 0 rgba(0,0,0,0.03)",
-              }}
-            >
-              <CreatableSelect
-                style={{ width: 170 }}
-                placeholder="Sheet Column"
-                value={mapping.column ? { value: mapping.column, label: mapping.label } : null}
-                onChange={val => handleColumnChange(index, val)}
-                options={formFields
-                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
-                  .map(f => ({ value: f.id, label: f.name }))}
-                isClearable
-                size="middle"
+      {!loading && (
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-visible relative z-10">
+          {/* Header */}
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+            <h3 className="text-sm font-medium text-gray-700 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              Form Field Mapping with Google Sheet Columns
+            </h3>
+          </div>
 
-                // Prevent duplication of column names already chosen elsewhere
-                isOptionDisabled={option =>
-                  fieldMappings.some((m, i) => m.column === option.value && i !== index)
-                }
-              />
-              <motion.div
-                initial={{ scale: 0.67, opacity: 0.7 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: "spring", duration: 0.45 }}
-                style={{ pointerEvents: "none" }}
-              >
-                <ArrowRightOutlined style={{ fontSize: 22, color: "#1890ff" }} />
-              </motion.div>
-              <Select
-                style={{ width: 170 }}
-                placeholder="Form Field"
-                value={mapping.id ? { value: mapping.id, label: mapping.name } : null}
-                onChange={val => handleFieldChange(index, val)}
-                options={formFields
-                  .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
-                  .map(f => ({ value: f.id, label: f.name }))
-                }
-                showSearch
-                allowClear
-                size="middle"
-              />
-              <Button
-                danger
-                onClick={() => removeFieldMapping(index)}
-                disabled={fieldMappings.length <= 1}
-                type="default"
-              >
-                Remove
-              </Button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        <Button onClick={addFieldMapping} type="primary" style={{ marginTop: 6 }}>
-          Add More Fields
-        </Button>
-      </div>
+          <div className="p-4 space-y-1 relative">
+            {/* Header row */}
+            <div className="grid grid-cols-12 gap-3 items-center pb-2 mb-2 border-b border-gray-100">
+              <div className="col-span-5">
+                <label className="block text-xs font-medium text-gray-500 uppercase">
+                  Sheet Column
+                </label>
+              </div>
+              <div className="col-span-6">
+                <label className="block text-xs font-medium text-gray-500 uppercase">
+                  Form Field
+                </label>
+              </div>
+              <div className="col-span-1" />
+            </div>
+
+            {/* Mapping rows */}
+            <AnimatePresence>
+              {fieldMappings.map((mapping, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className={`group relative grid grid-cols-12 gap-3 items-center py-2 hover:bg-gray-50 rounded-md transition-colors duration-150 ${error && (!mapping.column || !mapping.id) ? "border border-red-400" : ""
+                    }`}
+                >
+                  {/* Sheet Column */}
+                  <div className="col-span-5 relative">
+                    <CreatableSelect
+                      value={mapping.column ? { value: mapping.column, label: mapping.label } : null}
+                      onChange={val => handleColumnChange(index, val)}
+                      options={formFields
+                        .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                        .map(f => ({ value: f.id, label: f.name }))}
+                      isClearable
+                      placeholder="Select column"
+                      styles={{
+                        container: base => ({ ...base, fontSize: "0.875rem" }),
+                        control: base => ({ ...base, minHeight: "36px" }),
+                      }}
+                    />
+                  </div>
+
+                  {/* Form Field */}
+                  <div className="col-span-6 relative">
+                    <Select
+                      value={mapping.id ? { value: mapping.id, label: mapping.name } : null}
+                      onChange={val => handleFieldChange(index, val)}
+                      options={formFields
+                        .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
+                        .map(f => ({ value: f.id, label: f.name }))}
+                      isClearable
+                      placeholder="Select field"
+                      styles={{
+                        container: base => ({ ...base, fontSize: "0.875rem" }),
+                        control: base => ({ ...base, minHeight: "36px" }),
+                      }}
+                    />
+                  </div>
+
+                  {/* Remove Button */}
+                  <div className="col-span-1 flex justify-center opacity-30 group-hover:opacity-100 transition-opacity duration-150">
+                    {fieldMappings.length > 1 && (
+                      <button
+                        onClick={() => removeFieldMapping(index)}
+                        className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                        title="Remove mapping"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 13 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M11.7601 1C11.8925 1 12 1.09029 12 1.20166V1.79833C12 1.90971 11.8925 2 11.7601 2H0.240001C0.107452 2 0 1.90971 0 1.79833V1.20166C0 1.09029 0.107452 1 0.240001 1H3.42661C3.96661 1 4.40521 0.450497 4.40521 0H7.59482C7.59482 0.450497 8.03282 1 8.57343 1H11.7601Z" fill="#0B0A0A" />
+                          <path d="M11.4678 4.4502L9.61816 15.5498H2.38184L0.532227 4.4502H11.4678Z" fill="white" stroke="#262626ff" strokeWidth="0.9" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+
+            {/* Add More Fields Button */}
+            <button
+              onClick={addFieldMapping}
+              className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium mt-3"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Field Mapping
+            </button>
+          </div>
+        </div>
+
+      )}
       {error && <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -3261,11 +3283,11 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
       >
         {error}
       </motion.div>}
-       {spreadsheetId && (
-        <ConditionsPanel 
-          columns={selectedColumns.flat()} 
-          conditions={sheetconditions} 
-          setConditions={setsheetConditions} 
+      {spreadsheetId && (
+        <ConditionsPanel
+          columns={selectedColumns.flat()}
+          conditions={sheetconditions}
+          setConditions={setsheetConditions}
           sheetlogicType={conditionsLogic}
           setsheetLogicType={setConditionsLogic}
           customLogic={sheetcustomLogic}
@@ -3274,9 +3296,6 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
           setUpdateMultiple={setUpdateMultiple}
         />
       )}
-      <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-end", gap: 12 }}>
-        <Button onClick={handleSave} type="primary">Save</Button>
-      </div>
     </div>
   );
 };
@@ -3284,7 +3303,6 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
 const GoogleSheetFindPanel = ({
   instanceUrl, userId, token,
   sheetsApiUrl, // API endpoint for list of sheets
-  onSave, // callback with config
   initialConfig // { spreadsheetId, sheetName, columnMappings, conditions, returnLimit, sortField, sortOrder }
 }) => {
   const [spreadsheets, setSpreadsheets] = useState([]);
@@ -3299,12 +3317,17 @@ const GoogleSheetFindPanel = ({
   const [findreturnLimit, setReturnLimit] = useState(initialConfig?.googleSheetReturnLimit || "");
   const [findsortField, setSortField] = useState(initialConfig?.googleSheetSortField || "");
   const [findsortOrder, setSortOrder] = useState(initialConfig?.googleSheetSortOrder || "ASC");
-  const [findupdateMultiple , setupdateMultiple] = useState(initialConfig?.updateMultiple);
+  const [findupdateMultiple, setupdateMultiple] = useState(initialConfig?.updateMultiple);
   const [error, setError] = useState("");
-  const [findname , setfindname] = useState(initialConfig?.findNodeName || "Default")
+  const [accordionOpen, setAccordionOpen] = useState({
+    findreturnLimit: false,
+    findsortRecords: false,
+  });
+
   // Fetch spreadsheets on mount or when dependencies change
   useEffect(() => {
     if (!instanceUrl || !userId || !token || !sheetsApiUrl) return;
+
     const url = new URL(sheetsApiUrl);
     url.searchParams.append("instanceUrl", instanceUrl);
     url.searchParams.append("sfToken", token);
@@ -3313,7 +3336,8 @@ const GoogleSheetFindPanel = ({
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        setSpreadsheets(data.spreadsheets || []);
+        const list = data.spreadsheets || [];
+        setSpreadsheets(list);
       })
       .catch(err => {
         setError("Failed to fetch Google Sheets: " + err.message);
@@ -3341,55 +3365,15 @@ const GoogleSheetFindPanel = ({
     label: col
   }));
 
-  // Validation and save handler
-  const handleSave = () => {
-    if (!spreadsheetId || !sheetName) {
-      setError("Please select a Google Sheet.");
-      return;
-    }
-    if (findreturnLimit && (isNaN(findreturnLimit) || findreturnLimit < 1 || findreturnLimit > 100)) {
-      setError("Return Limit must be a number between 1 and 100.");
-      return;
-    }
-    if (findsortField && !columns.includes(findsortField)) {
-      setError("Sort field must correspond to a column in the selected sheet.");
-      return;
-    }
-    // You can add more validations as needed
-
-    const config = {
-      findNodeName: findname,                  // name entered by user
-      selectedSheetName: sheetName,            // sheet display name
-      findSheetConditions: findconditions ,   // array of conditions
-      updateMultiple: findupdateMultiple , // boolean flag
-      googleSheetReturnLimit: findreturnLimit ,    // limit on rows
-      googleSheetSortOrder: findsortOrder,       // field/column to sort by
-      googleSheetSortField : findsortField,
-      spreadsheetId,
-      logicType : findlogicType,
-      customLogic : findcustomLogic,
-      sheetColumns : columns
-    };
-    console.log(config)
-    onSave(config);
-    // Hand off to parent handler for storage (e.g., ActionPanel)
-    message.success("FindGoogleSheet configuration saved!");
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, x: 60 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3 }}
-      className="bg-white p-6 rounded-xl border border-gray-200 shadow-xl w-full max-w-lg"
     >
       {/* Sheet selection */}
       <div className="mb-4">
-      <motion.div layout className="mb-4">
-        <label className="font-medium block mb-1">Name : </label>
-        <Input type="text" onChange={(e) => setfindname(e.target.value)} placeholder="Enter Name.." value={findname}/>
-        </motion.div>
-        <label className="font-medium mb-2 block">Select Google Sheet</label>
+        <label className="font-medium mb-2 block">{loading ? 'Loading...' : 'Select Google Sheet'}</label>
         {loading ? (
           <Spin />
         ) : (
@@ -3408,56 +3392,118 @@ const GoogleSheetFindPanel = ({
 
       {/* Conditions Panel placeholder */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
-        <label className="font-medium mb-2 block">Find Conditions</label>
         <ConditionsPanel columns={columns} conditions={findconditions} setConditions={setConditions}
-         logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
-         {columns.length === 0 && (
-         <motion.div
-           initial={{ opacity: 0, y: 10 }}
-           animate={{ opacity: 1, y: 0 }}
-           exit={{ opacity: 0, y: 10 }}
-           className="text-gray-400 text-sm flex items-center gap-2 py-2"
-         >
-           <span>🔎</span>
-           <span>No columns available. Select a Google Sheet to begin.</span>
-         </motion.div>
-         )}
+          logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
+        {columns.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="text-gray-400 text-sm flex items-center gap-2 py-2"
+          >
+            <span>🔎</span>
+            <span>No columns available. Select a Google Sheet to begin.</span>
+          </motion.div>
+        )}
       </motion.div>
 
-      {/* Return Limit */}
-      <motion.div layout className="mb-4">
-        <label className="font-medium block mb-1">Return Limit (max 100)</label>
-        <Input
-          type="number"
-          value={findreturnLimit}
-          min={1} max={100}
-          onChange={e => setReturnLimit(e.target.value)}
-          placeholder="Optional"
-        />
-      </motion.div>
+      {/* Return Limit Accordion */}
+      <div className="mb-2">
+        <button
+          className="w-full flex justify-between items-center py-3 text-left font-medium text-gray-700"
+          onClick={() =>
+            setAccordionOpen(prev => ({ ...prev, findreturnLimit: !prev.findreturnLimit }))
+          }
+        >
+          <span>Return Limit (max 100)</span>
+          <svg
+            className={`w-5 h-5 transition-transform ${accordionOpen.findreturnLimit ? "rotate-180" : ""
+              }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
 
-      {/* Sort Records */}
-      <motion.div layout className="mb-4">
-        <label className="font-medium block mb-1">Sort Records</label>
-        <div className="flex gap-3">
-          <Select
-            value={findsortField ? { value: findsortField, label: findsortField } : null}
-            onChange={opt => setSortField(opt?.value || "")}
-            options={columnOptions}
-            isClearable
-            placeholder="Sort Field"
-          />
-          <AntSelect
-            value={{ value: findsortOrder, label: findsortOrder === "ASC" ? "Ascending" : "Descending" }}
-            onChange={opt => setSortOrder(opt)}
-            options={[
-              { value: "ASC", label: "Ascending" },
-              { value: "DESC", label: "Descending" }
-            ]}
-            placeholder="Sort Order"
-          />
-        </div>
-      </motion.div>
+        {accordionOpen.findreturnLimit && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className=" pb-4"
+          >
+            <Input
+              type="number"
+              value={findreturnLimit}
+              min='1'
+              max='100'
+              onChange={(e) => setReturnLimit(e.target.value)}
+              placeholder="Optional"
+            />
+            <p className="text-xs text-gray-500 mt-1">Enter a number up to 100 or leave blank to return all records.</p>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Sort Records Accordion */}
+      <div className="mb-2">
+        <button
+          className="w-full flex justify-between items-center py-3 text-left font-medium text-gray-700"
+          onClick={() =>
+            setAccordionOpen(prev => ({ ...prev, findsortRecords: !prev.findsortRecords }))
+          }
+        >
+          <span>Sort Records</span>
+          <svg
+            className={`w-5 h-5 transition-transform ${accordionOpen.findsortRecords ? "rotate-180" : ""
+              }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {accordionOpen.findsortRecords && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="pb-4"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
+                <AntSelect
+                  value={findsortField ? { value: findsortField, label: findsortField } : null}
+                  onChange={(opt) => setSortField(opt?.value || "")}
+                  options={columnOptions}
+                  placeholder="Sort Field"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Sort Order</label>
+                <AntSelect
+                  value={{
+                    value: findsortOrder,
+                    label: findsortOrder === "ASC" ? "Ascending" : "Descending",
+                  }}
+                  onChange={(opt) => setSortOrder(opt)}
+                  options={[
+                    { value: "ASC", label: "Ascending" },
+                    { value: "DESC", label: "Descending" },
+                  ]}
+                  placeholder="Sort Order"
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </div>
+
 
       {/* Error Message */}
       <AnimatePresence>
@@ -3473,10 +3519,6 @@ const GoogleSheetFindPanel = ({
         )}
       </AnimatePresence>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button type="primary" onClick={handleSave}>Save Find Config</Button>
-      </div>
     </motion.div>
   );
 };

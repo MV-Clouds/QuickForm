@@ -3,9 +3,10 @@ import { useLocation } from 'react-router-dom';
 import './SharePage.css';
 import { QRCodeCanvas } from "qrcode.react";
 import { motion, AnimatePresence } from 'framer-motion';
+import Loader from '../Loader';
 
 
-const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
+const SharePage = ({ publishLink, noPublishLink = false, onPublish, isLoadingForm, loadingText }) => {
 
   const [copiedLink, setCopiedLink] = useState(false); // for copy link button
   const [copiedEmbed, setCopiedEmbed] = useState(false); // for copy embed button
@@ -189,6 +190,7 @@ const SharePage = ({ publishLink, noPublishLink = false, onPublish }) => {
       transition={{ duration: 0.5 }}
     >
     <div className="share-container">
+      {isLoadingForm && <Loader text={loadingText} fullScreen={true} />}
           {noPublishLink && (
         <>
           <div className="no-publish-link-modal">

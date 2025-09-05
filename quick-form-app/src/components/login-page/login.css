@@ -385,7 +385,7 @@
   }
 } */
 /* Media query for medium screens (up to 1440px) */
-@media (max-width: 1440px) {
+@media (max-width: 1540px) {
   .content-container {
     min-height: 100vh;
   }
@@ -423,7 +423,7 @@
   }
 
   .footer {
-    width: min(85%, 550px);
+    width: min(90%, 1050px);
     top: 0%;
   }
 

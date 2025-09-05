@@ -7,14 +7,14 @@ import {
   SiTwilio,
   SiGooglesheets,
 } from "react-icons/si";
-import { Filter, Trash } from "lucide-react";
+import { Filter, Trash,Eye, EyeOff } from "lucide-react";
 import PayPalIntegrationPanel from "./payment/PayPalIntegrationPanel";
 
 const GMAIL_CLIENT_ID =
   "932194946717-snt34c2fiiqkpeuj36ivj5u83eaf5vua.apps.googleusercontent.com";
 const GMAIL_REDIRECT_URI = "http://localhost:3000/home";
 const GMAIL_SCOPE =
-  "https://www.googleapis.com/auth/gmail.readonly email profile openid";
+  "https://www.googleapis.com/auth/gmail.readonly email profile openid https://www.googleapis.com/auth/gmail.send";
 const SHEETS_SCOPE =
   "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly email profile openid";
 
@@ -223,6 +223,7 @@ const Integrations = ({ token }) => {
   // const [showAuthenticator, setShowAuthenticator] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [googleUsers, setGoogleUsers] = useState([]);
+  const [twilioUsers , setTwilioUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedApp, setSelectedApp] = useState(null);
   const [connectedApps, setConnectedApps] = useState(initialConnectedApps);
@@ -238,6 +239,8 @@ const Integrations = ({ token }) => {
   const [twilioConnectionName, setTwilioConnectionName] = useState("");
   const [twilioConnected, setTwilioConnected] = useState(false);
   const [twilioError, setTwilioError] = useState("");
+  const [showSid, setShowSid] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
   // Change awsuser to an array of user objects
   const [awsuser, setawsuser] = useState([]); // [{ username, date, accountId, arn, bucketName }]
   const userId = sessionStorage.getItem("userId");
@@ -305,6 +308,11 @@ const Integrations = ({ token }) => {
             Type: user.TokenType__c,
           }))
         );
+        setTwilioUsers(data?.twilioRecords.map((user)=>({
+          accountName : user.AccountName__c || 'Twilio User' ,
+          type : user.Type__c || 'Trial',
+          name : user.Name,
+        })));
       }
       setgoogle_access_token(data.token);
       // setError(null);
@@ -865,6 +873,7 @@ const Integrations = ({ token }) => {
                 {/* Twilio connect form */}
                 {selectedApp.id === "twilio" && !twilioConnected && (
                   <div className="w-full">
+                    {/* Account SID */}
                     <div className="mb-4">
                       <label
                         className="block text-gray-700 text-sm font-bold mb-2"
@@ -872,31 +881,65 @@ const Integrations = ({ token }) => {
                       >
                         Account SID
                       </label>
-                      <input
-                        id="twilio-sid"
-                        type="password"
-                        value={twilioSid}
-                        onChange={(e) => setTwilioSid(e.target.value)}
-                        placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                        className="shadow-sm appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
+                      <div className="relative">
+                        <input
+                          id="twilio-sid"
+                          type={showSid ? "text" : "password"}
+                          value={twilioSid}
+                          onChange={(e) => setTwilioSid(e.target.value)}
+                          placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                          className="shadow-sm appearance-none border rounded w-full py-2 px-3 pr-10 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSid(!showSid)}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
+                        >
+                          {showSid ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Auth Token */}
                     <div className="mb-4">
                       <label
-                        className="block text-gray-700 text-sm font-bold mb-2"
+                        className="block text-gray-700 text-sm font-bold mb-1"
                         htmlFor="twilio-auth-token"
                       >
                         Auth Token
                       </label>
-                      <input
-                        id="twilio-auth-token"
-                        type="password"
-                        value={twilioAuthToken}
-                        onChange={(e) => setTwilioAuthToken(e.target.value)}
-                        placeholder="********************************"
-                        className="shadow-sm appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
+                      <p className="text-xs text-gray-500 mb-2">
+                        Not sure where to find it?{" "}
+                        <a
+                          href="http://help.twilio.com/articles/223136027-Auth-Tokens-and-How-to-Change-Them"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Learn how to get your Twilio Auth Token
+                        </a>
+                      </p>
+                      <div className="relative">
+                        <input
+                          id="twilio-auth-token"
+                          type={showAuth ? "text" : "password"}
+                          value={twilioAuthToken}
+                          onChange={(e) => setTwilioAuthToken(e.target.value)}
+                          placeholder="********************************"
+                          className="shadow-sm appearance-none border rounded w-full py-2 px-3 pr-10 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAuth(!showAuth)}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700"
+                        >
+                          {showAuth ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
+
+
+                    {/* Connection Name */}
                     <div className="mb-6">
                       <label
                         className="block text-gray-700 text-sm font-bold mb-2"
@@ -908,13 +951,12 @@ const Integrations = ({ token }) => {
                         id="twilio-connection-name"
                         type="text"
                         value={twilioConnectionName}
-                        onChange={(e) =>
-                          setTwilioConnectionName(e.target.value)
-                        }
+                        onChange={(e) => setTwilioConnectionName(e.target.value)}
                         placeholder="My Twilio Connection"
                         className="shadow-sm appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-200"
                       />
                     </div>
+
                     {twilioError && (
                       <div className="text-center text-red-600 text-sm mb-4">
                         {twilioError}
@@ -1115,6 +1157,52 @@ const Integrations = ({ token }) => {
                               <button
                                 className="p-2 rounded hover:bg-gray-100 transition"
                                 onClick={() => handleDeleteGoogleUser(user.Id)}
+                                title="Delete"
+                              >
+                                <Trash className="w-5 h-5 text-red-500" />
+                              </button>
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
+                      </motion.div>
+                    </div>
+                  </div>
+                )}
+                {(selectedApp?.id === "twilio" ) &&
+                twilioUsers.length > 0 && (
+                  <div className="flex justify-center">
+                    <div className="w-[42%]">
+                      <h3 className="text-lg font-semibold mb-2">
+                        Connected Twilio Users
+                      </h3>
+                      <motion.div
+                        layout
+                        initial={false}
+                        className="flex flex-col gap-3"
+                      >
+                        <AnimatePresence>
+                          {twilioUsers.map((user, idx) => (
+                            <motion.div
+                              key={user.Id}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 20 }}
+                              transition={{ duration: 0.3 }}
+                              className="flex items-center bg-white rounded-lg shadow border px-4 py-3 gap-4"
+                            >
+                             {
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#F22F46] to-[#C81E3E] flex items-center justify-center text-white font-bold shadow-md">
+                                {user.accountName?.charAt(0).toUpperCase()}
+                              </div>
+                              }
+                              <div className="flex-1 flex flex-col">
+                                <span className="font-medium text-gray-900">
+                                  {user.accountName}
+                                </span>
+                              </div>
+                              <button
+                                className="p-2 rounded hover:bg-gray-100 transition"
+                                // onClick={() => handleDeleteGoogleUser(user.accountName)}
                                 title="Delete"
                               >
                                 <Trash className="w-5 h-5 text-red-500" />

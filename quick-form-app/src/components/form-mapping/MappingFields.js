@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation, useParams } from 'react-router-dom';
-import { ReactFlowProvider, useEdges } from "reactflow";
+import { ReactFlowProvider, addEdge } from "reactflow";
 import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
 import { XMarkIcon, PlusIcon } from '@heroicons/react/24/solid';
 import { useSalesforceData } from '../Context/MetadataContext';
 import FloatingAddButton from "./FloatingAddButton";
+import Loader from '../Loader';
 
 const MappingFields = ({ onSaveCallback }) => {
   const location = useLocation();
@@ -28,7 +29,6 @@ const MappingFields = ({ onSaveCallback }) => {
   const orderCounterRef = useRef(1);
   const reactFlowWrapperRef = useRef(null);
   const [addButtonPosition, setAddButtonPosition] = useState({ x: 0, y: 0 });
-
   const initialNodes = [];
   const initialEdges = [];
 
@@ -180,6 +180,14 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   }, []);
 
+
+  const setNodeLabel = React.useCallback((nodeId, newLabel) => {
+    setNodes(nds =>
+      nds.map(n => (n.id === nodeId ? { ...n, data: { ...n.data, label: newLabel } } : n))
+    );
+  }, [setNodes]);
+
+
   const fetchAccessToken = async (userId, instanceUrl, retries = 2) => {
     try {
       const url = process.env.REACT_APP_GET_ACCESS_TOKEN_URL || "https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/prod/getAccessToken";
@@ -239,241 +247,115 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   };
 
-  const validateNode = (nodeId, allNodeIds) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    if (!node) {
-      showToast(`Node ${nodeId} not found.`);
-      return false;
-    }
+  const calculateNodeOrders = useCallback((currentNodes, currentEdges) => {
+    // Custom ordering with Path branches: visit Condition 1 branch fully, then Condition 2, etc.
+    const updatedNodes = [...currentNodes];
+    const idToIndex = new Map();
+    const nodeById = new Map();
+    updatedNodes.forEach((n, i) => { idToIndex.set(n.id, i); nodeById.set(n.id, n); });
 
-    if (node.data.action === "Path") {
-      const outgoingEdges = edges.filter((edge) => edge.source === nodeId && edge.conditionNodeId);
-      if (outgoingEdges.length === 0) {
-        if (!mappings[nodeId] || mappings[nodeId].isNew) {
-          showToast(`Path node ${node.data.displayLabel} must have at least one outgoing connection.`);
-          return false;
-        }
-      }
+    const filteredEdges = currentEdges.filter(
+      (e) => e.source !== e.target && e.sourceHandle !== "loop" && e.targetHandle !== "loop-back"
+    );
 
-      for (const edge of outgoingEdges) {
-        const conditionNodeId = edge.target;
-        const conditionNode = nodes.find((n) => n.id === conditionNodeId);
-        if (!conditionNode || conditionNode.data.action !== "Condition") {
-          showToast(`Invalid condition node connected to Path node ${node.data.displayLabel}.`);
-          return false;
-        }
+    const adjacency = new Map();
+    const inDegree = new Map();
+    currentNodes.forEach((n) => {
+      adjacency.set(n.id, []);
+      inDegree.set(n.id, 0);
+    });
 
-        const conditionMapping = mappings[conditionNodeId] || {};
-        const validPathOption = conditionMapping.pathOption || "Rules";
-        if (!["Rules", "Always Run", "Fallback"].includes(validPathOption)) {
-          showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have a valid path option (Rules, Always Run, or Fallback).`);
-          return false;
-        }
-        if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
-          showToast(`Condition node ${conditionNode.data.displayLabel} for Path node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
-          return false;
-        }
-        if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
-          showToast(`Logic type must be defined for condition node ${conditionNode.data.displayLabel} with multiple conditions.`);
-          return false;
-        }
-        if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
-          showToast(`Custom logic expression must be provided for condition node ${conditionNode.data.displayLabel}.`);
-          return false;
-        }
+    filteredEdges.forEach((e) => {
+      if (adjacency.has(e.source) && inDegree.has(e.target)) {
+        adjacency.get(e.source).push(e.target);
+        inDegree.set(e.target, (inDegree.get(e.target) || 0) + 1);
       }
-      return true;
-    } else if (node.data.action === "Condition") {
-      const conditionMapping = mappings[nodeId] || {};
-      const validPathOption = conditionMapping.pathOption || "Rules";
-      if (validPathOption === "Rules" && (!conditionMapping.conditions || conditionMapping.conditions.length === 0)) {
-        showToast(`Condition node ${node.data.displayLabel} must have at least one condition configured when using Rules.`);
-        return false;
-      }
-      if (validPathOption === "Rules" && conditionMapping.conditions.length > 1 && !conditionMapping.logicType) {
-        showToast(`Logic type must be defined for condition node ${node.data.displayLabel} with multiple conditions.`);
-        return false;
-      }
-      if (conditionMapping.logicType === "Custom" && !conditionMapping.customLogic) {
-        showToast(`Custom logic expression must be provided for condition node ${node.data.displayLabel}.`);
-        return false;
-      }
-      return true;
-    }
+    });
 
-    const nodeMapping = mappings[nodeId] || {};
-    if (node.data.action === "Create/Update") {
-      if (!nodeMapping.salesforceObject || !nodeMapping.fieldMappings || nodeMapping.fieldMappings.length === 0) {
-        showToast(`No Salesforce object or complete mappings defined for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.enableConditions && (!nodeMapping.conditions || nodeMapping.conditions.length === 0)) {
-        showToast(`No complete conditions defined for node ${node.data.displayLabel} when conditions are enabled.`);
-        return false;
-      }
-      if (nodeMapping.enableConditions && nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
-        showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
-        return false;
-      }
-      if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
-        showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
-        showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
-        return false;
-      }
-    } else if (node.data.action === "Find" || node.data.action === "Filter") {
-      if (!nodeMapping.conditions || nodeMapping.conditions.length === 0) {
-        showToast(`No Salesforce object or complete conditions defined for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.conditions.length > 1 && !nodeMapping.logicType) {
-        showToast(`Logic type must be defined for node ${node.data.displayLabel} with multiple conditions.`);
-        return false;
-      }
-      if (nodeMapping.logicType === "Custom" && !nodeMapping.customLogic) {
-        showToast(`Custom logic expression must be provided for node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.returnLimit && (isNaN(nodeMapping.returnLimit) || nodeMapping.returnLimit < 1 || nodeMapping.returnLimit > 100)) {
-        showToast(`Return limit for node ${node.data.displayLabel} must be a number between 1 and 100.`);
-        return false;
-      }
-    } else if (node.data.action === "Loop") {
-      if (!nodeMapping.loopConfig || !nodeMapping.loopConfig.loopCollection || !nodeMapping.loopConfig.currentItemVariableName) {
-        showToast(`Loop node ${node.data.displayLabel} must have a collection and current item variable name.`);
-        return false;
-      }
-      const findNodeIds = allNodeIds.filter((id) => nodes.find((n) => n.id === id && n.data.action === "Find"));
-      if (!findNodeIds.includes(nodeMapping.loopConfig.loopCollection)) {
-        showToast(`Invalid Find node ID in loop collection for Loop node ${node.data.displayLabel}: ${nodeMapping.loopConfig.loopCollection}. Available Find nodes: ${findNodeIds.join(', ') || 'none'}.`);
-        return false;
-      }
-      if (nodeMapping.loopConfig.maxIterations && (isNaN(nodeMapping.loopConfig.maxIterations) || nodeMapping.loopConfig.maxIterations < 1)) {
-        showToast(`Max iterations for Loop node ${node.data.displayLabel} must be a positive number.`);
-        return false;
-      }
-      if (
-        nodeMapping.loopConfig.loopVariables &&
-        (typeof nodeMapping.loopConfig.loopVariables !== "object" ||
-          typeof nodeMapping.loopConfig.loopVariables.currentIndex !== "boolean" ||
-          typeof nodeMapping.loopConfig.loopVariables.counter !== "boolean" ||
-          !["0", "1"].includes(nodeMapping.loopConfig.loopVariables.indexBase))
-      ) {
-        showToast(`Invalid loop variables configuration for Loop node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.loopConfig.exitConditions && nodeMapping.loopConfig.exitConditions.length > 1 && !nodeMapping.loopConfig.logicType) {
-        showToast(`Logic type must be defined for loop exit conditions in node ${node.data.displayLabel}.`);
-        return false;
-      }
-      if (nodeMapping.loopConfig.logicType === "Custom" && !nodeMapping.loopConfig.customLogic) {
-        showToast(`Custom logic expression must be provided for loop exit conditions in node ${node.data.displayLabel}.`);
-        return false;
-      }
-    } else if (node.data.action === "Formatter") {
-      if (!nodeMapping.formatterConfig || !nodeMapping.formatterConfig.inputField || !nodeMapping.formatterConfig.operation) {
-        showToast(`Formatter node ${node.data.displayLabel} must have an input field and operation defined.`);
-        return false;
-      }
-      if (nodeMapping.formatterConfig.formatType === "date") {
-        if (nodeMapping.formatterConfig.operation === "format_date" && !nodeMapping.formatterConfig.options?.format) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a date format defined.`);
-          return false;
-        }
-        if (
-          (nodeMapping.formatterConfig.operation === "format_datetime" ||
-            nodeMapping.formatterConfig.operation === "format_time") &&
-          (!nodeMapping.formatterConfig.options?.format || !nodeMapping.formatterConfig.options?.timezone)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a date format and timezone defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "timezone_conversion" &&
-          (!nodeMapping.formatterConfig.options?.timezone || !nodeMapping.formatterConfig.options?.targetTimezone)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have source and target timezones defined.`);
-          return false;
-        }
-        if (
-          (nodeMapping.formatterConfig.operation === "add_date" || nodeMapping.formatterConfig.operation === "subtract_date") &&
-          (!nodeMapping.formatterConfig.options?.unit || nodeMapping.formatterConfig.options?.value === undefined)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a date unit and value defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "date_difference" &&
-          !nodeMapping.formatterConfig.inputField2 &&
-          !nodeMapping.formatterConfig.useCustomInput
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a second input field or use custom input for date difference.`);
-          return false;
-        }
-        if (nodeMapping.formatterConfig.useCustomInput && !nodeMapping.formatterConfig.customValue) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a custom compare date defined.`);
-          return false;
-        }
-      }
-      if (nodeMapping.formatterConfig.formatType === "number") {
-        if (nodeMapping.formatterConfig.operation === "locale_format" && !nodeMapping.formatterConfig.options?.locale) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a locale defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "currency_format" &&
-          (!nodeMapping.formatterConfig.options?.currency || !nodeMapping.formatterConfig.options?.locale)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a currency and locale defined.`);
-          return false;
-        }
-        if (nodeMapping.formatterConfig.operation === "round_number" && nodeMapping.formatterConfig.options?.decimals === undefined) {
-          showToast(`Formatter node ${node.data.displayLabel} must have number of decimals defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "phone_format" &&
-          (!nodeMapping.formatterConfig.options?.countryCode || !nodeMapping.formatterConfig.options?.format)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a country code and format defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "math_operation" &&
-          (!nodeMapping.formatterConfig.options?.operation ||
-            (!nodeMapping.formatterConfig.inputField2 && !nodeMapping.formatterConfig.useCustomInput))
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a math operation and second input field or custom value defined.`);
-          return false;
-        }
-        if (nodeMapping.formatterConfig.useCustomInput && nodeMapping.formatterConfig.customValue === undefined) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a custom value defined for math operation.`);
-          return false;
-        }
-      }
-      if (nodeMapping.formatterConfig.formatType === "text") {
-        if (
-          nodeMapping.formatterConfig.operation === "replace" &&
-          (!nodeMapping.formatterConfig.options?.searchValue || !nodeMapping.formatterConfig.options?.replaceValue)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have search and replace values defined.`);
-          return false;
-        }
-        if (
-          nodeMapping.formatterConfig.operation === "split" &&
-          (!nodeMapping.formatterConfig.options?.delimiter || !nodeMapping.formatterConfig.options?.index)
-        ) {
-          showToast(`Formatter node ${node.data.displayLabel} must have a delimiter and index defined.`);
-          return false;
-        }
-      }
-    }
-    return true;
-  };
+    // Priority based on on-screen position: top-to-bottom then left-to-right
+    const sortByPosition = (a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x);
 
-  const saveAllConfiguration = async () => {
+    const getConditionIndex = (condNode) => {
+      const raw = (condNode?.data?.displayLabel || condNode?.data?.label || '').toString();
+      const m1 = raw.match(/Condition\s*(\d+)/i);
+      if (m1 && !isNaN(parseInt(m1[1], 10))) return parseInt(m1[1], 10);
+      const m2 = raw.match(/Cond[_\s-]*(\d+)/i);
+      if (m2 && !isNaN(parseInt(m2[1], 10))) return parseInt(m2[1], 10);
+      return Number.MAX_SAFE_INTEGER;
+    };
+
+    const sortConditions = (aId, bId) => {
+      const a = nodeById.get(aId); const b = nodeById.get(bId);
+      const ai = getConditionIndex(a); const bi = getConditionIndex(b);
+      if (ai !== bi) return ai - bi;
+      return sortByPosition(a, b);
+    };
+
+    const visited = new Set();
+    orderCounterRef.current = 1;
+    const actionCounts = {};
+    const nextDisplayLabel = (node) => {
+      const actionKey = node.data.action || 'Action';
+      actionCounts[actionKey] = (actionCounts[actionKey] || 0) + 1;
+      return node.data.displayLabel || node.data.action || `Action ${actionCounts[actionKey]}`;
+    };
+
+    const assign = (nodeId) => {
+      if (!nodeId || visited.has(nodeId)) return;
+      visited.add(nodeId);
+      const idx = idToIndex.get(nodeId);
+      if (idx == null) return;
+      const order = orderCounterRef.current++;
+      const displayLabel = nextDisplayLabel(updatedNodes[idx]);
+      updatedNodes[idx] = {
+        ...updatedNodes[idx],
+        data: { ...updatedNodes[idx].data, order, displayLabel },
+      };
+    };
+
+    const traverseFrom = (nodeId) => {
+      if (!nodeId || visited.has(nodeId)) return;
+      const node = nodeById.get(nodeId);
+      if (!node) return;
+
+      assign(nodeId);
+
+      const children = adjacency.get(nodeId) || [];
+      if (node.data?.action === 'Path') {
+        // Only traverse condition children tied to this Path, in numeric order (then by position)
+        const conditionChildren = children.filter((cid) => {
+          const c = nodeById.get(cid);
+          return c && c.data?.action === 'Condition' && c.data?.pathNodeId === nodeId;
+        }).sort(sortConditions);
+
+        for (const condId of conditionChildren) {
+          traverseFrom(condId);
+        }
+      } else {
+        // For non-Path nodes, traverse children in position order
+        const sorted = [...children].sort((aId, bId) => sortByPosition(nodeById.get(aId), nodeById.get(bId)));
+        for (const cid of sorted) {
+          if (!visited.has(cid)) traverseFrom(cid);
+        }
+      }
+    };
+
+    // Start from roots
+    const roots = currentNodes
+      .filter((n) => (inDegree.get(n.id) || 0) === 0)
+      .sort(sortByPosition);
+    for (const r of roots) traverseFrom(r.id);
+
+    // Remaining nodes
+    const remaining = currentNodes
+      .filter((n) => !visited.has(n.id))
+      .sort(sortByPosition);
+    for (const n of remaining) traverseFrom(n.id);
+
+    return updatedNodes;
+  }, []);
+  
+  const saveAllConfiguration = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
 
@@ -483,13 +365,6 @@ const MappingFields = ({ onSaveCallback }) => {
 
     if (!userId || !instanceUrl || !flowId) {
       showToast("Missing userId, instanceUrl, or flowId. Please log in again.", 'error');
-      setIsSaving(false);
-      return;
-    }
-
-    const actionNodes = nodes;
-    if (actionNodes.length === 0) {
-      showToast("Flow must contain at least one action node.", 'error');
       setIsSaving(false);
       return;
     }
@@ -519,10 +394,77 @@ const MappingFields = ({ onSaveCallback }) => {
       }
     }
 
+    // Recalculate node orders just before saving to ensure correctness
+    const recalculatedNodes = calculateNodeOrders(nodes, edges);
+    setNodes(recalculatedNodes);
+    const nodesForSave = recalculatedNodes;
+
+    // Build order map to guarantee sequential topological order for save payload
+    const buildOrderMap = (ns, es) => {
+      // Mirror the same traversal logic used for display ordering
+      const nodeById = new Map(ns.map(n => [n.id, n]));
+      const filtered = es.filter((e) => e.source !== e.target && e.sourceHandle !== 'loop' && e.targetHandle !== 'loop-back');
+      const adj = new Map();
+      const indeg = new Map();
+      ns.forEach(n => { adj.set(n.id, []); indeg.set(n.id, 0); });
+      filtered.forEach(e => {
+        if (adj.has(e.source) && indeg.has(e.target)) {
+          adj.get(e.source).push(e.target);
+          indeg.set(e.target, (indeg.get(e.target) || 0) + 1);
+        }
+      });
+      const sortByPos = (a, b) => (a.position.y - b.position.y) || (a.position.x - b.position.x);
+      const getCondIndex = (node) => {
+        const raw = (node?.data?.displayLabel || node?.data?.label || '').toString();
+        const m1 = raw.match(/Condition\s*(\d+)/i);
+        if (m1 && !isNaN(parseInt(m1[1], 10))) return parseInt(m1[1], 10);
+        const m2 = raw.match(/Cond[_\s-]*(\d+)/i);
+        if (m2 && !isNaN(parseInt(m2[1], 10))) return parseInt(m2[1], 10);
+        return Number.MAX_SAFE_INTEGER;
+      };
+      const sortConds = (aId, bId) => {
+        const a = nodeById.get(aId); const b = nodeById.get(bId);
+        const ai = getCondIndex(a); const bi = getCondIndex(b);
+        if (ai !== bi) return ai - bi;
+        return sortByPos(a, b);
+      };
+      const visited = new Set();
+      const orderMap = new Map();
+      let counter = 1;
+
+      const traverseFrom = (id) => {
+        if (!id || visited.has(id)) return;
+        visited.add(id);
+        orderMap.set(id, counter++);
+        const node = nodeById.get(id);
+        const children = adj.get(id) || [];
+        if (node?.data?.action === 'Path') {
+          const condChildren = children.filter(cid => {
+            const c = nodeById.get(cid);
+            return c && c.data?.action === 'Condition' && c.data?.pathNodeId === id;
+          }).sort(sortConds);
+          for (const condId of condChildren) traverseFrom(condId);
+        } else {
+          const sorted = [...children].sort((aId, bId) => sortByPos(nodeById.get(aId), nodeById.get(bId)));
+          for (const cid of sorted) traverseFrom(cid);
+        }
+      };
+
+      const roots = ns.filter(n => (indeg.get(n.id) || 0) === 0).sort(sortByPos);
+      for (const r of roots) traverseFrom(r.id);
+
+      const remaining = ns.filter(n => !visited.has(n.id)).sort(sortByPos);
+      for (const n of remaining) traverseFrom(n.id);
+
+      return orderMap;
+    };
+    const orderMap = buildOrderMap(nodesForSave, edges);
 
     const allMappings = [];
     let maxOrder = 0;
-    for (const node of nodes) {
+    console.log('nodes==> ', nodesForSave);
+
+    for (const node of nodesForSave) {
       const nodeMapping = mappings[node.id] || {};
       const incomingEdge = edges.find((e) => e.target === node.id);
       const outgoingEdges = edges.filter((e) => e.source === node.id);
@@ -541,7 +483,8 @@ const MappingFields = ({ onSaveCallback }) => {
       else if (actionType === "Condition") actionType = "Condition";
       else if (!actionType) actionType = node.data.action || "Unknown";
 
-      const order = node.data.order || ++maxOrder;
+      const computedOrder = orderMap.get(node.id);
+      const order = (computedOrder != null ? computedOrder : ++maxOrder);
       maxOrder = Math.max(maxOrder, order);
 
       const mappingData = {
@@ -582,6 +525,8 @@ const MappingFields = ({ onSaveCallback }) => {
         sortField: actionType === "Find" || actionType === "Filter" ? nodeMapping.sortField || "" : undefined,
         sortOrder: actionType === "Find" || actionType === "Filter" ? nodeMapping.sortOrder || "ASC" : undefined,
         pathOption: actionType === "Condition" ? nodeMapping.pathOption || "Rules" : undefined,
+        storeAsContentDocument: actionType === "CreateUpdate" ? nodeMapping.storeAsContentDocument || false : undefined,
+        selectedFileUploadFields: actionType === "CreateUpdate" ? nodeMapping.selectedFileUploadFields || [] : [],
         nextNodeIds,
         previousNodeId,
         label: node.data.label,
@@ -609,13 +554,13 @@ const MappingFields = ({ onSaveCallback }) => {
       allMappings.push(mappingData);
     }
 
-    const allNodeIds = allMappings.map((m) => m.nodeId);
-    for (const mapping of allMappings) {
-      if (!validateNode(mapping.nodeId, allNodeIds)) {
-        setIsSaving(false);
-        return;
-      }
-    }
+    // const allNodeIds = allMappings.map((m) => m.nodeId);
+    // for (const mapping of allMappings) {
+    //   if (!validateNode(mapping.nodeId, allNodeIds)) {
+    //     setIsSaving(false);
+    //     return;
+    //   }
+    // }
     console.log('allMappings:', allMappings);
 
     const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
@@ -626,7 +571,7 @@ const MappingFields = ({ onSaveCallback }) => {
         userId,
         instanceUrl,
         flowId,
-        nodes,
+        nodes: nodesForSave,
         edges,
         mappings: allMappings,
       };
@@ -674,14 +619,14 @@ const MappingFields = ({ onSaveCallback }) => {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [nodes, edges, mappings, token, formVersionId, calculateNodeOrders]);
 
   // Register the save callback when component mounts
   useEffect(() => {
     if (onSaveCallback) {
       onSaveCallback(saveAllConfiguration);
     }
-  }, [onSaveCallback]);
+  }, [onSaveCallback, saveAllConfiguration]);
 
   const initializeData = async () => {
     setIsLoading(true);
@@ -764,6 +709,8 @@ const MappingFields = ({ onSaveCallback }) => {
               ? 'utility'
               : 'action',
             displayLabel: mapping.label || mapping.actionType,
+            storeAsContentDocument: mapping.storeAsContentDocument || false,
+            selectedFileUploadFields: mapping.selectedFileUploadFields || [],
             selectedSheetName: mapping.selectedSheetName || '',
             spreadsheetId: mapping.spreadsheetId || '',
             sheetConditions: mapping.sheetConditions || [],
@@ -851,88 +798,8 @@ const MappingFields = ({ onSaveCallback }) => {
     initializeData();
   }, [formVersionId, formRecords]);
 
-  const calculateNodeOrders = useCallback((currentNodes, currentEdges) => {
-    const updatedNodes = [...currentNodes];
-    const visited = new Set();
-    const nodeOrders = new Map();
-    const nodeLevels = new Map();
-    orderCounterRef.current = 1;
-    const levelNodeCounts = {};
 
-    const calculateLevels = (nodeId, level = 1) => {
-      if (!nodeId || visited.has(nodeId)) return;
-      visited.add(nodeId);
-      const currentLevel = nodeLevels.get(nodeId) || 0;
-      nodeLevels.set(nodeId, Math.max(currentLevel, level));
-      const outgoingEdges = currentEdges.filter(edge => edge.source === nodeId);
-      for (const edge of outgoingEdges) {
-        calculateLevels(edge.target, level + 1);
-      }
-    };
-
-    // calculate levels for all nodes
-    visited.clear();
-    for (const node of currentNodes) {
-      if (!visited.has(node.id)) {
-        calculateLevels(node.id);
-      }
-    }
-
-    visited.clear();
-    const assignOrders = (nodeId, targetLevel = null) => {
-      if (!nodeId || visited.has(nodeId)) return;
-      const nodeIndex = updatedNodes.findIndex(n => n.id === nodeId);
-      if (nodeIndex === -1) return;
-      const node = updatedNodes[nodeIndex];
-      const level = targetLevel !== null ? targetLevel : (nodeLevels.get(nodeId) || 1);
-      visited.add(nodeId);
-
-      let order;
-      if (nodeOrders.has(nodeId)) {
-        order = nodeOrders.get(nodeId);
-      } else {
-        order = orderCounterRef.current++;
-        nodeOrders.set(nodeId, order);
-      }
-
-      if (!levelNodeCounts[level]) levelNodeCounts[level] = {};
-      const actionKey = node.data.action || "Action";
-      levelNodeCounts[level][actionKey] = (levelNodeCounts[level][actionKey] || 0) + 1;
-      const index = levelNodeCounts[level][actionKey];
-
-      let label =
-        node.data.action === "Condition" ? `Cond_${index}_Level${level}` :
-          node.data.action === "Loop" ? `Loop_${index}_Level${level}` :
-            node.data.action === "Formatter" ? `Formatter_${index}_Level${level}` :
-              node.data.action === "Filter" ? `Filter_${index}_Level${level}` :
-                node.data.action === "Path" ? `Path_${index}_Level${level}` :
-                  `${node.data.action}${node.data.salesforceObject ? `_${node.data.salesforceObject}` : ''}_${index}_Level${level}`;
-
-      let displayLabel = node.data.action || `Action ${index}`;
-
-      updatedNodes[nodeIndex] = {
-        ...node,
-        data: { ...node.data, order, label, displayLabel },
-      };
-
-      const childEdges = currentEdges.filter(edge => edge.source === nodeId);
-      for (const edge of childEdges) {
-        assignOrders(edge.target);
-      }
-    };
-
-    // assign orders for all nodes
-    for (const node of currentNodes) {
-      if (!visited.has(node.id)) {
-        assignOrders(node.id);
-      }
-    }
-
-    return updatedNodes;
-  }, []);
-
-
-  const onAddNode = (nodeType, action) => {
+  const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
     const reactFlowWrapper = document.querySelector('.react-flow');
     if (!reactFlowWrapper) return;
 
@@ -942,12 +809,14 @@ const MappingFields = ({ onSaveCallback }) => {
 
     const randomNum = Math.floor(Math.random() * 10000);
     const nodeName = action.toLowerCase().replace("/", "_");
+    const newNodeId = `${nodeName}_${randomNum}`;
+
     const newNode = {
-      id: `${nodeName}_${randomNum}`,
+      id: newNodeId,
       type: "custom",
       position: { x: centerX, y: centerY },
       data: {
-        label: `${action}_Level0`,
+        label: `${action} Node`,
         displayLabel: action,
         type: nodeType,
         action,
@@ -1026,33 +895,176 @@ const MappingFields = ({ onSaveCallback }) => {
     };
 
     setNodes((nds) => {
-      const updatedNodes = [...nds, newNode];
-      const recalculatedNodes = calculateNodeOrders(updatedNodes, edges);
-      return recalculatedNodes;
+      const sourceNode = nds.find(n => n.id === sourceNodeId);
+      let updatedNodes = nds;
+
+      // If inserting between an existing edge, position node between source and target and split the edge
+      if (targetNodeId && edgeIdToReplace) {
+        const targetNode = nds.find(n => n.id === targetNodeId);
+
+        // Compute midpoint position
+        const position = (sourceNode && targetNode)
+          ? { x: (sourceNode.position.x + targetNode.position.x) / 2, y: (sourceNode.position.y + targetNode.position.y) / 2 }
+          : { x: centerX, y: centerY };
+
+        const insertedNode = { ...newNode, position };
+        updatedNodes = [...nds, insertedNode];
+
+        setEdges((eds) => {
+          const edgeToReplace = eds.find((e) => e.id === edgeIdToReplace);
+          let newEdges = eds.filter((e) => e.id !== edgeIdToReplace);
+
+          const edge1 = {
+            id: `e${sourceNodeId}-${newNodeId}`,
+            source: sourceNodeId,
+            sourceHandle: edgeToReplace?.sourceHandle || "bottom",
+            target: newNodeId,
+            targetHandle: "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+            ...(edgeToReplace && edgeToReplace.conditionNodeId ? { conditionNodeId: edgeToReplace.conditionNodeId } : {})
+          };
+
+          const edge2 = {
+            id: `e${newNodeId}-${targetNodeId}`,
+            source: newNodeId,
+            sourceHandle: "bottom",
+            target: targetNodeId,
+            targetHandle: edgeToReplace?.targetHandle || "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+            ...(edgeToReplace && edgeToReplace.conditionNodeId ? { conditionNodeId: edgeToReplace.conditionNodeId } : {})
+          };
+
+          newEdges = addEdge(edge1, newEdges);
+          newEdges = addEdge(edge2, newEdges);
+
+          const recalculatedNodes = calculateNodeOrders(updatedNodes, newEdges);
+          setNodes(recalculatedNodes);
+          return newEdges;
+        });
+
+        return updatedNodes;
+      }
+
+      // Default behavior (attach above/below an existing node)
+      updatedNodes = [...nds, newNode];
+
+      // Check if source node is a Path node
+    if (sourceNode && sourceNode.data.action === "Path") {
+      // Create a condition node in between
+      const conditionNodeId = `condition_${randomNum}`;
+
+      // Position condition node between source and target (newly added node)
+      const midX = (sourceNode.position.x + centerX) / 2;
+      const midY = (sourceNode.position.y + centerY) / 2;
+
+      const conditionNode = {
+        id: conditionNodeId,
+        type: "custom",
+        position: { x: midX, y: midY },
+        data: {
+          label: "Condition",
+          displayLabel: "Condition",
+          action: "Condition",
+          type: "condition",
+          order: null,
+          pathNodeId: sourceNodeId,
+          targetNodeId: newNodeId,
+          pathOption: "Rules",
+          conditions: [],
+          logicType: "AND",
+          customLogic: "",
+        },
+        draggable: true,
+      };
+
+      updatedNodes = [...updatedNodes, conditionNode];
+
+      setEdges((eds) => {
+        const newEdges = [
+          {
+            id: `e${sourceNodeId}-${conditionNodeId}`,
+            source: sourceNodeId,
+            sourceHandle: connectionType === 'top' ? "top" : "bottom",
+            target: conditionNodeId,
+            targetHandle: "top",
+            type: "default",
+            conditionNodeId,
+          },
+          {
+            id: `e${conditionNodeId}-${newNodeId}`,
+            source: conditionNodeId,
+            sourceHandle: "bottom",
+            target: newNodeId,
+            targetHandle: "top",
+            type: "default",
+            conditionNodeId,
+          }
+        ];
+
+        const updatedEdges = [...eds, ...newEdges];
+        const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+        setNodes(recalculatedNodes);
+        return updatedEdges;
+      });
+    }  else {
+        // Regular connection for non-Path nodes
+        let newEdge;
+
+        if (connectionType === 'bottom') {
+          newEdge = {
+            id: `e${sourceNodeId}-${newNodeId}`,
+            source: sourceNodeId,
+            sourceHandle: "bottom",
+            target: newNodeId,
+            targetHandle: "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+          };
+        } else if (connectionType === 'top') {
+          newEdge = {
+            id: `e${newNodeId}-${sourceNodeId}`,
+            source: newNodeId,
+            sourceHandle: "bottom",
+            target: sourceNodeId,
+            targetHandle: "top",
+            type: "default",
+            style: { stroke: '#999', strokeWidth: 2 },
+            markerEnd: { type: 'arrowclosed' },
+          };
+        }
+
+        if (newEdge) {
+          setEdges((eds) => {
+            const updatedEdges = addEdge(newEdge, eds);
+            const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+            setNodes(recalculatedNodes);
+            return updatedEdges;
+          });
+        }
+      }
+
+      return updatedNodes;
     });
 
-  };
+    console.log(`New Node ID: ${newNodeId}`);
+    console.log("Updated Nodes:", JSON.stringify(nodes));
+    console.log("Updated Edges:", JSON.stringify(edges));
+
+    return newNodeId;
+  }, [setNodes, calculateNodeOrders, setEdges]);
 
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">
       <div className="flex-1 flex flex-col relative transition-all duration-300">
         <div className="flex flex-col border rounded bg-gray-50 font-sans relative">
-          <AnimatePresence>
-            {isLoading && (
-              <motion.div
-                className="fixed inset-0 flex items-center align-center justify-center bg-gray-50 bg-opacity-10 z-10"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="flex flex-col items-center">
-                  <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div>
-                  <p className="mt-4 text-gray-700 text-lg font-medium">Loading Editor...</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+           {isLoading && (
+            <Loader text="Loading Mappings" fullScreen={false} />
+          )}
 
           {!isLoading && (
             <>
@@ -1065,7 +1077,7 @@ const MappingFields = ({ onSaveCallback }) => {
                       setSelectedNode={setSelectedNode}
                       setNodes={setNodes}
                       setEdges={setEdges}
-                      onAddNode={onAddNode} 
+                      onAddNode={onAddNode}
                     />
                   </ReactFlowProvider>
 
@@ -1088,7 +1100,8 @@ const MappingFields = ({ onSaveCallback }) => {
                     setSalesforceObjects={setSalesforceObjects}
                     fetchSalesforceFields={fetchSalesforceFields}
                     onClose={() => setSelectedNode(null)}
-                    nodeLabel={selectedNode.data.action}
+                    nodeLabel={selectedNode.data.label}
+                    setNodeLabel={setNodeLabel}
                     nodes={nodes}
                     edges={edges}
                     credentials={googleSheetConfig?.credentials}

@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import {
@@ -36,7 +37,6 @@ const PayPalPaymentProvider = ({
   merchantCapabilities = {},
   formId,
   linkData,
-  onPaymentStart,
   onPaymentSuccess,
   onPaymentError,
   onPaymentCancel,
@@ -94,6 +94,8 @@ const PayPalPaymentProvider = ({
   useEffect(() => {
     console.log("PaymentContent type:", typeof PaymentContent);
     const fetchCredentials = async () => {
+      console.log("Scrept provider again render ⚡⚡⚡");
+
       console.log("🔄 Fetching merchant credentials effect triggered");
       console.log("🔍 Account identifier:", accountIdentifier);
       if (!accountIdentifier) {
@@ -222,27 +224,35 @@ const PayPalPaymentProvider = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subFields.paymentMethods, merchantCapabilities, selectedPaymentMethod]);
 
-  // Generate PayPal SDK options - avoid null merchant-id in options
+  // Precompute a stable enabled-funding signature to avoid option churn
+  const enabledFundingStr = useMemo(() => {
+    const flags = {
+      venmo: !!merchantCapabilities?.venmo,
+      card: !!(merchantCapabilities?.cards || merchantCapabilities?.card),
+      paylater: !!merchantCapabilities?.payLater,
+    };
+    return Object.entries(flags)
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+      .join(",");
+  }, [
+    merchantCapabilities?.venmo,
+    merchantCapabilities?.cards,
+    merchantCapabilities?.card,
+    merchantCapabilities?.payLater,
+  ]);
+
+  // Generate PayPal SDK options - avoid null merchant-id in options and keep them stable
   const sdkOptions = useMemo(() => {
     const clientId = isProduction ? PRODUCTION_CLIENT_ID : SANDBOX_CLIENT_ID;
-
-    // Build funding options based on merchant capabilities - FIXED SDK validation
-    const enabledFunding = [];
-    if (merchantCapabilities.venmo) enabledFunding.push("venmo");
-    if (merchantCapabilities.cards) enabledFunding.push("card");
-    if (merchantCapabilities.payLater) enabledFunding.push("paylater");
-    // Note: Google Pay is handled separately, not in enable-funding
-
     const options = {
       "client-id": clientId,
       currency: amountConfig.currency || "USD",
-      components: "buttons,card-fields,funding-eligibility,googlepay", // Include Google Pay
+      components: "buttons,card-fields,funding-eligibility,googlepay",
       vault: paymentType === "subscription" ? "true" : "false",
       intent: paymentType === "subscription" ? "subscription" : "capture",
-      ...(enabledFunding.length > 0 && {
-        "enable-funding": enabledFunding.join(","),
-      }),
-      "disable-funding": "credit", // Encourage alternative payment methods
+      ...(enabledFundingStr && { "enable-funding": enabledFundingStr }),
+      "disable-funding": "credit",
     };
 
     const effectiveMerchantId =
@@ -250,15 +260,14 @@ const PayPalPaymentProvider = ({
     if (effectiveMerchantId) {
       options["merchant-id"] = effectiveMerchantId;
     }
-
     return options;
   }, [
-    merchantCredentials,
-    accountIdentifier,
-    merchantCapabilities,
-    paymentType,
+    enabledFundingStr,
     amountConfig.currency,
+    paymentType,
     isProduction,
+    merchantCredentials?.merchantId,
+    accountIdentifier,
   ]);
 
   // Only check form validation when needed, not continuously
@@ -433,7 +442,7 @@ const PayPalPaymentProvider = ({
   };
 
   // Create PayPal order
-  const createOrder = useCallback(
+  const createOrder = 
     async (data, actions) => {
       console.log("🎬 createOrder function called with data:", data);
       console.log(
@@ -442,31 +451,25 @@ const PayPalPaymentProvider = ({
       );
 
       try {
-        setIsProcessing(true);
+        // setIsProcessing(true);
         console.log("🔄 Setting processing state to true");
 
         // Validate form before starting payment - CRITICAL STEP
         console.log("🔍 Validating form before payment...");
         if (!checkFormValidation()) {
           console.log("❌ Form validation failed - stopping payment");
-          setStatusMessage({
-            type: "error",
-            message: "Please complete all required fields",
-            details:
-              "All required fields must be filled before processing payment.",
-          });
-          setIsProcessing(false);
+          // setStatusMessage({
+          //   type: "error",
+          //   message: "Please complete all required fields",
+          //   details:
+          //     "All required fields must be filled before processing payment.",
+          // });
+          // setIsProcessing(false);
           // Throw to ensure PayPal SDK rejects onClick and does not open a window
           throw new Error("Form validation failed");
         }
         console.log("✅ Form validation passed - proceeding with payment");
 
-        // Call payment start handler
-        const canProceed = onPaymentStart?.();
-        if (canProceed === false) {
-          setIsProcessing(false);
-          return;
-        }
 
         // Generate unique item number - Fixed field ID
         const fieldId =
@@ -475,7 +478,7 @@ const PayPalPaymentProvider = ({
           fieldId,
           formId
         );
-        setCurrentItemNumber(itemNumber);
+        // setCurrentItemNumber(itemNumber);
 
         // Validate amount for variable payments
         if (
@@ -550,12 +553,15 @@ const PayPalPaymentProvider = ({
           );
         }
         if (!paymentType) {
+          console.error("❌ Payment type is invalid:", { paymentType });
           throw new Error("Payment type is required");
         }
         if (!itemNumber) {
+          console.error("❌ Generated item number is invalid:", { itemNumber });
           throw new Error("Item number is required");
         }
         if (!paymentUrls.returnUrl || !paymentUrls.cancelUrl) {
+          console.error("❌ Payment URLs are invalid:", { paymentUrls });
           throw new Error("Return and cancel URLs are required");
         }
 
@@ -566,7 +572,7 @@ const PayPalPaymentProvider = ({
           paymentType,
           returnUrl: paymentUrls.returnUrl,
           cancelUrl: paymentUrls.cancelUrl,
-          itemNumber,
+          itemNumber: itemNumber,
           amount: parseFloat(paymentAmount) || 0,
           currency: amountConfig.currency || "USD",
           itemName: fieldConfig.label || "Payment",
@@ -574,37 +580,27 @@ const PayPalPaymentProvider = ({
             paymentType === "donation_button" ? donationButtonId : undefined,
         };
 
-        // Add product-specific data for product_wise payments
-        if (paymentType === "product_wise" && subFields.products) {
-          const selectedProduct = subFields.products.find((p) =>
-            currentItemNumber.includes(p.id)
-          );
-          if (selectedProduct) {
-            paymentRequest.products = [
-              {
-                productId: selectedProduct.id,
-                quantity: 1,
-                amount: selectedProduct.price,
-                name: selectedProduct.name,
-                description: selectedProduct.description,
-                sku: selectedProduct.sku,
-              },
-            ];
-          }
+        // Add product-specific data for product_wise payments (use explicit selection)
+        if (paymentType === "product_wise" && selectedProduct) {
+          paymentRequest.products = [
+            {
+              productId: selectedProduct.id,
+              quantity: 1,
+              amount: selectedProduct.price,
+              name: selectedProduct.name,
+              description: selectedProduct.description,
+              sku: selectedProduct.sku,
+            },
+          ];
         }
 
-        // Add subscription-specific data for subscription payments
-        if (paymentType === "subscription" && subFields.subscriptions) {
-          const selectedSubscription = subFields.subscriptions.find((s) =>
-            currentItemNumber.includes(s.id)
-          );
-          if (selectedSubscription) {
-            paymentRequest.subscriptionPlan = {
-              planId: selectedSubscription.planId,
-              planName: selectedSubscription.name,
-              planData: selectedSubscription.planData,
-            };
-          }
+        // Add subscription-specific data for subscription payments (prefer explicit selection)
+        if (paymentType === "subscription" && selectedSubscription) {
+          paymentRequest.subscriptionPlan = {
+            planId: selectedSubscription.planId,
+            planName: selectedSubscription.name,
+            planData: selectedSubscription.planData,
+          };
         }
 
         // Add form values for additional context
@@ -675,7 +671,7 @@ const PayPalPaymentProvider = ({
         );
 
         // Don't set processing to false here - this is only order creation, not completion
-        // setIsProcessing(false);  // Removed: PayPal SDK interprets this as completion
+        // setIsProcessing(false);  // Keep processing true until approval/cancel/error
         return orderId;
       } catch (error) {
         console.error("❌ Payment initiation error:", error);
@@ -695,25 +691,7 @@ const PayPalPaymentProvider = ({
         setIsProcessing(false);
         throw error;
       }
-    },
-    [
-      onPaymentStart,
-      fieldConfig,
-      formId,
-      paymentType,
-      paymentAmount,
-      amountConfig,
-      donationButtonId,
-      checkFormValidation,
-      credentialsError,
-      credentialsLoading,
-      currentItemNumber,
-      formValues,
-      merchantCredentials,
-      subFields,
-      accountIdentifier,
-    ]
-  );
+    };
 
   // For subscription intent, PayPal Buttons require a createSubscription callback
   const createSubscription = useCallback(
@@ -736,8 +714,31 @@ const PayPalPaymentProvider = ({
               "All required fields must be filled before processing payment.",
           });
           setIsProcessing(false);
-          return;
+          // Throw to ensure the SDK rejects and does not proceed
+          throw new Error("Form validation failed");
         }
+
+        // Optional start hook (support async) - abort if it returns false
+        // try {
+        //   if (typeof onPaymentStart === "function") {
+        //     const maybePromise = onPaymentStart();
+        //     const proceed =
+        //       typeof maybePromise?.then === "function"
+        //         ? await maybePromise
+        //         : maybePromise !== false;
+        //     if (proceed === false) {
+        //       setIsProcessing(false);
+        //       throw new Error("Payment start was blocked");
+        //     }
+        //   }
+        // } catch (hookErr) {
+        //   console.error(
+        //     "❌ onPaymentStart hook error (subscription):",
+        //     hookErr
+        //   );
+        //   setIsProcessing(false);
+        //   throw hookErr instanceof Error ? hookErr : new Error(String(hookErr));
+        // }
 
         // Reuse current item number if present; otherwise generate a new one
         itemNumber = currentItemNumber;
@@ -855,9 +856,9 @@ const PayPalPaymentProvider = ({
   const onApprove = useCallback(
     async (data, actions) => {
       try {
-        setIsProcessing(true);
+        // setIsProcessing(true);
         console.log("🔄 Processing payment approval with data:", data);
-
+        
         // Validate orderID from PayPal
         if (!data.orderID) {
           throw new Error("Order ID is missing from PayPal approval data");
@@ -1366,6 +1367,8 @@ const PayPalPaymentProvider = ({
     );
   };
 
+  // Previously used dynamic key for script provider removed to avoid remounts
+
   // Debug logging (removed to prevent re-rendering)
   // console.log("🔍 PayPalPaymentProvider Debug:", { paymentType, merchantId });
 
@@ -1420,13 +1423,23 @@ const PayPalPaymentProvider = ({
 
   return (
     <PayPalScriptProvider
+      // Avoid dynamic key to prevent unintended SDK reloads/remounts during interactions
       options={sdkOptions}
+      // Keep load callbacks minimal to avoid extra state changes that can retrigger the script
       onLoadStart={() => {
-        console.log("🔄 PayPal SDK loading started...", sdkOptions);
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.debug("🔄 PayPal SDK loading started");
+        }
+        console.log("✅ PayPal SDK start loading");
+
       }}
       onLoadSuccess={() => {
-        console.log("✅ PayPal SDK loaded successfully!");
-        console.log("🔍 window.paypal exists:", !!window.paypal);
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.debug("✅ PayPal SDK loaded");
+        }
+        console.log("✅ PayPal SDK is ready:");
       }}
       onLoadError={(error) => {
         console.error("❌ PayPal SDK failed to load:", error);

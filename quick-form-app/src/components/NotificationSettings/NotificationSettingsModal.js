@@ -25,7 +25,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
     setLoading(true);
     try {
       const formRecord = formRecords.length > 0 ? formRecords.find(form => form.FormVersions.some(version => version.Id === formVersionId)) : null;
-      console.log('formrecord', formRecord, formRecord.Id)
+      console.log('formrecord', formRecord, formRecord?.Id)
       if (!formRecord) {
         throw new Error(`Form record with version Id ${formVersionId} not found`);
       }
@@ -36,17 +36,17 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
       setLoading(false)
     }
   }
-  const fetchAllData = async () => {
+  const fetchAllData =  () => {
     setLoading(true);
     if(formRecords.length === 0) {
-      await refreshData();
+      refreshData();
     }
     try {
       let cleanData;
       if (formRecords.length > 0) {
         // console.log('notifydata', formRecords.filter(form => form.Id === formId))
         const rec = formRecords.filter(form => form.Id === formId)[0]?.Notifications
-        // console.log('rec', rec)
+        console.log('rec', rec)
         cleanData = rec?.map((field) => {
           return {
             id: field.Id,
@@ -56,7 +56,9 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
             createdDate: new Date(field.LastModifiedDate).toLocaleDateString('en-GB'),
             body: field.Body__c,
             receipents: field.Receipe__c,
-            gmailAccount : field.Gmail__c || ''
+            gmailAccount : field.Gmail__c || '',
+            condition : field.Condition__c || [],
+            schedule : field.Schedule__c || {}
           }
         });
       }
@@ -130,9 +132,6 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
-      if(res.newAccessToken){
-        setToken(res.newAccessToken);
-      }
 
       return res.message || 'Saved successfully';
     } catch (error) {
@@ -174,8 +173,9 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
   };
   // services/notificationService.js
   const deleteNotificationData = async (id) => {
+    console.log('Deleting' , id)
     try {
-      const response = await fetch(`https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify?notificationId=${id}&instanceUrl=${instanceUrl}`, {
+      const response = await fetch(`https://kf17mvi36k.execute-api.us-east-1.amazonaws.com/notify?notificationId=${id}&instanceUrl=${instanceUrl}&formId=${formId}&userId=${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -184,16 +184,15 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
       if (!response.ok) {
         throw new Error('Failed to delete notification');
       }
-      if(response.newAccessToken){
-        setToken(response.newAccessToken);
-      }
-      return await response.json();
+      const res = await response.json()
+      console.log('Response' , res);
+      return res;
     } catch (error) {
       // Log error for debugging
       console.error('API error in deleteNotificationData:', error);
-      throw error;
     } finally {
-      // fetchAllData(true);
+      refreshData();
+      fetchAllData();
     }
   };
   return (
@@ -211,7 +210,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
       )}
       {!loading && (
         <div className="flex-col w-full ">
-          <div className=" bg-gray-50 rounded-2xl shadow-2xl">
+          <div className="bg-gray-50 border">
             <div className="bg-gradient-to-br from-black-50 to-black-100">
               {activeTab === 'SMS' && (
                 <NotificationTab
@@ -250,6 +249,7 @@ const NotificationSettings = ({ currentFields , sendNotificationData , GoogleDat
                   rules={rules}
                   setEditingRuleId={setEditingRuleId}
                   formFieldsData={currentFields}
+                  GoogleData = {GoogleData}
                 />
               )}
               {activeTab === null && (

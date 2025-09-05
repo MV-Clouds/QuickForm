@@ -1,3 +1,4 @@
+
 import { API_ENDPOINTS } from "../../../../../config";
 
 /**
@@ -224,12 +225,30 @@ export const fetchOnboardedAccounts = async () => {
   return await fetchMerchantAccounts();
 };
 
+// Resolve Salesforce Account Id to PayPal Merchant_ID__c
+export const resolvePaypalMerchantId = async (merchantId) => {
+  try {
+    if (!merchantId) return merchantId;
+    const result = await fetchMerchantAccounts();
+    const accounts = result?.accounts || [];
+    const match = accounts.find((acc) => acc?.Id === merchantId);
+    return match?.Merchant_ID__c || merchantId;
+  } catch (e) {
+    console.warn(
+      "Could not resolve PayPal merchant id; using provided value",
+      e
+    );
+    return merchantId;
+  }
+};
+
 // Fetch merchant capabilities
 export const fetchMerchantCapabilities = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
-    { action: "get-merchant-capabilities", merchantId },
+    { action: "get-merchant-capabilities", merchantId: resolvedId },
     "Failed to fetch merchant capabilities"
   );
 
@@ -267,13 +286,14 @@ export const updateProduct = async (productData) => {
 
 // Delete product
 export const deleteProduct = async (productId, merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "delete-product",
       productId,
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to delete product"
   );
@@ -281,12 +301,13 @@ export const deleteProduct = async (productId, merchantId) => {
 
 // Fetch products
 export const fetchProducts = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "list-items",
-      merchantId,
+      merchantId: resolvedId,
       type: "product", // Filter for products only
     },
     "Failed to fetch products"
@@ -300,12 +321,13 @@ export const fetchProducts = async (merchantId) => {
 
 // Fetch PayPal products
 export const fetchPaypalProducts = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "list-items",
-      merchantId,
+      merchantId: resolvedId,
       type: "product",
     },
     "Failed to fetch PayPal products"
@@ -319,12 +341,13 @@ export const fetchPaypalProducts = async (merchantId) => {
 
 // Fetch PayPal subscriptions
 export const fetchPaypalSubscriptions = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "list-paypal-subscriptions",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to fetch PayPal subscriptions"
   );
@@ -337,6 +360,7 @@ export const fetchPaypalSubscriptions = async (merchantId) => {
 
 // Create subscription plan
 export const createSubscriptionPlan = async (planData) => {
+  console.log(" Creating subscription plan with data:", planData);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
@@ -389,6 +413,7 @@ export const updateItem = async (itemData) => {
 
 // Initiate payment
 export const initiatePayment = async (paymentData) => {
+  console.log("⚡⚡⚡ Initiate payment with data:", paymentData);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
@@ -430,7 +455,7 @@ export const getPaymentStatus = async (paymentId) => {
 export const generateOnboardingUrl = async (returnUrl, cancelUrl) => {
   console.log("Return Url  ", returnUrl);
   console.log("Cancel Url  ", cancelUrl);
-  
+
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
@@ -442,7 +467,7 @@ export const generateOnboardingUrl = async (returnUrl, cancelUrl) => {
     "Failed to generate onboarding URL"
   );
 
-    console.log("💀 generateOnboardingUrl response:", response);
+  console.log("💀 generateOnboardingUrl response:", response);
 
   return {
     ...response,
@@ -497,24 +522,26 @@ export const onboardMerchant = async (onboardingData) => {
 
 // Get onboarding status
 export const getOnboardingStatus = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "get-onboarding-status",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to get onboarding status"
   );
 };
 // Sync PayPal subscriptions
 export const syncPaypalSubscriptions = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "sync-paypal-subscriptions",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to sync PayPal subscriptions"
   );
@@ -522,13 +549,14 @@ export const syncPaypalSubscriptions = async (merchantId) => {
 
 // Get single item
 export const getItem = async (productId, merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "get-item",
       productId,
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to get item"
   );
@@ -536,12 +564,13 @@ export const getItem = async (productId, merchantId) => {
 
 // List transactions
 export const listTransactions = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "list-transactions",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to list transactions"
   );
@@ -549,12 +578,13 @@ export const listTransactions = async (merchantId) => {
 
 // Get subscription status
 export const getSubscriptionStatus = async (merchantId, subscriptionId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "get-subscription-status",
-      merchantId,
+      merchantId: resolvedId,
       subscriptionId,
     },
     "Failed to get subscription status"
@@ -569,12 +599,13 @@ export const handleCancel = async (
   orderId,
   subscriptionId
 ) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "handle-cancel",
-      merchantId,
+      merchantId: resolvedId,
       itemNumber,
       paymentType,
       orderId,
@@ -594,13 +625,14 @@ export const handleDonationComplete = async (
   donorEmail,
   message
 ) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "handle-donation-complete",
       transactionId,
-      merchantId,
+      merchantId: resolvedId,
       amount,
       currency,
       donorName,
@@ -628,12 +660,13 @@ export const completeOnboarding = async (onboardingData) => {
 
 // Get merchant status (from lambda)
 export const getMerchantStatus = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "get-merchant-status",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to get merchant status"
   );
@@ -654,12 +687,13 @@ export const createDonationPlan = async (planData) => {
 
 // List plans (from lambda)
 export const listPlans = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "list-plans",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to list plans"
   );
@@ -685,13 +719,14 @@ export const updatePlan = async (planData) => {
 
 // Delete plan (from lambda)
 export const deletePlan = async (planId, merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "delete-plan",
       planId,
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to delete plan"
   );
@@ -699,13 +734,14 @@ export const deletePlan = async (planId, merchantId) => {
 
 // Capture payment (from lambda)
 export const capturePayment = async (orderId, merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   return await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "capture-payment",
       orderId,
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to capture payment"
   );
@@ -713,12 +749,13 @@ export const capturePayment = async (orderId, merchantId) => {
 
 // List subscriptions (from lambda)
 export const listSubscriptions = async (merchantId) => {
+  const resolvedId = await resolvePaypalMerchantId(merchantId);
   const response = await apiRequest(
     API_ENDPOINTS.UNIFIED_PAYMENT_API,
     "POST",
     {
       action: "list-subscriptions",
-      merchantId,
+      merchantId: resolvedId,
     },
     "Failed to list subscriptions"
   );
