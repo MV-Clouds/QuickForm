@@ -174,7 +174,7 @@ const PaymentFieldRenderer = ({
     console.log("✅ Payment configuration validated");
     // Load merchant capabilities
     loadMerchantCapabilities();
-  }, [fieldConfig, loadMerchantCapabilities]);
+  }, [fieldConfig]);
 
   // Check for payment result in URL (for redirected payments)
   useEffect(() => {
@@ -203,33 +203,6 @@ const PaymentFieldRenderer = ({
     }
   }, [fieldId]);
 
-  // Handle payment method selection
-  const handlePaymentMethodSelect = useCallback((method) => {
-    setSelectedPaymentMethod(method);
-    setPaymentStatus(null); // Clear any previous status
-  }, []);
-
-  // Handle payment start with form validation
-  const handlePaymentStart = useCallback(() => {
-    // Validate form before starting payment
-    if (validateForm && !validateForm()) {
-      setPaymentStatus({
-        type: "error",
-        message: "Form validation failed",
-        details:
-          "Please fill in all required fields before proceeding with payment.",
-      });
-      return false;
-    }
-
-    setIsProcessingPayment(true);
-    setPaymentStatus({
-      type: "info",
-      message: "Processing payment...",
-      details: "Please wait while we process your payment.",
-    });
-    return true;
-  }, [validateForm]);
 
   // Handle payment success
   const handlePaymentSuccess = useCallback(
@@ -292,7 +265,6 @@ const PaymentFieldRenderer = ({
             merchantCapabilities={merchantCapabilities}
             formId={formId}
             linkData={linkData}
-            onPaymentStart={handlePaymentStart}
             onPaymentSuccess={handlePaymentSuccess}
             onPaymentError={handlePaymentError}
             onPaymentCancel={handlePaymentCancel}

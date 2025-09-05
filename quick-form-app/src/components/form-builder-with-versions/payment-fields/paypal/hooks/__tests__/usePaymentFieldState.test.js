@@ -47,7 +47,9 @@ describe("usePaymentFieldState", () => {
         usePaymentFieldState(subFields, mockOnUpdateField, mockFieldId)
       );
 
-      expect(result.current.state.selectedMerchantId).toBe("merchant-123");
+      expect(result.current.state.capabilities?.merchantId).toBe(
+        "merchant-123"
+      );
       expect(result.current.state.paymentType).toBe("subscription");
       expect(result.current.state.amount.type).toBe("variable");
       expect(result.current.state.amount.value).toBe(25.99);
@@ -69,7 +71,9 @@ describe("usePaymentFieldState", () => {
         result.current.actions.updateMerchant("new-merchant-456");
       });
 
-      expect(result.current.state.selectedMerchantId).toBe("new-merchant-456");
+      expect(result.current.state.capabilities?.merchantId).toBe(
+        "new-merchant-456"
+      );
       expect(result.current.state.merchantDataLoaded).toBe(true);
       expect(result.current.state.isDirty).toBe(true);
     });
@@ -180,7 +184,7 @@ describe("usePaymentFieldState", () => {
       rerender();
 
       expect(result.current.state.paymentType).toBe("subscription");
-      expect(result.current.state.selectedMerchantId).toBe(
+      expect(result.current.state.capabilities?.merchantId).toBe(
         "persistent-merchant"
       );
     });
@@ -211,7 +215,9 @@ describe("usePaymentFieldState", () => {
       rerender({ subFields: updatedSubFields });
 
       // Should sync merchant but preserve local payment methods change
-      expect(result.current.state.selectedMerchantId).toBe("updated-merchant");
+      expect(result.current.state.capabilities?.merchantId).toBe(
+        "updated-merchant"
+      );
       expect(result.current.state.paymentMethods.googlePay).toBe(true);
     });
   });
@@ -290,7 +296,7 @@ describe("usePaymentFieldState Integration", () => {
     });
 
     // Verify final state
-    expect(result.current.state.selectedMerchantId).toBe("merchant-123");
+    expect(result.current.state.capabilities?.merchantId).toBe("merchant-123");
     expect(result.current.state.paymentType).toBe("product_wise");
     expect(result.current.state.paymentMethods.googlePay).toBe(true);
     expect(result.current.state.behavior.collectBillingAddress).toBe(true);

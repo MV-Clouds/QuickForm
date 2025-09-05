@@ -26,7 +26,7 @@ export class PaymentFieldValidator {
       }
 
       // Merchant configuration validation
-      if (!state.selectedMerchantId) {
+      if (!state.capabilities?.merchantId) {
         results.push({
           type: "warning",
           field: "selectedMerchantId",

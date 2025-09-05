@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 
 /**
@@ -22,26 +22,36 @@ const SimplePayPalButton = ({
   },
 }) => {
   const [{ isPending }] = usePayPalScriptReducer();
-  console.log("🎛️ SimplePayPalButton props:", {
-    hasCreateOrder: !!createOrder,
-    hasCreateSubscription: !!createSubscription,
-    hasOnApprove: !!onApprove,
-    hasOnCancel: !!onCancel,
-    hasOnError: !!onError,
-    disabled,
-    style,
-  });
-
-  const buttonProps = createSubscription
-    ? { createSubscription }
-    : { createOrder };
-
+  // Minimal diagnostics only in development to avoid noisy logs that suggest remounts
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.debug("🧩 SimplePayPalButton ready", {
+      createOrder: !!createOrder,
+      createSubscription: !!createSubscription,
+    });
+  }
   // For subscription flows, PayPal recommends using the "subscribe" label
-  const computedStyle = createSubscription
-    ? { ...style, label: "subscribe" }
-    : style;
+  const styleMemo = useMemo(() => {
+    const base = style || {};
+    if (createSubscription) {
+      return { ...base, label: "subscribe" };
+    }
+    return base;
+  }, [createSubscription, style]);
 
-  console.log("🎛️ Using button props:", buttonProps);
+  // Signature of the style for safe forceReRender (primitives only)
+  const styleSignature = useMemo(() => {
+    return [styleMemo.shape, styleMemo.color, styleMemo.layout, styleMemo.label]
+      .filter(Boolean)
+      .join(":");
+  }, [styleMemo]);
+
+  // Ensure we pass the correct creation callback without changing it unnecessarily
+  const buttonProps = useMemo(
+    () => (createSubscription ? { createSubscription } : { createOrder }),
+    [createSubscription, createOrder]
+  );
+
   return (
     <>
       {showSpinner && isPending && (
@@ -53,15 +63,23 @@ const SimplePayPalButton = ({
       <PayPalButtons
         // If a createSubscription handler is provided, use it; otherwise fallback to createOrder
         {...buttonProps}
+        // onClick={(data, actions) => {
+        //   if (disabled) {
+        //     // eslint-disable-next-line no-console
+        //     console.warn("🛑 PayPal button click blocked: disabled");
+        //     return actions.reject();
+        //   }
+        //   return actions.resolve();
+        // }}
         // Validate before opening the PayPal window
-        onClick={(data, actions) => {
-          if (disabled) {
-            console.warn("🛑 PayPal button click blocked: disabled");
-            return actions.reject();
-          }
-          console.log("▶️ PayPal button onClick resolved");
-          return actions.resolve();
-        }}
+        // onClick={(data, actions) => {
+        //   if (disabled) {
+        //     console.warn("🛑 PayPal button click blocked: disabled");
+        //     return actions.reject();
+        //   }
+        //   console.log("▶️ PayPal button onClick resolved");
+        //   return actions.resolve();
+        // }}
         onApprove={onApprove}
         onCancel={onCancel}
         onError={(e) => {
@@ -71,9 +89,10 @@ const SimplePayPalButton = ({
               : new Error(e?.message || e?.toString() || "PayPal error");
           onError?.(err);
         }}
-        disabled={disabled}
-        style={computedStyle}
-        forceReRender={[computedStyle, ...forceReRenderKeys]}
+        // Avoid toggling disabled which can cause re-renders; parent should gate clicks via onClick if needed
+        style={styleMemo}
+        // Only re-render when external keys or style signature change; avoid object identity churn
+        forceReRender={[styleSignature, ...forceReRenderKeys]}
         fundingSource={undefined}
       />
     </>

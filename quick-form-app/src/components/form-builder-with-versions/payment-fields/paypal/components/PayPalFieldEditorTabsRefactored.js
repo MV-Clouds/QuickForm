@@ -275,7 +275,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowProductModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
+        selectedMerchantId={state.capabilities?.merchantId}
       />
 
       <SubscriptionManagementModal
@@ -283,7 +283,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowSubscriptionModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
+        selectedMerchantId={state.capabilities?.merchantId}
       />
     </div>
   );
@@ -329,7 +329,7 @@ const AccountTab = React.memo(
         {expandedSections.account && (
           <div className="px-4 pb-4 border-t border-gray-100">
             <MerchantAccountSelector
-              selectedMerchantId={state.selectedMerchantId}
+              selectedMerchantId={state.capabilities?.merchantId}
               onMerchantChange={onMerchantChange}
               onCapabilitiesChange={actions.updateCapabilities}
               className="mt-4"
@@ -338,7 +338,7 @@ const AccountTab = React.memo(
             />
 
             {/* Account Status Display */}
-            {state.selectedMerchantId && state.accountStatus && (
+            {state.capabilities?.merchantId && state.accountStatus && (
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-2">
                   {state.accountStatus.status === "active" ? (
@@ -849,7 +849,7 @@ const AdvancedTab = React.memo(
               ? new Date(state.lastUpdated).toLocaleString()
               : "Never"}
           </div>
-          <div>Merchant ID: {state.selectedMerchantId || "Not set"}</div>
+          <div>Merchant ID: {state.capabilities?.merchantId || "Not set"}</div>
           <div>Payment Type: {state.paymentType}</div>
           <div>
             Payment Methods:{" "}

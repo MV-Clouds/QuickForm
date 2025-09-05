@@ -92,7 +92,7 @@ const SimpleSubscriptionConfig = ({
         subscriptionConfig.selectedSubscriptionId || ""
       );
     }
-  }, [subscriptionConfig.selectedSubscriptionId]);
+  }, [subscriptionConfig.selectedSubscriptionId, selectedSubscriptionId]);
 
   // Memoized config object to prevent infinite loops
   const configToSend = useMemo(
@@ -110,7 +110,7 @@ const SimpleSubscriptionConfig = ({
   }, [onConfigChange, configToSend]);
 
   const handleSubscriptionsChange = useCallback(
-    (newSubscriptions) => {
+    (newSubscriptions, derivedConfig) => {
       setSubscriptions(newSubscriptions);
 
       // If the currently selected subscription was deleted, clear selection
@@ -125,8 +125,19 @@ const SimpleSubscriptionConfig = ({
       if (!selectedSubscriptionId && newSubscriptions.length > 0) {
         setSelectedSubscriptionId(newSubscriptions[0].id);
       }
+
+      // If modal provided a derived minimal config, push it upstream immediately
+      if (derivedConfig) {
+        onConfigChange?.({
+          ...subscriptionConfig,
+          ...derivedConfig,
+          selectedSubscriptionId:
+            selectedSubscriptionId || newSubscriptions[0]?.id || "",
+          subscriptions: newSubscriptions,
+        });
+      }
     },
-    [selectedSubscriptionId]
+    [selectedSubscriptionId, onConfigChange, subscriptionConfig]
   );
 
   return (

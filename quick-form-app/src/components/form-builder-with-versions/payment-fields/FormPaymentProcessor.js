@@ -155,7 +155,7 @@ class FormPaymentProcessor {
     if (!provider) {
       throw new Error(`Unsupported payment provider: ${subFields.gateway}`);
     }
-
+    console.log(`🧾 vvvvvvvvvvvvvvvvvvvvvvvvv `, field, formId, formVersionId);
     switch (subFields.paymentType) {
       case "subscription":
         return await this.processSubscription(field, formId, formVersionId);

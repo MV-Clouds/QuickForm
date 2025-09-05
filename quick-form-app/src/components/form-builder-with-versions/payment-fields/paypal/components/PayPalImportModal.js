@@ -7,7 +7,7 @@ import {
   FaDownload,
   FaInfoCircle,
 } from "react-icons/fa";
-import { API_ENDPOINTS } from "../../../../../config";
+import { fetchPaypalSubscriptions } from "../api/paypalApi";
 
 /**
  * PayPalImportModal Component
@@ -33,6 +33,7 @@ const PayPalImportModal = ({
     if (isOpen && selectedMerchantId) {
       fetchPayPalSubscriptions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedMerchantId]);
 
   const fetchPayPalSubscriptions = async () => {
@@ -45,22 +46,15 @@ const PayPalImportModal = ({
         selectedMerchantId
       );
 
-      const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "list-paypal-subscriptions",
-          merchantId: selectedMerchantId,
-        }),
-      });
+      const {
+        success,
+        subscriptions = [],
+        error: apiError,
+      } = await fetchPaypalSubscriptions(selectedMerchantId);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch PayPal subscriptions");
+      if (!success) {
+        throw new Error(apiError || "Failed to fetch PayPal subscriptions");
       }
-
-      const subscriptions = data.subscriptions || [];
 
       // Filter out subscriptions that are already imported
       const existingPlanIds = new Set(

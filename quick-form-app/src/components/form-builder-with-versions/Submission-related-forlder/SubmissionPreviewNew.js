@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   ArrowLeft,
   Download,
@@ -14,11 +14,13 @@ import {
   Eye,
 } from "lucide-react";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 const SubmissionPreviewNew = ({
   submission,
   allFields,
   fieldsByVersion,
+  formVersions = [],
   onStatusUpdate,
   onClose,
   onArchive,
@@ -27,15 +29,124 @@ const SubmissionPreviewNew = ({
   onImageClick,
   onShowFiles,
 }) => {
-  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState(null); // 'downloads' | 'templates' | null
   const [isLoading, setIsLoading] = useState(false);
+  const printableRef = useRef(null);
+
+  // Prebuilt PDF templates (colors and sizing). Default is applied initially.
+  const TEMPLATES = useMemo(
+    () => ({
+      default: {
+        key: "default",
+        name: "Default",
+        page: { background: "#ffffff", padding: 16 },
+        header: { background: "#0b295e", color: "#ffffff" },
+        section: {
+          background: "#ffffff",
+          borderColor: "#e5e7eb",
+          titleColor: "#111827",
+        },
+        text: { color: "#111827", muted: "#6b7280" },
+        accent: { borderRadius: 12 },
+        // meta layout: positions of meta tiles (date/id/version)
+        metaLayout: "row",
+      },
+      ocean: {
+        key: "ocean",
+        name: "Ocean",
+        page: { background: "#f0f7ff", padding: 16 },
+        header: { background: "#0ea5e9", color: "#ffffff" },
+        section: {
+          background: "#ffffff",
+          borderColor: "#bae6fd",
+          titleColor: "#0c4a6e",
+        },
+        text: { color: "#0f172a", muted: "#334155" },
+        accent: { borderRadius: 12 },
+        metaLayout: "tiles", // meta shown as tiles on right
+      },
+      sunset: {
+        key: "sunset",
+        name: "Sunset",
+        page: { background: "#fff7ed", padding: 16 },
+        header: { background: "#f97316", color: "#ffffff" },
+        section: {
+          background: "#ffffff",
+          borderColor: "#fed7aa",
+          titleColor: "#7c2d12",
+        },
+        text: { color: "#111827", muted: "#92400e" },
+        accent: { borderRadius: 12 },
+        metaLayout: "stacked",
+      },
+      slate: {
+        key: "slate",
+        name: "Slate",
+        page: { background: "#f8fafc", padding: 16 },
+        header: { background: "#334155", color: "#ffffff" },
+        section: {
+          background: "#ffffff",
+          borderColor: "#cbd5e1",
+          titleColor: "#0f172a",
+        },
+        text: { color: "#0f172a", muted: "#475569" },
+        accent: { borderRadius: 10 },
+        metaLayout: "row",
+      },
+      minimal: {
+        key: "minimal",
+        name: "Minimal",
+        page: { background: "#ffffff", padding: 16 },
+        header: { background: "#ffffff", color: "#111827" },
+        section: {
+          background: "#ffffff",
+          borderColor: "#e5e7eb",
+          titleColor: "#111827",
+        },
+        text: { color: "#111827", muted: "#6b7280" },
+        accent: { borderRadius: 6 },
+        metaLayout: "inline",
+      },
+    }),
+    []
+  );
+
+  const [templateKey, setTemplateKey] = useState("default");
+  const template = TEMPLATES[templateKey] || TEMPLATES.default;
+
+  // Resolve form version display as "v{number} (Name)" when available
+  const getVersionDisplay = () => {
+    const fv = formVersions.find((v) => v.id === submission?.formVersionId);
+    if (fv) {
+      const ver =
+        fv.version !== undefined && fv.version !== null ? `v${fv.version}` : "";
+      const nm = fv.name || fv.label || fv.versionName || "";
+      if (ver && nm) return `${ver} (${nm})`;
+      if (ver) return ver;
+      if (nm) return nm;
+    }
+    return submission?.formVersionId || "-";
+  };
+
+  // Resolve form title from submission or formVersions list
+  const getFormTitle = () => {
+    const fv = formVersions.find((v) => v.id === submission?.formVersionId);
+    return (
+      submission?.formTitle ||
+      submission?.formName ||
+      fv?.formName ||
+      fv?.name ||
+      fv?.label ||
+      ""
+    );
+  };
 
   // Update status to "Read" when component mounts
   useEffect(() => {
     if (submission && submission.status === "Unread" && onStatusUpdate) {
       onStatusUpdate(submission.id, "Read");
     }
-  }, [submission]);
+  }, [submission]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get organized field data for this submission
   const getOrganizedFieldData = () => {
@@ -58,45 +169,58 @@ const SubmissionPreviewNew = ({
     });
 
     sortedFields.forEach(([fieldId, fieldInfo]) => {
-      const fieldType = fieldInfo.type?.toLowerCase();
+      const fieldType = (fieldInfo.type || "text").toLowerCase();
       const fieldValue = submissionData[fieldId];
 
       if (fieldType === "heading") {
-        // Start a new section
+        // Start a new section (and use heading label as section title)
         if (currentSection && currentSection.fields.length > 0) {
           sections.push(currentSection);
         }
         currentSection = {
-          title: fieldInfo.label,
+          title: fieldInfo.label || "",
           fields: [],
         };
-      } else if (fieldType === "divider") {
-        // End current section
+        return;
+      }
+
+      if (fieldType === "divider") {
+        // End current section with a visual divider marker
         if (currentSection && currentSection.fields.length > 0) {
           sections.push(currentSection);
-          currentSection = null;
         }
-      } else if (!["displaytext", "pagebreak"].includes(fieldType)) {
-        // Regular field with data
-        if (
-          fieldValue !== null &&
-          fieldValue !== undefined &&
-          fieldValue !== ""
-        ) {
-          const fieldData = {
-            id: fieldId,
-            label: fieldInfo.label,
-            value: fieldValue,
-            type: fieldType,
-            info: fieldInfo,
-          };
+        currentSection = {
+          title: currentSection?.title || "",
+          fields: [
+            ...(currentSection?.fields || []),
+            {
+              id: `${fieldId}__divider`,
+              label: "",
+              value: "__DIVIDER__",
+              type: "divider",
+              info: fieldInfo,
+            },
+          ],
+        };
+        // push and reset to avoid stacking
+        sections.push(currentSection);
+        currentSection = null;
+        return;
+      }
 
-          if (currentSection) {
-            currentSection.fields.push(fieldData);
-          } else {
-            fieldsWithoutSection.push(fieldData);
-          }
-        }
+      // Include all other fields (including displaytext/pagebreak) regardless of empty value
+      const fieldData = {
+        id: fieldId,
+        label: fieldInfo.label,
+        value: fieldValue,
+        type: fieldType,
+        info: fieldInfo,
+      };
+
+      if (currentSection) {
+        currentSection.fields.push(fieldData);
+      } else {
+        fieldsWithoutSection.push(fieldData);
       }
     });
 
@@ -159,9 +283,44 @@ const SubmissionPreviewNew = ({
     }
   };
 
+  // Pretty-print subfield key (e.g., firstName -> First Name)
+  const prettyLabel = (k) =>
+    String(k)
+      .replace(/_/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/\b\w/g, (m) => m.toUpperCase());
+
   // Render field value based on type
   const renderFieldValue = (field) => {
     const { value, type } = field;
+
+    // Composite subfields: when base value is empty but there are keys like `${id}_firstName`
+    const renderCompositeIfAny = () => {
+      const d = submission?.data || {};
+      const prefix = `${field.id}_`;
+      const entries = Object.entries(d)
+        .filter(([k]) => k.startsWith(prefix))
+        .map(([k, v]) => ({ subKey: k.slice(prefix.length), v }))
+        .sort((a, b) => a.subKey.localeCompare(b.subKey));
+      if (entries.length === 0) return null;
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {entries.map(({ subKey, v }) => (
+            <div
+              key={subKey}
+              className="flex items-center justify-between bg-gray-50 border rounded p-2"
+            >
+              <span className="text-gray-600 text-sm">
+                {prettyLabel(subKey)}
+              </span>
+              <span className="text-gray-800 text-sm font-medium break-all">
+                {v === undefined || v === null || v === "" ? "—" : String(v)}
+              </span>
+            </div>
+          ))}
+        </div>
+      );
+    };
 
     switch (type) {
       case "fileupload":
@@ -314,6 +473,18 @@ const SubmissionPreviewNew = ({
           </div>
         );
 
+      case "displaytext":
+        return (
+          <div className="bg-gray-50 p-3 rounded border text-gray-700">
+            {value && typeof value === "string"
+              ? value
+              : field.info?.label || ""}
+          </div>
+        );
+
+      case "pagebreak":
+        return <div className="my-2 border-t border-dashed border-gray-300" />;
+
       case "signature": {
         // signature may be array/string/object
         const sigUrl = resolveToUrl(value);
@@ -451,11 +622,27 @@ const SubmissionPreviewNew = ({
           );
         }
 
+        // If base is empty, try composite subfields
+        if (value === undefined || value === null || value === "") {
+          const composite = renderCompositeIfAny();
+          if (composite) return composite;
+        }
+
         return (
-          <span className="text-gray-800 font-medium">{String(value)}</span>
+          <span className="text-gray-800 font-medium">
+            {value === undefined || value === null || value === ""
+              ? "—"
+              : String(value)}
+          </span>
         );
     }
 
+    // Fallback with composite handling
+    if (value === undefined || value === null || value === "") {
+      const composite = renderCompositeIfAny();
+      if (composite) return composite;
+      return <span className="text-gray-500">—</span>;
+    }
     return <span className="text-gray-800 font-medium">{String(value)}</span>;
   };
 
@@ -463,174 +650,60 @@ const SubmissionPreviewNew = ({
   const downloadAsPDF = async () => {
     setIsLoading(true);
     try {
-      const pdf = new jsPDF();
-      let yPosition = 20;
+      const node = printableRef.current;
+      if (!node) throw new Error("Printable area not found");
 
-      // Title
-      pdf.setFontSize(20);
-      pdf.text(
-        `${submission.name || `Response ${submission.index || 1}`}`,
-        20,
-        yPosition
+      // Temporarily ensure node has desired background for capture
+      const prevBg = node.style.background;
+      node.style.background = template.page.background;
+
+      const canvas = await html2canvas(node, {
+        backgroundColor: template.page.background,
+        useCORS: true,
+        scale: 2,
+      });
+      const imgData = canvas.toDataURL("image/png");
+
+      // A4 portrait (mm)
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10; // mm
+      const pdfWidth = pageWidth - margin * 2;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = pdfHeight;
+      let position = margin;
+
+      pdf.addImage(
+        imgData,
+        "PNG",
+        margin,
+        position,
+        pdfWidth,
+        pdfHeight,
+        undefined,
+        "FAST"
       );
-      yPosition += 10;
-
-      // Date
-      pdf.setFontSize(12);
-      pdf.text(
-        `Submitted on ${formatSubmissionDate(submission.submissionDate)}`,
-        20,
-        yPosition
-      );
-      yPosition += 20;
-
-      // Helper function to fetch, resize, and prepare an image for the PDF
-      async function addImageToPDF(imageUrl, maxW = 170, maxH = 120) {
-        const isDataUrl = imageUrl.startsWith("data:image");
-        const fetchUrl = isDataUrl
-          ? imageUrl
-          : imageUrl +
-            (imageUrl.includes("?") ? "&" : "?") +
-            "cors-fix=" +
-            Date.now();
-
-        try {
-          const img = new Image();
-
-          if (!isDataUrl) {
-            const resp = await fetch(fetchUrl, {
-              mode: "cors",
-              credentials: "omit",
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const blob = await resp.blob();
-            img.src = URL.createObjectURL(blob);
-          } else {
-            img.src = imageUrl;
-          }
-
-          await new Promise((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = (e) => reject(e);
-          });
-
-          let w = img.naturalWidth;
-          let h = img.naturalHeight;
-
-          // Only scale down if image is larger than maxW/maxH; do not scale up.
-          if (w > maxW || h > maxH) {
-            const ratio = Math.min(maxW / w, maxH / h);
-            w = Math.round(w * ratio);
-            h = Math.round(h * ratio);
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, w, h);
-
-          const dataUrl = canvas.toDataURL("image/png");
-
-          if (!isDataUrl && img.src.startsWith("blob:")) {
-            URL.revokeObjectURL(img.src);
-          }
-
-          return { dataUrl, width: w, height: h };
-        } catch (e) {
-          console.error("[addImageToPDF] error:", e);
-          throw e;
-        }
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - pdfHeight + margin;
+        pdf.addPage();
+        pdf.addImage(
+          imgData,
+          "PNG",
+          margin,
+          position,
+          pdfWidth,
+          pdfHeight,
+          undefined,
+          "FAST"
+        );
+        heightLeft -= pageHeight;
       }
 
-      // Process sections
-      for (const section of [
-        ...sections,
-        ...(fieldsWithoutSection.length > 0
-          ? [{ title: "Additional Information", fields: fieldsWithoutSection }]
-          : []),
-      ]) {
-        if (yPosition > 250) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-
-        pdf.setFontSize(16);
-        pdf.text(section.title, 20, yPosition);
-        yPosition += 10;
-
-        pdf.setFontSize(10);
-        for (const field of section.fields) {
-          if (yPosition > 270) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-
-          if (field.type === "fileupload" || field.type === "imageuploader") {
-            pdf.text(`${field.label}:`, 20, yPosition);
-            yPosition += 7;
-
-            const files = Array.isArray(field.value)
-              ? field.value
-              : [field.value];
-            for (const file of files) {
-              if (typeof file === "string" && file.startsWith("http")) {
-                if (/\.jpe?g$|\.png$|\.gif$|\.webp$/i.test(file)) {
-                  try {
-                    const { dataUrl, width, height } = await addImageToPDF(
-                      file
-                    );
-                    if (yPosition + height > 280) {
-                      pdf.addPage();
-                      yPosition = 20;
-                    }
-                    pdf.addImage(dataUrl, "PNG", 20, yPosition, width, height);
-                    yPosition += height + 5;
-                  } catch (error) {
-                    console.error("Error adding image to PDF:", error);
-                    pdf.text(`[Could not load image]`, 25, yPosition);
-                    yPosition += 7;
-                  }
-                } else {
-                  pdf.text(`File: ${file}`, 25, yPosition);
-                  yPosition += 7;
-                }
-              }
-            }
-          } else if (
-            field.type === "signature" &&
-            typeof field.value === "string" &&
-            field.value.startsWith("data:image")
-          ) {
-            pdf.text(`${field.label}:`, 20, yPosition);
-            yPosition += 7;
-            try {
-              const { dataUrl, width, height } = await addImageToPDF(
-                field.value,
-                150,
-                75
-              );
-              if (yPosition + height > 280) {
-                pdf.addPage();
-                yPosition = 20;
-              }
-              pdf.addImage(dataUrl, "PNG", 20, yPosition, width, height);
-              yPosition += height + 5;
-            } catch (error) {
-              console.error("Error adding signature to PDF:", error);
-              pdf.text(`[Could not load signature]`, 25, yPosition);
-              yPosition += 7;
-            }
-          } else {
-            const fieldText = `${field.label}: ${String(field.value)}`;
-            const lines = pdf.splitTextToSize(fieldText, 170);
-            pdf.text(lines, 20, yPosition);
-            yPosition += lines.length * 7;
-          }
-          yPosition += 3;
-        }
-        yPosition += 10;
-      }
+      // restore
+      node.style.background = prevBg;
 
       pdf.save(`${submission.name || "submission"}.pdf`);
     } catch (error) {
@@ -645,6 +718,8 @@ const SubmissionPreviewNew = ({
     const content = [
       `${submission.name || `Response ${submission.index || 1}`}`,
       `Submitted on ${formatSubmissionDate(submission.submissionDate)}`,
+      `Submission ID: ${submission.id}`,
+      `Form Version: ${getVersionDisplay()}`,
       "",
       ...sections
         .map((section) => [
@@ -685,6 +760,7 @@ const SubmissionPreviewNew = ({
         submissionDate: submission.submissionDate,
         status: submission.status,
         formVersionId: submission.formVersionId,
+        formVersionLabel: getVersionDisplay(),
       },
       sections: sections,
       additionalFields: fieldsWithoutSection,
@@ -767,6 +843,9 @@ const SubmissionPreviewNew = ({
       `    <formVersionId>${escapeXML(
         submission.formVersionId
       )}</formVersionId>`,
+      `    <formVersionLabel>${escapeXML(
+        getVersionDisplay()
+      )}</formVersionLabel>`,
       `    <archived>${submission.archived || false}</archived>`,
       `  </metadata>`,
       "  <data>",
@@ -839,28 +918,110 @@ const SubmissionPreviewNew = ({
                 <p className="text-sm text-gray-500 mt-1">
                   Submitted on {formatSubmissionDate(submission.submissionDate)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Form: {getFormTitle() || "-"} • Version: {getVersionDisplay()}
+                </p>
               </div>
             </div>
 
             {/* Right Side: Action Buttons */}
             <div className="flex items-center space-x-2">
+              {/* Template selector cards */}
+              <div className="relative">
+                <button
+                  className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  onClick={() =>
+                    setOpenMenu((v) => (v === "templates" ? null : "templates"))
+                  }
+                  title="Choose Template"
+                >
+                  Templates
+                </button>
+                {openMenu === "templates" && (
+                  <div className="absolute right-0 mt-2 w-[520px] bg-white rounded-lg shadow-lg border border-gray-200 z-50 p-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.values(TEMPLATES).map((t) => (
+                        <button
+                          key={t.key}
+                          onClick={() => {
+                            setTemplateKey(t.key);
+                            setOpenMenu(null);
+                          }}
+                          className={`text-left rounded-lg border p-2 hover:border-blue-400 ${
+                            templateKey === t.key
+                              ? "border-blue-500"
+                              : "border-gray-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="font-medium text-sm">{t.name}</div>
+                            {templateKey === t.key && (
+                              <span className="text-xs text-blue-600">
+                                Selected
+                              </span>
+                            )}
+                          </div>
+                          {/* tiny preview card */}
+                          <div
+                            className="rounded-md overflow-hidden"
+                            style={{
+                              border: `1px solid ${t.section.borderColor}`,
+                            }}
+                          >
+                            <div
+                              style={{
+                                background: t.header.background,
+                                color: t.header.color,
+                                height: 18,
+                              }}
+                            />
+                            <div
+                              style={{
+                                background: t.page.background,
+                                padding: 6,
+                              }}
+                            >
+                              <div
+                                className="h-3 w-3/4 mb-1"
+                                style={{
+                                  background: t.section.background,
+                                  border: `1px solid ${t.section.borderColor}`,
+                                }}
+                              />
+                              <div
+                                className="h-3 w-2/3"
+                                style={{
+                                  background: t.section.background,
+                                  border: `1px solid ${t.section.borderColor}`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               {/* Download Dropdown */}
               <div className="relative">
                 <button
-                  onClick={() => setIsDownloadOpen(!isDownloadOpen)}
+                  onClick={() =>
+                    setOpenMenu((v) => (v === "downloads" ? null : "downloads"))
+                  }
                   disabled={isLoading}
                   aria-label="Download"
                   className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   <Download className="w-4 h-4" />
                 </button>
-                {isDownloadOpen && (
+                {openMenu === "downloads" && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                     <div className="py-2">
                       <button
                         onClick={() => {
                           downloadAsPDF();
-                          setIsDownloadOpen(false);
+                          setOpenMenu(null);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                       >
@@ -870,7 +1031,7 @@ const SubmissionPreviewNew = ({
                       <button
                         onClick={() => {
                           downloadAsText();
-                          setIsDownloadOpen(false);
+                          setOpenMenu(null);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                       >
@@ -880,7 +1041,7 @@ const SubmissionPreviewNew = ({
                       <button
                         onClick={() => {
                           downloadAsJSON();
-                          setIsDownloadOpen(false);
+                          setOpenMenu(null);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                       >
@@ -890,7 +1051,7 @@ const SubmissionPreviewNew = ({
                       <button
                         onClick={() => {
                           downloadAsXML();
-                          setIsDownloadOpen(false);
+                          setOpenMenu(null);
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
                       >
@@ -924,13 +1085,154 @@ const SubmissionPreviewNew = ({
 
           {/* Scrollable Content Area */}
           <div className="preview-modal-body flex-grow overflow-hidden w-full relative p-4 ">
+            {/* Visible Preview Content (neutral styling, no template) */}
             <div className="space-y-6 preview-modal-inner-body overflow-y-auto h-full relative pr-1">
+              {/* Payment Details Section (if present) */}
+              {(() => {
+                const d = submission?.data || {};
+                // Primary sources: payment_<fieldId> objects or root paymentData
+                const payments = [];
+                // Collect payment_<fieldId>
+                Object.keys(d).forEach((k) => {
+                  if (
+                    k.startsWith("payment_") &&
+                    typeof d[k] === "object" &&
+                    d[k]
+                  ) {
+                    payments.push(d[k]);
+                  }
+                });
+                if (d.paymentData && typeof d.paymentData === "object") {
+                  payments.push(d.paymentData);
+                }
+                if (payments.length === 0) return null;
+
+                // De-duplicate by transactionId+orderId+fieldId to avoid double rendering
+                const seen = new Set();
+                const uniquePayments = payments.filter((p) => {
+                  const key = `${p.transactionId || ""}|${p.orderId || ""}|${
+                    p.fieldId || ""
+                  }`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                });
+
+                // Render combined Payment Details
+                return (
+                  <div className="rounded-xl shadow-sm p-6 bg-white border border-gray-200">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-100">
+                      Payment Details
+                    </h2>
+                    <div className="space-y-4">
+                      {uniquePayments.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg p-4 bg-green-50 border border-green-200"
+                        >
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            {p.amount !== undefined && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Amount:</span>
+                                <span className="font-semibold">
+                                  {p.currency ? `${p.currency} ` : ""}
+                                  {p.amount}
+                                </span>
+                              </div>
+                            )}
+                            {p.paymentMethod && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Method:</span>
+                                <span className="font-medium capitalize">
+                                  {p.paymentMethod}
+                                </span>
+                              </div>
+                            )}
+                            {p.metadata?.provider && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Provider:</span>
+                                <span className="font-medium">
+                                  {p.metadata.provider}
+                                </span>
+                              </div>
+                            )}
+                            {p.paymentType && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Type:</span>
+                                <span className="font-medium">
+                                  {p.paymentType}
+                                </span>
+                              </div>
+                            )}
+                            {p.status && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Status:</span>
+                                <span
+                                  className={`font-semibold ${
+                                    p.status === "completed"
+                                      ? "text-green-700"
+                                      : p.status === "failed"
+                                      ? "text-red-700"
+                                      : "text-gray-700"
+                                  }`}
+                                >
+                                  {p.status}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-700">
+                            {p.transactionId && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">
+                                  Transaction ID
+                                </span>
+                                <span className="font-mono ml-3 break-all">
+                                  {p.transactionId}
+                                </span>
+                              </div>
+                            )}
+                            {p.orderId && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">Order ID</span>
+                                <span className="font-mono ml-3 break-all">
+                                  {p.orderId}
+                                </span>
+                              </div>
+                            )}
+                            {p.merchantId && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">Merchant</span>
+                                <span className="font-mono ml-3 break-all">
+                                  {p.merchantId}
+                                </span>
+                              </div>
+                            )}
+                            {(p.completedAt || p.processedAt) && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">Completed</span>
+                                <span className="ml-3">
+                                  {p.completedAt
+                                    ? new Date(p.completedAt).toLocaleString()
+                                    : p.processedAt
+                                    ? new Date(p.processedAt).toLocaleString()
+                                    : ""}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {sections.map((section, index) => (
                 <div
                   key={index}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+                  className="rounded-xl shadow-sm p-6 bg-white border border-gray-200"
                 >
-                  <h2 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-100">
+                  <h2 className="text-lg font-semibold mb-6 pb-2 border-b border-gray-200 text-gray-900">
                     {section.title}
                   </h2>
                   <div className="grid grid-cols-1 gap-6">
@@ -939,10 +1241,10 @@ const SubmissionPreviewNew = ({
                         key={field.id}
                         className="grid grid-cols-1 sm:grid-cols-[200px,1fr] gap-4 items-start"
                       >
-                        <div className="text-blue-600 font-medium text-sm">
+                        <div className="font-medium text-sm text-gray-600">
                           {field.label}
                         </div>
-                        <div className="text-gray-800">
+                        <div className="text-gray-900">
                           {renderFieldValue(field)}
                         </div>
                       </div>
@@ -952,8 +1254,8 @@ const SubmissionPreviewNew = ({
               ))}
 
               {fieldsWithoutSection.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-100">
+                <div className="rounded-xl shadow-sm p-6 bg-white border border-gray-200">
+                  <h2 className="text-lg font-semibold mb-6 pb-2 border-b border-gray-200 text-gray-900">
                     Additional Information
                   </h2>
                   <div className="grid grid-cols-1 gap-6">
@@ -962,10 +1264,322 @@ const SubmissionPreviewNew = ({
                         key={field.id}
                         className="grid grid-cols-1 sm:grid-cols-[200px,1fr] gap-4 items-start"
                       >
-                        <div className="text-blue-600 font-medium text-sm">
+                        <div className="font-medium text-sm text-gray-600">
                           {field.label}
                         </div>
-                        <div className="text-gray-800">
+                        <div className="text-gray-900">
+                          {renderFieldValue(field)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Hidden templated printable area for PDF capture only */}
+            <div
+              ref={printableRef}
+              className="space-y-6 absolute -left-[10000px] -top-[10000px] w-[210mm] pr-1"
+              style={{
+                background: template.page.background,
+                padding: template.page.padding,
+              }}
+            >
+              {/* Header banner with template styles */}
+              <div
+                className="rounded-lg mb-4"
+                style={{
+                  background: template.header.background,
+                  color: template.header.color,
+                  padding: 12,
+                }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="font-semibold">
+                    {submission.name || `Response ${submission.index || 1}`}
+                  </div>
+                  {/* Template-driven meta layout */}
+                  {(() => {
+                    const tiles = (
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="bg-white/10 rounded px-2 py-1">
+                          <span className="opacity-90">Submitted:</span>
+                          <div className="font-medium">
+                            {formatSubmissionDate(submission.submissionDate)}
+                          </div>
+                        </div>
+                        <div className="bg-white/10 rounded px-2 py-1">
+                          <span className="opacity-90">Submission ID:</span>
+                          <div className="font-mono break-all">
+                            {submission.id}
+                          </div>
+                        </div>
+                        <div className="bg-white/10 rounded px-2 py-1">
+                          <span className="opacity-90">Form Version:</span>
+                          <div className="font-medium">
+                            {getVersionDisplay()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                    const inline = (
+                      <div className="text-xs opacity-90 flex flex-wrap gap-3 items-center">
+                        <span>
+                          Submitted{" "}
+                          {formatSubmissionDate(submission.submissionDate)}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          ID: <span className="font-mono">{submission.id}</span>
+                        </span>
+                        <span>•</span>
+                        <span>Version: {getVersionDisplay()}</span>
+                      </div>
+                    );
+                    if (template.metaLayout === "tiles") return tiles;
+                    if (template.metaLayout === "stacked")
+                      return (
+                        <div className="flex flex-col gap-1 text-xs opacity-90 text-right">
+                          <span>
+                            Submitted{" "}
+                            {formatSubmissionDate(submission.submissionDate)}
+                          </span>
+                          <span>
+                            ID:{" "}
+                            <span className="font-mono">{submission.id}</span>
+                          </span>
+                          <span>Version: {getVersionDisplay()}</span>
+                        </div>
+                      );
+                    return inline;
+                  })()}
+                </div>
+              </div>
+
+              {(() => {
+                const d = submission?.data || {};
+                const payments = [];
+                Object.keys(d).forEach((k) => {
+                  if (
+                    k.startsWith("payment_") &&
+                    typeof d[k] === "object" &&
+                    d[k]
+                  )
+                    payments.push(d[k]);
+                });
+                if (d.paymentData && typeof d.paymentData === "object")
+                  payments.push(d.paymentData);
+                if (payments.length === 0) return null;
+                const seen = new Set();
+                const uniquePayments = payments.filter((p) => {
+                  const key = `${p.transactionId || ""}|${p.orderId || ""}|${
+                    p.fieldId || ""
+                  }`;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                });
+                return (
+                  <div
+                    className="rounded-xl shadow-sm p-6"
+                    style={{
+                      background: template.section.background,
+                      border: `1px solid ${template.section.borderColor}`,
+                      borderRadius: template.accent.borderRadius,
+                      color: template.text.color,
+                    }}
+                  >
+                    <h2
+                      className="text-lg font-semibold mb-6 pb-2 border-b"
+                      style={{
+                        color: template.section.titleColor,
+                        borderColor: template.section.borderColor,
+                      }}
+                    >
+                      Payment Details
+                    </h2>
+                    <div className="space-y-4">
+                      {uniquePayments.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg p-4"
+                          style={{
+                            background: "#ecfdf5",
+                            border: "1px solid #86efac",
+                          }}
+                        >
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            {p.amount !== undefined && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Amount:</span>
+                                <span className="font-semibold">
+                                  {p.currency ? `${p.currency} ` : ""}
+                                  {p.amount}
+                                </span>
+                              </div>
+                            )}
+                            {p.paymentMethod && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Method:</span>
+                                <span className="font-medium capitalize">
+                                  {p.paymentMethod}
+                                </span>
+                              </div>
+                            )}
+                            {p.metadata?.provider && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Provider:</span>
+                                <span className="font-medium">
+                                  {p.metadata.provider}
+                                </span>
+                              </div>
+                            )}
+                            {p.paymentType && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Type:</span>
+                                <span className="font-medium">
+                                  {p.paymentType}
+                                </span>
+                              </div>
+                            )}
+                            {p.status && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Status:</span>
+                                <span
+                                  className={`font-semibold ${
+                                    p.status === "completed"
+                                      ? "text-green-700"
+                                      : p.status === "failed"
+                                      ? "text-red-700"
+                                      : "text-gray-700"
+                                  }`}
+                                >
+                                  {p.status}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-700">
+                            {p.transactionId && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">
+                                  Transaction ID
+                                </span>
+                                <span className="font-mono ml-3 break-all">
+                                  {p.transactionId}
+                                </span>
+                              </div>
+                            )}
+                            {p.orderId && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">Order ID</span>
+                                <span className="font-mono ml-3 break-all">
+                                  {p.orderId}
+                                </span>
+                              </div>
+                            )}
+                            {p.merchantId && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">Merchant</span>
+                                <span className="font-mono ml-3 break-all">
+                                  {p.merchantId}
+                                </span>
+                              </div>
+                            )}
+                            {(p.completedAt || p.processedAt) && (
+                              <div className="flex items-center justify-between bg-white border rounded p-2">
+                                <span className="text-gray-600">Completed</span>
+                                <span className="ml-3">
+                                  {p.completedAt
+                                    ? new Date(p.completedAt).toLocaleString()
+                                    : p.processedAt
+                                    ? new Date(p.processedAt).toLocaleString()
+                                    : ""}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {sections.map((section, index) => (
+                <div
+                  key={index}
+                  className="rounded-xl shadow-sm p-6"
+                  style={{
+                    background: template.section.background,
+                    border: `1px solid ${template.section.borderColor}`,
+                    borderRadius: template.accent.borderRadius,
+                    color: template.text.color,
+                  }}
+                >
+                  <h2
+                    className="text-lg font-semibold mb-6 pb-2 border-b"
+                    style={{
+                      color: template.section.titleColor,
+                      borderColor: template.section.borderColor,
+                    }}
+                  >
+                    {section.title}
+                  </h2>
+                  <div className="grid grid-cols-1 gap-6">
+                    {section.fields.map((field) => (
+                      <div
+                        key={field.id}
+                        className="grid grid-cols-1 sm:grid-cols-[200px,1fr] gap-4 items-start"
+                      >
+                        <div
+                          className="font-medium text-sm"
+                          style={{ color: template.text.muted }}
+                        >
+                          {field.label}
+                        </div>
+                        <div style={{ color: template.text.color }}>
+                          {renderFieldValue(field)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {fieldsWithoutSection.length > 0 && (
+                <div
+                  className="rounded-xl shadow-sm p-6"
+                  style={{
+                    background: template.section.background,
+                    border: `1px solid ${template.section.borderColor}`,
+                    borderRadius: template.accent.borderRadius,
+                    color: template.text.color,
+                  }}
+                >
+                  <h2
+                    className="text-lg font-semibold mb-6 pb-2 border-b"
+                    style={{
+                      color: template.section.titleColor,
+                      borderColor: template.section.borderColor,
+                    }}
+                  >
+                    Additional Information
+                  </h2>
+                  <div className="grid grid-cols-1 gap-6">
+                    {fieldsWithoutSection.map((field) => (
+                      <div
+                        key={field.id}
+                        className="grid grid-cols-1 sm:grid-cols-[200px,1fr] gap-4 items-start"
+                      >
+                        <div
+                          className="font-medium text-sm"
+                          style={{ color: template.text.muted }}
+                        >
+                          {field.label}
+                        </div>
+                        <div style={{ color: template.text.color }}>
                           {renderFieldValue(field)}
                         </div>
                       </div>
@@ -979,11 +1593,8 @@ const SubmissionPreviewNew = ({
       </div>
 
       {/* Click outside to close dropdown */}
-      {isDownloadOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setIsDownloadOpen(false)}
-        />
+      {openMenu && (
+        <div className="fixed inset-0 z-40" onClick={() => setOpenMenu(null)} />
       )}
     </div>
   );

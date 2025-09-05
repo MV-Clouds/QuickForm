@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
 import {
   FaTimes,
   FaPlus,
   FaEdit,
   FaTrash,
-  FaSpinner,
   FaDownload,
-  FaCheckSquare,
-  FaSquare,
+  FaSpinner,
 } from "react-icons/fa";
 import SubscriptionFormModal from "./SubscriptionFormModal";
 import PayPalImportModal from "./PayPalImportModal";
+import { resolvePaypalMerchantId } from "../api/paypalApi";
 
 /**
  * SubscriptionManagementModal Component
@@ -30,8 +30,10 @@ const SubscriptionManagementModal = ({
   selectedMerchantId,
 }) => {
   const [subscriptions, setSubscriptions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [resolvedMerchantId, setResolvedMerchantId] = useState("");
+  // Note: loading/error UI can be added if we introduce async operations here
+  const [loading] = useState(false);
+  const [error] = useState("");
   const [success, setSuccess] = useState("");
 
   // Modal states
@@ -41,10 +43,33 @@ const SubscriptionManagementModal = ({
 
   // Get subscriptions from field data
   useEffect(() => {
+    console.log("😁 Merchnant ID:", selectedMerchantId);
     if (isOpen && selectedField) {
       loadSubscriptions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedField]);
+
+  // Resolve the actual PayPal Merchant_ID__c from the selected account Id
+  useEffect(() => {
+    let isMounted = true;
+    const run = async () => {
+      try {
+        if (!selectedMerchantId) {
+          if (isMounted) setResolvedMerchantId("");
+          return;
+        }
+        const resolved = await resolvePaypalMerchantId(selectedMerchantId);
+        if (isMounted) setResolvedMerchantId(resolved || selectedMerchantId);
+      } catch (e) {
+        if (isMounted) setResolvedMerchantId(selectedMerchantId);
+      }
+    };
+    run();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMerchantId]);
 
   const loadSubscriptions = () => {
     const fieldSubscriptions = selectedField?.subFields?.subscriptions || [];
@@ -111,10 +136,39 @@ const SubscriptionManagementModal = ({
   const updateFieldSubscriptions = (updatedSubscriptions) => {
     setSubscriptions(updatedSubscriptions);
 
+    // Derive a minimal subscriptionConfig so builder validation passes on save
+    let derivedConfig = null;
+    const refSub =
+      updatedSubscriptions?.[updatedSubscriptions.length - 1] ||
+      updatedSubscriptions?.[0];
+    const planData = refSub?.planData || refSub;
+    if (
+      planData &&
+      Array.isArray(planData.billing_cycles) &&
+      planData.billing_cycles.length > 0
+    ) {
+      const regular =
+        planData.billing_cycles.find((c) => c.tenure_type === "REGULAR") ||
+        planData.billing_cycles[0];
+      const fixed = regular?.pricing_scheme?.fixed_price || {};
+      const freq = regular?.frequency || {};
+      derivedConfig = {
+        useExistingPlan: false,
+        selectedExistingPlan: null,
+        name: planData.name || refSub?.name || "",
+        price: parseFloat(fixed?.value ?? refSub?.price ?? 0) || 0,
+        currency: fixed?.currency_code || planData.currency_code || "USD",
+        frequency: (freq?.interval_unit || "MONTH").toUpperCase(),
+        interval: parseInt(freq?.interval_count || 1),
+        totalCycles: parseInt(regular?.total_cycles ?? 0),
+      };
+    }
+
     // Update the field data
     const updatedSubFields = {
       ...selectedField.subFields,
       subscriptions: updatedSubscriptions,
+      ...(derivedConfig ? { subscriptionConfig: derivedConfig } : {}),
     };
 
     onUpdateField(selectedField.id, { subFields: updatedSubFields });
@@ -138,7 +192,7 @@ const SubscriptionManagementModal = ({
 
   if (!isOpen) return null;
 
-  return (
+  return ReactDOM.createPortal(
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
         <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -183,7 +237,7 @@ const SubscriptionManagementModal = ({
               <button
                 onClick={handleImportFromPayPal}
                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                disabled={!selectedMerchantId}
+                disabled={!resolvedMerchantId}
               >
                 <FaDownload size={14} />
                 Import from PayPal
@@ -289,18 +343,20 @@ const SubscriptionManagementModal = ({
         }}
         onSave={handleSaveSubscription}
         editingSubscription={editingSubscription}
-        selectedMerchantId={selectedMerchantId}
+        selectedMerchantId={resolvedMerchantId}
       />
 
       {/* PayPal Import Modal */}
+      {/* Note: selectedMerchantId here may be a Salesforce record Id; the API layer resolves it to Merchant_ID__c */}
       <PayPalImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImport={handleImportComplete}
-        selectedMerchantId={selectedMerchantId}
+        selectedMerchantId={resolvedMerchantId}
         existingSubscriptions={subscriptions}
       />
-    </>
+    </>,
+    document.body
   );
 };
 

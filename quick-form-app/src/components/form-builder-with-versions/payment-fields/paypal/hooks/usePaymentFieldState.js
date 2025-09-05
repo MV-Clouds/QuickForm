@@ -252,8 +252,10 @@ export function usePaymentFieldState(subFields, onUpdateField, fieldId) {
   // Generate subFields object from current state
   const currentSubFields = useMemo(
     () => ({
-      merchantId: state.selectedMerchantId, // Legacy support
-      merchantAccountId: state.selectedMerchantId, // New approach
+      // Save both identifiers explicitly
+      merchantId: state.capabilities?.merchantId || null, // Actual PayPal Merchant_ID__c
+      merchantAccountId: state.selectedMerchantId, // Salesforce record Id for the custom setting
+      merchantResolvedId: state.capabilities?.merchantId || null, // Redundant but explicit for consumers
       paymentType: state.paymentType,
       amount: state.amount,
       paymentMethods: state.paymentMethods,

@@ -1,4 +1,23 @@
 // REMOVED: DynamoDB imports - payment gateway now only handles payments
+import crypto from "crypto";
+
+// Normalize and bound itemNumber usages per PayPal limits
+// - invoice_id: max 127 chars (per docs)
+// - custom_id: max 127 chars (per docs)
+// - PayPal-Request-Id: idempotency key, keep <= 127 and deterministic
+function normalizePayPalIds(raw) {
+  const base = String(raw || "").trim();
+  const safe = base.replace(/[^A-Za-z0-9\-_.:@|/]/g, "-");
+  const hash = crypto.createHash("sha256").update(safe).digest("hex");
+  const addHash = (val, maxLen) =>
+    val.length <= maxLen
+      ? val
+      : `${val.slice(0, Math.max(0, maxLen - 13))}-${hash.slice(0, 12)}`;
+  const invoiceId = addHash(safe, 127);
+  const customId = addHash(safe, 127);
+  const requestId = addHash(safe, 127);
+  return { invoiceId, customId, requestId };
+}
 // Data storage is handled by form submission to Salesforce
 
 // Helper function to estimate next payment date for recurring donations
@@ -333,6 +352,9 @@ async function initiateOrder(
 ) {
   const accessToken = await getPayPalAccessTokenForGatewayMerchant(merchantId);
 
+  // Normalize and bound itemNumber usages per PayPal limits
+  const { invoiceId, customId, requestId } = normalizePayPalIds(itemNumber);
+
   // Build items and totals if products array is provided
   const hasProducts = Array.isArray(products) && products.length > 0;
   const currencyCode = currency || "USD";
@@ -347,6 +369,7 @@ async function initiateOrder(
 
   let items = [];
   let itemsTotal = 0;
+  let shippingAmount = 0;
   if (hasProducts) {
     items = products.map((p) => {
       const qty = Number(p.quantity || 1);
@@ -366,23 +389,36 @@ async function initiateOrder(
         category: shippingAddress ? "PHYSICAL_GOODS" : "DIGITAL_GOODS",
       };
     });
+    // Optional shipping cost from products payload
+    const shippingLine = products.find((p) => p.type === "shipping");
+    if (shippingLine && shippingLine.amount) {
+      shippingAmount = Number(shippingLine.amount) || 0;
+    }
   }
 
   // Single purchase unit per PayPal docs; include breakdown when items exist
   const purchaseUnit = {
-    invoice_id: isDonation ? `DON-${itemNumber}` : String(itemNumber),
-    custom_id: String(itemNumber),
+    invoice_id: isDonation ? `DON-${invoiceId}` : String(invoiceId),
+    custom_id: String(customId),
     ...(description && { description }),
     payee: { merchant_id: merchantId },
     amount: hasProducts
       ? {
           currency_code: currencyCode,
-          value: formatAmount(currencyCode, itemsTotal),
+          value: formatAmount(currencyCode, itemsTotal + shippingAmount),
           breakdown: {
             item_total: {
               currency_code: currencyCode,
               value: formatAmount(currencyCode, itemsTotal),
             },
+            ...(shippingAmount
+              ? {
+                  shipping: {
+                    currency_code: currencyCode,
+                    value: formatAmount(currencyCode, shippingAmount),
+                  },
+                }
+              : {}),
           },
         }
       : {
@@ -424,8 +460,6 @@ async function initiateOrder(
           user_action: "PAY_NOW",
           return_url: returnUrl,
           cancel_url: cancelUrl,
-          brand_name: isDonation ? "Donation Portal" : "QuickForm Checkout",
-          locale: "en-US",
         },
       },
     },
@@ -439,7 +473,7 @@ async function initiateOrder(
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
-        "PayPal-Request-Id": itemNumber,
+        "PayPal-Request-Id": requestId,
       },
       body: JSON.stringify(payload),
     }
@@ -475,10 +509,15 @@ async function initiateSubscription(
   const accessToken = await getPayPalAccessTokenForGatewayMerchant(merchantId);
   const startTime = new Date(Date.now() + 10 * 60 * 1000);
   const formattedStartTime = startTime.toISOString().split(".")[0] + "Z";
+  const {
+    invoiceId: _inv,
+    customId,
+    requestId,
+  } = normalizePayPalIds(itemNumber);
   const payload = {
     plan_id: planId,
     start_time: formattedStartTime,
-    custom_id: itemNumber,
+    custom_id: customId,
     payee: {
       merchant_id: merchantId,
     },
@@ -507,7 +546,7 @@ async function initiateSubscription(
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
-        "PayPal-Request-Id": itemNumber,
+        "PayPal-Request-Id": requestId,
       },
       body: JSON.stringify(payload),
     }
@@ -746,6 +785,8 @@ export const handler = async (event) => {
         isDonationSubscription,
         donationButtonId,
       } = body;
+
+      console.log("🔍 Initiate payment with data:", body);
 
       // Validate required fields
       if (

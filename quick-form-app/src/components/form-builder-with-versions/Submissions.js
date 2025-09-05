@@ -264,6 +264,22 @@ const Submissions = ({
   const [filtersModal, setFiltersModal] = useState(false);
   const [hoverSortConfig, setHoverSortConfig] = useState(null);
 
+  // Helper to humanize sub-field keys (e.g., firstName -> First Name, country_code -> Country Code)
+  const humanize = useCallback((str) => {
+    if (!str) return "";
+    const spaced = String(str)
+      // insert space before capital letters in camelCase
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      // replace underscores and dashes with spaces
+      .replace(/[._-]+/g, " ")
+      .trim();
+    return spaced
+      .split(" ")
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }, []);
+
   useEffect(() => {
     // Compute and set CSS variables for sticky column left offsets so they
     // remain consistent during horizontal scrolling and resizing.
@@ -712,6 +728,45 @@ const Submissions = ({
       }
     }
 
+    // Dynamically add sub-field columns for keys like <baseId>_<suffix>
+    // and hide the base column when subfields exist
+    const existing = new Set(fieldIdsToUse);
+    const basesWithSubfields = new Set();
+    filteredSubmissions.forEach((sub) => {
+      const data = sub?.data || {};
+      Object.keys(data).forEach((k) => {
+        const idx = k.indexOf("_");
+        if (idx > 0) {
+          const baseId = k.slice(0, idx);
+          const suffix = k.slice(idx + 1);
+          // Only consider if the base field is in our current view
+          if (fieldsToUse[baseId]) {
+            const syntheticId = `${baseId}__sub__${suffix}`;
+            basesWithSubfields.add(baseId);
+            if (!existing.has(syntheticId)) {
+              existing.add(syntheticId);
+              // Label: humanized suffix (e.g., First Name)
+              fieldsToUse[syntheticId] = humanize(suffix);
+              fieldIdsToUse.push(syntheticId);
+            }
+          }
+        }
+      });
+    });
+
+    // Remove the base field columns that have subfields
+    if (basesWithSubfields.size > 0) {
+      basesWithSubfields.forEach((baseId) => {
+        if (fieldsToUse[baseId]) {
+          delete fieldsToUse[baseId];
+        }
+      });
+      // Filter out base ids from the ordered list
+      fieldIdsToUse = fieldIdsToUse.filter(
+        (fid) => !basesWithSubfields.has(fid)
+      );
+    }
+
     setSubmissions(filteredSubmissions);
     setFields(fieldsToUse);
 
@@ -722,16 +777,23 @@ const Submissions = ({
     console.log(
       `Updated for ${selectedVersion}: ${filteredSubmissions.length} submissions, ${fieldIdsToUse.length} fields`
     );
-  }, [selectedVersion, allSubmissions, currentFormVersionId, fieldsByVersion]);
+  }, [
+    selectedVersion,
+    allSubmissions,
+    currentFormVersionId,
+    fieldsByVersion,
+    humanize,
+  ]);
 
   // Separate effect for stats update to prevent infinite re-renders
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     console.log("🔄 Updating stats with total submissions:");
     if (onStatsUpdate && typeof onStatsUpdate === "function" && !loading) {
       // Provide the parent component with the total submissions (all versions)
       onStatsUpdate(allSubmissions);
     }
-  }, [allSubmissions, loading]);
+  }, [allSubmissions, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     console.log("🔄 Updating pagination and filters");
@@ -772,32 +834,94 @@ const Submissions = ({
         formatDate(sub.submissionDate),
         ...visibleFields.map((fieldId) => {
           // Use the same logic as the table to find the correct field value
-          let fieldValue = sub.data[fieldId];
+          let fieldValue;
 
-          // For "All Versions", search for field with same label if not found
-          if (
-            selectedVersion === "all" &&
-            (fieldValue === null ||
-              fieldValue === undefined ||
-              fieldValue === "")
-          ) {
-            const targetLabel = fields[fieldId];
+          // Synthetic sub-field IDs formatted as <baseId>__sub__<suffix>
+          if (fieldId.includes("__sub__")) {
+            const [baseId, suffix] = fieldId.split("__sub__");
+            fieldValue = sub?.data?.[`${baseId}_${suffix}`];
+          } else {
+            fieldValue = sub.data[fieldId];
+
+            // For "All Versions", search for field with same label if not found
             if (
-              targetLabel &&
-              sub.formVersionId &&
-              fieldsByVersion[sub.formVersionId]
+              selectedVersion === "all" &&
+              (fieldValue === null ||
+                fieldValue === undefined ||
+                fieldValue === "")
             ) {
-              const versionFields = fieldsByVersion[sub.formVersionId];
-              for (const [versionFieldId, versionFieldInfo] of Object.entries(
-                versionFields
-              )) {
-                if (
-                  versionFieldInfo.label === targetLabel &&
-                  sub.data[versionFieldId] !== undefined
-                ) {
-                  fieldValue = sub.data[versionFieldId];
-                  break;
+              const targetLabel = fields[fieldId];
+              if (
+                targetLabel &&
+                sub.formVersionId &&
+                fieldsByVersion[sub.formVersionId]
+              ) {
+                const versionFields = fieldsByVersion[sub.formVersionId];
+                for (const [versionFieldId, versionFieldInfo] of Object.entries(
+                  versionFields
+                )) {
+                  if (
+                    versionFieldInfo.label === targetLabel &&
+                    sub.data[versionFieldId] !== undefined
+                  ) {
+                    fieldValue = sub.data[versionFieldId];
+                    break;
+                  }
                 }
+              }
+            }
+
+            // Map to payment object if present under known keys
+            const paymentKey = `payment_${fieldId}`;
+            const paymentFromKey = sub.data?.[paymentKey];
+            const paymentFromRoot =
+              sub.data?.paymentData?.fieldId === fieldId
+                ? sub.data.paymentData
+                : null;
+            const paymentObj = paymentFromKey || paymentFromRoot;
+            if (
+              (fieldValue === null ||
+                fieldValue === undefined ||
+                fieldValue === "") &&
+              paymentObj
+            ) {
+              fieldValue = paymentObj;
+            }
+
+            // If still empty, check for composite subfields like `${fieldId}_firstName`
+            if (
+              fieldValue === null ||
+              fieldValue === undefined ||
+              fieldValue === ""
+            ) {
+              const prefix = `${fieldId}_`;
+              const subEntries = Object.entries(sub.data || {})
+                .filter(([k, v]) => k.startsWith(prefix))
+                .map(([k, v]) => ({ key: k.slice(prefix.length), value: v }))
+                .filter(
+                  (e) =>
+                    e.value !== undefined && e.value !== null && e.value !== ""
+                );
+              if (subEntries.length > 0) {
+                const priority = [
+                  "fullName",
+                  "firstName",
+                  "street",
+                  "email",
+                  "phone",
+                  "city",
+                  "state",
+                  "postal",
+                  "zip",
+                  "country",
+                ];
+                const notMeta = subEntries.filter(
+                  (e) => e.key.toLowerCase() !== "countrycode"
+                );
+                const pickFrom = notMeta.length > 0 ? notMeta : subEntries;
+                let picked = pickFrom.find((e) => priority.includes(e.key));
+                if (!picked) picked = pickFrom[0];
+                fieldValue = picked?.value;
               }
             }
           }
@@ -808,6 +932,21 @@ const Submissions = ({
             csvValue = fieldValue.join("; ");
           } else if (typeof fieldValue === "boolean") {
             csvValue = fieldValue ? "Yes" : "No";
+          } else if (
+            fieldValue &&
+            typeof fieldValue === "object" &&
+            (fieldValue.amount || fieldValue.paymentMethod || fieldValue.status)
+          ) {
+            const parts = [];
+            if (fieldValue.amount)
+              parts.push(
+                `${fieldValue.currency ? fieldValue.currency + " " : ""}${
+                  fieldValue.amount
+                }`
+              );
+            if (fieldValue.paymentMethod) parts.push(fieldValue.paymentMethod);
+            if (fieldValue.status) parts.push(`(${fieldValue.status})`);
+            csvValue = parts.join(" ");
           } else {
             csvValue = (fieldValue || "").toString();
           }
@@ -1494,8 +1633,57 @@ const Submissions = ({
       );
     }
 
-    // Objects -> pretty JSON block
+    // Objects -> detect known shapes first (e.g., payment), else pretty JSON
     if (typeof fieldValue === "object") {
+      // Special rendering for payment field
+      const isPaymentField =
+        (fieldInfo &&
+          typeof fieldInfo.type === "string" &&
+          fieldInfo.type.toLowerCase() === "payment") ||
+        (fieldValue &&
+          ("amount" in fieldValue || "paymentMethod" in fieldValue) &&
+          ("status" in fieldValue || "transactionId" in fieldValue));
+
+      if (isPaymentField) {
+        const amount = fieldValue.amount;
+        const currency = fieldValue.currency || "";
+        const method = fieldValue.paymentMethod || fieldValue.method;
+        const provider = fieldValue.metadata?.provider;
+        const status = fieldValue.status;
+
+        return (
+          <div className="inline-flex items-center gap-2">
+            {amount !== undefined && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-green-50 text-green-700 text-xs font-semibold border border-green-200">
+                {currency ? `${currency} ` : ""}
+                {amount}
+              </span>
+            )}
+            {method && (
+              <span className="text-xs text-gray-700 font-medium capitalize">
+                {method}
+              </span>
+            )}
+            {provider && (
+              <span className="text-[11px] text-gray-500">({provider})</span>
+            )}
+            {status && (
+              <span
+                className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
+                  status === "completed"
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : status === "failed"
+                    ? "bg-red-50 text-red-700 border border-red-200"
+                    : "bg-gray-50 text-gray-700 border border-gray-200"
+                }`}
+              >
+                {status}
+              </span>
+            )}
+          </div>
+        );
+      }
+
       try {
         return (
           <pre className="text-sm bg-gray-50 p-2 rounded-lg border text-gray-800 font-mono whitespace-pre-wrap">
@@ -1561,7 +1749,15 @@ const Submissions = ({
   const applyAdvancedFilter = useCallback(
     (submission, filter) => {
       // Use the same logic as table rendering to find the correct field value
-      let fieldValue = submission.data[filter.field];
+      let fieldValue;
+
+      // Handle synthetic sub-fields formatted as <baseId>__sub__<suffix>
+      if (filter.field && String(filter.field).includes("__sub__")) {
+        const [baseId, suffix] = String(filter.field).split("__sub__");
+        fieldValue = submission?.data?.[`${baseId}_${suffix}`];
+      } else {
+        fieldValue = submission.data[filter.field];
+      }
 
       // For "All Versions", search for field with same label if not found
       if (
@@ -1744,7 +1940,14 @@ const Submissions = ({
         sub.submissionDate.toLowerCase().includes(searchTerm.toLowerCase()) ||
         visibleFields.some((fieldId) => {
           // Use the same logic as table rendering to find the correct field value
-          let fieldValue = sub.data[fieldId];
+          let fieldValue;
+
+          if (fieldId.includes("__sub__")) {
+            const [baseId, suffix] = fieldId.split("__sub__");
+            fieldValue = sub?.data?.[`${baseId}_${suffix}`];
+          } else {
+            fieldValue = sub.data[fieldId];
+          }
 
           // For "All Versions", search for field with same label if not found
           if (
@@ -1834,8 +2037,16 @@ const Submissions = ({
         return isNaN(t) ? 0 : t;
       }
 
-      // Field sorting: try top-level data first
-      let val = submission.data ? submission.data[key] : undefined;
+      // Field sorting: handle synthetic subfields and top-level data
+      let val;
+      if (key && String(key).includes("__sub__")) {
+        const [baseId, suffix] = String(key).split("__sub__");
+        val = submission.data
+          ? submission.data[`${baseId}_${suffix}`]
+          : undefined;
+      } else {
+        val = submission.data ? submission.data[key] : undefined;
+      }
 
       // If in "all" mode and val is missing, try to find a field in this submission
       // which has the same label as the column's label (fields[key])
@@ -1989,6 +2200,7 @@ const Submissions = ({
                 submission={previewModal.submission}
                 allFields={allFields}
                 fieldsByVersion={fieldsByVersion}
+                formVersions={formVersions}
                 onStatusUpdate={handleStatusUpdate}
                 onClose={() =>
                   setPreviewModal({ isOpen: false, submission: null })
@@ -2564,16 +2776,32 @@ const Submissions = ({
                               visibleFields.map((fieldId) => {
                                 // For "All Versions", we need to find the actual field value
                                 // by looking for the field in the submission's version-specific data
-                                let fieldValue = sub.data[fieldId];
-                                let fieldInfo = getFieldInfoForSubmission(
-                                  fieldId,
-                                  sub
-                                );
+                                let fieldValue;
+                                let fieldInfo;
+
+                                // Handle synthetic sub-field IDs formatted as <baseId>__sub__<suffix>
+                                if (fieldId.includes("__sub__")) {
+                                  const [baseId, suffix] =
+                                    fieldId.split("__sub__");
+                                  fieldValue =
+                                    sub?.data?.[`${baseId}_${suffix}`];
+                                  fieldInfo = getFieldInfoForSubmission(
+                                    baseId,
+                                    sub
+                                  );
+                                } else {
+                                  fieldValue = sub.data[fieldId];
+                                  fieldInfo = getFieldInfoForSubmission(
+                                    fieldId,
+                                    sub
+                                  );
+                                }
 
                                 // If we're in "All Versions" mode and don't find the field value,
                                 // search for a field with the same label in the submission's version
                                 if (
                                   selectedVersion === "all" &&
+                                  !fieldId.includes("__sub__") &&
                                   (fieldValue === null ||
                                     fieldValue === undefined ||
                                     fieldValue === "")
@@ -2601,6 +2829,76 @@ const Submissions = ({
                                         break;
                                       }
                                     }
+                                  }
+                                }
+
+                                // Map to payment object if present under known keys,
+                                // even if the field's type metadata is missing
+                                {
+                                  const paymentKey = `payment_${fieldId}`;
+                                  const paymentFromKey = sub.data?.[paymentKey];
+                                  const paymentFromRoot =
+                                    sub.data?.paymentData?.fieldId === fieldId
+                                      ? sub.data.paymentData
+                                      : null;
+                                  const paymentObj =
+                                    paymentFromKey || paymentFromRoot;
+                                  if (
+                                    (fieldValue === null ||
+                                      fieldValue === undefined ||
+                                      fieldValue === "") &&
+                                    paymentObj
+                                  ) {
+                                    fieldValue = paymentObj;
+                                  }
+                                }
+
+                                // If still empty, check for composite subfields like `${fieldId}_firstName` and show a meaningful one
+                                if (
+                                  fieldValue === null ||
+                                  fieldValue === undefined ||
+                                  fieldValue === ""
+                                ) {
+                                  const prefix = `${fieldId}_`;
+                                  const subEntries = Object.entries(
+                                    sub.data || {}
+                                  )
+                                    .filter(([k, v]) => k.startsWith(prefix))
+                                    .map(([k, v]) => ({
+                                      key: k.slice(prefix.length),
+                                      value: v,
+                                    }))
+                                    .filter(
+                                      (e) =>
+                                        e.value !== undefined &&
+                                        e.value !== null &&
+                                        e.value !== ""
+                                    );
+                                  if (subEntries.length > 0) {
+                                    // Prefer common subfields
+                                    const priority = [
+                                      "fullName",
+                                      "firstName",
+                                      "street",
+                                      "email",
+                                      "phone",
+                                      "city",
+                                      "state",
+                                      "postal",
+                                      "zip",
+                                      "country",
+                                    ];
+                                    const notMeta = subEntries.filter(
+                                      (e) =>
+                                        e.key.toLowerCase() !== "countrycode"
+                                    );
+                                    const pickFrom =
+                                      notMeta.length > 0 ? notMeta : subEntries;
+                                    let picked = pickFrom.find((e) =>
+                                      priority.includes(e.key)
+                                    );
+                                    if (!picked) picked = pickFrom[0];
+                                    fieldValue = picked?.value;
                                   }
                                 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   FaInfoCircle,
   FaCog,
@@ -24,7 +24,6 @@ import {
   isZeroDecimal,
   isInCountryOnly,
 } from "../../../../../utils/paypalCurrencies";
-
 
 /**
  * Refactored PayPal Field Editor with Centralized State Management
@@ -56,6 +55,10 @@ const PayPalFieldEditorTabsRefactored = ({
     onUpdateField,
     fieldId
   );
+
+  useEffect(() => {
+    console.log("🎛️ PayPalFieldEditorTabsRefactored state:", state);
+  }, [state]);
 
   // Performance monitoring
   const performanceMonitor = usePerformanceMonitor("PayPalFieldEditorTabs");
@@ -312,7 +315,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowProductModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
+        selectedMerchantId={state.capabilities?.merchantId || ""}
       />
 
       <SubscriptionManagementModal
@@ -320,7 +323,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowSubscriptionModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
+        selectedMerchantId={state.capabilities?.merchantId || ""}
       />
     </div>
   );
