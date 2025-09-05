@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import "rsuite/dist/rsuite.min.css";
 import "./Submissions.css";
+import Loader from "../Loader";
 import SubmissionPreviewNew from "./Submission-related-forlder/SubmissionPreviewNew";
 // import SubmissionPreviewContent from "./SubmissionPreviewContent";
 import AdvancedFilters from "./Submission-related-forlder/AdvancedFilters";
@@ -255,6 +256,7 @@ const Submissions = ({
   const [openMenu, setOpenMenu] = useState(null); // Manages which menu is open
   const headerMenuRef = useRef(null);
   const selectionBarMenuRef = useRef(null);
+  const [loadingText , setLoadingText] = useState("");
 
   // Modal and UI states
   const [previewModal, setPreviewModal] = useState({
@@ -443,6 +445,7 @@ const Submissions = ({
     }
 
     setLoading(true);
+    setLoadingText("Loading submissions");
     setError(null);
 
     try {
@@ -876,16 +879,17 @@ const Submissions = ({
       return;
     }
 
-    if (
-      !window.confirm(
-        `Are you sure you want to delete ${selectedRows.length} submission(s)? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    // if (
+    //   !window.confirm(
+    //     `Are you sure you want to delete ${selectedRows.length} submission(s)? This action cannot be undone.`
+    //   )
+    // ) {
+    //   return;
+    // }
 
     try {
       setLoading(true);
+      setLoadingText("Deleting Submissions");
       const userId = sessionStorage.getItem("userId");
       const instanceUrl = sessionStorage.getItem("instanceUrl");
       const accessToken = await fetchAccessToken(userId, instanceUrl, 3);
@@ -1057,15 +1061,19 @@ const Submissions = ({
       );
 
       // Make API call to update archive status in Salesforce
+      setLoading(true);
+      setLoadingText("Archiving Submission");
       const userId = sessionStorage.getItem("userId");
       const instanceUrl = sessionStorage.getItem("instanceUrl");
 
       if (!userId || !instanceUrl) {
+        setLoading(false);
         throw new Error("Missing authentication details");
       }
 
       const accessToken = await fetchAccessToken(userId, instanceUrl, 3);
       if (!accessToken) {
+        setLoading(false);
         throw new Error("Failed to obtain access token");
       }
 
@@ -1087,15 +1095,18 @@ const Submissions = ({
       });
 
       if (!response.ok) {
+        setLoading(false);
         throw new Error(`Failed to archive submission: ${response.statusText}`);
       }
 
       const result = await response.json();
       if (!result.success) {
+        setLoading(false);
         throw new Error(result.error || "Failed to archive submission");
       }
 
       console.log(`Successfully archived submission ${submissionId}`);
+      setLoading(false);
       alert("Submission archived successfully!");
     } catch (error) {
       console.error("Error archiving submission:", error);
@@ -1128,6 +1139,7 @@ const Submissions = ({
 
     try {
       setLoading(true);
+      setLoadingText("Deleting Submission");
       const userId = sessionStorage.getItem("userId");
       const instanceUrl = sessionStorage.getItem("instanceUrl");
       const accessToken = await fetchAccessToken(userId, instanceUrl, 3);
@@ -1939,14 +1951,10 @@ const Submissions = ({
       </div>
     );
 
-  if (loading)
+  if (loading && (!loadingText.startsWith("Deleting") && !(loadingText === "Archiving Submission")))
     return (
       <div className="flex flex-col items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-        <div className="text-blue-600 font-medium">Loading submissions...</div>
-        <div className="text-gray-500 text-sm mt-2">
-          This may take a few moments
-        </div>
+       {!loadingText.startsWith("Deleting") && (<Loader text={loadingText} fullScreen={false}/>)} 
       </div>
     );
 
@@ -1977,6 +1985,7 @@ const Submissions = ({
         width: isSidebarOpen ? "calc(100vw - 16rem)" : "calc(100vw - 4rem)",
       }}
     >
+      {loading && (loadingText.startsWith("Deleting") || loadingText === "Archiving Submission") && (<Loader text={loadingText} fullScreen={true}/>)} 
       {/* Preview modal displayed as a card over the table (like image 2) */}
       {previewModal.isOpen && previewModal.submission && (
         <div className="submission-modal-container">

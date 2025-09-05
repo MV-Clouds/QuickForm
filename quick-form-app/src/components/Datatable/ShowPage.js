@@ -50,13 +50,7 @@ const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleD
   // }, []);
 
 
-  if (isLoading) {
-    return (
-      <div className="">
-        <QuickFormLoading />
-      </div>
-    );
-  }
+
 
   return (
     <div className="container mx-auto py-10">

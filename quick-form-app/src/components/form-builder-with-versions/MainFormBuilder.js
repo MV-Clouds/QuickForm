@@ -28,6 +28,7 @@ import PreviewForm from "./PreviewForm";
 import VersionList from "./VersionList.js";
 import { motion, AnimatePresence } from "framer-motion";
 import { displayName } from "react-quill";
+import Loader from "../Loader";
 
 const themes = [
   {
@@ -364,6 +365,7 @@ function MainFormBuilder({
   const [clipboard, setClipboard] = useState({ field: null, operation: null });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [loadingText, setLoadingText] = useState('');
   const fields = fieldsState.present;
 
   const [footerConfigs, setFooterConfigs] = useState({});
@@ -431,6 +433,7 @@ function MainFormBuilder({
   const handlePublish = async () => {
     try {
       setIsLoadingForm(true);
+      setLoadingText('Publishing Form');
       setHasChanges(false);
       const userId = sessionStorage.getItem("userId");
       const instanceUrl = sessionStorage.getItem("instanceUrl");
@@ -620,6 +623,7 @@ function MainFormBuilder({
   const fetchFormData = async (userId, instanceUrl) => {
     try {
       setIsLoadingForm(true);
+      setLoadingText('Loading Form Data');
       setFetchFormError(null);
 
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
@@ -1048,6 +1052,8 @@ function MainFormBuilder({
     );
     const userId = sessionStorage.getItem("userId");
     const instanceUrl = sessionStorage.getItem("instanceUrl");
+    setIsLoadingForm(true);
+    !showThankYou ? setLoadingText('Saving Form') : setLoadingText('Saving Thank You');
     const token = await fetchAccessToken(userId, instanceUrl);
     const result = await handleThankYouSave({
       instanceUrl,
@@ -1060,13 +1066,8 @@ function MainFormBuilder({
       return;
     }
     if (!isEditable) return;
-    setIsSaving(true);
     setSaveError(null);
     try {
-      const userId = sessionStorage.getItem("userId");
-      const instanceUrl = sessionStorage.getItem("instanceUrl");
-      if (!userId || !instanceUrl)
-        throw new Error("Missing userId or instanceUrl.");
 
       // Step 1: Mock validation (set to true by default for now)
       const mockValidation = true;
@@ -1080,6 +1081,7 @@ function MainFormBuilder({
         await enhancedFormPaymentProcessor.validateFormPayments(fields, formId);
 
       if (!paymentValidation.isValid) {
+        setIsLoadingForm(false);
         const errorMessage = `Payment validation failed:\n${paymentValidation.errors.join(
           "\n"
         )}`;
@@ -1087,6 +1089,7 @@ function MainFormBuilder({
       }
 
       if (paymentValidation.warnings.length > 0) {
+        setIsLoadingForm(false);
         const warningMessage = `Payment warnings:\n${paymentValidation.warnings.join(
           "\n"
         )}\n\nDo you want to continue?`;
@@ -1105,6 +1108,7 @@ function MainFormBuilder({
         );
 
       if (!paymentProcessing.success) {
+        setIsLoadingForm(false);
         const errorMessage = `Payment processing failed:\n${paymentProcessing.errors
           .map((e) => `Field ${e.fieldId}: ${e.error}`)
           .join("\n")}`;
@@ -1142,8 +1146,6 @@ function MainFormBuilder({
       }
 
       // Step 4: Continue with normal form save process
-      const token = await fetchAccessToken(userId, instanceUrl);
-      if (!token) throw new Error("Failed to obtain access token.");
       const { formVersion, formFields } = prepareFormData();
 
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
@@ -1164,6 +1166,7 @@ function MainFormBuilder({
       }
       // Success message with payment processing info
       let successMessage = "Form saved successfully!";
+      setIsLoadingForm(false);
       if (paymentProcessing.processedFields.length > 0) {
         const processedCount = paymentProcessing.processedFields.length;
         successMessage += `\n\n${processedCount} payment field(s) processed:`;
@@ -1171,7 +1174,6 @@ function MainFormBuilder({
           successMessage += `\n- ${field.action} for field ${field.fieldId}`;
         });
       }
-      alert(successMessage);
 
       await refreshData();
       if (hasChanges || !formVersion.Id) {
@@ -2037,30 +2039,7 @@ function MainFormBuilder({
               {fetchFormError}
             </div>
           )}
-          {isLoadingForm ? (
-            <div className="flex justify-center items-center h-64">
-              <svg
-                className="animate-spin h-8 w-8 text-blue-600"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            </div>
-          ) : showThankYou ? (
+          {showThankYou ? (
             <ThankYouPageBuilder
               formVersionId={formVersionId}
               elements={elements}
@@ -2069,11 +2048,12 @@ function MainFormBuilder({
               setContent={setContent}
               theme={theme}
               setTheme={setTheme}
+              isLoadingForm={isLoadingForm} loadingText={loadingText}
             />
           ) : showCondition ? (
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
-            <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish} />
+            <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish}  isLoadingForm={isLoadingForm} loadingText={loadingText} />
           ) : showSubmission ? (
             <Submissions
               isSidebarOpen={isSidebarOpen}
@@ -2093,6 +2073,11 @@ function MainFormBuilder({
               <MappingFields />
             ) : (
               <div className="flex w-full h-screen builder-start" style={{ position: "relative" }}>
+                {isLoadingForm && (
+            loadingText === "Publishing Form" || loadingText === 'Saving Form' ? (
+              <Loader text={loadingText} fullScreen={true}/>
+            ) : ( <Loader text={loadingText} fullScreen={false} />))}
+          
                 {/* Builder fades out when preview is active */}
                 <div className={`w-3/4 inner-builder-container ${showPreview ? "fade-out" : "fade-in"}`} style={{ position: "relative" }}>
                   {!showPreview && (

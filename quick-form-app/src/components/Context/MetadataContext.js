@@ -5,7 +5,7 @@ export const MetadataContext = createContext();
 export const SalesforceDataProvider = ({ children }) => {
   const [metadata, setMetadata] = useState([]);
   const [formRecords, setFormRecords] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProfile, setuserProfile] = useState([]); // User Profile Data
   const [Fieldset , setFieldset] = useState([]); // Field Set Data

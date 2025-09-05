@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { useSalesforceData } from "../Context/MetadataContext";
 import { AnimatePresence, motion } from "framer-motion";
+import Loader from "../Loader";
 
 const FavoriteTab = ({ handleEditForm }) => {
 
-    const { favoriteData } = useSalesforceData();
+    const { favoriteData, isLoading } = useSalesforceData();
     console.log('Favorite Data =>', favoriteData);
     const [search, setSearch] = useState('');
     const filteredFavorites = useMemo(() =>
@@ -61,10 +62,10 @@ const FavoriteTab = ({ handleEditForm }) => {
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm w-64"
-                        />
+                            />
                         {/* <select className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm">
               <option>All</option>
-            </select> */}
+              </select> */}
                     </div>
 
                 </div>
@@ -72,22 +73,23 @@ const FavoriteTab = ({ handleEditForm }) => {
             <AnimatePresence mode="wait">
                 <motion.div
                     key="card-view"
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6"
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6 relative h-full"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.3 }}
-                >
+                    >
+                        {isLoading && <div style={{ width: '80vw', height:'70vh' }}> <Loader text={"Loading Favorites"} fullScreen={false} /></div>}
                     {filteredFavorites.map((item, index) => (
                         <motion.div
-                            key={item.id || index}
-                            className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 bg-white border border-gray-100 h-full"
-                            whileHover={{ y: -5 }}
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ duration: 0.3, delay: index * 0.05 }}
-                            layout
+                        key={item.id || index}
+                        className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 bg-white border border-gray-100 h-full"
+                        whileHover={{ y: -5 }}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        layout
                         >
                             <div className="flex flex-col sm:flex-row h-full">
                                 {/* Status Badge */}

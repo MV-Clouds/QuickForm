@@ -41,6 +41,7 @@
     "react-scripts": "^5.0.1",
     "react-select": "^5.10.1",
     "react-signature-canvas": "^1.1.0-alpha.2",
+    "react-spinners": "^0.17.0",
     "react-syntax-highlighter": "^15.6.1",
     "reactflow": "^11.11.4",
     "rsuite": "^5.83.3",

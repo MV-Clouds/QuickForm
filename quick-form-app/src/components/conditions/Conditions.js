@@ -4,6 +4,7 @@ import { Tabs, Select, Button, Input, Modal } from 'antd';
 import { motion, AnimatePresence } from 'framer-motion';
 import MainMenuBar from '../form-builder-with-versions/MainMenuBar'; // Replaced Sidebar with MainMenuBar
 import { FaPlus, FaSave, FaTrash, FaEdit, FaEye } from 'react-icons/fa';
+import Loader from '../Loader';
 import ReactFlow, {
   ReactFlowProvider,
   Controls,
@@ -37,6 +38,7 @@ const Conditions = ({ formVersionId }) => {
   const [fields, setFields] = useState([]);
   const [formRecords, setFormRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('');
   const [error, setError] = useState(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [token, setToken] = useState(null);
@@ -132,6 +134,7 @@ const Conditions = ({ formVersionId }) => {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setLoadingText('Loading Conditions')
       try {
         const userId = sessionStorage.getItem('userId');
         const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -172,7 +175,6 @@ const Conditions = ({ formVersionId }) => {
         }
 
         if (!formVersion) throw new Error(`Form version ${formVersionId} not found`);
-        console.log('Form Version Data:', formVersion);
         setFields(formVersion.Fields || []);
         const parsedConditions = Array.isArray(formVersion.Conditions)
           ? formVersion.Conditions.flat().map((c) => ({
@@ -181,16 +183,13 @@ const Conditions = ({ formVersionId }) => {
               logicExpression: c.logic === 'Custom' ? (c.logicExpression || '') : '',            }))
           : [];
         setConditions(parsedConditions);
-        console.log('Parsed Conditions:', parsedConditions);
         
         const uniquePageNumbers = [...new Set(formVersion.Fields.map((field) => field.Page_Number__c))].sort((a, b) => a - b);
-        console.log('Unique Page Numbers:', uniquePageNumbers);
         const derivedPages = uniquePageNumbers.map((pageNum, index) => ({
           Id: `page_${pageNum}`,
           Name: `Page ${pageNum}`,
           Fields: formVersion.Fields.filter((f) => f.Page_Number__c === pageNum).map((f) => f.Unique_Key__c),
         }));
-        console.log('Dervied Pages:', derivedPages);
         
         setPages(derivedPages);
 
@@ -465,7 +464,6 @@ const Conditions = ({ formVersionId }) => {
   };
 
   const editCondition = (condition) => {
-    console.log('Editing condition:', condition);
     const conditionData = condition.Condition_Data__c ? JSON.parse(condition.Condition_Data__c || '{}') : condition;
     setNewCondition({
       type: conditionData.type,
@@ -535,6 +533,8 @@ const Conditions = ({ formVersionId }) => {
       setError('Access token not available');
       return;
     }
+    setIsLoading(true);
+    conditionId === null ? setLoadingText('Saving Condition') : setLoadingText('Updating Condition');
     try {
       const userId = sessionStorage.getItem('userId');
       const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -610,7 +610,6 @@ const Conditions = ({ formVersionId }) => {
           }),
         };
       } else if (newCondition.type === 'skip_hide_page') {
-        console.log('Processing skip/hide page condition:', newCondition);
         if (!newCondition.conditions?.every((c) => c.ifField && c.operator) || !newCondition.targetPage || !newCondition.sourcePage) {
           throw new Error('Missing required fields for skip/hide page condition');
         }
@@ -698,7 +697,7 @@ const Conditions = ({ formVersionId }) => {
           }),
         };
       }
-      console.log('Saving condition data:', conditionData);
+
 
       const response = await fetch(process.env.REACT_APP_SAVE_CONDITION_URL, {
         method: 'POST',
@@ -721,6 +720,8 @@ const Conditions = ({ formVersionId }) => {
         setToken(data.newAccessToken);
       }
 
+      setIsLoading(false);
+
       setConditions((prev) =>
         conditionId
           ? prev.map((c) => (c.Id === conditionId ? data.condition : c))
@@ -730,11 +731,9 @@ const Conditions = ({ formVersionId }) => {
       if (newCondition.type === 'skip_hide_page') {
         // Normalize targetPage to an array
         const targetPages = Array.isArray(newCondition.targetPage) ? newCondition.targetPage : [newCondition.targetPage].filter(Boolean);
-        console.log('Normalized targetPages:', targetPages);
 
         // Create or update edges for each target page
         setEdges((prevEdges) => {
-          console.log('Previous Edges:', prevEdges);
           let newEdges = [...prevEdges];
 
           if (newCondition.thenAction === 'loop') {
@@ -788,7 +787,6 @@ const Conditions = ({ formVersionId }) => {
             // Create or update an edge for each target page
             targetPages.forEach((targetPage) => {
               const edgeId = `${newCondition.sourcePage}-${newCondition.thenAction}-${targetPage}`;
-              console.log('Generated edgeId:', edgeId);
               const existingEdge = newEdges.find((e) => e.id === edgeId);
               if (existingEdge) {
                 const updatedConditions = conditionId
@@ -843,7 +841,6 @@ const Conditions = ({ formVersionId }) => {
               }
             });
           }
-          console.log('Updated Edges:', newEdges);
           return newEdges;
         });
       }
@@ -869,6 +866,7 @@ const Conditions = ({ formVersionId }) => {
       }
       setIsShowHideModalVisible(false);
     } catch (err) {
+      setIsLoading(false);
       setError(err.message);
     }
   };
@@ -880,6 +878,9 @@ const Conditions = ({ formVersionId }) => {
     }
     try {
       // Find the condition to be deleted
+      setIsLoading(true);
+      setLoadingText('Deleting Condition');
+      // If it's a "don't require" condition, check for dependencies first
       const condToDelete = conditions.find((c) => c.Id === conditionId);
       // Check if it is a "don't require" condition (enable_require_mask type, thenAction == "don't require")
       if (
@@ -950,6 +951,7 @@ const Conditions = ({ formVersionId }) => {
         });
 
         if (conflicting) {
+          setIsLoading(false);
           setError('Cannot delete this "Don\'t Require" condition because it is required by other Hide/Disable/Skip/Hide Page conditions involving required fields.');
           return;
         }
@@ -978,6 +980,7 @@ const Conditions = ({ formVersionId }) => {
       if (data.newAccessToken) {
         setToken(data.newAccessToken);
       }
+      setIsLoading(false);
       setConditions(conditions.filter((c) => c.Id !== conditionId));
       setEdges((prevEdges) => {
         const updatedEdges = prevEdges.map((edge) => {
@@ -1005,13 +1008,87 @@ const Conditions = ({ formVersionId }) => {
         return updatedEdges;
       });
     } catch (err) {
+      setIsLoading(false);
       setError(err.message);
     }
   };
 
-  const validIfFields = fields.filter(
+  function getSelectableConditionFields(fields) {
+    const expanded = [];
+
+    fields.forEach((field) => {
+      let props = {};
+      try {
+        props = JSON.parse(field.Properties__c || '{}');
+      } catch {}
+
+      const type = (field.Field_Type__c || '').toLowerCase();
+
+      if (['address', 'phone', 'fullname'].includes(type)) {
+        Object.entries(props.subFields || {}).forEach(([subKey, subMeta]) => {
+          
+          
+          if (subMeta.visible !== false && subMeta.enabled !== false) {
+            
+            expanded.push({
+              ...field,
+              Name: `${props.label || field.Name} - ${subMeta.label}`,
+              Unique_Key__c: `${props.id || field.Unique_Key__c}_${subKey}`,
+              properties: { ...props, id: `${props.id || field.Unique_Key__c}_${subKey}` },
+              Field_Type__c: type,
+            });
+          }
+        });
+      } else if (type === 'section') {
+        Object.entries(props.subFields || {}).forEach(([sideKey, subMeta]) => {
+          if (!subMeta) return;
+
+          const subType = subMeta.type;
+          const subProps = subMeta;
+
+          if (['address', 'phone', 'fullname'].includes(subType)) {
+            Object.entries(subProps.subFields || {}).forEach(([nestedKey, nestedMeta]) => {
+
+              if(nestedKey === 'firstName'){
+                nestedMeta.label = 'First Name';
+              } else if(nestedKey === 'lastName'){
+                nestedMeta.label = 'Last Name';
+              } else if(nestedKey === 'salutation'){
+                nestedMeta.label = 'Salutation';
+              }
+              
+              if (nestedMeta.visible !== false && nestedMeta.enabled !== false) {
+                expanded.push({
+                  ...field,
+                  Name: `Section - ${subMeta.label} - ${nestedMeta.label}`,
+                  Unique_Key__c: `${subProps.id}_${nestedKey}`,
+                  properties: { ...subProps, id: `${subProps.id}_${nestedKey}` },
+                  Field_Type__c: subType,
+                });
+              }
+            });
+          } else {
+            expanded.push({
+              ...field,
+              Name: `Section - ${subMeta.label}`,
+              Unique_Key__c: subProps.id || field.Unique_Key__c,
+              properties: { ...subProps, id: subProps.id },
+              Field_Type__c: subType,
+            });
+          }
+        });
+      } else {
+        // Normal field
+        expanded.push(field);
+      }
+    });
+
+    return expanded;
+  }
+
+  const validIfFields = getSelectableConditionFields(fields).filter(
     (f) =>
-      !['signature', 'fileupload', 'imageuploader', 'terms', 'displaytext', 'divider', 'pagebreak', 'section', 'header'].includes(
+      !['signature', 'fileupload', 'imageuploader', 'terms', 'displaytext', 'divider', 'pagebreak', 'section', 'header','footer'].includes(
         f.Field_Type__c
       )
   );
@@ -1930,13 +2007,9 @@ const Conditions = ({ formVersionId }) => {
               {error}
             </motion.div>
           )}
-          {isLoading ? (
+          {isLoading && (loadingText === 'Loading Conditions' || loadingText === 'Deleting Condition') ? (
             <div className="flex justify-center items-center h-full">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1 }}
-                className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"
-              />
+              {loadingText === 'Loading Conditions' ? (<Loader text={loadingText} fullScreen={false} />) : (<Loader text={loadingText} fullScreen={true} />)}
             </div>
           ) : (
             <Tabs
@@ -2278,7 +2351,7 @@ const Conditions = ({ formVersionId }) => {
                                       ) : (
                                         <div className="logic-display">
                                           {conds.map((cond, index) => {
-                                            const fieldObj = fields.find((f) => f.Unique_Key__c === cond.ifField);
+                                            const fieldObj = validIfFields.find((f) => f.Unique_Key__c === cond.ifField);
                                             return (
                                               <React.Fragment key={index}>
                                                 <div className="condition-item">
@@ -2312,13 +2385,13 @@ const Conditions = ({ formVersionId }) => {
                                         </span>
                                         {Array.isArray(conditionData.thenFields) && conditionData.thenFields.length > 0
                                           ? conditionData.thenFields.map((id) => {
-                                              const field = fields.find((f) => f.Unique_Key__c === id);
+                                              const field = validIfFields.find((f) => f.Unique_Key__c === id);
                                               return field ? (
                                                 <span key={id} className="field-pill">{field.Name}</span>
                                               ) : null;
                                             })
                                           : (
-                                            fields.find((f) => f.Unique_Key__c === conditionData.thenFields)
+                                            validIfFields.find((f) => f.Unique_Key__c === conditionData.thenFields)
                                               ? <span className="field-pill">{fields.find((f) => f.Unique_Key__c === conditionData.thenFields).Name}</span>
                                               : 'None'
                                           )
@@ -3784,7 +3857,8 @@ const Conditions = ({ formVersionId }) => {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.85, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              >
+                >
+                {isLoading && ( loadingText === 'Saving Condition' || loadingText === 'Updating Condition' ) && <Loader text={loadingText} fullScreen={true} />}
                 <div className="showhide-modal-header">
                   <h2 className="showhide-modal-title">{editingConditionId ? 'Edit Show/Hide Condition' : 'Add Show/Hide Condition'}</h2>
                   <button
