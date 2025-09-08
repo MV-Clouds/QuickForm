@@ -21,7 +21,7 @@ import {
   parsePhoneNumberFromString,
   getExampleNumber,
 } from "libphonenumber-js";
-import { Select, Tooltip , message} from "antd";
+import { Select, Tooltip, message } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
 import { evaluateFormula } from './FormulaEvaluator';
@@ -61,8 +61,8 @@ function PublicFormViewer({ runPrefill = false }) {
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [notificationData , setNotificationData] = useState([]);
-  const [twilioData , setTwilioData] = useState([]);
+  const [notificationData, setNotificationData] = useState([]);
+  const [twilioData, setTwilioData] = useState([]);
   // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
@@ -1303,49 +1303,52 @@ function PublicFormViewer({ runPrefill = false }) {
         alert("Form submitted successfully!");
       }
 
-      const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: linkData.userId,
-          instanceUrl,
-          formVersionId: formData.Id,
-          formData: updatedSubmissionData,
-          nodes: formData.mappings,
-          ...(data.submissionId ? { submissionId: data.submissionId } : { submissionId: data.tempSubmissionId })
-        }),
-      });
+      if (formData.mappings && formData.mappings.length > 0) {
+        const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            userId: linkData.userId,
+            instanceUrl,
+            formVersionId: formData.Id,
+            formData: updatedSubmissionData,
+            nodes: formData.mappings,
+            ...(data.submissionId ? { submissionId: data.submissionId } : { submissionId: data.tempSubmissionId })
+          }),
+        });
 
-      const flowData = await flowResponse.json();
-      if (!flowResponse.ok) {
-        const newErrors = {};
-        if (flowData.results) {
-          Object.entries(flowData.results).forEach(([nodeId, result]) => {
-            if (result.error) {
-              const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-              if (mapping?.Config__c) {
-                const config = JSON.parse(mapping.Config__c || '{}');
-                let fieldId = config.inputField;
-                if (fieldId.includes('_phoneNumber')) {
-                  fieldId = fieldId.replace('_phoneNumber', '');
+        const flowData = await flowResponse.json();
+        if (!flowResponse.ok) {
+          const newErrors = {};
+          if (flowData.results) {
+            Object.entries(flowData.results).forEach(([nodeId, result]) => {
+              if (result.error) {
+                const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+                if (mapping?.Config__c) {
+                  const config = JSON.parse(mapping.Config__c || '{}');
+                  let fieldId = config.inputField;
+                  if (fieldId.includes('_phoneNumber')) {
+                    fieldId = fieldId.replace('_phoneNumber', '');
+                  }
+                  newErrors[fieldId] = result.error;
                 }
-                newErrors[fieldId] = result.error;
               }
+            });
+            if (Object.keys(newErrors).length > 0) {
+              setErrors(newErrors);
+              throw new Error('Form submission completed but flow execution had errors');
             }
-          });
-          if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            throw new Error('Form submission completed but flow execution had errors');
           }
+          throw new Error(flowData.error || 'Failed to execute flow');
         }
-        throw new Error(flowData.error || 'Failed to execute flow');
+      } else {
+        console.log("⏭️ Skipping mapping execution: no mappings for this form version.");
       }
-      console.log('formData exist ',notificationData)
-     if(notificationData.length > 0){
-      if(notificationData){
+      if (notificationData.length > 0) {
+        if (notificationData) {
           console.log("Twilio SMS sending started");
           try {
             const smsResponse = await fetch(
@@ -1359,13 +1362,13 @@ function PublicFormViewer({ runPrefill = false }) {
                   userId: linkData.userId,
                   instanceUrl,
                   to: JSON.parse(notificationData[0].Receipe__c || '{}')?.to,
-                  message : notificationData[0].Body__c,
+                  message: notificationData[0].Body__c,
                   formId: formData.Form__c,
-                  twilioConnected : true
+                  twilioConnected: true
                 }),
               }
             );
-        
+
             if (!smsResponse.ok) {
               const smsErrorData = await smsResponse.json().catch(() => ({}));
               console.error(
@@ -1379,39 +1382,39 @@ function PublicFormViewer({ runPrefill = false }) {
           } catch (smsError) {
             console.error("Exception during Twilio SMS fetch:", smsError);
           }
-      }else{
-        console.log('Message sending started ')
-        try {
-          const mailResponse = await fetch('https://0oue66drzd.execute-api.us-east-1.amazonaws.com/sendMail', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userId: linkData.userId,
-              instanceUrl,
-              submissionData: updatedSubmissionData,
-              sftoken: accessToken,
-              formId : formData.Form__c,
-            }),
-          });
-  
-          if (!mailResponse.ok) {
-            const mailErrorData = await mailResponse.json().catch(() => ({}));
-            console.error('Error sending mail:', mailErrorData.error || mailResponse.statusText);
-          } else {
-            // Optionally handle success, e.g. log or ignore
-            const mailResult = await mailResponse.json();
-            console.log('Mail result' , mailResult)
+        } else {
+          console.log('Message sending started ')
+          try {
+            const mailResponse = await fetch('https://0oue66drzd.execute-api.us-east-1.amazonaws.com/sendMail', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: linkData.userId,
+                instanceUrl,
+                submissionData: updatedSubmissionData,
+                sftoken: accessToken,
+                formId: formData.Form__c,
+              }),
+            });
+
+            if (!mailResponse.ok) {
+              const mailErrorData = await mailResponse.json().catch(() => ({}));
+              console.error('Error sending mail:', mailErrorData.error || mailResponse.statusText);
+            } else {
+              // Optionally handle success, e.g. log or ignore
+              const mailResult = await mailResponse.json();
+              console.log('Mail result', mailResult)
+            }
+          } catch (mailError) {
+            console.error('Exception during sendMail fetch:', mailError);
           }
-        } catch (mailError) {
-          console.error('Exception during sendMail fetch:', mailError);
         }
+
+        alert('Form submitted and flow executed successfully!');
       }
 
-      alert('Form submitted and flow executed successfully!');
-     }
-     
 
       // Set to show thank you page
       setThankyouData(formData?.ThankYou || null);
@@ -1616,18 +1619,18 @@ function PublicFormViewer({ runPrefill = false }) {
             const intermediatePageFields = pages[i];
             for (const field of intermediatePageFields) {
               const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
-              const fieldId =  properties.id || field.Id;
+              const fieldId = properties.id || field.Id;
               // Get UI state from conditions (required/don't require)
               const uiState = getFieldUiState(fieldId, formValues);
               const required = properties.isRequired || uiState.required;
-              
+
               if (required) {
                 // Dynamically don't require
                 const dontRequire = uiState && uiState.required === false && properties.isRequired;
-                
+
                 // Only block if not dynamically set to "don't require"
                 if (!dontRequire && (formValues[fieldId] === undefined || formValues[fieldId] === "" ||
-                    (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
+                  (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
                   blockSkip = true;
                   break;
                 }
@@ -2057,12 +2060,12 @@ function PublicFormViewer({ runPrefill = false }) {
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
-    const isDisabled = 
+    const isDisabled =
       typeof state.disabled === 'boolean'
         ? state.disabled
         : !!properties.isDisabled;
 
-    const isRequired = 
+    const isRequired =
       typeof state.required === 'boolean'
         ? state.required
         : !!properties.isRequired;
@@ -2680,7 +2683,7 @@ function PublicFormViewer({ runPrefill = false }) {
               })}
             </div>
 
-             {/* Selection count and validation messages */}
+            {/* Selection count and validation messages */}
             <div className="mt-1 text-sm text-gray-500">
               Selected: {selectedCount}
               {(minSelection > 0 || maxSelection < Infinity) && ` of ${maxSelection < Infinity ? maxSelection : '∞'}`}
@@ -2737,7 +2740,7 @@ function PublicFormViewer({ runPrefill = false }) {
             <Select
               style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
-onChange={(val) => {
+              onChange={(val) => {
                 // Validate selection limits for multiple selections
                 if (properties.allowMultipleSelections && Array.isArray(val)) {
                   if (val.length <= properties.maxSelection) {
@@ -2746,9 +2749,9 @@ onChange={(val) => {
                 } else {
                   handleChange(fieldId, val);
                 }
-              }}              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              }} onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               mode={properties.allowMultipleSelections ? 'multiple' : undefined}
-                            maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
+              maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
 
               placeholder={properties.placeholder?.main || 'Select an option'}
               disabled={isDisabled}
@@ -2765,7 +2768,7 @@ onChange={(val) => {
                 {`Select between ${properties.minSelection} and ${properties.maxSelection < Infinity ? properties.maxSelection : 'unlimited'} options`}
               </div>
             )}
-            
+
             {renderError()}
           </div>
         );
