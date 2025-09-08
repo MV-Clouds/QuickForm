@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
 import { XMarkIcon, PlusIcon } from '@heroicons/react/24/solid';
-import { useSalesforceData } from '../Context/MetadataContext';
 import FloatingAddButton from "./FloatingAddButton";
 import Loader from '../Loader';
 
@@ -13,7 +12,8 @@ const MappingFields = ({ onSaveCallback }) => {
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
-  const { metadata, formRecords, refreshData } = useSalesforceData();
+  const [metadata, setMetadata] = useState([]);
+  const [formRecords, setFormRecords] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [mappings, setMappings] = useState({});
   const [formFields, setFormFields] = useState([]);
@@ -103,6 +103,50 @@ const MappingFields = ({ onSaveCallback }) => {
     }, 5000);
   };
 
+  // Local metadata fetching (direct API), replacing MetadataContext usage
+  const parseFormRecords = (formRecordsString) => {
+    if (!formRecordsString || formRecordsString === 'null') return [];
+    try {
+      const parsed = JSON.parse(formRecordsString);
+      return parsed;
+    } catch (e) {
+      try {
+        const fixed = formRecordsString
+          .replace(/\](?=\s*\[)/g, '],')
+          .replace(/\}(?=\s*\{)/g, '},')
+          .replace(/,\s*([\]}])/g, '$1');
+        return JSON.parse(fixed);
+      } catch {
+        return [];
+      }
+    }
+  };
+
+  const fetchMetadata = async (userIdParam, instanceUrlParam) => {
+    const userId = userIdParam || sessionStorage.getItem('userId');
+    const instanceUrl = instanceUrlParam || sessionStorage.getItem('instanceUrl');
+    if (!userId || !instanceUrl) {
+      showToast('Missing userId or instanceUrl', 'error');
+      return;
+    }
+    try {
+      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch metadata');
+      const data = await response.json();
+      const parsedMetadata = JSON.parse(data.metadata || '[]');
+      const parsedFormRecords = parseFormRecords(data.FormRecords);
+      setMetadata(parsedMetadata);
+      setFormRecords(parsedFormRecords);
+    } catch (err) {
+      showToast(err.message || 'Failed to fetch metadata', 'error');
+    }
+  };
+
   // Initialize Salesforce objects from metadata
   useEffect(() => {
     if (metadata && metadata.length > 0) {
@@ -176,9 +220,53 @@ const MappingFields = ({ onSaveCallback }) => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
     if (userId && instanceUrl && (!formRecords || formRecords.length === 0)) {
-      refreshData();
+      const fetchAllData = async () => {
+        setIsLoading(true);
+        try {
+          // First fetch metadata and form records
+          await fetchMetadata(userId, instanceUrl);
+
+          // Then fetch access token
+          const accessToken = await fetchAccessToken(userId, instanceUrl);
+          if (accessToken) {
+            setToken(accessToken);
+          }
+
+          // Now initialize the data if we have formVersionId and formRecords
+          if (formVersionId && formRecords && formRecords.length > 0) {
+            await initializeData();
+          }
+        } catch (error) {
+          showToast(`Failed to load data: ${error.message}`, 'error');
+          console.error('Error loading data:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchAllData();
     }
-  }, []);
+  }, []); // Keep empty dependency array
+
+  useEffect(() => {
+    const initializeIfReady = async () => {
+      if (formVersionId && formRecords && formRecords.length > 0 && !isLoading) {
+        // Check if we already have nodes (meaning initialization was already done)
+        if (nodes.length === 0) {
+          setIsLoading(true);
+          try {
+            await initializeData();
+          } catch (error) {
+            showToast(`Failed to initialize: ${error.message}`, 'error');
+          } finally {
+            setIsLoading(false);
+          }
+        }
+      }
+    };
+
+    initializeIfReady();
+  }, [formRecords, formVersionId]);
 
 
   const setNodeLabel = React.useCallback((nodeId, newLabel) => {
@@ -354,7 +442,7 @@ const MappingFields = ({ onSaveCallback }) => {
 
     return updatedNodes;
   }, []);
-  
+
   const saveAllConfiguration = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
@@ -596,7 +684,7 @@ const MappingFields = ({ onSaveCallback }) => {
         });
         setMappings(updatedMappings);
         showToast("All configurations saved successfully!", 'success');
-        await refreshData();
+        await fetchMetadata(userId, instanceUrl);
       } else {
         throw new Error(`Save failed: ${data.message || "Unknown error"}`);
       }
@@ -794,9 +882,9 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   };
 
-  useEffect(() => {
-    initializeData();
-  }, [formVersionId, formRecords]);
+  // useEffect(() => {
+  //   initializeData();
+  // }, [formVersionId, formRecords]);
 
 
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
@@ -953,64 +1041,64 @@ const MappingFields = ({ onSaveCallback }) => {
       updatedNodes = [...nds, newNode];
 
       // Check if source node is a Path node
-    if (sourceNode && sourceNode.data.action === "Path") {
-      // Create a condition node in between
-      const conditionNodeId = `condition_${randomNum}`;
+      if (sourceNode && sourceNode.data.action === "Path") {
+        // Create a condition node in between
+        const conditionNodeId = `condition_${randomNum}`;
 
-      // Position condition node between source and target (newly added node)
-      const midX = (sourceNode.position.x + centerX) / 2;
-      const midY = (sourceNode.position.y + centerY) / 2;
+        // Position condition node between source and target (newly added node)
+        const midX = (sourceNode.position.x + centerX) / 2;
+        const midY = (sourceNode.position.y + centerY) / 2;
 
-      const conditionNode = {
-        id: conditionNodeId,
-        type: "custom",
-        position: { x: midX, y: midY },
-        data: {
-          label: "Condition",
-          displayLabel: "Condition",
-          action: "Condition",
-          type: "condition",
-          order: null,
-          pathNodeId: sourceNodeId,
-          targetNodeId: newNodeId,
-          pathOption: "Rules",
-          conditions: [],
-          logicType: "AND",
-          customLogic: "",
-        },
-        draggable: true,
-      };
-
-      updatedNodes = [...updatedNodes, conditionNode];
-
-      setEdges((eds) => {
-        const newEdges = [
-          {
-            id: `e${sourceNodeId}-${conditionNodeId}`,
-            source: sourceNodeId,
-            sourceHandle: connectionType === 'top' ? "top" : "bottom",
-            target: conditionNodeId,
-            targetHandle: "top",
-            type: "default",
-            conditionNodeId,
+        const conditionNode = {
+          id: conditionNodeId,
+          type: "custom",
+          position: { x: midX, y: midY },
+          data: {
+            label: "Condition",
+            displayLabel: "Condition",
+            action: "Condition",
+            type: "condition",
+            order: null,
+            pathNodeId: sourceNodeId,
+            targetNodeId: newNodeId,
+            pathOption: "Rules",
+            conditions: [],
+            logicType: "AND",
+            customLogic: "",
           },
-          {
-            id: `e${conditionNodeId}-${newNodeId}`,
-            source: conditionNodeId,
-            sourceHandle: "bottom",
-            target: newNodeId,
-            targetHandle: "top",
-            type: "default",
-            conditionNodeId,
-          }
-        ];
+          draggable: true,
+        };
 
-        const updatedEdges = [...eds, ...newEdges];
-        const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-        setNodes(recalculatedNodes);
-        return updatedEdges;
-      });
-    }  else {
+        updatedNodes = [...updatedNodes, conditionNode];
+
+        setEdges((eds) => {
+          const newEdges = [
+            {
+              id: `e${sourceNodeId}-${conditionNodeId}`,
+              source: sourceNodeId,
+              sourceHandle: connectionType === 'top' ? "top" : "bottom",
+              target: conditionNodeId,
+              targetHandle: "top",
+              type: "default",
+              conditionNodeId,
+            },
+            {
+              id: `e${conditionNodeId}-${newNodeId}`,
+              source: conditionNodeId,
+              sourceHandle: "bottom",
+              target: newNodeId,
+              targetHandle: "top",
+              type: "default",
+              conditionNodeId,
+            }
+          ];
+
+          const updatedEdges = [...eds, ...newEdges];
+          const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+          setNodes(recalculatedNodes);
+          return updatedEdges;
+        });
+      } else {
         // Regular connection for non-Path nodes
         let newEdge;
 
@@ -1062,13 +1150,11 @@ const MappingFields = ({ onSaveCallback }) => {
     <div className="flex p-6 h-screen bg-[#f8fafc]">
       <div className="flex-1 flex flex-col relative transition-all duration-300">
         <div className="flex flex-col border rounded bg-gray-50 font-sans relative">
-           {isLoading && (
+          {isLoading && (
             <Loader text="Loading Mappings" fullScreen={false} />
           )}
 
-          {!isLoading && (
-            <>
-              <div className="flex flex-1 overflow-hidden">
+<div className="flex flex-1 overflow-hidden">
                 <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
                   <ReactFlowProvider>
                     <FlowDesigner
@@ -1109,8 +1195,51 @@ const MappingFields = ({ onSaveCallback }) => {
                   />
                 )}
               </div>
+
+          {/* {!isLoading && (
+            <>
+              <div className="flex flex-1 overflow-hidden">
+                <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
+                  <ReactFlowProvider>
+                    <FlowDesigner
+                      initialNodes={nodes}
+                      initialEdges={edges}
+                      setSelectedNode={setSelectedNode}
+                      setNodes={setNodes}
+                      setEdges={setEdges}
+                      onAddNode={onAddNode}
+                    />
+                  </ReactFlowProvider>
+
+                  <FloatingAddButton
+                    onAddNode={onAddNode}
+                    reactFlowWrapper={reactFlowWrapperRef}
+                    nodes={nodes}
+                  />
+                </div>
+
+                {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
+                  <ActionPanel
+                    nodeId={selectedNode.id}
+                    nodeType={selectedNode.data.action}
+                    formFields={formFields}
+                    salesforceObjects={salesforceObjects}
+                    mappings={mappings}
+                    setMappings={setMappings}
+                    setSalesforceObjects={setSalesforceObjects}
+                    fetchSalesforceFields={fetchSalesforceFields}
+                    onClose={() => setSelectedNode(null)}
+                    nodeLabel={selectedNode.data.label}
+                    setNodeLabel={setNodeLabel}
+                    nodes={nodes}
+                    edges={edges}
+                    credentials={googleSheetConfig?.credentials}
+                    sfToken={token}
+                  />
+                )}
+              </div>
             </>
-          )}
+          )} */}
 
           <AnimatePresence>
             {saveError && (
