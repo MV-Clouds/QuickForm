@@ -149,7 +149,6 @@ function PublicFormViewer({ runPrefill = false }) {
             }
           }
         });
-        console.log('Local id ', localIdToSFId);
 
         // Parse Prefill array from formVersion.Prefills if available
         if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
@@ -459,7 +458,6 @@ function PublicFormViewer({ runPrefill = false }) {
                         LIMIT 1`;
 
       try {
-        const startTime = Date.now();
         const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -475,7 +473,6 @@ function PublicFormViewer({ runPrefill = false }) {
         if (data.newAccessToken) {
           setAccessToken(data.newAccessToken);
         }
-        console.log(`Prefill query returned in ${Date.now() - startTime}ms`);
         if (data.record) {
           const updates = {};
           Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
@@ -1573,8 +1570,6 @@ function PublicFormViewer({ runPrefill = false }) {
 
       // Set to show thank you page
       setThankyouData(formData?.ThankYou || null);
-      console.log('formdata =>', formData)
-      console.log('thankyouData =>', formData?.ThankYou)
       setIsSubmitted(true);
 
       const initialValues = {};
@@ -1733,6 +1728,8 @@ function PublicFormViewer({ runPrefill = false }) {
 
   const getFieldUiState = (fieldId, formValues) => {
     let state = { hidden: false, required: undefined, mask: null, disabled: undefined };
+    if(fieldId.includes('_'))
+    fieldId = Object.keys(localIdToSFId).find(key => localIdToSFId[key] === fieldId) || fieldId;
     formConditions.forEach(c => {
       if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
@@ -2159,7 +2156,6 @@ function PublicFormViewer({ runPrefill = false }) {
       }
     });
 
-    console.log(properties.formula);
 
 
     // Evaluate the formula using the mapped values
@@ -2561,6 +2557,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
       case 'phone':
         if (isHidden) return null;
+        const countryCodeState = getFieldUiState(`${fieldId}_countryCode`,formValues);
         const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
         let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
         try {
@@ -2580,7 +2577,7 @@ function PublicFormViewer({ runPrefill = false }) {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            {properties.subFields?.countryCode?.enabled ? (
+          {properties.subFields?.countryCode?.enabled && !countryCodeState.hidden ? (
               <div className="flex items-center gap-3">
                 <div className="w-1/3">
                   <PhoneInput
@@ -3023,6 +3020,9 @@ onChange={(val) => {
 
       case 'fullname':
         if (isHidden) return null;
+        const salutationFieldState = getFieldUiState(`${fieldId}_salutation`,formValues);
+        const firstNameFieldState = getFieldUiState(`${fieldId}_firstName`,formValues);
+        const lastNameFieldState = getFieldUiState(`${fieldId}_lastName`,formValues);
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -3032,13 +3032,14 @@ onChange={(val) => {
               </Tooltip>
             )}
             <div className="flex gap-3">
-              {properties.subFields?.salutation?.enabled && (
+              {properties.subFields?.salutation?.enabled && !salutationFieldState.hidden &&(
                 <Select
                   style={{ width: '33%' }}
+                  required={salutationFieldState.required}
                   value={formValues[`${fieldId}_salutation`] || properties.subFields.salutation.placeholder}
                   onChange={(value) => handleChange(`${fieldId}_salutation`, value)}
                   onBlur={() => dependentFields.has(`${fieldId}_salutation`) && runPrefillForField(`${fieldId}_salutation`)}
-                  disabled={isDisabled}
+                  disabled={salutationFieldState.disabled}
                   className="w-1/5"
                   placeholder={properties.subFields.salutation.placeholder || 'Select'}
                   options={(properties.subFields.salutation.options || []).map((option) => ({
@@ -3047,6 +3048,7 @@ onChange={(val) => {
                   }))}
                 />
               )}
+              {!firstNameFieldState.hidden && (
               <input
                 type="text"
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
@@ -3054,8 +3056,11 @@ onChange={(val) => {
                 onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
                 onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
                 placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
-                disabled={isDisabled}
+                disabled={firstNameFieldState.disabled}
+                required={firstNameFieldState.required}
               />
+              )}
+              {!lastNameFieldState.hidden && (
               <input
                 type="text"
                 className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
@@ -3063,8 +3068,10 @@ onChange={(val) => {
                 onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
                 onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
                 placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
-                disabled={isDisabled}
+                disabled={lastNameFieldState.disabled}
+                required={lastNameFieldState.required}
               />
+              )}
             </div>
             {renderError()}
           </div>
@@ -3072,85 +3079,102 @@ onChange={(val) => {
 
       case 'address':
         if (isHidden) return null;
+
+        // Get subfield UI states
+        const streetFieldState = getFieldUiState(`${fieldId}_street`, formValues);
+        const cityFieldState = getFieldUiState(`${fieldId}_city`, formValues);
+        const stateFieldState = getFieldUiState(`${fieldId}_state`, formValues);
+        const countryFieldState = getFieldUiState(`${fieldId}_country`, formValues);
+        const postalFieldState = getFieldUiState(`${fieldId}_postal`, formValues);
+
         return (
           <div className="mb-4">
             {renderLabel()}
             {helpText && (
               <Tooltip title={helpText}>
-                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+                <InfoCircleOutlined />
               </Tooltip>
             )}
             <div className="space-y-3">
-              {properties.subFields?.street?.visiblesubFields !== false && (
+              {properties?.subFields?.street?.visiblesubFields !== false && !streetFieldState.hidden && (
                 <div>
-                  <label className="text-xs text-gray-500">{properties.subLabels?.street || 'Street Address'}</label>
+                  <label className="text-xs text-gray-500">{properties?.subLabels?.street || 'Street Address'}</label>
                   <input
                     type="text"
-                    className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                    value={formValues[`${fieldId}_street`] || ''}
-                    onChange={(e) => handleChange(`${fieldId}_street`, e.target.value)}
+                    className={`w-full p-2 border rounded ${streetFieldState.required && !formValues[`${fieldId}_street`] ? 'border-red-500' : 'border-gray-300'}`}
+                    value={formValues?.[`${fieldId}_street`] || ''}
+                    onChange={e => handleChange(`${fieldId}_street`, e.target.value)}
                     onBlur={() => dependentFields.has(`${fieldId}_street`) && runPrefillForField(`${fieldId}_street`)}
-                    placeholder={properties.placeholder?.street || 'Street Address'}
-                    disabled={isDisabled}
+                    placeholder={properties?.placeholder?.street || 'Street Address'}
+                    disabled={streetFieldState.disabled}
+                    required={streetFieldState.required}
                   />
                 </div>
               )}
+
               <div className="flex gap-3">
-                {properties.subFields?.city?.visible !== false && (
+                {properties?.subFields?.city?.visible !== false && !cityFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.city || 'City'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.city || 'City'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_city`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_city`, e.target.value)}
+                      className={`w-full p-2 border rounded ${cityFieldState.required && !formValues[`${fieldId}_city`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_city`] || ''}
+                      onChange={e => handleChange(`${fieldId}_city`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_city`) && runPrefillForField(`${fieldId}_city`)}
-                      placeholder={properties.placeholder?.city || 'City'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.city || 'City'}
+                      disabled={cityFieldState.disabled}
+                      required={cityFieldState.required}
                     />
                   </div>
                 )}
-                {properties.subFields?.city?.visible !== false && (
+
+                {properties?.subFields?.state?.visible !== false && !stateFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.state || 'State'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.state || 'State'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_state`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_state`, e.target.value)}
+                      className={`w-full p-2 border rounded ${stateFieldState.required && !formValues[`${fieldId}_state`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_state`] || ''}
+                      onChange={e => handleChange(`${fieldId}_state`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_state`) && runPrefillForField(`${fieldId}_state`)}
-                      placeholder={properties.placeholder?.state || 'State'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.state || 'State'}
+                      disabled={stateFieldState.disabled}
+                      required={stateFieldState.required}
                     />
                   </div>
                 )}
               </div>
+
               <div className="flex gap-3">
-                {properties.subFields?.city?.visible !== false && (
+                {properties?.subFields?.country?.visible !== false && !countryFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.country || 'Country'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.country || 'Country'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_country`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_country`, e.target.value)}
+                      className={`w-full p-2 border rounded ${countryFieldState.required && !formValues[`${fieldId}_country`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_country`] || ''}
+                      onChange={e => handleChange(`${fieldId}_country`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_country`) && runPrefillForField(`${fieldId}_country`)}
-                      placeholder={properties.placeholder?.country || 'Country'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.country || 'Country'}
+                      disabled={countryFieldState.disabled}
+                      required={countryFieldState.required}
                     />
                   </div>
                 )}
-                {properties.subFields?.city?.visible !== false && (
+
+                {properties?.subFields?.postal?.visible !== false && !postalFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.postal || 'Postal Code'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.postal || 'Postal Code'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_postal`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_postal`, e.target.value)}
+                      className={`w-full p-2 border rounded ${postalFieldState.required && !formValues[`${fieldId}_postal`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_postal`] || ''}
+                      onChange={e => handleChange(`${fieldId}_postal`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_postal`) && runPrefillForField(`${fieldId}_postal`)}
-                      placeholder={properties.placeholder?.postal || 'Postal Code'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.postal || 'Postal Code'}
+                      disabled={postalFieldState.disabled}
+                      required={postalFieldState.required}
                     />
                   </div>
                 )}

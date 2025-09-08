@@ -14,6 +14,7 @@ import ReactFlow, {
   applyEdgeChanges,
 } from 'react-flow-renderer';
 import './Conditions.css';
+import { getCountryList } from '../form-builder-with-versions/getCountries';
 
 const { TabPane } = Tabs;
 const { Option } = Select;
@@ -87,6 +88,100 @@ const Conditions = ({ formVersionId }) => {
       return false;
     }
   }
+
+  function getFieldType(fieldId) {
+    // Try exact field match
+    const topField = fields.find(f => f.Unique_Key__c === fieldId);
+    if (topField) return topField.Field_Type__c;
+
+    // Try subfield match
+    for (const f of fields) {
+      try {
+        const props = JSON.parse(f.Properties__c || '{}');
+        let baseId = props.id || f.Unique_Key__c;
+
+        if(props.type === 'section' && props.subFields){
+          fieldId.startsWith(props.subFields.leftField?.id) ? baseId = props.subFields.leftField.id : baseId = props.subFields.rightField.id;
+        }        
+
+        if(fieldId.startsWith(baseId) && !fieldId.startsWith(baseId+'_') && props.type === 'section'){
+          console.log('baseId',baseId,fieldId);
+          if(baseId === props.subFields.leftField?.id){ 
+            console.log('Props left field', props.subFields.leftField.type);
+            return props.subFields.leftField?.type || 'text';
+          }
+          else if(baseId === props.subFields.rightField?.id)
+          {
+            console.log('Props right field', props.subFields.rightField.type);
+            return props.subFields.rightField?.type || 'text';
+          }
+        }
+        
+        if (fieldId.startsWith(baseId + '_')) {
+          const subKey = fieldId.slice(baseId.length + 1);
+          
+          if(props.subFields && !(subKey in props.subFields)){
+            const parentField = baseId.startsWith(props.subFields.leftField?.id) ? props.subFields.leftField : props.subFields.rightField;
+            const subField = parentField?.subFields[subKey];
+            if(parentField.type === 'address'){
+              return 'text';
+            }
+
+            if(parentField.type === 'fullname'){
+              if(subKey === 'salutation') return 'dropdown';
+              if(subKey === 'firstName' || subKey === 'lastName') return 'text';
+              return 'text'; // default for fullname subfields
+            }
+
+            if(parentField.type === 'phone'){
+              if(subKey === 'countryCode') return 'dropdown';
+              if(subKey === 'phoneNumber') return 'number';
+            }
+            
+          }
+          
+          if (props.subFields && subKey in props.subFields) {
+            const subField = props.subFields[subKey];
+            
+            if (subField && subField.type) return subField.type;
+
+            // Fallback by parent field type or by subKey known names
+            const parentType = f.Field_Type__c?.toLowerCase();
+            
+            // Handle fullname subfields
+            if (parentType === 'fullname') {
+              if (subKey === 'salutation') return 'dropdown';
+              if (subKey === 'firstName' || subKey === 'lastName') return 'text';
+              return 'text'; // default for fullname subfields
+            }
+
+            // Handle address subfields
+            if (parentType === 'address') {
+              // Assume all are text if no explicit type
+              return 'text';
+            }
+
+            // Handle phone subfields
+            if (parentType === 'phone') {
+              if (subKey === 'countryCode') return 'dropdown';
+              if (subKey === 'phoneNumber') return 'number';
+              return 'text';
+            }
+
+            // Default fallback
+            return parentType || 'text';
+          }
+        }
+      } catch(e) {
+        // Ignore parse errors
+      }
+    }
+
+    // Fallback default
+    return 'text';
+  }
+
+
 
   function canHideOrDisableField(fieldId, conditions) {
     // Returns true if a 'don't require' condition exists for this field
@@ -1033,7 +1128,7 @@ const Conditions = ({ formVersionId }) => {
             expanded.push({
               ...field,
               Name: `${props.label || field.Name} - ${subMeta.label}`,
-              Unique_Key__c: `${props.id || field.Unique_Key__c}_${subKey}`,
+              Unique_Key__c: subKey !== 'phoneNumber'? `${props.id || field.Unique_Key__c}_${subKey}` : props.id || field.Unique_Key__c,
               properties: { ...props, id: `${props.id || field.Unique_Key__c}_${subKey}` },
               Field_Type__c: type,
             });
@@ -1055,13 +1150,17 @@ const Conditions = ({ formVersionId }) => {
                 nestedMeta.label = 'Last Name';
               } else if(nestedKey === 'salutation'){
                 nestedMeta.label = 'Salutation';
+              } else if(nestedKey === 'phoneNumber'){
+                nestedMeta.label = 'Phone number'
+              } else if(nestedKey === 'countryCode'){
+                nestedMeta.label = 'Country Code'
               }
               
               if (nestedMeta.visible !== false && nestedMeta.enabled !== false) {
                 expanded.push({
                   ...field,
                   Name: `Section - ${subMeta.label} - ${nestedMeta.label}`,
-                  Unique_Key__c: `${subProps.id}_${nestedKey}`,
+                  Unique_Key__c: nestedKey !== 'phoneNumber' ? `${subProps.id}_${nestedKey}` : subProps.id,
                   properties: { ...subProps, id: `${subProps.id}_${nestedKey}` },
                   Field_Type__c: subType,
                 });
@@ -1097,7 +1196,7 @@ const Conditions = ({ formVersionId }) => {
   const validDependentFields = fields.filter((f) => ['dropdown', 'multiselect'].includes(f.Field_Type__c));
 
   const getOperators = (fieldType) => {
-    if (['shorttext', 'longtext', 'email', 'phone', 'address', 'link', 'fullname'].includes(fieldType)) {
+    if (['text','shorttext', 'longtext', 'email', 'phone', 'address', 'link', 'fullname'].includes(fieldType)) {
       return ['equals', 'not equals', 'is null', 'is not null', 'contains', 'does not contain'];
     }
     if (['number', 'price', 'percent', 'date', 'datetime', 'date-time', 'time'].includes(fieldType)) {
@@ -1110,19 +1209,72 @@ const Conditions = ({ formVersionId }) => {
   };
 
   const getFieldOptions = (fieldId) => {
-    const field = fields.find((f) => f.Unique_Key__c === fieldId);
-    if (!field) return [];
-    try {
-      const properties = JSON.parse(field.Properties__c || '{}');
-      if (['checkbox', 'radio', 'dropdown'].includes(field.Field_Type__c)) {
-        return properties.options || [];
+    // Try to find top-level field match first
+    let field = fields.find((f) => f.Unique_Key__c === fieldId);
+    if (field) {
+      try {
+        const properties = JSON.parse(field.Properties__c || '{}');
+        if (['checkbox', 'radio', 'dropdown'].includes(field.Field_Type__c)) {
+          return properties.options || [];
+        }
+        return [];
+      } catch (err) {
+        console.error('Error parsing Properties__c for field options:', err);
+        return [];
       }
-      return [];
-    } catch (err) {
-      console.error('Error parsing Properties__c for field options:', err);
-      return [];
     }
+
+    if (fieldId.endsWith('countryCode')) {
+      // Use reusable function to get country list
+      const countries = getCountryList();
+      // Map into Select.Option friendly {label, value} format
+      return countries;
+    }
+
+    // If no top-level field match, try to find subfield in sections, addresses etc.
+    for (const f of fields) {
+      try {
+        const props = JSON.parse(f.Properties__c || '{}');
+        const type = (f.Field_Type__c || '').toLowerCase();
+        
+
+        if (['address', 'phone', 'fullname'].includes(type)) {
+          for (const [subKey, subMeta] of Object.entries(props.subFields || {})) {
+            const subfieldId = `${props.id || f.Unique_Key__c}_${subKey}`;
+            if(fieldId === subfieldId)
+            return subMeta.options || subMeta.options || [];
+          }
+        } else if (type === 'section') {
+          for (const [sideKey, subMeta] of Object.entries(props.subFields || {})) {
+            if (!subMeta) continue;
+            const subType = subMeta.type;
+            const subProps = subMeta;
+            
+            if (['address', 'phone', 'fullname'].includes(subType)) {
+              for (const [nestedKey, nestedMeta] of Object.entries(subProps.subFields || {})) {
+                const subfieldIdNested = `${subProps.id}_${nestedKey}`;
+                
+                if (subfieldIdNested === fieldId) {
+                  return nestedMeta.options || [];
+                }
+              }
+            } else {
+              const subfieldIdNormal = subProps.id || f.Unique_Key__c;
+              if (subfieldIdNormal === fieldId && ['checkbox', 'radio', 'dropdown'].includes(subType)) {
+                return subMeta.options || [];
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing Properties__c for subfield options:', err);
+        continue;
+      }
+    }
+
+    return [];
   };
+
 
   const getDependentValues = (fieldId) => {
     const field = fields.find((f) => f.Unique_Key__c === fieldId);
@@ -3932,13 +4084,13 @@ const Conditions = ({ formVersionId }) => {
                                       className="showhide-modal-select"
                                       style={{ width: '100%' }}
                                     >
-                                      {getOperators(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c).map(op => (
+                                      {getOperators(getFieldType(condition.ifField) || 'text').map(op => (
                                         <Select.Option key={op} value={op}>{op}</Select.Option>
                                       ))}
                                     </Select>
                                   </div>
                                   <div className="modal-condition-value">
-                                    {['checkbox', 'radio', 'dropdown'].includes(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c) ? (
+                                    {['checkbox', 'radio', 'dropdown'].includes(getFieldType(condition.ifField)) ? (
                                       <Select
                                         value={condition.value || undefined}
                                         onChange={value => handleFieldChange('value', value, index)}
@@ -3946,27 +4098,37 @@ const Conditions = ({ formVersionId }) => {
                                         className="showhide-modal-select"
                                         style={{ width: '100%' }}
                                       >
-                                        {getFieldOptions(condition.ifField).map(option => (
-                                          <Select.Option key={option} value={option}>{option}</Select.Option>
-                                        ))}
+                                        {getFieldOptions(condition.ifField).map(option => {
+                                          if (typeof option === 'object' && option.code) {
+                                            // This is a country code option
+                                            return (
+                                              <Select.Option key={option.code} value={option.code}>
+                                                {option.name} ({option.dialCode})
+                                              </Select.Option>
+                                            );
+                                          } else {
+                                            // Normal string option
+                                            return (
+                                              <Select.Option key={option} value={option}>
+                                                {option}
+                                              </Select.Option>
+                                            );
+                                          }
+                                        })}
                                       </Select>
-                                    ) : ['date', 'datetime', 'date-time', 'time'].includes(fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c) ? (
+                                    ) : ['date', 'datetime', 'date-time', 'time'].includes(getFieldType(condition.ifField)) ? (
                                       <Input
                                         type={
-                                          fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
-                                            ? 'date'
-                                            : fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
-                                            ? 'time'
-                                            : 'datetime-local'
+                                          getFieldType(condition.ifField) === 'date' ? 'date' :
+                                          getFieldType(condition.ifField) === 'time' ? 'time' :
+                                          'datetime-local'
                                         }
                                         value={condition.value}
                                         onChange={e => handleFieldChange('value', e.target.value, index)}
                                         placeholder={
-                                          fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'date'
-                                            ? 'YYYY-MM-DD'
-                                            : fields.find(f => f.Unique_Key__c === condition.ifField)?.Field_Type__c === 'time'
-                                            ? 'HH:MM'
-                                            : 'YYYY-MM-DD HH:MM'
+                                          getFieldType(condition.ifField) === 'date' ? 'YYYY-MM-DD' :
+                                          getFieldType(condition.ifField) === 'time' ? 'HH:MM' :
+                                          'YYYY-MM-DD HH:MM'
                                         }
                                         className="showhide-modal-input"
                                         style={{ width: '100%' }}
@@ -3981,6 +4143,7 @@ const Conditions = ({ formVersionId }) => {
                                       />
                                     )}
                                   </div>
+
                                 </>
                                 {newCondition.conditions?.length > 1 && (
                                   <button
