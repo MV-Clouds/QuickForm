@@ -811,168 +811,6 @@ function PublicFormViewer({ runPrefill = false }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
-  //     return;
-  //   }
-
-  //   setIsSubmitting(true);
-  //   try {
-  //     const submissionData = {};
-  //     const filesToUpload = {};
-
-  //     for (const key of Object.keys(formValues)) {
-  //       const field = formData.Fields.find((f) => f.Id === key);
-  //       const fieldType = field?.Field_Type__c;
-
-  //       if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-  //         filesToUpload[key] = formValues[key];
-  //         submissionData[key] = formValues[key].name;
-  //       } else if (fieldType === 'signature' && signatures[key]) {
-  //         const signatureBlob = await (await fetch(signatures[key])).blob();
-  //         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-  //         filesToUpload[key] = signatureFile;
-  //         submissionData[key] = `${key}.png`;
-  //       } else {
-  //         // For phone fields, clean the input to digits only for submission
-  //         if (fieldType === 'phone') {
-  //           submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
-  //         } else {
-  //           submissionData[key] = formValues[key];
-  //         }
-  //       }
-  //     }
-
-  //     const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${accessToken}`,
-  //       },
-  //       body: JSON.stringify({
-  //         userId: linkData.userId,
-  //         submissionData: {
-  //           formId: formData.Form__c,
-  //           formVersionId: formData.Id,
-  //           data: submissionData,
-  //           signatures: signatures,
-  //         },
-  //       }),
-  //     });
-
-  //     const data = await response.json();
-  //     if (!response.ok) {
-  //       throw new Error(data.error || 'Failed to submit form');
-  //     }
-
-  //     const submissionId = data.submissionId;
-
-  //     const updatedSubmissionData = { ...submissionData };
-  //     for (const [key, file] of Object.entries(filesToUpload)) {
-  //       const documentId = await uploadFileToSalesforce(file, submissionId);
-  //       updatedSubmissionData[key] = documentId;
-  //     }
-
-  //     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${accessToken}`,
-  //       },
-  //       body: JSON.stringify({
-  //         userId: linkData.userId,
-  //         instanceUrl,
-  //         formVersionId: formData.Id,
-  //         formData: updatedSubmissionData,
-  //         nodes: formData.mappings,
-  //       }),
-  //     });
-
-  //     const flowData = await flowResponse.json();
-  //     if (!flowResponse.ok) {
-  //       const newErrors = {};
-  //       if (flowData.results) {
-  //         Object.entries(flowData.results).forEach(([nodeId, result]) => {
-  //           if (result.error) {
-  //             const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-  //             if (mapping?.Formatter_Config__c) {
-  //               const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-  //               let fieldId = formatterConfig.inputField;
-  //               if (fieldId.includes('_phoneNumber')) {
-  //                 fieldId = fieldId.replace('_phoneNumber', '');
-  //               }
-  //               newErrors[fieldId] = result.error;
-  //             }
-  //           }
-  //         });
-  //         if (Object.keys(newErrors).length > 0) {
-  //           setErrors(newErrors);
-  //           throw new Error('Form submission completed but flow execution had errors');
-  //         }
-  //       }
-  //       throw new Error(flowData.error || 'Failed to execute flow');
-  //     }
-
-  //     alert('Form submitted and flow executed successfully!');
-
-  //     const initialValues = {};
-  //     formData.Fields.forEach((field) => {
-  //       const properties = JSON.parse(field.Properties__c || '{}');
-  //       const fieldType = field.Field_Type__c;
-  //       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-  //         initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
-  //         initialValues[field.Id] = '';
-  //       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-  //         initialValues[field.Id] = [];
-  //       } else if (fieldType === 'datetime' || fieldType === 'date') {
-  //         initialValues[field.Id] = null;
-  //       } else if (fieldType === 'scalerating') {
-  //         initialValues[field.Id] = {};
-  //       } else {
-  //         initialValues[field.Id] = '';
-  //       }
-  //     });
-  //     setFormValues(initialValues);
-  //     setErrors({});
-  //     setSignatures({});
-  //     setFilePreviews({});
-  //     setSelectedRatings({});
-  //     setSelectedOptions({});
-  //     setToggles({});
-  //     setCurrentPage(0);
-  //   } catch (error) {
-  //     if (error.message.includes('INVALID_JWT_FORMAT')) {
-  //       let decrypted;
-  //       try {
-  //         decrypted = decrypt(linkId);
-  //       } catch (e) {
-  //         throw new Error(e.message || 'Invalid link format');
-  //       }
-
-  //       const [userId, formId] = decrypted.split('$');
-  //       const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({ userId }),
-  //       });
-
-  //       const tokenData = await tokenResponse.json();
-  //       if (!tokenResponse.ok || tokenData.error) {
-  //         throw new Error(tokenData.error || 'Failed to fetch access token');
-  //       }
-  //       const token = tokenData.access_token;
-  //       setAccessToken(token);
-  //       handleSubmit(e);
-  //     } else {
-  //       console.error('Error submitting form:', error);
-  //       setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
-  //     }
-  //   } finally {
-  //     setIsSubmitting(false);
-  //   }
-  // };
-
   // Utility: Validation for a single field (returns an error message string if invalid, or null if valid)
   const validateSingleField = (field, value, allValues, { signaturesObj, uiState } = {}) => {
     let properties = {};
@@ -1345,6 +1183,11 @@ function PublicFormViewer({ runPrefill = false }) {
         const fieldType = field?.Field_Type__c;
         const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
+        // Skip footer fields (they're visual only, no submission)
+        if (fieldType === 'footer') {
+          continue;
+        }
+
         if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
           filesToUpload[key] = filteredFormValues[key];
           submissionData[key] = filteredFormValues[key].name;
@@ -1449,8 +1292,6 @@ function PublicFormViewer({ runPrefill = false }) {
         throw new Error(data.error || 'Failed to submit form');
       }
 
-      const submissionId = data.submissionId;
-
       const updatedSubmissionData = { ...submissionData };
 
       // Show success message based on whether payment was involved
@@ -1474,6 +1315,7 @@ function PublicFormViewer({ runPrefill = false }) {
           formVersionId: formData.Id,
           formData: updatedSubmissionData,
           nodes: formData.mappings,
+          ...(data.submissionId ? { submissionId: data.submissionId } : { submissionId: data.tempSubmissionId })
         }),
       });
 
@@ -1484,9 +1326,9 @@ function PublicFormViewer({ runPrefill = false }) {
           Object.entries(flowData.results).forEach(([nodeId, result]) => {
             if (result.error) {
               const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-              if (mapping?.Formatter_Config__c) {
-                const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-                let fieldId = formatterConfig.inputField;
+              if (mapping?.Config__c) {
+                const config = JSON.parse(mapping.Config__c || '{}');
+                let fieldId = config.inputField;
                 if (fieldId.includes('_phoneNumber')) {
                   fieldId = fieldId.replace('_phoneNumber', '');
                 }

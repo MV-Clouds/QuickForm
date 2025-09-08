@@ -170,7 +170,7 @@ const ActionPanel = ({
 
   const selectedFindNode = mappings[nodeId]?.selectedFindNode || "";
 
-// Clear error state when switching nodes to prevent stale messages
+  // Clear error state when switching nodes to prevent stale messages
   useEffect(() => {
     setSaveError(null);
   }, [nodeId]);
@@ -893,8 +893,18 @@ const ActionPanel = ({
         if (formatterConfig.operation === "currency_format" && (!formatterConfig.options.currency || !formatterConfig.options.locale)) {
           return { error: "Please provide currency and locale." };
         }
-        if (formatterConfig.operation === "round_number" && formatterConfig.options.decimals === undefined) {
-          return { error: "Please provide number of decimals." };
+        if (formatterConfig.operation === "round_number") {
+          const decimals = formatterConfig.options.decimals;
+
+          // Check if decimals is undefined, null, or not a number
+          if (decimals === undefined || decimals === null || isNaN(decimals)) {
+            return { error: "Please provide number of decimals." };
+          }
+
+          // Check if decimals is within valid range
+          if (decimals < 0 || decimals > 15) {
+            return { error: "Decimals must be between 0 and 15." };
+          }
         }
         if (formatterConfig.operation === "phone_format" && (!formatterConfig.options.countryCode || !formatterConfig.options.format)) {
           return { error: "Please provide country code and format." };
@@ -2512,16 +2522,22 @@ const ActionPanel = ({
                   {formatterConfig.operation === "round_number" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Decimals</label>
-                      <Input
+                      <input
                         type="number"
-                        value={formatterConfig.options.decimals ?? undefined}
-                        onChange={(val) => handleFormatterOptionChange("decimals", val ?? "")}
+                        value={formatterConfig.options.decimals ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleFormatterOptionChange(
+                            "decimals",
+                            value === "" ? undefined : parseInt(value)
+                          );
+                        }}
                         placeholder="e.g., 2"
                         min={0}
-                        style={{ width: "100%" }}
+                        max={15}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-
                   )}
                   {formatterConfig.operation === "phone_format" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
