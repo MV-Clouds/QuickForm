@@ -191,11 +191,11 @@
 /* Condition Cards */
 .conditions-list {
   overflow-y: auto;
-  height: 57vh;
+  max-height: 57vh;
   display: flex;
   flex-grow: 1;
   flex-direction: column;
-  justify-content: space-around;
+  justify-content: space-between;
   padding: 16px 0px;
   gap: 8px;
   scrollbar-width: none;
