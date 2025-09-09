@@ -28,7 +28,7 @@ function FormBuilder({
   onMovePageUp,
   onMovePageDown,
   isSidebarOpen = true,
-  footerConfigs,
+  footerConfigs=[],
   setFooterConfigs
 }) {
   const fieldsContainerRef = useRef(null);
