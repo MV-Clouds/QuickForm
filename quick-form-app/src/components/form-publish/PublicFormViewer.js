@@ -1461,48 +1461,51 @@ function PublicFormViewer({ runPrefill = false }) {
       } else {
         alert("Form submitted successfully!");
       }
+      if (formData.mappings && formData.mappings.length > 0) {
+        // call Run Mappings URL here
+        const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            userId: linkData.userId,
+            instanceUrl,
+            formVersionId: formData.Id,
+            formData: updatedSubmissionData,
+            nodes: formData.mappings,
+          }),
+        });
 
-      const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: linkData.userId,
-          instanceUrl,
-          formVersionId: formData.Id,
-          formData: updatedSubmissionData,
-          nodes: formData.mappings,
-        }),
-      });
-
-      const flowData = await flowResponse.json();
-      if (!flowResponse.ok) {
-        const newErrors = {};
-        if (flowData.results) {
-          Object.entries(flowData.results).forEach(([nodeId, result]) => {
-            if (result.error) {
-              const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-              if (mapping?.Formatter_Config__c) {
-                const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-                let fieldId = formatterConfig.inputField;
-                if (fieldId.includes('_phoneNumber')) {
-                  fieldId = fieldId.replace('_phoneNumber', '');
+        const flowData = await flowResponse.json();
+        if (!flowResponse.ok) {
+          const newErrors = {};
+          if (flowData.results) {
+            Object.entries(flowData.results).forEach(([nodeId, result]) => {
+              if (result.error) {
+                const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+                if (mapping?.Formatter_Config__c) {
+                  const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
+                  let fieldId = formatterConfig.inputField;
+                  if (fieldId.includes('_phoneNumber')) {
+                    fieldId = fieldId.replace('_phoneNumber', '');
+                  }
+                  newErrors[fieldId] = result.error;
                 }
-                newErrors[fieldId] = result.error;
               }
+            });
+            if (Object.keys(newErrors).length > 0) {
+              setErrors(newErrors);
+              throw new Error('Form submission completed but flow execution had errors');
             }
-          });
-          if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            throw new Error('Form submission completed but flow execution had errors');
           }
+          throw new Error(flowData.error || 'Failed to execute flow');
         }
-        throw new Error(flowData.error || 'Failed to execute flow');
       }
+      console.log('No mapping' , formData)
       console.log('formData exist ',notificationData)
-     if(notificationData.length > 0){
+     if(notificationData?.length > 0){
       if(notificationData){
           console.log("Twilio SMS sending started");
           try {

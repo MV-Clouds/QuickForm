@@ -14,7 +14,7 @@ import { encrypt } from "./crypto";
 import MappingFields from "../form-mapping/MappingFields";
 import formbuilder from "./formbuilder.css";
 import { useSalesforceData } from "../Context/MetadataContext";
-import ThankYouPageBuilder from "../Thankyou/TY3";
+import ThankYouPageBuilder from "../Thankyou/TY6";
 import NotificationPage from "../NotificationSettings/NotificationSettingsModal.js";
 import Conditions from "../conditions/Conditions"; // Or your actual path
 import { v4 as uuidv4 } from "uuid";
@@ -190,171 +190,62 @@ function MainFormBuilder({
   }, [showMapping]);
 
 
-  // Initialize data for Thank You Page
-  const [content, setContent] = useState({
-    title: "Thank You for Your Submission!",
-    subtitle: "We have received your message and will get back to you shortly.",
-    buttonText: "Explore More",
-    images: [
-      {
-        id: uuidv4(),
-        url: "https://quickform-images.s3.us-east-1.amazonaws.com/1751534809565_quickform-logo.png",
-        name: "Main Image",
-      },
-    ],
-    socialLinks: {
-      facebook: { enabled: true, url: "https://facebook.com" },
-      instagram: { enabled: true, url: "https://instagram.com" },
-      linkedin: { enabled: true, url: "https://linkedin.com" },
-      message: { enabled: true, url: "mailto:contact@example.com" },
-    },
-    customTexts: [],
+  const [thankYouPayload, setThankYouPayload] = useState({
+    Form_Version__c: formVersionId,
+    Heading__c: '',
+    Sub_Heading__c: '',
+    Image_Url__c: '',
+    Actions__c: '',
+    Description__c: '',
+    Body__c: '',
   });
-  const [elements, setElements] = useState([
-    {
-      id: "image",
-      type: "image",
-      x: 150,
-      y: 0,
-      width: 800,
-      height: 320,
-      zIndex: 1,
-      alignment: "center",
-      imageId: content.images[0]?.id || "",
-    },
-    {
-      id: "title",
-      type: "title",
-      x: 150,
-      y: 340,
-      width: 800,
-      height: 60,
-      zIndex: 2,
-      alignment: "center",
-    },
-    {
-      id: "subtitle",
-      type: "subtitle",
-      x: 150,
-      y: 420,
-      width: 800,
-      height: 40,
-      zIndex: 2,
-      alignment: "center",
-    },
-    {
-      id: "button",
-      type: "button",
-      x: 450,
-      y: 480,
-      width: 200,
-      height: 50,
-      zIndex: 2,
-      alignment: "center",
-    },
-    {
-      id: "social",
-      type: "social",
-      x: 450,
-      y: 550,
-      width: 200,
-      height: 60,
-      zIndex: 2,
-      alignment: "center",
-    },
-  ]);
-  const [theme, setTheme] = useState({
+  const [thankYouRecordId, setThankYouRecordId] = useState(null);
+
+    const [theme, setTheme] = useState({
     backgroundColor: "#ffffff",
     primaryColor: "#028ab0",
     secondaryColor: "#ffbb1b",
     textColor: "#0b0a0a",
     secondaryTextColor: "#5f6165",
   });
-  useEffect(() => {
-    console.log("formRecords =>", sfFormRecords);
-    if (sfFormRecords.length === 0) {
-      refreshData();
-    }
-    const formVersion = sfFormRecords
-      .find((val) => val.Id === formId)
-      ?.FormVersions.find((version) => version.Id === formVersionId);
-    console.log("formversion ", formVersion);
-    let thankyouRecord;
-    thankyouRecord = formVersion?.ThankYou;
-    console.log("ty record", thankyouRecord);
-    if ((typeof thankyouRecord === 'object' && Object.keys(thankyouRecord)?.length > 0) || thankyouRecord?.length > 0) {
-      const { content: loadedContent, elements: loadedElements } =
-        mapSalesforceThankYouToUI(thankyouRecord);
-      console.log('mapped...')
-      setContent(loadedContent || content); // fallback to default if null
-      setElements(
-        Array.isArray(loadedElements) && loadedElements.length > 0
-          ? loadedElements
-          : elements
-      );
-    }
-  }, [sfFormRecords]);
-  useEffect(() => {
-    console.log('elements in formbuilder', elements);
-    console.log('content ==>', content)
-  }, [elements, content])
-  /**
-   * Maps a Salesforce Thank_You__c record to your content and elements state shapes.
-   * @param {object} sfRecord - The Thank_You__c record from Salesforce
-   * @returns {{content: object, elements: array}}
-   */
-  function mapSalesforceThankYouToUI(sfRecord) {
-    // Parse Salesforce JSON fields
-    const bodyParsed = sfRecord.Body__c ? JSON.parse(sfRecord.Body__c) : {};
-    const imageParsed = sfRecord.Image_Url__c
-      ? JSON.parse(sfRecord.Image_Url__c)
-      : {};
-    const headingParsed = sfRecord.Heading__c
-      ? JSON.parse(sfRecord.Heading__c)
-      : {};
-    const subHeadingParsed = sfRecord.Sub_Heading__c
-      ? JSON.parse(sfRecord.Sub_Heading__c)
-      : {};
-    const actionsParsed = sfRecord.Actions__c
-      ? JSON.parse(sfRecord.Actions__c)
-      : {};
-
-    // Build content
-    const content = {
-      title: headingParsed.text || "",
-      subtitle: subHeadingParsed.text || "",
-      buttonText: actionsParsed.buttonText || "",
-      images:
-        Array.isArray(imageParsed.images) && imageParsed.images.length > 0
-          ? imageParsed.images
-          : [
-            {
-              id: uuidv4(),
-              url: "https://quickform-images.s3.us-east-1.amazonaws.com/1751534809565_quickform-logo.png",
-              name: "Main Image",
-            },
-          ],
-      socialLinks: bodyParsed.socialLinks || {},
-      customTexts: bodyParsed.customTexts || [],
-      description: sfRecord.Description__c || "",
+  
+ 
+  function updatePayloadFromContentElements(content, elements) {
+    // Compose JSON strings for relevant fields:
+    const headingObj = elements.find(e => e.id === 'title') || {};
+    const heading = JSON.stringify({ ...headingObj, text: content.title });
+  
+    const subHeadingObj = elements.find(e => e.id === 'subtitle') || {};
+    const subHeading = JSON.stringify({ ...subHeadingObj, text: content.subtitle });
+  
+    const actionObj = elements.find(e => e.id === 'button') || {};
+    const action = JSON.stringify({ ...actionObj, buttonText: content.buttonText, buttonLink: content.buttonUrl });
+  
+    const imagesObj = elements.find(e => e.id === 'image') || {};
+    const images = content.images.length > 0 ? content.images : [{ id: 'default', url: '', name: '' }];
+    const imagePayload = JSON.stringify({ ...imagesObj, images });
+  
+    // Compose Body with layout referencing current elements and content parts
+    const body = JSON.stringify({
+      layout: elements,
+      socialLinks: content.socialLinks,
+      customTexts: content.customTexts,
+    });
+    const updatedPayload = {
+      // preserve relevant ids & meta if you keep them, else map as needed
+      Heading__c: heading,
+      Sub_Heading__c: subHeading,
+      Actions__c: action,
+      Image_Url__c: imagePayload,
+      Body__c: body,
+      Description__c: content.description || '',
+      Form_Version__c : formVersionId
     };
-
-    // Build elements (layout) - from Body__c layout if present; fallback to construct from individual configs if needed
-    const elements = Array.isArray(bodyParsed.layout)
-      ? bodyParsed.layout
-      : [
-        imageParsed && { ...imageParsed, id: "image", type: "image" },
-        headingParsed && { ...headingParsed, id: "title", type: "title" },
-        subHeadingParsed && {
-          ...subHeadingParsed,
-          id: "subtitle",
-          type: "subtitle",
-        },
-        actionsParsed && { ...actionsParsed, id: "button", type: "button" },
-      ].filter(Boolean);
-
-    return { content, elements };
+    console.log('body',updatedPayload)
+  
+    setThankYouPayload(updatedPayload);
   }
+  
 
   const [showSidebar, setShowSidebar] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -476,79 +367,36 @@ function MainFormBuilder({
       setIsLoadingForm(false);
     }
   };
-  function prepareThankYouData(rawData, elements, theme, formVersionId) {
-    // Extract elements by type for mapping
-    const titleElem = elements.find((e) => e.type === "title");
-    const subtitleElem = elements.find((e) => e.type === "subtitle");
-    const imageElem = elements.find((e) => e.type === "image");
-    const buttonElem = elements.find((e) => e.type === "button");
-    const socialElem = elements.find((e) => e.type === "social");
-
-    // Compose configs for Salesforce fields
-    const Body__c = {
-      layout: elements,
-      socialLinks: rawData.socialLinks,
-      customTexts: rawData.customTexts,
-      color: theme.secondaryColor,
-      backgroundColor: theme.backgroundColor,
-    };
-
-    let data = {
-      Form_Version__c: formVersionId,
-      Heading__c: JSON.stringify({
-        text: rawData.title,
-        color: theme.textColor,
-        ...titleElem,
-      }),
-      Sub_Heading__c: JSON.stringify({
-        text: rawData.subtitle,
-        color: theme.secondaryTextColor,
-        ...subtitleElem,
-      }),
-      Image_Url__c: JSON.stringify({
-        images: rawData.images,
-        ...imageElem,
-      }),
-      Actions__c: JSON.stringify({
-        buttonText: rawData.buttonText,
-        buttonLink: rawData.buttonLink || "#",
-        color: theme.primaryColor,
-        ...buttonElem,
-      }),
-      Description__c: "This is Test", // your sample has no description, add if you get one
-      Body__c: JSON.stringify(Body__c), // all additional config and layout
-    };
-
-    // For PATCH (update), add Id if present
-    const thankYouId = elements.Id;
-    if (thankYouId) data.Id = thankYouId.Id;
-
-    return data;
-  }
+  // Provide a function to receive payload update from ThankYou editor
+  const onThankYouPayloadChange = (payload) => {
+    setThankYouPayload(payload);
+  };
   async function handleThankYouSave({
     instanceUrl,
     userId,
     ThankYouData,
     token,
-    recordId, // Optional: for PATCH/updating existing
   }) {
     if (!showThankYou) {
       // Don't send if flag is false
       console.log("skipping...");
       return { skip: true, message: "showThankYou is false, no request sent." };
     }
-    console.log("saving...");
-
+    if(!ThankYouData){
+      console.log(thankYouPayload)
+      return { skip: false, message: "thankyou data is false, no request sent." };
+    }
+    setIsLoadingForm(true)
     const invokeUrl =
       "https://l8rbccfzz8.execute-api.us-east-1.amazonaws.com/savedata/";
-    const isPatch = !!recordId;
+    const isPatch = !!thankYouRecordId;
     // If PATCH, add Id to payload
     const payload = {
       instanceUrl,
       userId,
       ThankYouData: {
         ...ThankYouData,
-        ...(isPatch && { Id: recordId }),
+        ...(isPatch && { Id: thankYouRecordId }),
       },
     };
     console.log("ty paylaod", payload);
@@ -564,6 +412,7 @@ function MainFormBuilder({
 
       const data = await response.json();
       console.log("Responsefrom TY", data);
+      setThankYouRecordId(data?.Id)
       if (!response.ok) {
         throw new Error(
           data?.error || data?.message || "Unknown error from API"
@@ -582,6 +431,8 @@ function MainFormBuilder({
         success: false,
         error: error.message || error,
       };
+    }finally{
+      setIsLoadingForm(false);
     }
   }
 
@@ -1043,21 +894,16 @@ function MainFormBuilder({
   };
 
   const saveFormToSalesforce = async () => {
-    const thankYouData = prepareThankYouData(
-      content,
-      elements,
-      theme,
-      urlFormVersionId
-    );
     const userId = sessionStorage.getItem("userId");
     const instanceUrl = sessionStorage.getItem("instanceUrl");
     setIsLoadingForm(true);
     !showThankYou ? setLoadingText('Saving Form') : setLoadingText('Saving Thank You');
     const token = await fetchAccessToken(userId, instanceUrl);
+    console.log('payload' , thankYouPayload)
     const result = await handleThankYouSave({
       instanceUrl,
       userId,
-      ThankYouData: thankYouData,
+      ThankYouData: thankYouPayload,
       token,
     });
     if (result.success) {
@@ -2042,13 +1888,11 @@ function MainFormBuilder({
           {showThankYou ? (
             <ThankYouPageBuilder
               formVersionId={formVersionId}
-              elements={elements}
-              setElements={setElements}
-              content={content}
-              setContent={setContent}
+              onContentElementsChange={updatePayloadFromContentElements} // pass setter function
               theme={theme}
               setTheme={setTheme}
-              isLoadingForm={isLoadingForm} loadingText={loadingText}
+              isLoadingForm={isLoadingForm} formloadingtext={loadingText}
+              setThankYouRecordId = {setThankYouRecordId}
             />
           ) : showCondition ? (
             <Conditions formVersionId={formVersionId} />

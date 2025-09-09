@@ -74,9 +74,9 @@ export const SalesforceDataProvider = ({ children }) => {
       const parsedFormRecords = parseFormRecords(data.FormRecords);
       // console.log('Parsed Form Records:', JSON.stringify(parsedFormRecords, null, 2));
       const userProfileData = data?.UserProfile || {};
-      const folderData = typeof data?.Folders === 'string' ? JSON.parse(data?.Folders) : data?.Folders || [];
-      const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
-      const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
+      // const folderData = typeof data?.Folders === 'string' ? JSON.parse(data?.Folders) : data?.Folders || [];
+      // const parsedFieldset = typeof data?.Fieldset === 'string' ? JSON.parse(data?.Fieldset) : data?.Fieldset;
+      // const parsedDeletedData = JSON.parse(data?.DeletedFormRecords)
       const favoriteRecords = parsedFormRecords.filter(val => val.isFavorite === true);
       const parsedgoogleData = typeof data?.GoogleData === 'string' ? JSON.parse(data?.GoogleData) : data?.GoogleData || [];
       const parsedTwilioData = typeof data?.TwilioData === 'string' ? JSON.parse(data?.TwilioData) : data?.TwilioData || []
@@ -84,10 +84,10 @@ export const SalesforceDataProvider = ({ children }) => {
       setMetadata(parsedMetadata);
       setFormRecords(parsedFormRecords);
       setuserProfile(JSON.parse(userProfileData));
-      setFieldset(parsedFieldset);
-      setdeletedData(parsedDeletedData);
+      // setFieldset(parsedFieldset);
+      // setdeletedData(parsedDeletedData);
       setfavoriteData(favoriteRecords);
-      setFolders(folderData);
+      // setFolders(folderData);
       setgoogleData(parsedgoogleData);
       setTwilioData(parsedTwilioData);
       console.log('Metadata fetched successfully:', data);

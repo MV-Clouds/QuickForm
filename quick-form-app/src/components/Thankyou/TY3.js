@@ -84,14 +84,36 @@ export default function ThankYouPageEditor({
     }
   };
   useEffect(() => {
-    console.log("url", url);
-    if (url) {
-      setContent({
-        ...content,
-        images: [...content.images, url.backgroundImage],
-      });
+    if (url?.backgroundImage) {
+      const newImage = {
+        id: uuidv4(),
+        url: url.backgroundImage,
+        name: `Image ${content.images.length + 1}`,
+      };
+  
+      setContent((prev) => ({
+        ...prev,
+        images: [...prev.images, newImage],
+      }));
+  
+      // Add an image element to canvas only if needed
+      setElements((prev) => [
+        ...prev,
+        {
+          id: `image-${uuidv4()}`,
+          type: "image",
+          x: 100 + prev.length * 30,
+          y: 100 + prev.length * 30,
+          width: 300,
+          height: 180,
+          zIndex: 1,
+          alignment: "center",
+          imageId: newImage.id,
+        },
+      ]);
     }
   }, [url]);
+  
   // Handle image upload
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -357,15 +379,21 @@ export default function ThankYouPageEditor({
     console.log("Elements= >", elements , content)
   },[elements, content])
   // Remove image
- const removeImage = (imageId) => {
+// Remove image safely
+const removeImage = (imageId) => {
   setContent((prev) => ({
     ...prev,
-    images: prev.images.filter((img) => img.id !== imageId),
+    images: prev.images.filter((img) => img?.id !== imageId),
   }));
+
   setElements((prev) =>
     prev.filter((el) => !(el.type === "image" && el.imageId === imageId))
   );
+
+  // If selectedElement was pointing to a removed image, reset it
+  setSelectedElement(null);
 };
+
 
   // Update custom text
   const updateCustomText = (id, text) => {
@@ -437,10 +465,11 @@ export default function ThankYouPageEditor({
       onMouseUp={handleDragEnd}
     >
       {/* Main Canvas Area */}
-      <div className="flex-1 p-8 overflow-auto relative">
-        <div className="absolute top-4 right-4 z-10 flex gap-2 bg-white p-2 rounded-lg shadow">
+      <div className="flex-1 overflow-auto relative">
+        {/* <div className="absolute top-4 right-4 z-10 flex gap-2 bg-white p-2 rounded-lg shadow">
           <button
             onClick={() => handleZoom("in")}
+            disabled={scale >= 1.2}
             className="login-button p-1 hover:bg-gray-100 rounded"
             title="Zoom In"
           >
@@ -453,35 +482,37 @@ export default function ThankYouPageEditor({
             onClick={() => handleZoom("out")}
             className="login-button p-1 hover:bg-gray-100 rounded"
             title="Zoom Out"
+            disabled={scale <= 0.7}
           >
             <Minus className="w-4 h-4" />
           </button>
-        </div>
+        </div> */}
 
         <div
-          className="mx-auto relative border border-gray-200 mt-10 bg-white rounded-lg shadow-lg"
+          className="absolute border border-gray-200 bg-white rounded-lg shadow-lg"
           style={{
-            width: "95vw",
-            maxWidth: "1000px",
-            height: "700px",
+            width: "min(95vw, 1000px)", // Responsive width
+            height: "min(80vw, 700px)", // Responsive height (adjust 80vw as needed)
+            left: "50%",
+            top: "50%",
+            transform: `translate(-50%, -50%) scale(${scale})`,
             backgroundColor: theme.backgroundColor,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
+            transformOrigin: "center center",
           }}
           ref={canvasRef}
         >
           {elements.map((element) => {
             const elementStyle = {
-              left: `${element.x}px`,
-              top: `${element.y}px`,
-              width: `${element.width}px`,
-              height: `${element.height}px`,
+              left: `${element.x  * scale}px`,
+              top: `${element.y  * scale}px`,
+              width: `${element.width  * scale}px`,
+              height: `${element.height  * scale}px`,
               zIndex: element.zIndex,
               display: "flex",
               justifyContent: element.alignment,
               alignItems: "center",
-              transform: `scale(${1 / scale})`, // Counteract parent scale for elements
-              transformOrigin: "top left",
+              // transform: `scale(${1 / scale})`, // Counteract parent scale for elements
+              // transformOrigin: "top left",
             };
 
             return (
@@ -500,13 +531,12 @@ export default function ThankYouPageEditor({
                   <div className="w-full h-full relative">
                     <img
                       src={
-                        content.images.find(
-                          (img) => img?.id === element.imageId
-                        )?.url || ""
+                        content.images.find((img) => img?.id === element.imageId)?.url || ""
                       }
                       alt="Thank you page background"
                       className="w-full h-full object-cover rounded"
                     />
+
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition">
                       <button className="p-2 bg-white/90 rounded-full">
                         <ImageIcon className="w-5 h-5 text-gray-700" />
@@ -692,8 +722,8 @@ export default function ThankYouPageEditor({
             onClick={() => {
               const defaultImage = {
                 id: uuidv4(),
-                url: "https://quickform-images.s3.us-east-1.amazonaws.com/1751534809565_quickform-logo.png",
-                name: "Main Image",
+                url: "/images/quickform-only-logo.png",
+                name: "Default Image",
               };
               setTheme({
                 backgroundColor: "#ffffff",
@@ -833,14 +863,26 @@ export default function ThankYouPageEditor({
                     checked={elements.some((el) => el.type === "image")}
                     onChange={() => {
                       if (elements.some((el) => el.type === "image")) {
-                        setElements(
-                          elements.filter((el) => el.type !== "image")
-                        );
+                        // Turning OFF
+                        setElements(elements.filter((el) => el.type !== "image"));
                       } else {
+                        // Turning ON
+                        let firstImage = content.images[0];
+                        if (!firstImage) {
+                          firstImage = {
+                            id: uuidv4(),
+                            url: "/images/quickform-only-logo.png",
+                            name: "Default Image",
+                          };
+                          setContent((prev) => ({
+                            ...prev,
+                            images: [firstImage],
+                          }));
+                        }
                         setElements([
                           ...elements,
                           {
-                            id: `image-${uuidv4()}`,
+                            id: `image-${firstImage.id}`,
                             type: "image",
                             x: 0,
                             y: 0,
@@ -848,11 +890,12 @@ export default function ThankYouPageEditor({
                             height: 320,
                             zIndex: 1,
                             alignment: "center",
-                            imageId: content.images[0]?.id || "",
+                            imageId: firstImage.id,
                           },
                         ]);
                       }
                     }}
+                    
                     className="sr-only peer"
                   />
                   <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
@@ -894,10 +937,11 @@ export default function ThankYouPageEditor({
                   </div>
                   {/* <label className="login-button cursor-pointer px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"> */}
                   {/* <ImagePlus className="w-4 h-4" /> */}
+                  {content.images.length < 4 && (
                   <FileUpload
                     acceptedFileTypes={".png,.jpg,.jpeg"}
                     setDesign={(imgObj) => {
-                      // Add image to content.images
+                      if (content.images.length >= 4) return; // safety guard
                       const newImage = {
                         id: uuidv4(),
                         url: imgObj.backgroundImage,
@@ -907,13 +951,12 @@ export default function ThankYouPageEditor({
                         ...prev,
                         images: [...prev.images, newImage],
                       }));
-                      // Add image element to canvas
                       setElements((prev) => [
                         ...prev,
                         {
                           id: `image-${newImage.id}`,
                           type: "image",
-                          x: 50 + prev.length * 40, // staggered placement
+                          x: 50 + prev.length * 40,
                           y: 50 + prev.length * 40,
                           width: 300,
                           height: 180,
@@ -924,26 +967,28 @@ export default function ThankYouPageEditor({
                       ]);
                     }}
                   />
+                )}
+
                   {/* </label> */}
                   {selectedElement &&
                     elements.find((el) => el.id === selectedElement)?.type ===
                       "image" && (
-                      <select
+                        <select
                         value={
-                          elements.find((el) => el.id === selectedElement)
-                            ?.imageId || ""
+                          elements.find((el) => el.id === selectedElement)?.imageId || ""
                         }
-                        onChange={(e) =>
-                          setImageForElement(selectedElement, e.target.value)
-                        }
+                        onChange={(e) => setImageForElement(selectedElement, e.target.value)}
                         className="text-xs px-2 py-1 border rounded w-32"
                       >
-                        {content.images.map((img) => (
-                          <option key={img?.id} value={img?.id}>
-                            {img?.name}
-                          </option>
-                        ))}
+                        {content.images.map((img) =>
+                          img?.id ? (
+                            <option key={img.id} value={img.id}>
+                              {img.name}
+                            </option>
+                          ) : null
+                        )}
                       </select>
+                      
                     )}
                 </>
               )}

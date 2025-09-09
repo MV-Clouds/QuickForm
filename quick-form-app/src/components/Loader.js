@@ -3,7 +3,6 @@ import React from 'react';
 import './Loader.css';
 
 const Loader = ({ text = "Loading", fullScreen = true }) => {
-  console.log('Full screen ',fullScreen);
   
   return (
     <div className={`loader-overlay ${fullScreen ? 'fullscreen' : 'parent-relative'}`}>
