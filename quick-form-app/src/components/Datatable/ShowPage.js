@@ -13,7 +13,7 @@ const mapApiToTableData = (apiData) => {
     formName: item.FormVersions[0].Name || 'Untitled Form',
     activeVersion: item.Active_Version__c || 'V1',
     submissionCount: item.FormVersions[0].Submission_Count__c,
-    status: item.FormVersions.filter(val => val.Stage__c === 'Publish').length > 0 ? 'Active' : 'Inactive' ,
+    status: item.Status__c || '',
     lastmodDate : new Date(item.LastModifiedDate).toLocaleDateString(),
     fields : item.FormVersions[0].Fields
   }));

@@ -231,7 +231,16 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       Object_Info__c: JSON.stringify(objectInfo),
     };
 
-    return { formVersion, formFields, allFields };
+     const defaultThankyoudata = {
+    "Heading__c": "{\"id\":\"title\",\"type\":\"title\",\"x\":100,\"y\":370,\"width\":800,\"height\":60,\"zIndex\":2,\"alignment\":\"center\",\"text\":\"Thank You for Your Submission!\"}",
+    "Sub_Heading__c": "{\"id\":\"subtitle\",\"type\":\"subtitle\",\"x\":100,\"y\":450,\"width\":800,\"height\":40,\"zIndex\":2,\"alignment\":\"center\",\"text\":\"We have received your message and will get back to you shortly.\"}",
+    "Actions__c": "{\"id\":\"button\",\"type\":\"button\",\"x\":400,\"y\":510,\"width\":200,\"height\":50,\"zIndex\":2,\"alignment\":\"center\",\"buttonText\":\"Explore More\",\"buttonLink\":\"https://example.com\"}",
+    "Image_Url__c": "{\"id\":\"image\",\"type\":\"image\",\"x\":100,\"y\":30,\"width\":800,\"height\":320,\"zIndex\":1,\"alignment\":\"center\",\"imageId\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\",\"images\":[{\"id\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\",\"url\":\"/images/quickform-only-logo.png\",\"name\":\"Default Image\"}]}",
+    "Body__c": "{\"layout\":[{\"id\":\"image\",\"type\":\"image\",\"x\":100,\"y\":30,\"width\":800,\"height\":320,\"zIndex\":1,\"alignment\":\"center\",\"imageId\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\"},{\"id\":\"title\",\"type\":\"title\",\"x\":100,\"y\":370,\"width\":800,\"height\":60,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"subtitle\",\"type\":\"subtitle\",\"x\":100,\"y\":450,\"width\":800,\"height\":40,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"button\",\"type\":\"button\",\"x\":400,\"y\":510,\"width\":200,\"height\":50,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"social\",\"type\":\"social\",\"x\":400,\"y\":580,\"width\":200,\"height\":60,\"zIndex\":2,\"alignment\":\"center\"}],\"socialLinks\":{\"facebook\":{\"enabled\":true,\"url\":\"https://facebook.com\"},\"instagram\":{\"enabled\":true,\"url\":\"https://instagram.com\"},\"linkedin\":{\"enabled\":true,\"url\":\"https://linkedin.com\"},\"message\":{\"enabled\":true,\"url\":\"mailto:contact@example.com\"}},\"customTexts\":[]}",
+    "Description__c": "Default Thank you",
+  }
+
+    return { formVersion, formFields, allFields,defaultThankyoudata };
   };
 
   const prepareMappingData = (formVersionId, objectInfo, salesforceFieldToFormFieldId) => {
@@ -356,7 +365,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       if (!token) throw new Error('Failed to obtain access token.');
 
       // Create the form version and fields
-      const { formVersion, formFields, allFields } = prepareFormData();
+       const { formVersion, formFields, allFields , defaultThankyoudata } = prepareFormData();
       const formResponse = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -367,6 +376,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
           userId,
           instanceUrl: instanceUrl.replace(/https?:\/\//, ''),
           formData: { formVersion, formFields },
+          thankyouData : defaultThankyoudata
         }),
       });
 

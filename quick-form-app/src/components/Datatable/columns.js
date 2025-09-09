@@ -2,6 +2,100 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpDown, Edit, Folder, Heart, Trash } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import Loader from '../Loader'
+const StatusCell = ({ row }) => {
+  const [localStatus, setLocalStatus] = useState(row.getValue("status"));
+  const [loading, setLoading] = useState(false);
+  const fetchAccessToken = async (userId, instanceUrl) => {
+    try {
+      const response = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, instanceUrl }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to fetch access token");
+      return data.access_token;
+    } catch (error) {
+      console.error("Error fetching access token:", error);
+      return null;
+    }
+  };
+
+  const handleStatusChange = async (formId) => {
+    if (loading) return;
+    const prevStatus = localStatus;
+    const newStatus = localStatus === "Active" ? "Inactive" : "Active";
+    setLocalStatus(newStatus); // optimistic
+    setLoading(true);
+    try {
+      const userId = sessionStorage.getItem("userId");
+      const instanceUrl = sessionStorage.getItem("instanceUrl");
+      const token = await fetchAccessToken(userId, instanceUrl);
+
+      const response = await fetch(process.env.REACT_APP_STATUS_CHANGE ,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, instanceUrl, token, status: newStatus, formId }),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "Update failed");
+    } catch (error) {
+      console.error("Error updating status:", error);
+      setLocalStatus(prevStatus); // rollback
+    } finally {
+      setLoading(false);
+    }
+  };
+  if(loading){
+    return(
+      <div>
+        <Loader text={`${localStatus === "Inactive" ? "Inactivating form" : "Activating Form"}`} />
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center justify-center gap-2 ">
+      <motion.button
+        onClick={() => handleStatusChange(row.original.id)}
+        className={`relative w-12 h-7 rounded-full border transition-colors duration-200 focus:outline-none ${
+          localStatus === "Active"
+            ? "bg-green-400 border-green-500"
+            : "bg-gray-300 border-gray-400"
+        }`}
+        disabled={row.getValue("activeVersion") === "None" || loading}
+        animate={{
+          backgroundColor: localStatus === "Active" ? "#00C853" : "#D1D5DB",
+          borderColor: localStatus === "Active" ? "#22C55E" : "#9CA3AF",
+        }}
+      >
+       {loading ? (
+        <motion.div
+          className="absolute left-1/2 top-1/2 w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+          style={{ x: "-50%", y: "-50%" }}
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+        />
+      ) : (
+        <motion.span
+          className="absolute left-1 top-[3px] bg-white rounded-full shadow-md"
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          style={{
+            x: localStatus === "Active" ? 19 : 0,
+            height: "20px",
+            width: "20px",
+          }}
+        />
+      )}
+      </motion.button>
+    </div>
+  );
+};
+
+
 export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavoriteForm, handleCloneForm }) => [
   {
     header: 'Sr. No.',
@@ -52,27 +146,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
   {
     accessorKey: 'status',
     header: 'Status',
-    cell: ({ row, table }) => {
-    const handleStatusChange = (formId)=>{
-    }
-      return (
-        <div className="flex items-center justify-center gap-2">
-          <motion.button
-            onClick={()=>handleStatusChange(row.original.id)}
-            className={`relative w-12 h-7 rounded-full border transition-colors duration-200 focus:outline-none ${row.getValue('status') === 'Active' ? 'bg-green-400 border-green-500' : 'bg-gray-300 border-gray-400'}`}
-            initial={row.getValue('status') === 'Active'}
-            disabled = {row.getValue('activeVersion') === 'None'}
-            animate={{ backgroundColor: row.getValue('status') === 'Active' ? '#00C853' : '#D1D5DB', borderColor: row.getValue('status') === 'Active' ? '#22C55E' : '#9CA3AF' }}
-          >
-            <motion.span
-              className="absolute left-1 top-[3px] bg-white rounded-full shadow-md"
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              style={{ x: row.getValue('status') === 'Active' ? 19 : 0 , height : '20px' , width : '20px'}}
-            />
-          </motion.button>
-        </div>
-      );
-    },
+    cell: ({ row, table }) => (<StatusCell row={row}/>)
   },
   {
     accessorKey: 'submissionCount',
@@ -137,7 +211,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
       useEffect(() => {
         if (open && btnRef.current && ref.current) {
           const btnRect = btnRef.current.getBoundingClientRect();
-          const dropdownHeight = 140; // px, estimate
+          const dropdownHeight = 160; // px, estimate
           setDropdownPos({
             left: btnRect.left - 160,
             top: window.innerHeight - btnRect.bottom < dropdownHeight + 16 ? btnRect.top - dropdownHeight - 8 : btnRect.bottom + 8,
