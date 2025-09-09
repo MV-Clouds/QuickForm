@@ -404,6 +404,7 @@ function FormBuilder({
                             isSelected={selectedFieldId === field.id && selectedSectionSide === field.sectionSide}
                             onClick={handleFieldClick}
                             onDrop={onDrop}
+                            index={index}
                             onUpdateField={onUpdateField}
                             onDeleteField={onDeleteField}
                             pageIndex={pageIndex}
@@ -411,7 +412,7 @@ function FormBuilder({
                             fields={fields}
                             setClipboard={setClipboard}
                             clipboard={clipboard}
-                            handlePaste={() => handlePaste(pageIndex, index + 1, null, null)}
+                            handlePaste={(dropIndex, sectionId = null, sectionSide = null) => handlePaste(pageIndex, dropIndex, sectionId, sectionSide)}
                             selectedTheme={selectedTheme}
                             selectedFieldId={selectedFieldId}
                             selectedSectionSide={selectedSectionSide}

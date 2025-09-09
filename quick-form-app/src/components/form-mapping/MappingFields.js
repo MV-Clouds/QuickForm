@@ -224,17 +224,175 @@ const MappingFields = ({ onSaveCallback }) => {
         setIsLoading(true);
         try {
           // First fetch metadata and form records
-          await fetchMetadata(userId, instanceUrl);
-
+          // await fetchMetadata(userId, instanceUrl);
+            const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+            const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl }),
+            });
+            if (!response.ok) throw new Error('Failed to fetch metadata');
+            const data = await response.json();
+            const parsedMetadata = JSON.parse(data.metadata || '[]');
+            const parsedFormRecords = parseFormRecords(data.FormRecords);
+            setMetadata(parsedMetadata);
+            setFormRecords(parsedFormRecords);
           // Then fetch access token
           const accessToken = await fetchAccessToken(userId, instanceUrl);
           if (accessToken) {
             setToken(accessToken);
           }
-
           // Now initialize the data if we have formVersionId and formRecords
-          if (formVersionId && formRecords && formRecords.length > 0) {
-            await initializeData();
+          if (formVersionId && parsedFormRecords && parsedFormRecords.length > 0) {
+            setIsLoading(true);
+    try {
+      // Find the form version in parsedFormRecords
+      const formVersion = parsedFormRecords
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version.Id === formVersionId);
+      if (!formVersion) {
+        showToast(`Form version ${formVersionId} not found`, 'error');
+        setIsLoading(false);
+        return;
+      }
+      // Extract mappings data from formVersion
+      const mappingsData = formVersion.Mappings || {};
+      console.log('Mappings ',mappingsData)
+      // Process the mappings data to match your component's expected format
+      const processedMappings = {};
+      const processedNodes = [];
+      const processedEdges = [];
+      if (mappingsData.Mappings) {
+        // Process mappings
+        Object.entries(mappingsData.Mappings).forEach(([nodeId, mapping]) => {
+          processedMappings[nodeId] = {
+            nodeId,
+            actionType: mapping.actionType,
+            label: mapping.label,
+            order: mapping.order,
+            formVersionId: mapping.formVersionId,
+            previousNodeId: mapping.previousNodeId,
+            nextNodeIds: mapping.nextNodeIds || [],
+            salesforceObject: mapping.salesforceObject,
+            fieldMappings: mapping.fieldMappings || [],
+            conditions: mapping.conditions || [],
+            logicType: mapping.logicType || 'AND',
+            customLogic: mapping.customLogic || '',
+            pathOption: mapping.pathOption || 'Rules',
+            returnLimit: mapping.returnLimit,
+            sortField: mapping.sortField,
+            sortOrder: mapping.sortOrder || 'ASC',
+            enableConditions: mapping.enableConditions || false,
+            loopConfig: mapping.loopConfig || {
+              loopCollection: '',
+              currentItemVariableName: '',
+              maxIterations: '',
+              loopIterationOrder: 'ASC',
+              loopVariables: {
+                currentIndex: false,
+                counter: false,
+                indexBase: "0"
+              },
+              exitConditions: [],
+              logicType: 'AND',
+              customLogic: ''
+            },
+            formatterConfig: mapping.formatterConfig || {
+              formatType: 'date',
+              operation: '',
+              inputField: '',
+              outputVariable: '',
+              options: {},
+              inputField2: '',
+              useCustomInput: false,
+              customValue: ''
+            },
+            id: mapping.id || '',
+            type: (mapping.actionType === 'Condition' || mapping.actionType === 'Path' ||
+              mapping.actionType === 'Loop' || mapping.actionType === 'Formatter')
+              ? 'utility'
+              : 'action',
+            displayLabel: mapping.label || mapping.actionType,
+            storeAsContentDocument: mapping.storeAsContentDocument || false,
+            selectedFileUploadFields: mapping.selectedFileUploadFields || [],
+            selectedSheetName: mapping.selectedSheetName || '',
+            spreadsheetId: mapping.spreadsheetId || '',
+            sheetConditions: mapping.sheetConditions || [],
+            conditionsLogic: mapping.conditionsLogic || 'AND', // Add this
+            sheetcustomLogic: mapping.sheetcustomLogic || '', // Add this
+            updateMultiple: mapping.updateMultiple || false,
+            googleSheetReturnLimit: mapping.googleSheetReturnLimit || '',
+            googleSheetSortField: mapping.googleSheetSortField || '',
+            googleSheetSortOrder: mapping.googleSheetSortOrder || 'ASC'
+          };
+        });
+        // Process nodes
+        if (mappingsData.Nodes && Array.isArray(mappingsData.Nodes)) {
+          mappingsData.Nodes.forEach(node => {
+            const mapping = processedMappings[node.id];
+            if (mapping) {
+              processedNodes.push({
+                ...node,
+                type: "custom",
+                data: {
+                  ...node.data,
+                  label: mapping.label,
+                  displayLabel: mapping.displayLabel || mapping.label,
+                  action: mapping.actionType === "CreateUpdate" ? "Create/Update" : mapping.actionType,
+                  type: mapping.type,
+                  order: mapping.order,
+                  salesforceObject: mapping.salesforceObject,
+                  fieldMappings: mapping.fieldMappings,
+                  conditions: mapping.conditions,
+                  logicType: mapping.logicType,
+                  customLogic: mapping.customLogic,
+                  pathOption: mapping.pathOption,
+                  returnLimit: mapping.returnLimit,
+                  sortField: mapping.sortField,
+                  sortOrder: mapping.sortOrder,
+                  enableConditions: mapping.enableConditions,
+                  loopConfig: mapping.loopConfig,
+                  formatterConfig: mapping.formatterConfig
+                }
+              });
+            } else {
+              // Fallback for nodes without mappings
+              processedNodes.push({
+                ...node,
+                type: "custom",
+                data: {
+                  ...node.data,
+                  action: node.data.action || 'Unknown',
+                  type: node.data.type || 'action',
+                  order: node.data.order || 0
+                }
+              });
+            }
+          });
+        }
+        // Process edges
+        if (mappingsData.Edges && Array.isArray(mappingsData.Edges)) {
+          processedEdges.push(...mappingsData.Edges);
+        }
+      }
+      // If no mappings data found, initialize with default nodes
+      if (Object.keys(processedMappings).length === 0) {
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+      } else {
+        setMappings(processedMappings);
+        setNodes(processedNodes);
+        setEdges(processedEdges);
+      }
+    } catch (error) {
+      showToast(`Initialization failed: ${error.message}`, 'error');
+      console.error('Error initializing mappings:', error);
+      // Fallback to initial nodes if there's an error
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+    } finally {
+      setIsLoading(false);
+    }
           }
         } catch (error) {
           showToast(`Failed to load data: ${error.message}`, 'error');
@@ -243,7 +401,6 @@ const MappingFields = ({ onSaveCallback }) => {
           setIsLoading(false);
         }
       };
-
       fetchAllData();
     }
   }, []); // Keep empty dependency array

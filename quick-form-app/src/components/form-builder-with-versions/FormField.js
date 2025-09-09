@@ -238,7 +238,7 @@ const textToHtml = (text) => {
   return text ? `<p>${text.replace(/\n/g, '<br>')}</p>` : '';
 };
 
-function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme, selectedFieldId, selectedSectionSide }) {
+function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme, selectedFieldId, selectedSectionSide }) {
   const {
     type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
@@ -674,7 +674,7 @@ function FormField({ field, isSelected, onClick, onDrop, pageIndex, sectionSide 
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                handlePaste('below');
+                 handlePaste(index, null, null);
               }}
               className="px-4 py-1 text-center text-[#0b295ee6] hover:bg-blue-50 z-20 whitespace-nowrap"
             >
