@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSalesforceData } from '../Context/MetadataContext';
 import './FormName.css'
 import { motion, AnimatePresence } from 'framer-motion';
 import Loader from '../Loader';
@@ -8,7 +7,6 @@ import Loader from '../Loader';
 const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
   const initialName = fields.find(f => f.id === 'name')?.defaultValue || '';
   const initialDescription = fields.find(f => f.id === 'description')?.defaultValue || '';
-  const { refreshData } = useSalesforceData();
   const [formName, setFormName] = useState(initialName);
   const [formDescription, setFormDescription] = useState(initialDescription); // New state for description
   const [formNameError, setFormNameError] = useState(null);
@@ -120,36 +118,37 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
     }
   };
 
- const prepareFormData = () => {
-  const nonHeaderFields = fields.filter((f) => f.type !== 'header');
-  const pages = [];
-  let currentPage = [];
-  let pageNumber = 1;
-  
-  nonHeaderFields.forEach((field) => {
-    if (field.type === 'pagebreak') {
-      pages.push({ fields: currentPage, pageNumber });
-      pageNumber++;
-      currentPage = [];
-    } else {
-      currentPage.push(field);
-    }
-  });
-  
-  if (currentPage.length > 0 || pages.length === 0) {
-    pages.push({ fields: currentPage, pageNumber });
-  }
+  const prepareFormData = () => {
+    // Group fields by objectName
+    const objectGroups = objectInfo.filter(obj => obj.fields && obj.fields.length > 0);
 
-  // Generate fields from all objects in objectInfo
-  const generatedFields = objectInfo
-    .filter((obj) => obj.fields && obj.fields.length > 0)
-    .flatMap((obj) =>
-      obj.fields.map((objField) => {
+    const pages = [];
+    let pageNumber = 1;
+
+    // For each Salesforce object group, generate its fields as one page
+    objectGroups.forEach((obj) => {
+      const headingFieldId = `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const headingField = {
+        id: headingFieldId,
+        label: 'Heading',
+        type: 'heading',
+        sectionId: null,
+        sectionSide: null,
+        subFields: {},
+        heading: `${obj.objectName} Form`,
+        alignment: 'center',
+      };
+
+      const generatedFields = obj.fields.map((objField) => {
+        // Generate a unique ID for each field
+        const fieldId = `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
         const fieldTypeOptions = typeMapping[objField.type] || ['shorttext'];
         const selectedType = fieldTypeOptions[0];
 
         const newField = {
-          id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: fieldId, // Use the unique fieldId here
           type: selectedType,
           label: objField.label,
           name: objField.name,
@@ -161,14 +160,12 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
           },
         };
 
-        // Handle checkbox for boolean fields
         if (objField.type === 'boolean') {
           newField.options = ['Checked'];
           newField.allowMultipleSelections = false;
           newField.dropdownRelatedValues = { 'Checked': 'Checked' };
         }
 
-        // Handle picklist and multipicklist fields
         if (['picklist', 'multipicklist'].includes(objField.type)) {
           newField.options = objField.values && objField.values.length > 0
             ? objField.values
@@ -180,217 +177,160 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
           }, {});
         }
 
-        // Add phone-specific properties
         if (objField.type === 'phone') {
           newField.phoneInputMask = '(999) 999-9999';
           newField.enableCountryCode = true;
           newField.selectedCountryCode = 'US';
         }
 
-        // Add placeholder for text fields
         if (['shorttext', 'longtext', 'email', 'link'].includes(objField.type)) {
           newField.placeholder = { main: `Enter ${objField.label || objField.name}` };
         }
 
-        // Add number-specific properties
         if (['number', 'percent'].includes(objField.type)) {
           newField.numberValueLimits = { enabled: false, min: '', max: '' };
         }
 
+        // You may add a custom property to associate object on field if needed:
+        newField.sfObjectName = obj.objectName;
+
         return newField;
-      })
+      });
+
+      const pageFields = [headingField, ...generatedFields];
+
+      pages.push({
+        fields: pageFields,
+        pageNumber,
+        objectName: obj.objectName,
+      });
+      pageNumber++;
+    });
+
+    // Create formFields for backend with page number assigned per object group
+    const formFields = pages.flatMap((page) =>
+      page.fields.map((field, index) => ({
+        Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
+        Field_Type__c: field.type,
+        Page_Number__c: page.pageNumber,  // Assign page number per object
+        Order_Number__c: index + 1,
+        Properties__c: JSON.stringify(field),
+        Unique_Key__c: field.id,
+      }))
     );
 
-  // Create default footer for each page
-  const footerFields = pages.map((page, index) => ({
-    id: `footer-prev-${page.pageNumber}-${Math.random().toString(36).substr(2, 9)}`,
-    type: 'footer',
-    label: 'Footer',
-    alignment: 'center',
-    pageIndex: index,
-    subFields: {
-      submit: {
-        text: "Submit",
-        bgColor: "#2667eaff",
-        textColor: "#FFFFFF",
-      }
-    },
-    isHidden: false
-  }));
+    // Combine all fields from all pages in order
+    const allFields = pages.flatMap(page => page.fields);
 
-  // Combine all fields: generated fields + footer fields
-  const allFields = [...generatedFields, ...footerFields];
-
-  // Create formFields for backend
-  const formFields = allFields.map((field, index) => ({
-    Name: field.label || field.type.charAt(0).toUpperCase() + field.type.slice(1),
-    Field_Type__c: field.type,
-    Page_Number__c: field.pageIndex !== undefined ? field.pageIndex + 1 : 1,
-    Order_Number__c: index + 1,
-    Properties__c: JSON.stringify(field),
-    Unique_Key__c: field.id,
-  }));
-
-  const formVersion = {
-    Name: formName,
-    Description__c: formDescription,
-    Stage__c: 'Draft',
-    Publish_Link__c: '',
-    Version__c: '1',
-    Object_Info__c: JSON.stringify(objectInfo),
-  };
-  
-  return { formVersion, formFields, allFields };
-};
-
-  const prepareMappingData = (formVersionId, objectInfo) => {
-    // Create nodes for the flow
-    const nodes = [];
-    const mappings = [];
-    const edges = [];
-    
-    // Start node
-    const startNode = {
-      nodeId: 'start',
-      actionType: 'Start',
-      salesforceObject: '',
-      fieldMappings: [],
-      conditions: [],
-      order: 1,
-      previousNodeId: '',
-      nextNodeIds: [],
-      formVersionId: formVersionId,
-      label: 'Start'
+    const formVersion = {
+      Name: formName,
+      Description__c: formDescription,
+      Stage__c: 'Draft',
+      Publish_Link__c: '',
+      Version__c: '1',
+      Object_Info__c: JSON.stringify(objectInfo),
     };
-    
-    nodes.push({
-      id: 'start',
-      type: 'custom',
-      position: { x: 208, y: 50 },
-      data: {
-        label: 'Start',
-        displayLabel: 'Start',
-        type: 'trigger',
-        action: 'Start',
-        order: 1,
-        conditions: [],
-        fieldMappings: [],
-        formVersionId: formVersionId
-      },
-      draggable: true,
-    });
-    
-    mappings.push(startNode);
-    
-    // Create/Update nodes for each object
-    let previousNodeId = 'start';
-    let order = 2;
-    
-    objectInfo.forEach((obj, index) => {
+
+    return { formVersion, formFields, allFields };
+  };
+
+  const prepareMappingData = (formVersionId, objectInfo, salesforceFieldToFormFieldId) => {
+    const nodes = [];
+    const edges = [];
+    const mappings = [];
+
+    objectInfo.forEach((obj, objIndex) => {
       const nodeId = `create_update_${Math.floor(Math.random() * 10000)}`;
-      const label = `Create/Update`;
-      
-      // Create field mappings for this object
-      const fieldMappings = obj.fields.map(field => ({
-        formFieldId: '', // This will be populated after form fields are created
-        fieldType: typeMapping[field.type]?.[0] || 'shorttext',
-        salesforceField: field.name,
-        picklistValue: '',
-      }));
-      
-      const createUpdateNode = {
-        nodeId,
-        actionType: 'CreateUpdate',
-        salesforceObject: obj.objectName,
-        fieldMappings,
-        conditions: [],
-        order,
-        previousNodeId: previousNodeId,
-        nextNodeIds: [],
+
+      // Create field mappings only for fields of this object
+      const fieldMappings = obj.fields.map(field => {
+        return {
+          formFieldId: salesforceFieldToFormFieldId[field.name] || '',
+          fieldType: typeMapping[field.type]?.[0] || 'shorttext',
+          salesforceField: field.name,
+          picklistValue: '',
+        };
+      });
+
+      // Add the content document configuration
+      const contentDocumentConfig = {
+        storeAsContentDocument: false,
+        selectedFileUploadFields: []
       };
-      
-      nodes.push({
+
+      // Use the combined mappings
+      const finalMappings = [...fieldMappings, contentDocumentConfig];
+
+      const createUpdateNode = {
         id: nodeId,
         type: 'custom',
-        position: { x: 190 + (index * 20), y: 145 + (index * 20) },
+        position: { x: 250, y: 150 + objIndex * 300 },
         data: {
-          label,
+          label: 'Create/Update',
           displayLabel: 'Create/Update',
-          type: 'action',
           action: 'Create/Update',
-          order,
-          conditions: [],
-          fieldMappings,
+          type: 'action',
+          order: objIndex + 1,
           salesforceObject: obj.objectName,
+          fieldMappings: finalMappings,
+          conditions: [],
+          logicType: 'AND',
+          customLogic: '',
+          enableConditions: false,
+          returnLimit: '',
+          sortField: '',
+          sortOrder: 'ASC',
+          nextNodeIds: [],
+          previousNodeId: '',
         },
         draggable: true,
-      });
-      
-      mappings.push(createUpdateNode);
-      
-      // Create edge from previous node to this one
-      edges.push({
-        id: `e${previousNodeId}-${nodeId}`,
-        source: previousNodeId,
-        sourceHandle: 'bottom',
-        target: nodeId,
-        targetHandle: 'top',
-      });
-      
-      previousNodeId = nodeId;
-      order++;
-    });
-    
-    // End node
-    const endNode = {
-      nodeId: 'end',
-      actionType: 'End',
-      salesforceObject: '',
-      fieldMappings: [],
-      conditions: [],
-      order,
-      previousNodeId: previousNodeId,
-      nextNodeIds: [],
-    };
-    
-    nodes.push({
-      id: 'end',
-      type: 'custom',
-      position: { x: 213, y: 520 },
-      data: {
-        label: 'End',
-        displayLabel: 'End',
-        type: 'end',
-        action: 'End',
-        order,
+      };
+
+      nodes.push(createUpdateNode);
+
+      const mapping = {
+        nodeId: nodeId,
+        actionType: 'CreateUpdate',
+        salesforceObject: obj.objectName,
+        fieldMappings: fieldMappings,
         conditions: [],
-        fieldMappings: [],
-      },
-      draggable: true,
+        logicType: 'AND',
+        customLogic: '',
+        enableConditions: false,
+        returnLimit: '',
+        sortField: '',
+        sortOrder: 'ASC',
+        label: 'Create/Update',
+        order: objIndex + 1,
+        formVersionId: formVersionId,
+        previousNodeId: '',
+        nextNodeIds: [],
+      };
+
+      mappings.push(mapping);
     });
-    
-    mappings.push(endNode);
-    
-    // Create edge from last create/update to end
-    edges.push({
-      id: `e${previousNodeId}-end`,
-      source: previousNodeId,
-      sourceHandle: 'bottom',
-      target: 'end',
-      targetHandle: 'top',
-    });
-    
-    // Update nextNodeIds for all nodes
-    mappings.forEach((node, index) => {
-      if (index < mappings.length - 1) {
-        node.nextNodeIds = [mappings[index + 1].nodeId];
+
+    // Connect nodes and mappings with edges, set prev/next metadata
+    for (let i = 0; i < nodes.length; i++) {
+      if (i < nodes.length - 1) {
+        edges.push({
+          id: `edge_${nodes[i].id}_to_${nodes[i + 1].id}`,
+          source: nodes[i].id,
+          target: nodes[i + 1].id,
+        });
+
+        nodes[i].data.nextNodeIds.push(nodes[i + 1].id);
+        mappings[i].nextNodeIds.push(nodes[i + 1].id);
+
+        nodes[i + 1].data.previousNodeId = nodes[i].id;
+        mappings[i + 1].previousNodeId = nodes[i].id;
       }
-    });
-    
+    }
+
     return {
       nodes,
-      mappings,
       edges,
+      mappings,
     };
   };
 
@@ -401,7 +341,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
     }
     setIsSaving(true);
     setFormNameError(null)
-    
+
     if (onSubmit) {
       onSubmit({ name: formName, description: formDescription });
       return;
@@ -434,48 +374,52 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       if (!formResponse.ok) throw new Error(formData.error || 'Failed to create form.');
 
       const newFormVersionId = formData.formVersionId;
-      const formFieldIds = formData.formFieldIds || {};
+      const formFieldIds = formData.fieldRecordIds || {};
+
+      console.log('Field ID mapping from backend:', formFieldIds);
 
       // Check if objectInfo has valid fields
       const hasValidObjectInfo = objectInfo.some((obj) => obj.fields && obj.fields.length > 0);
 
       if (hasValidObjectInfo) {
         // Create the mapping records
-        const { nodes, mappings, edges } = prepareMappingData(newFormVersionId, objectInfo);
-        
+        const salesforceFieldToFormFieldId = {};
+        allFields.forEach(field => {
+          console.log('allfields name:: ', field);
+
+          if (field.name && formFieldIds[field.id]) {
+            salesforceFieldToFormFieldId[field.name] = formFieldIds[field.id];
+          }
+        });
+
+        const { nodes, mappings, edges } = prepareMappingData(newFormVersionId, objectInfo, salesforceFieldToFormFieldId);
+
+        console.log('Salesforce field to form field ID mapping:', salesforceFieldToFormFieldId);
+
+        // Debug: Check if we have the right field IDs
+        allFields.forEach(field => {
+          console.log(`Field: ${field.name}, Unique Key: ${field.id}, Salesforce ID: ${formFieldIds[field.id]}`);
+        });
+
         // Update field mappings with actual form field IDs
-        mappings.forEach((node) => {
-          if (node.actionType === 'CreateUpdate') {
-            node.formVersionId = newFormVersionId;
-            node.label = `Create/Update`;
+        mappings.forEach((mapping) => {
+          if (mapping.actionType === 'CreateUpdate') {
+            mapping.formVersionId = newFormVersionId;
+            mapping.label = `Create/Update`;
 
-            node.fieldMappings = node.fieldMappings.map((mapping) => {
-              // Find the matching form field by salesforceField
-              const formField = allFields.find((f) => {
-                // Match by label or salesforceField name
-                return (
-                  f.name === mapping.salesforceField ||
-                  (f.Properties__c?.description && f.Properties__c.description.includes(mapping.salesforceField))
-                );
-              });
-
-              // Get the formFieldId from formFieldIds using the field's Unique_Key__c
-              const formFieldId = formField && formField.id ? formFieldIds[formField.id] || '' : '';
+            mapping.fieldMappings = mapping.fieldMappings.map((fieldMapping) => {
+              // Find the form field ID using the Salesforce field name mapping
+              const formFieldId = salesforceFieldToFormFieldId[fieldMapping.salesforceField] || '';
 
               return {
-                ...mapping,
+                ...fieldMapping,
                 formFieldId, // Assign the correct formFieldId
               };
             });
-          } else {
-            // For start and end nodes
-            node.formVersionId = newFormVersionId;
-            node.label = node.nodeId === 'start' ? 'Start' : 'End';
           }
-
-          // Ensure order is integer
-          node.order = parseInt(node.order);
         });
+
+        console.log('Mappings with formFieldIds:', mappings);
 
         const mappingResponse = await fetch(process.env.REACT_APP_SAVE_MAPPINGS_URL, {
           method: 'POST',
@@ -500,8 +444,6 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
         }
       }
 
-      await refreshData();
-
       navigate(`/form-builder/${newFormVersionId}`, {
         state: { fields: allFields },
       });
@@ -514,110 +456,110 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
   };
 
   return (
-  <AnimatePresence>
-  <motion.div 
-    className="formdetails-modal-bg"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    transition={{ duration: 0.3 }}
-  >
-    {isSaving && <Loader text="Creating form" />}
-    <motion.div 
-      className="formdetails-modal-box"
-      initial={{ scale: 0.85, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.85, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+    <AnimatePresence>
+      <motion.div
+        className="formdetails-modal-bg"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
       >
-      <div className="formdetails-modal-header">
-        <div className="formdetails-modal-title">Enter Form Details</div>
-        <button
-          onClick={onClose}
-          className="formdetails-modal-close"
-          aria-label="Close"
+        {isSaving && <Loader text="Creating form" />}
+        <motion.div
+          className="formdetails-modal-box"
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.85, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         >
-           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 1.00714L8.99286 0L5 3.99286L1.00714 0L0 1.00714L3.99286 5L0 8.99286L1.00714 10L5 6.00714L8.99286 10L10 8.99286L6.00714 5L10 1.00714Z" fill="#5F6165"/>
-                </svg>
-
-        </button>
-      </div>
-      <div className="form-container">
-      <div className="formdetails-modal-content">
-        <div>
-          <label htmlFor="formName" className="formdetails-modal-label">
-            Form Name <span className="required-star">*</span>
-          </label>
-          <motion.input
-            id="formName"
-            type="text"
-            value={formName}
-            onChange={(e) => setFormName(e.target.value)}
-            placeholder="Enter form name"
-            className="formdetails-modal-input"
-            autoFocus
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          />
-        </div>
-        <div>
-          <label htmlFor="formDescription" className="formdetails-modal-label">
-            Form Description
-          </label>
-          <motion.textarea
-            id="formDescription"
-            value={formDescription}
-            onChange={(e) => setFormDescription(e.target.value)}
-            placeholder="Enter form description"
-            className="formdetails-modal-textarea"
-            rows={3}
-            style={{ resize: 'vertical' }}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          />
-        </div>
-        <AnimatePresence>
-          {formNameError && (
-            <motion.div
-              className="formdetails-modal-error"
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+          <div className="formdetails-modal-header">
+            <div className="formdetails-modal-title">Enter Form Details</div>
+            <button
+              onClick={onClose}
+              className="formdetails-modal-close"
+              aria-label="Close"
             >
-              {formNameError}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      </div>
-      <div className="formdetails-modal-actions">
-        <div className="cancel-button">
-          <button
-            onClick={onClose}
-            className="wizard-btn wizard-btn-secondary"
-            type="button"
-          >
-            Cancel
-          </button>
-        </div>
-        <div className={` ${!formName.trim() ? 'next-button' : 'next-button-enabled'}`}>
-          <button
-            onClick={handleFormNameSubmit}
-            disabled={isSaving}
-            className="wizard-btn wizard-btn-primary"
-          >
-            {isSaving ? "Creating..." : "Create Form"}
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  </motion.div>
-  </AnimatePresence>
-);
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 1.00714L8.99286 0L5 3.99286L1.00714 0L0 1.00714L3.99286 5L0 8.99286L1.00714 10L5 6.00714L8.99286 10L10 8.99286L6.00714 5L10 1.00714Z" fill="#5F6165" />
+              </svg>
+
+            </button>
+          </div>
+          <div className="form-container">
+            <div className="formdetails-modal-content">
+              <div>
+                <label htmlFor="formName" className="formdetails-modal-label">
+                  Form Name <span className="required-star">*</span>
+                </label>
+                <motion.input
+                  id="formName"
+                  type="text"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Enter form name"
+                  className="formdetails-modal-input"
+                  autoFocus
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+              <div>
+                <label htmlFor="formDescription" className="formdetails-modal-label">
+                  Form Description
+                </label>
+                <motion.textarea
+                  id="formDescription"
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="Enter form description"
+                  className="formdetails-modal-textarea"
+                  rows={3}
+                  style={{ resize: 'vertical' }}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+              <AnimatePresence>
+                {formNameError && (
+                  <motion.div
+                    className="formdetails-modal-error"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {formNameError}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          <div className="formdetails-modal-actions">
+            <div className="cancel-button">
+              <button
+                onClick={onClose}
+                className="wizard-btn wizard-btn-secondary"
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className={` ${!formName.trim() ? 'next-button' : 'next-button-enabled'}`}>
+              <button
+                onClick={handleFormNameSubmit}
+                disabled={isSaving}
+                className="wizard-btn wizard-btn-primary"
+              >
+                {isSaving ? "Creating..." : "Create Form"}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 
 };
 
