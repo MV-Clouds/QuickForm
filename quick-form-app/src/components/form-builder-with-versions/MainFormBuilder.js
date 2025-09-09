@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect , useCallback} from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { FaRegStar } from "react-icons/fa";
 import { BsStack } from "react-icons/bs";
@@ -28,7 +28,7 @@ import PreviewForm from "./PreviewForm";
 import VersionList from "./VersionList.js";
 import { motion, AnimatePresence } from "framer-motion";
 import { displayName } from "react-quill";
-
+import Loader from "../Loader.js";
 const themes = [
   {
     name: "Remove Theme",
@@ -105,11 +105,11 @@ function MainFormBuilder({
   showSubmission
 }) {
   // const { formVersionId } = useParams();
-  const location = useLocation();
+    const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
     urlFormVersionId || location.state?.formVersionId || null;
-  const { refreshData, formRecords: sfFormRecords, Fieldset: fieldsets, googleData } = useSalesforceData();
+  const { refreshData, formRecords: sfFormRecords , Fieldset: fieldsets , googleData } = useSalesforceData();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -364,9 +364,10 @@ function MainFormBuilder({
   const [clipboard, setClipboard] = useState({ field: null, operation: null });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [loadingText, setLoadingText] = useState('');
   const fields = fieldsState.present;
 
-  const [footerConfigs, setFooterConfigs] = useState({});
+ const [footerConfigs, setFooterConfigs] = useState({});
 
 
   const fetchAccessToken = async (userId, instanceUrl) => {
@@ -431,6 +432,7 @@ function MainFormBuilder({
   const handlePublish = async () => {
     try {
       setIsLoadingForm(true);
+      setLoadingText('Publishing Form');
       setHasChanges(false);
       const userId = sessionStorage.getItem("userId");
       const instanceUrl = sessionStorage.getItem("instanceUrl");
@@ -620,6 +622,7 @@ function MainFormBuilder({
   const fetchFormData = async (userId, instanceUrl) => {
     try {
       setIsLoadingForm(true);
+      setLoadingText('Loading Form Data');
       setFetchFormError(null);
 
       const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, "");
@@ -675,7 +678,7 @@ function MainFormBuilder({
 
       // Process footer fields into footerConfigs
       const footerConfigsFromDB = {};
-
+      
       formFields.forEach((field) => {
         if (field.Field_Type__c === "footer") {
           try {
@@ -688,13 +691,13 @@ function MainFormBuilder({
           }
         }
       });
-
+      
       setFooterConfigs(footerConfigsFromDB);
 
       const pages = {};
       formFields.forEach((field) => {
         if (field.Field_Type__c === "footer") return;
-
+        
         const pageNumber = field.Page_Number__c || 1;
         if (!pages[pageNumber]) {
           pages[pageNumber] = [];
@@ -889,33 +892,33 @@ function MainFormBuilder({
     }
 
     // Create footer fields from footerConfigs
-    const footerFields = Object.entries(footerConfigs).map(([pageIndexStr, config]) => {
-      const pageIndex = parseInt(pageIndexStr);
-      const pageNumber = pageIndex + 1; // Convert 0-indexed to 1-indexed
+  const footerFields = Object.entries(footerConfigs).map(([pageIndexStr, config]) => {
+    const pageIndex = parseInt(pageIndexStr);
+    const pageNumber = pageIndex + 1; // Convert 0-indexed to 1-indexed
+    
+    const footerId = `footer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const footerProperties = {
+      id: footerId,
+      type: "footer",
+      label: "Footer",
+      alignment: "center",
+      pageIndex: pageIndex,
+      subFields: config,
+      isHidden: false
+    };
 
-      const footerId = `footer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-      const footerProperties = {
-        id: footerId,
-        type: "footer",
-        label: "Footer",
-        alignment: "center",
-        pageIndex: pageIndex,
-        subFields: config,
-        isHidden: false
-      };
-
-      return {
-        Name: "Footer",
-        Field_Type__c: "footer",
-        Page_Number__c: pageNumber,
-        Order_Number__c: 999, // Place at the end of the page
-        Properties__c: JSON.stringify(footerProperties),
-        Unique_Key__c: footerId,
-        isHidden__c: false,
-        Default_Value__c: null
-      };
-    });
+    return {
+      Name: "Footer",
+      Field_Type__c: "footer",
+      Page_Number__c: pageNumber,
+      Order_Number__c: 999, // Place at the end of the page
+      Properties__c: JSON.stringify(footerProperties),
+      Unique_Key__c: footerId,
+      isHidden__c: false,
+      Default_Value__c: null
+    };
+  });
 
     const formVersion = {
       Name: currentFormVersion?.Name || formName || "Contact Form",
@@ -1034,7 +1037,7 @@ function MainFormBuilder({
         };
       })
     );
-
+    
 
     return { formVersion, formFields: [...formFields, ...footerFields] };
   };
@@ -1048,6 +1051,8 @@ function MainFormBuilder({
     );
     const userId = sessionStorage.getItem("userId");
     const instanceUrl = sessionStorage.getItem("instanceUrl");
+    setIsLoadingForm(true);
+    !showThankYou ? setLoadingText('Saving Form') : setLoadingText('Saving Thank You');
     const token = await fetchAccessToken(userId, instanceUrl);
     const result = await handleThankYouSave({
       instanceUrl,
@@ -1063,23 +1068,16 @@ function MainFormBuilder({
     setIsSaving(true);
     setSaveError(null);
     try {
-      const userId = sessionStorage.getItem("userId");
-      const instanceUrl = sessionStorage.getItem("instanceUrl");
-      if (!userId || !instanceUrl)
-        throw new Error("Missing userId or instanceUrl.");
-
+     
       // Step 1: Mock validation (set to true by default for now)
       const mockValidation = true;
-      if (!mockValidation) {
-        throw new Error("Form validation failed");
-      }
-
       // Step 2: Validate payment fields using enhanced processor
       console.log("🔍 Validating payment fields with enhanced processor...");
       const paymentValidation =
         await enhancedFormPaymentProcessor.validateFormPayments(fields, formId);
 
       if (!paymentValidation.isValid) {
+        setIsLoadingForm(false);
         const errorMessage = `Payment validation failed:\n${paymentValidation.errors.join(
           "\n"
         )}`;
@@ -1087,6 +1085,7 @@ function MainFormBuilder({
       }
 
       if (paymentValidation.warnings.length > 0) {
+        setIsLoadingForm(false);
         const warningMessage = `Payment warnings:\n${paymentValidation.warnings.join(
           "\n"
         )}\n\nDo you want to continue?`;
@@ -1105,6 +1104,7 @@ function MainFormBuilder({
         );
 
       if (!paymentProcessing.success) {
+        setIsLoadingForm(false);
         const errorMessage = `Payment processing failed:\n${paymentProcessing.errors
           .map((e) => `Field ${e.fieldId}: ${e.error}`)
           .join("\n")}`;
@@ -1142,8 +1142,6 @@ function MainFormBuilder({
       }
 
       // Step 4: Continue with normal form save process
-      const token = await fetchAccessToken(userId, instanceUrl);
-      if (!token) throw new Error("Failed to obtain access token.");
       const { formVersion, formFields } = prepareFormData();
 
       const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
@@ -1164,6 +1162,7 @@ function MainFormBuilder({
       }
       // Success message with payment processing info
       let successMessage = "Form saved successfully!";
+      setIsLoadingForm(false);
       if (paymentProcessing.processedFields.length > 0) {
         const processedCount = paymentProcessing.processedFields.length;
         successMessage += `\n\n${processedCount} payment field(s) processed:`;
@@ -1171,7 +1170,6 @@ function MainFormBuilder({
           successMessage += `\n- ${field.action} for field ${field.fieldId}`;
         });
       }
-      alert(successMessage);
 
       await refreshData();
       if (hasChanges || !formVersion.Id) {
@@ -1908,120 +1906,124 @@ function MainFormBuilder({
                   </button>
                 ) : (
                   <>
-                    <button
-                      className="flex items-center justify-center my-version-btn"
-                      onClick={() => setShowVersionDropdown((v) => !v)}
-                      title="Change Version"
-                      style={{ position: "relative" }}
+                <button
+                  className="flex items-center justify-center my-version-btn"
+                  onClick={() => setShowVersionDropdown((v) => !v)}
+                  title="Change Version"
+                  style={{ position: "relative" }}
+                >
+                  <BsStack className="text-white text-xl" />
+                </button>
+                <VersionList
+                  visible={showVersionDropdown}
+                  versions={formVersions}
+                  selectedVersionId={selectedVersionId}
+                  // onChange={(val) => {
+                  //   setShowVersionDropdown(false);
+                  //   handleVersionChange({ target: { value: val } });
+                  // }}
+                  onChange={(val) => {
+                    setShowVersionDropdown(false);
+                    setPendingVersionId(val);
+                    setShowConfirmation(true);
+                  }}
+                  onClose={() => setShowVersionDropdown(false)}
+                />
+                <button
+                  className="preview-btn flex items-center gap-2"
+                  title="Preview"
+                  onClick={handlePreview}
+                >
+                  <span className="flex items-center">
+                    <svg
+                      width="18"
+                      height="14"
+                      viewBox="0 0 18 14"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
                     >
-                      <BsStack className="text-white text-xl" />
-                    </button>
-                    <VersionList
-                      visible={showVersionDropdown}
-                      versions={formVersions}
-                      selectedVersionId={selectedVersionId}
-                      onChange={(val) => {
-                        setShowVersionDropdown(false);
-                        setPendingVersionId(val);
-                        setShowConfirmation(true);
-                      }}
-                      onClose={() => setShowVersionDropdown(false)}
-                    />
+                      <circle
+                        cx="8.8202"
+                        cy="6.99891"
+                        r="2.80556"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                      <path
+                        d="M16.0986 6.05205C16.4436 6.47096 16.6161 6.68041 16.6161 6.99935C16.6161 7.31829 16.4436 7.52774 16.0986 7.94665C14.8363 9.47923 12.0521 12.3327 8.82031 12.3327C5.58855 12.3327 2.80437 9.47923 1.54206 7.94665C1.19703 7.52774 1.02451 7.31829 1.02451 6.99935C1.02451 6.68041 1.19703 6.47096 1.54206 6.05205C2.80437 4.51947 5.58855 1.66602 8.82031 1.66602C12.0521 1.66602 14.8363 4.51947 16.0986 6.05205Z"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                  </span>
+                  Preview
+                </button>
+                <button
+                  onClick={saveFormToSalesforce}
+                  disabled={isSaving || currentFormVersion?.Stage__c !== "Draft"}
+                  className={`save-btn flex items-center gap-2 ${isSaving
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-white/10"
+                    }`}
+                  title="Save Form"
+                >
+                  <span className="flex items-center">
+                    <svg
+                      width="25"
+                      height="24"
+                      viewBox="0 0 25 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M4.82031 7.2C4.82031 5.43269 6.253 4 8.02031 4H12.8203H15.0262C15.6627 4 16.2732 4.25286 16.7233 4.70294L20.1174 8.09706C20.5675 8.54714 20.8203 9.15759 20.8203 9.79411V12V16.8C20.8203 18.5673 19.3876 20 17.6203 20H8.02031C6.253 20 4.82031 18.5673 4.82031 16.8V7.2Z"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                      <path
+                        d="M8.02026 14.4008C8.02026 13.5171 8.73661 12.8008 9.62026 12.8008H16.0203C16.9039 12.8008 17.6203 13.5171 17.6203 14.4008V20.0008H8.02026V14.4008Z"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                      <path
+                        d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4"
+                        stroke="white"
+                        strokeWidth="1.5"
+                      />
+                    </svg>
+                  </span>
+                  Save
+                </button>
+                {(currentFormVersion?.Stage__c === "Draft" ||
+                  currentFormVersion?.Stage__c === "Locked") && (
                     <button
-                      className="preview-btn flex items-center gap-2"
-                      title="Preview"
-                      onClick={handlePreview}
+                      onClick={handlePublish}
+                      disabled={
+                        isLoadingForm || currentFormVersion?.Stage__c === "Publish"
+                      }
+                      className="publish-btn flex items-center gap-2"
                     >
                       <span className="flex items-center">
                         <svg
-                          width="18"
-                          height="14"
-                          viewBox="0 0 18 14"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <circle
-                            cx="8.8202"
-                            cy="6.99891"
-                            r="2.80556"
-                            stroke="white"
-                            strokeWidth="1.5"
-                          />
-                          <path
-                            d="M16.0986 6.05205C16.4436 6.47096 16.6161 6.68041 16.6161 6.99935C16.6161 7.31829 16.4436 7.52774 16.0986 7.94665C14.8363 9.47923 12.0521 12.3327 8.82031 12.3327C5.58855 12.3327 2.80437 9.47923 1.54206 7.94665C1.19703 7.52774 1.02451 7.31829 1.02451 6.99935C1.02451 6.68041 1.19703 6.47096 1.54206 6.05205C2.80437 4.51947 5.58855 1.66602 8.82031 1.66602C12.0521 1.66602 14.8363 4.51947 16.0986 6.05205Z"
-                            stroke="white"
-                            strokeWidth="1.5"
-                          />
-                        </svg>
-                      </span>
-                      Preview
-                    </button>
-                    <button
-                      onClick={saveFormToSalesforce}
-                      disabled={isSaving || currentFormVersion?.Stage__c !== "Draft"}
-                      className={`save-btn flex items-center gap-2 ${isSaving
-                        ? "opacity-50 cursor-not-allowed"
-                        : "hover:bg-white/10"
-                        }`}
-                      title="Save Form"
-                    >
-                      <span className="flex items-center">
-                        <svg
-                          width="25"
-                          height="24"
-                          viewBox="0 0 25 24"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 16 16"
                           fill="none"
                           xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
-                            d="M4.82031 7.2C4.82031 5.43269 6.253 4 8.02031 4H12.8203H15.0262C15.6627 4 16.2732 4.25286 16.7233 4.70294L20.1174 8.09706C20.5675 8.54714 20.8203 9.15759 20.8203 9.79411V12V16.8C20.8203 18.5673 19.3876 20 17.6203 20H8.02031C6.253 20 4.82031 18.5673 4.82031 16.8V7.2Z"
-                            stroke="white"
-                            strokeWidth="1.5"
+                            d="M4.35031 7.64885L5.76031 8.11885C6.69231 8.42885 7.15731 8.58485 7.49131 8.91885C7.82531 9.25285 7.98131 9.71885 8.29131 10.6489L8.76131 12.0589C9.54531 14.4129 9.93731 15.5889 10.6583 15.5889C11.3783 15.5889 11.7713 14.4129 12.5553 12.0589L15.3933 3.54685C15.9453 1.89085 16.2213 1.06285 15.7843 0.625853C15.3473 0.188853 14.5193 0.464853 12.8643 1.01585L4.34931 3.85585C1.99831 4.63885 0.820312 5.03085 0.820312 5.75185C0.820312 6.47285 1.99731 6.86485 4.35031 7.64885Z"
+                            fill="white"
                           />
                           <path
-                            d="M8.02026 14.4008C8.02026 13.5171 8.73661 12.8008 9.62026 12.8008H16.0203C16.9039 12.8008 17.6203 13.5171 17.6203 14.4008V20.0008H8.02026V14.4008Z"
-                            stroke="white"
-                            strokeWidth="1.5"
-                          />
-                          <path
-                            d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4"
-                            stroke="white"
-                            strokeWidth="1.5"
+                            d="M6.1841 9.59379L4.1221 8.90679C3.97781 8.85869 3.82445 8.84414 3.67369 8.86424C3.52293 8.88434 3.37874 8.93857 3.2521 9.02279L2.1621 9.74879C2.03307 9.83476 1.9318 9.95636 1.87061 10.0988C1.80941 10.2413 1.79094 10.3985 1.81742 10.5512C1.84391 10.704 1.91421 10.8458 2.01979 10.9593C2.12537 11.0729 2.26166 11.1533 2.4121 11.1908L4.3671 11.6788C4.45508 11.7008 4.53542 11.7462 4.59954 11.8103C4.66366 11.8745 4.70914 11.9548 4.7311 12.0428L5.2191 13.9978C5.25661 14.1482 5.33703 14.2845 5.45058 14.3901C5.56413 14.4957 5.7059 14.566 5.85867 14.5925C6.01144 14.619 6.16861 14.6005 6.31107 14.5393C6.45353 14.4781 6.57513 14.3768 6.6611 14.2478L7.3871 13.1578C7.47132 13.0311 7.52555 12.887 7.54565 12.7362C7.56575 12.5854 7.5512 12.4321 7.5031 12.2878L6.8161 10.2258C6.76699 10.0786 6.68433 9.94494 6.57464 9.83525C6.46495 9.72556 6.33124 9.6429 6.1841 9.59379Z"
+                            fill="white"
                           />
                         </svg>
                       </span>
-                      Save
+                      Publish
                     </button>
-                    {(currentFormVersion?.Stage__c === "Draft" ||
-                      currentFormVersion?.Stage__c === "Locked") && (
-                        <button
-                          onClick={handlePublish}
-                          disabled={
-                            isLoadingForm || currentFormVersion?.Stage__c === "Publish"
-                          }
-                          className="publish-btn flex items-center gap-2"
-                        >
-                          <span className="flex items-center">
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path
-                                d="M4.35031 7.64885L5.76031 8.11885C6.69231 8.42885 7.15731 8.58485 7.49131 8.91885C7.82531 9.25285 7.98131 9.71885 8.29131 10.6489L8.76131 12.0589C9.54531 14.4129 9.93731 15.5889 10.6583 15.5889C11.3783 15.5889 11.7713 14.4129 12.5553 12.0589L15.3933 3.54685C15.9453 1.89085 16.2213 1.06285 15.7843 0.625853C15.3473 0.188853 14.5193 0.464853 12.8643 1.01585L4.34931 3.85585C1.99831 4.63885 0.820312 5.03085 0.820312 5.75185C0.820312 6.47285 1.99731 6.86485 4.35031 7.64885Z"
-                                fill="white"
-                              />
-                              <path
-                                d="M6.1841 9.59379L4.1221 8.90679C3.97781 8.85869 3.82445 8.84414 3.67369 8.86424C3.52293 8.88434 3.37874 8.93857 3.2521 9.02279L2.1621 9.74879C2.03307 9.83476 1.9318 9.95636 1.87061 10.0988C1.80941 10.2413 1.79094 10.3985 1.81742 10.5512C1.84391 10.704 1.91421 10.8458 2.01979 10.9593C2.12537 11.0729 2.26166 11.1533 2.4121 11.1908L4.3671 11.6788C4.45508 11.7008 4.53542 11.7462 4.59954 11.8103C4.66366 11.8745 4.70914 11.9548 4.7311 12.0428L5.2191 13.9978C5.25661 14.1482 5.33703 14.2845 5.45058 14.3901C5.56413 14.4957 5.7059 14.566 5.85867 14.5925C6.01144 14.619 6.16861 14.6005 6.31107 14.5393C6.45353 14.4781 6.57513 14.3768 6.6611 14.2478L7.3871 13.1578C7.47132 13.0311 7.52555 12.887 7.54565 12.7362C7.56575 12.5854 7.5512 12.4321 7.5031 12.2878L6.8161 10.2258C6.76699 10.0786 6.68433 9.94494 6.57464 9.83525C6.46495 9.72556 6.33124 9.6429 6.1841 9.59379Z"
-                                fill="white"
-                              />
-                            </svg>
-                          </span>
-                          Publish
-                        </button>
-                      )}
+                  )}
                   </>
                 )}
               </div>
@@ -2037,30 +2039,7 @@ function MainFormBuilder({
               {fetchFormError}
             </div>
           )}
-          {isLoadingForm ? (
-            <div className="flex justify-center items-center h-64">
-              <svg
-                className="animate-spin h-8 w-8 text-blue-600"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            </div>
-          ) : showThankYou ? (
+          {showThankYou ? (
             <ThankYouPageBuilder
               formVersionId={formVersionId}
               elements={elements}
@@ -2069,11 +2048,12 @@ function MainFormBuilder({
               setContent={setContent}
               theme={theme}
               setTheme={setTheme}
+              isLoadingForm={isLoadingForm} loadingText={loadingText}
             />
           ) : showCondition ? (
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
-            <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish} />
+            <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish}  isLoadingForm={isLoadingForm} loadingText={loadingText} />
           ) : showSubmission ? (
             <Submissions
               isSidebarOpen={isSidebarOpen}
@@ -2086,13 +2066,18 @@ function MainFormBuilder({
               <NotificationPage
                 currentFields={formVersions[0]?.Fields}
                 sendNotificationData={sendNotificationData}
-                GoogleData={googleData}
-                formRecords={sfFormRecords}
+                GoogleData = {googleData}
+                formRecords = {sfFormRecords}
               />
             ) : showMapping ? (
-              <MappingFields />
+              <MappingFields onSaveCallback={registerSaveCallback} />
             ) : (
               <div className="flex w-full h-screen builder-start" style={{ position: "relative" }}>
+                {isLoadingForm && (
+            loadingText === "Publishing Form" || loadingText === 'Saving Form' ? (
+              <Loader text={loadingText} fullScreen={true}/>
+            ) : ( <Loader text={loadingText} fullScreen={false} />))}
+          
                 {/* Builder fades out when preview is active */}
                 <div className={`w-3/4 inner-builder-container ${showPreview ? "fade-out" : "fade-in"}`} style={{ position: "relative" }}>
                   {!showPreview && (
@@ -2123,43 +2108,43 @@ function MainFormBuilder({
                       onUndo={undo}
                       onRedo={redo}
                       isSidebarOpen={isSidebarOpen}
-                      footerConfigs={footerConfigs}
-                      setFooterConfigs={setFooterConfigs}
+                       footerConfigs={footerConfigs}
+  setFooterConfigs={setFooterConfigs}
                     />
                   )}
                 </div>
                 {/* Sidebar only visible when not in preview */}
                 <div className={`w-1/4 pl-2 ${previewStep > 1 ? "slide-out-right" : "slide-in-right"}`}>
-                  {showSidebar && !selectedFieldId && !selectedFooter ? (
-                    <Sidebar
-                      selectedTheme={selectedTheme}
-                      onThemeSelect={setSelectedTheme}
-                      themes={themes}
-                    />
-                  ) : (
-                    <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
-                      {(selectedFieldId || selectedFooter) && (
-                        <FieldEditor
-                          selectedField={selectedField}
-                          selectedFooter={selectedFooter}
-                          onUpdateField={handleUpdateField}
-                          onDeleteField={handleDeleteField}
-                          onClose={() => {
-                            setSelectedFieldId(null);
-                            setSelectedSectionSide(null);
-                            setSelectedFooter(null);
-                            setShowSidebar(true);
-                          }}
-                          fields={fields}
+                    {showSidebar && !selectedFieldId && !selectedFooter ? (
+                      <Sidebar
+                        selectedTheme={selectedTheme}
+                        onThemeSelect={setSelectedTheme}
+                        themes={themes}
+                      />
+                    ) : (
+                      <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
+                        {(selectedFieldId || selectedFooter) && (
+                          <FieldEditor
+                            selectedField={selectedField}
+                            selectedFooter={selectedFooter}
+                            onUpdateField={handleUpdateField}
+                            onDeleteField={handleDeleteField}
+                            onClose={() => {
+                              setSelectedFieldId(null);
+                              setSelectedSectionSide(null);
+                              setSelectedFooter(null);
+                              setShowSidebar(true);
+                            }}
+                            fields={fields}
                           fieldsets={fieldsets}
                           onAddFieldsFromFieldset={handleAddFieldsFromFieldset}
-                          footerConfigs={footerConfigs}
-                          setFooterConfigs={setFooterConfigs}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
+                              footerConfigs={footerConfigs}
+  setFooterConfigs={setFooterConfigs}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                 {/* PreviewForm covers full width below header */}
                 {showPreview && (

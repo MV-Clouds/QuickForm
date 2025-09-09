@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import SimplePayPalButton from "./SimplePayPalButton";
 import AmountInput from "./AmountInput";
 import ProductSelection from "./ProductSelection";
@@ -38,12 +38,22 @@ const PaymentContent = ({
     console.log("SubscriptionSelection type:", typeof SubscriptionSelection);
     console.log("AmountInput type:", typeof AmountInput);
     console.log("ProductSelection type:", typeof ProductSelection);
-  });
-  // Render content based on payment type
+  }, []);
+
+  // Keep PayPal button style stable across renders
+  const paypalBtnStyle = useMemo(
+    () => ({
+      shape: "rect",
+      color: "blue",
+      layout: "vertical",
+      label: paymentType === "subscription" ? "subscribe" : "paypal",
+    }),
+    [paymentType]
+  );
+
   const renderPaymentTypeContent = () => {
     switch (paymentType) {
       case "donation_button": {
-        // Render the hosted donate button directly (no amount input or method select)
         const donationButtonId =
           subFields?.donationButtonId || subFields?.hostedButtonId;
         return (
@@ -73,7 +83,6 @@ const PaymentContent = ({
             currency={subFields?.currency || "USD"}
           />
         );
-
       case "subscription":
         return (
           <SubscriptionSelection
@@ -83,14 +92,10 @@ const PaymentContent = ({
             currency={subFields?.currency || "USD"}
           />
         );
-
-      case "custom_amount":
-        // Check if it's a static amount (fixed price) or variable amount (user input)
+      case "custom_amount": {
         const amountType = subFields?.amount?.type;
         const staticAmount = subFields?.amount?.value;
-
         if (amountType === "static" && staticAmount) {
-          // Static amount - show fixed price, no user input
           return (
             <div className="mb-6">
               <h4 className="text-lg font-medium text-gray-900 mb-4">
@@ -111,24 +116,21 @@ const PaymentContent = ({
               </div>
             </div>
           );
-        } else {
-          // Variable amount - show user input
-          return (
-            <AmountInput
-              amount={paymentAmount}
-              onAmountChange={onAmountChange}
-              error={amountError}
-              currency={subFields?.currency || "USD"}
-              suggestedAmounts={subFields?.suggestedAmounts || []}
-              placeholder={subFields?.placeholder || "Enter amount"}
-              amountConfig={subFields?.amount || {}}
-              paymentType={paymentType}
-            />
-          );
         }
-
+        return (
+          <AmountInput
+            amount={paymentAmount}
+            onAmountChange={onAmountChange}
+            error={amountError}
+            currency={subFields?.currency || "USD"}
+            suggestedAmounts={subFields?.suggestedAmounts || []}
+            placeholder={subFields?.placeholder || "Enter amount"}
+            amountConfig={subFields?.amount || {}}
+            paymentType={paymentType}
+          />
+        );
+      }
       default:
-        // For other payment types, show amount input if needed
         return (
           <AmountInput
             amount={paymentAmount}
@@ -144,10 +146,8 @@ const PaymentContent = ({
     }
   };
 
-  // Render payment interface based on selected method
   const renderPaymentInterface = () => {
     if (!paymentMethod) return null;
-
     switch (paymentMethod) {
       case "paypal":
         return (
@@ -161,30 +161,22 @@ const PaymentContent = ({
               onCancel={onCancel}
               onError={onError}
               disabled={!isPaymentButtonReady || isProcessing}
-              style={{
-                shape: "rect",
-                color: "blue",
-                layout: "vertical",
-                label: paymentType === "subscription" ? "subscribe" : "paypal",
-              }}
+              style={paypalBtnStyle}
             />
           </div>
         );
-
       case "card":
         return (
           <div className="mt-6">
             <PayPalCardPayment
               createOrderHandler={createOrder}
               onApproveOrder={onApprove}
-              onSuccess={onApprove}
               onError={onError}
               disabled={!isPaymentButtonReady || isProcessing}
               merchantCredentials={merchantCredentials}
             />
           </div>
         );
-
       case "googlepay":
         return (
           <GooglePayIntegration
@@ -192,11 +184,10 @@ const PaymentContent = ({
             merchantCapabilities={merchantCredentials?.capabilities}
             amount={paymentAmount}
             currency={subFields?.currency || "USD"}
-            onSuccess={onApprove}
             onError={onError}
-            isProduction={false} // Or pass dynamically
-            createOrderHandler={createOrder} // Pass for dynamic order creation
-            onApproveOrder={onApprove} // Pass for dynamic approval
+            isProduction={false}
+            createOrderHandler={createOrder}
+            onApproveOrder={onApprove}
             disabled={!isPaymentButtonReady || isProcessing}
           />
         );
@@ -205,11 +196,9 @@ const PaymentContent = ({
     }
   };
 
-  // Show payment summary
   const renderPaymentSummary = () => {
     let amount = 0;
     let description = "";
-
     if (paymentType === "product_wise" && selectedProduct) {
       amount = selectedProduct.price || 0;
       description = selectedProduct.name || "Selected Product";
@@ -220,7 +209,6 @@ const PaymentContent = ({
       amount = parseFloat(paymentAmount) || 0;
       description = "Custom Amount";
     }
-
     if (amount > 0) {
       return (
         <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -248,7 +236,6 @@ const PaymentContent = ({
         </div>
       );
     }
-
     return null;
   };
 

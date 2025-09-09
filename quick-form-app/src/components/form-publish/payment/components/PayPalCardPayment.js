@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   PayPalCardFieldsProvider,
   PayPalCardFieldsForm,
@@ -6,13 +6,7 @@ import {
 } from "@paypal/react-paypal-js";
 
 // Submit button component that uses the card fields
-const SubmitCardPayment = ({
-  onSuccess,
-  onError,
-  disabled,
-  isPaying,
-  setIsPaying,
-}) => {
+const SubmitCardPayment = ({ onError, disabled, isPaying, setIsPaying }) => {
   const { cardFieldsForm } = usePayPalCardFields();
 
   const handleClick = async () => {
@@ -70,12 +64,13 @@ const SubmitCardPayment = ({
 const PayPalCardPayment = ({
   createOrderHandler,
   onApproveOrder,
-  onSuccess,
   onError,
   onCancel,
   disabled = false,
 }) => {
   const [isPaying, setIsPaying] = useState(false);
+  // Expose a validator function (set by a child inside the Provider)
+  const validateCardFieldsRef = useRef(async () => true);
 
   // Use the same createOrder function as the main PayPal buttons
   const createOrder = async (data, actions) => {
@@ -84,6 +79,25 @@ const PayPalCardPayment = ({
     }
 
     try {
+      // Validate card fields before creating order (safety net)
+      try {
+        const isValid = await validateCardFieldsRef.current?.();
+        if (!isValid) {
+          const err = new Error(
+            "The payment form is invalid. Please check all fields."
+          );
+          console.warn("💳 Blocking createOrder due to invalid card fields");
+          onError?.(err);
+          throw err; // Ensure SDK halts
+        }
+      } catch (e) {
+        // If validator isn't ready or throws, block to be safe
+        const err =
+          e instanceof Error ? e : new Error("Unable to validate card fields");
+        onError?.(err);
+        throw err;
+      }
+
       console.log("💳 Creating order for card payment using shared handler");
       return await createOrderHandler(data, actions);
     } catch (error) {
@@ -102,14 +116,6 @@ const PayPalCardPayment = ({
       console.log("💳 Card payment approved, using shared handler");
       const result = await onApproveOrder(data, actions);
       setIsPaying(false);
-
-      // Call the success callback if provided
-      if (onSuccess) {
-        onSuccess({
-          ...data,
-          paymentMethod: "card",
-        });
-      }
 
       return result;
     } catch (error) {
@@ -151,6 +157,10 @@ const PayPalCardPayment = ({
           onCancel(data);
         }}
       >
+        {/* Binder to expose card form validator up to the parent createOrder */}
+        <CardFieldsValidatorBinder
+          setValidator={(fn) => (validateCardFieldsRef.current = fn)}
+        />
         <div className="space-y-4">
           {/* PayPal Card Fields Form - handles all card inputs automatically */}
           <PayPalCardFieldsForm />
@@ -158,7 +168,6 @@ const PayPalCardPayment = ({
           {/* Submit Button */}
           <div className="mt-4">
             <SubmitCardPayment
-              onSuccess={onSuccess}
               onError={onError}
               disabled={disabled}
               isPaying={isPaying}
@@ -180,6 +189,22 @@ const PayPalCardPayment = ({
       </div>
     </div>
   );
+};
+
+// Internal helper inside Provider context to expose validation to parent
+const CardFieldsValidatorBinder = ({ setValidator }) => {
+  const { cardFieldsForm } = usePayPalCardFields();
+
+  useEffect(() => {
+    const validator = async () => {
+      if (!cardFieldsForm) return false;
+      const formState = await cardFieldsForm.getState();
+      return !!formState?.isFormValid;
+    };
+    setValidator(() => validator);
+  }, [cardFieldsForm, setValidator]);
+
+  return null;
 };
 
 export default PayPalCardPayment;

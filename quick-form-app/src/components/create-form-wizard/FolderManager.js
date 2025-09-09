@@ -8,6 +8,7 @@ import { Dropdown, Button, Space } from "antd";
 import { AppstoreOutlined, BarsOutlined } from "@ant-design/icons";
 import FolderList from "./FolderList";
 import FolderDetail from "./FolderDetail";
+import Loader from "../Loader";
 
 const viewModes = {
   LARGE: "large",
@@ -236,7 +237,7 @@ const handleBulkFavorite = async () => {
       </div>
 
       <motion.div
-        className="p-10 bg-white rounded-xl h-[100vh] shadow-lg"
+        className="p-10 bg-white h-[90vh] rounded-xl shadow-lg"
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.98 }}
@@ -350,105 +351,9 @@ const handleBulkFavorite = async () => {
         <div className="">
           {/* Loading & Empty States */}
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] bg-gray-50 rounded-xl p-8">
-              {/* Main loading animation */}
-              <div className="relative flex justify-center items-center mb-8">
-                {/* Outer circle */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-                  className="absolute h-24 w-24 border-4 border-blue-100 rounded-full"
-                />
-
-                {/* Middle circle */}
-                <motion.div
-                  animate={{ rotate: -360 }}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 1.5,
-                    ease: "linear",
-                  }}
-                  className="absolute h-16 w-16 border-4 border-blue-200 border-t-transparent rounded-full"
-                />
-
-                {/* Inner circle with folder icon */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                  className="h-10 w-10 bg-blue-500 rounded-lg flex items-center justify-center"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                    />
-                  </svg>
-                </motion.div>
-              </div>
-
-              {/* Loading text with animation */}
-              <motion.div
-                initial={{ opacity: 0.5, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                  duration: 1.5,
-                }}
-                className="text-center"
-              >
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                  Organizing Your Files
-                </h3>
-                <p className="text-gray-500 max-w-md">
-                  Please wait while we prepare your folder structure...
-                </p>
-              </motion.div>
-
-              {/* Animated folder preview (skeleton) */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="mt-12 w-full max-w-md"
-              >
-                <div className="grid grid-cols-3 gap-4">
-                  {[1, 2, 3, 4, 5, 6].map((item) => (
-                    <motion.div
-                      key={item}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 + item * 0.1 }}
-                      className="bg-white p-3 rounded-lg shadow-sm border border-gray-100"
-                    >
-                      <div className="h-6 w-6 bg-blue-100 rounded mb-2"></div>
-                      <div className="h-4 w-3/4 bg-gray-100 rounded"></div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-
-              {/* Progress indicator */}
-              <motion.div
-                className="mt-8 w-full max-w-md bg-gray-200 rounded-full h-2"
-                initial={{ scaleX: 0.1 }}
-                animate={{ scaleX: 1 }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                }}
-              >
-                <div className="bg-blue-500 h-2 rounded-full w-full"></div>
-              </motion.div>
+            <div className="flex flex-col relative items-center justify-center rounded-xl p-8 text-center"
+            style={{ height: '65vh'}}>
+            <Loader text={"Fetching folders"} fullScreen={false}/>
             </div>
           ) : foldersToShow.length === 0 ? (
             <motion.div

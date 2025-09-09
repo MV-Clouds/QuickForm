@@ -6,6 +6,7 @@ import { Select } from 'antd';
 import './createFormWizard.css';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import AnimatedTooltip from './AnimatedTooltip';
+import Loader from '../Loader';
 const { Option } = Select;
 
 const itemVariants = {
@@ -28,6 +29,7 @@ const CreateFormWizard = ({ onClose }) => {
   const [fieldSearch, setFieldSearch] = useState(''); // State for field search input
   const [accessToken, setAccessToken] = useState(null); // State for storing access token
   const [isFormNameOpen, setIsFormNameOpen] = useState(false);
+  const [loadingText, setLoadingText] = useState(''); // State for loading text in the modal
   const navigate = useNavigate(); // Hook for navigation
 
   // Memoize filtered metadata based on search input
@@ -81,6 +83,7 @@ const CreateFormWizard = ({ onClose }) => {
 
   const fetchMetadata = async () => {
     setIsLoading(true);
+    setLoadingText('Loading Metadata');
     setError('');
     try {
       const userId = sessionStorage.getItem('userId');
@@ -119,6 +122,7 @@ const CreateFormWizard = ({ onClose }) => {
   const refreshFieldsForCurrentObject = async () => {
     if (!currentObject) return;
     setIsLoading(true);
+    setLoadingText('Refreshing Fields');
     setError('');
     try {
       const userId = sessionStorage.getItem('userId');
@@ -329,6 +333,7 @@ const CreateFormWizard = ({ onClose }) => {
     }
 
     setIsLoading(true); // Set loading state to true
+    setLoadingText('Fetching Fields');
     try {
       const fieldsMap = {}; // Initialize fields map
       const initialSelectedFields = {}; // Initialize selected fields map
@@ -432,15 +437,7 @@ const CreateFormWizard = ({ onClose }) => {
       transition={{ duration: 0.25 }}
     > {/* Overlay for modal */}
       {isLoading && (
-        <motion.div
-          key="loading-overlay"
-          className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-50"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </motion.div>
+        <Loader text={loadingText || "Loading..."} fullScreen={true} />
       )}
 
 

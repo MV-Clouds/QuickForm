@@ -3,7 +3,7 @@ import { Edit, PlusCircle, Search, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import FieldSetBuilder from './FieldSetPageNew'
 import useUndo from 'use-undo';
-
+import Loader from '../Loader'
 const gradientBtn = {
   background: 'linear-gradient(to right, #1D6D9E, #0B295E)',
 };
@@ -669,9 +669,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
                   onChange={e => setSearch(e.target.value)}
                   className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm w-64"
                 />
-                {/* <select className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2 text-black-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all shadow-sm">
-                <option>All</option>
-              </select> */}
+               
               </div>
 
             </div>
@@ -679,14 +677,16 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
           {/* Grid of fieldsets */}
           <motion.div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
             <AnimatePresence mode='sync'>
-              {isLoading ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="bg-white rounded-xl shadow p-4 border border-gray-200 animate-pulse h-[260px]">
-                    <div className="h-24 bg-gray-200 rounded mb-4"></div>
-                    <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
-                    <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-                  </div>
-                ))
+              {true ? (
+                <motion.div
+                key="loader"
+                className="col-span-4 flex justify-center items-center py-12"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <Loader text="Fetching Fieldsets..." fullscreen={false} />
+              </motion.div>
               ) : (
                 <>
                   {filteredFieldsets.length === 0 && (

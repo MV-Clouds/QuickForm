@@ -305,7 +305,7 @@ const NotificationTab = ({
   };
 
   return (
-    <div className="rounded-2xl bg-gray-50">
+    <div className="bg-gray-50">
       {previewRule && (
   <AnimatePresence>
     <motion.div
@@ -325,7 +325,7 @@ const NotificationTab = ({
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.95, y: 20 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full mx-4 overflow-hidden border border-gray-200 dark:border-gray-700"
+        className="relative bg-white dark:bg-gray-800 max-w-2xl w-full mx-4 overflow-hidden border border-gray-200 dark:border-gray-700"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
@@ -661,7 +661,7 @@ const NotificationTab = ({
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="px-5 py-2.5 bg-blue-900 text-white rounded-lg shadow-md flex items-center gap-2"
+                    className="px-5 py-2.5 login-button rounded-lg shadow-md flex items-center gap-2"
                     onClick={toggleAddOptions}
                   >
                     <Plus size={18} />
@@ -701,7 +701,7 @@ const NotificationTab = ({
                 )}
               </AnimatePresence>
               {currentRows?.length > 0 ? (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="bg-white overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                     <thead>

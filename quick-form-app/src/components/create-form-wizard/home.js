@@ -1,7 +1,7 @@
 import React, { useState, useEffect , useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormName from './FormName';
-import Datatable from '../Datatable/ShowPage';
+import ShowPage from '../Datatable/ShowPage';
 import Sidebar from './sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import Integrations from '../integrations/Integrations';
@@ -14,6 +14,7 @@ import FolderManager from './FolderManager';
 import FieldsetPage from './FieldsetPage';
 import Bin from './Bin'
 import FavoriteTab from './FavoriteTab';
+import Loader from '../Loader';
 const Home = () => {
   const {
     metadata,
@@ -24,7 +25,8 @@ const Home = () => {
     userProfile,
     Fieldset,
     Folders,
-    googleData
+    googleData,
+    favoriteData
   } = useSalesforceData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   // const [selectedVersions, setSelectedVersions] = useState({});
@@ -44,6 +46,8 @@ const Home = () => {
   const [cloningFormData, setCloningFormData] = useState(null); 
   const [isCloneFormNameOpen, setIsCloneFormNameOpen] = useState(false);
   const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
+  const [isProcessing, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Loading');
 
   const handleCloneForm = (form) => {
   // Find published version or draft version to clone
@@ -61,7 +65,8 @@ const Home = () => {
   };
 
   const handleCloneFormSubmit = async (fields) => {
-    
+    setIsLoading(true);
+    setLoadingText('Cloning Form');
     const newName = fields.name || cloneFormNameDesc.name;
     const newDesc = fields.description || cloneFormNameDesc.description;
 
@@ -125,6 +130,8 @@ console.log('Cloning ',cloningFormData);
         throw new Error(data.error || 'Failed to clone form');
       }
 
+      setIsLoading(false);
+
       navigate(`/form-builder/${data.formVersionId}`);
     } catch (error) {
       console.error('Error cloning form:', error);
@@ -160,28 +167,7 @@ console.log('Cloning ',cloningFormData);
     }
   };
 
-  // Warm up fetchFieldsForObject Lambda function
-  const warmFetchFieldsForObject = async (userId, instanceUrl, token) => {
-    try {
-      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
-      const sampleObject = 'Account';
-      await fetch(process.env.REACT_APP_FETCH_FIELDS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId,
-          instanceUrl: cleanedInstanceUrl,
-          objectName: sampleObject,
-          access_token: token,
-        }),
-      });
-    } catch (error) {
-      console.error('Error warming fetchFieldsForObject Lambda:', error);
-    }
-  };
+
 
   // Initialize page by fetching formRecords and warming Lambdas
   const initializePage = async () => {
@@ -203,7 +189,6 @@ console.log('Cloning ',cloningFormData);
       if (token) {
         await Promise.all([
           fetchSalesforceData(userId, instanceUrl),
-          warmFetchFieldsForObject(userId, instanceUrl, token),
         ]);
       }
     } else {
@@ -225,7 +210,8 @@ console.log('Cloning ',cloningFormData);
 
   const handleDeleteForm = async (formId) => {
     try {
-      
+      setIsLoading(true);
+      setLoadingText('Deleting Form');
       const response = await fetch('https://kd1xkj8zo2.execute-api.us-east-1.amazonaws.com/delete-user-data', {
         method: 'POST',
         headers: {
@@ -245,6 +231,7 @@ console.log('Cloning ',cloningFormData);
       if(data.newAccessToken){
         settoken(data.newAccessToken);
       }
+      setIsLoading(false);
     } catch (error) {
       console.error('Error deleting form:', error);
     } finally {
@@ -273,7 +260,8 @@ console.log('Cloning ',cloningFormData);
   };
 
   const handleEditForm = async (form) => {
-
+    setIsLoading(true);
+    setLoadingText('Editing Form');
     const draftVersion = form.FormVersions.find(
       (version) => version.Stage__c === 'Draft'
     );
@@ -289,6 +277,7 @@ console.log('Cloning ',cloningFormData);
     );
 
     if (!publishedVersion) {
+      setIsLoading(false);
       navigate('/form-builder'); // No Publish, create new form
       return;
     }
@@ -335,7 +324,7 @@ console.log('Cloning ',cloningFormData);
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create new version');
       }
-
+      setIsLoading(false);
       navigate(`/form-builder/${data.formVersionId}`);
     } catch (error) {
       console.error('Error creating new version:', error);
@@ -396,6 +385,8 @@ console.log('Cloning ',cloningFormData);
       console.error('No formId provided to handleFavoriteForm');
       return;
     }
+    setIsLoading(true);
+    setLoadingText('Updating Favorites');
     const updatedFavorite = formRecords.find(form => form.Id === formId).isFavorite;
     console.log('Favorite data ==>' , updatedFavorite)
     try {
@@ -418,6 +409,8 @@ console.log('Cloning ',cloningFormData);
       if(result.newAccessToken){
         settoken(result.newAccessToken);
       }
+
+      setIsLoading(false);
   
       console.log(`Form ${formId} favorite status toggled successfully`, result);
       // Optionally, update local state/UI here
@@ -435,6 +428,7 @@ console.log('Cloning ',cloningFormData);
 
   return (
     <div className={`flex min-h-screen`} style={{ marginLeft: `${!sidebarOpen ? '60px' : ''}` }}>
+      {isProcessing && <Loader text={loadingText} fullScreen={true}/>}
       {
         selectedNav === 'home' ? (
           // {/* Analytics Cards - Top Right */}
@@ -514,7 +508,7 @@ console.log('Cloning ',cloningFormData);
           </div>
         ) : selectedNav === 'fieldset' ? (
           <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
-        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} /> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
+        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} loading = {contextLoading} favoriteData = {favoriteData}/> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div
@@ -560,7 +554,7 @@ console.log('Cloning ',cloningFormData);
                 )}
               </motion.div>
             </div>
-            <div className="mt-5">
+            <div className="mt-5 relative" style={{ height: '80%'}}>
               {/* <AnimatePresence> */}
               <motion.div
                 style={{ padding: '8px 26px 0 26px' }}
@@ -569,8 +563,9 @@ console.log('Cloning ',cloningFormData);
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 0 }}
                 transition={{ duration: 0.5 }}
-              >
-                <Datatable forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleFavoriteForm={handleFavoriteForm} handleCloneForm={handleCloneForm} />
+                >
+                {contextLoading &&   <Loader text={"Fetching forms"} fullScreen={false}/>}
+                <ShowPage forms={formRecords} handleEditForm={handleEditForm} handleCreateForm={handleCreateForm} isLoading={contextLoading} handleDeleteForm={handleDeleteForm} handleFavoriteForm={handleFavoriteForm} handleCloneForm={handleCloneForm} />
               </motion.div>
               {/* </AnimatePresence> */}
             </div>
