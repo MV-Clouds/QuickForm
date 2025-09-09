@@ -179,7 +179,6 @@ function MainFormBuilder({
 
   // Function to register the save callback
   const registerSaveCallback = useCallback((callback) => {
-    console.log("Save callback registered");
     setSaveMappingCallback(() => callback);
   }, []);
 
@@ -657,8 +656,6 @@ function MainFormBuilder({
 
 
   useEffect(() => {
-    console.log('currentFormVersion changed', currentFormVersion);
-
     if (currentFormVersion && currentFormVersion.Conditions) {
       // Parse conditions if needed
       const parsedConditions = currentFormVersion.Conditions.map(c =>
@@ -874,7 +871,6 @@ function MainFormBuilder({
           defaultValue: field.defaultValue || null, //  defaultValue
         };
 
-        console.log(JSON.stringify(properties, null, 2), "properties");
 
         return {
           Name: properties.label,
