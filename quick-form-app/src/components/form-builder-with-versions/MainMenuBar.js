@@ -59,7 +59,7 @@ function MainMenuBar({ isSidebarOpen, toggleSidebar, formRecords, selectedVersio
 
   const navItems = [
     {
-      name: 'Fields',
+      name: 'Form Builder',
       path: '/form-builder',
       route: `/form-builder/${selectedVersionId}`,
       onClick: () => selectedVersionId && navigate(`/form-builder/${selectedVersionId}`),

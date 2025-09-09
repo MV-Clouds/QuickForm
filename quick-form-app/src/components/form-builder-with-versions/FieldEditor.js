@@ -1484,6 +1484,10 @@ function FieldEditor({
       {/* Header and Close Button */}
       <div className="flex justify-between items-center m-3">
         <div className="flex gap-2 items-center">
+          <button
+          type="button"
+          onClick={onClose}
+        >
           <svg
             width="24"
             height="24"
@@ -1499,16 +1503,11 @@ function FieldEditor({
               stroke-linejoin="round"
             />
           </svg>
-          <h2 className="text-xl font-semibold text-gray-800">Property</h2>
+        </button>
+          
+          <h2 className="text-xl font-semibold text-gray-800">Properties</h2>
         </div>
 
-        <button
-          type="button"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={onClose}
-        >
-          ✕
-        </button>
       </div>
 
       <div className="bg-white">

@@ -105,6 +105,7 @@ const ActionPanel = ({
   const [currentItemVariableName, setCurrentItemVariableName] = useState("");
   const [loopVariables, setLoopVariables] = useState({ currentIndex: false, indexBase: "0", counter: false });
   const [maxIterations, setMaxIterations] = useState("");
+  const [loopIterationOrder, setLoopIterationOrder] = useState("ASC");
   const [formatterConfig, setFormatterConfig] = useState({
     formatType: "date",
     operation: "",
@@ -208,6 +209,7 @@ const ActionPanel = ({
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
     setMaxIterations(loopConfig.maxIterations || "");
+    setLoopIterationOrder(loopConfig.loopIterationOrder || "ASC");
     setExitConditions(
       loopConfig.exitConditions?.length > 0
         ? loopConfig.exitConditions.map(c => ({ ...c, logic: undefined }))
@@ -814,6 +816,10 @@ const ActionPanel = ({
         return { error: "Max iterations must be a positive number." };
       }
 
+      if (loopIterationOrder && !["ASC", "DESC"].includes(loopIterationOrder)) {
+        return { error: "Invalid iteration order. Please select Ascending or Descending." };
+      }
+
       const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
         .filter((node) => node.data.action === "Find")
         .map((node) => node.id);
@@ -1011,6 +1017,7 @@ const ActionPanel = ({
       ? {
         loopCollection,
         currentItemVariableName,
+        loopIterationOrder,
         ...(loopVariables.currentIndex || loopVariables.counter ? { loopVariables } : {}),
         ...(maxIterations ? { maxIterations } : {}),
         ...(validExitConditions.length > 0 ? { exitConditions: validExitConditions } : {}),
@@ -1696,6 +1703,24 @@ const ActionPanel = ({
               className="space-y-6"
             >
               <div>
+                {/* Iteration order */}
+                <div className="mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Iteration Order
+                  </label>
+                  <AntSelect
+                    value={loopIterationOrder}
+                    onChange={(value) => setLoopIterationOrder(value || "ASC")}
+                    options={[
+                      { value: "ASC", label: "Ascending (First to Last)" },
+                      { value: "DESC", label: "Descending (Last to First)" }
+                    ]}
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Choose whether to iterate through the collection from first to last or last to first
+                  </p>
+                </div>
                 {/* Max Iterations Accordion */}
                 <div className="">
                   <button

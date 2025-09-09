@@ -690,20 +690,6 @@ const MappingFields = ({ onSaveCallback }) => {
       }
     } catch (error) {
       console.log('Error in Saving mapping', error)
-      // if (error.message.includes('INVALID_JWT_FORMAT')) {
-      //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ userId }),
-      //   });
-
-      //   const tokenData = await tokenResponse.json();
-      //   if (!tokenResponse.ok || tokenData.error) {
-      //     throw new Error(tokenData.error || 'Failed to fetch access token');
-      //   }
-      //   tokenRef.current = tokenData.access_token;
-      //   saveAllConfiguration();
-      // }
     } finally {
       setIsSaving(false);
     }
@@ -715,6 +701,17 @@ const MappingFields = ({ onSaveCallback }) => {
       onSaveCallback(saveAllConfiguration);
     }
   }, [onSaveCallback, saveAllConfiguration]);
+
+  // Check for node deletion and clear selection
+  useEffect(() => {
+    // Check if the selected node still exists
+    if (selectedNode) {
+      const nodeExists = nodes.some(node => node.id === selectedNode.id);
+      if (!nodeExists) {
+        setSelectedNode(null);
+      }
+    }
+  }, [nodes, selectedNode, setSelectedNode]);
 
   const initializeData = async () => {
     setIsLoading(true);
@@ -772,6 +769,7 @@ const MappingFields = ({ onSaveCallback }) => {
               loopCollection: '',
               currentItemVariableName: '',
               maxIterations: '',
+              loopIterationOrder: 'ASC',
               loopVariables: {
                 currentIndex: false,
                 counter: false,
@@ -882,11 +880,6 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   };
 
-  // useEffect(() => {
-  //   initializeData();
-  // }, [formVersionId, formRecords]);
-
-
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
     const reactFlowWrapper = document.querySelector('.react-flow');
     if (!reactFlowWrapper) return;
@@ -947,6 +940,7 @@ const MappingFields = ({ onSaveCallback }) => {
             loopCollection: "",
             currentItemVariableName: "",
             maxIterations: "",
+            loopIterationOrder: "ASC",
             loopVariables: {
               currentIndex: false,
               counter: false,
@@ -1154,47 +1148,48 @@ const MappingFields = ({ onSaveCallback }) => {
             <Loader text="Loading Mappings" fullScreen={false} />
           )}
 
-<div className="flex flex-1 overflow-hidden">
-                <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
-                  <ReactFlowProvider>
-                    <FlowDesigner
-                      initialNodes={nodes}
-                      initialEdges={edges}
-                      setSelectedNode={setSelectedNode}
-                      setNodes={setNodes}
-                      setEdges={setEdges}
-                      onAddNode={onAddNode}
-                    />
-                  </ReactFlowProvider>
+          <div className="flex flex-1 overflow-hidden">
+            <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
+              <ReactFlowProvider>
+                <FlowDesigner
+                  initialNodes={nodes}
+                  initialEdges={edges}
+                  setSelectedNode={setSelectedNode}
+                  setNodes={setNodes}
+                  setEdges={setEdges}
+                  onAddNode={onAddNode}
+                  selectedNode={selectedNode}
+                />
+              </ReactFlowProvider>
 
-                  {/* Add the floating button component */}
-                  <FloatingAddButton
-                    onAddNode={onAddNode}
-                    reactFlowWrapper={reactFlowWrapperRef}
-                    nodes={nodes}
-                  />
-                </div>
+              {/* Add the floating button component */}
+              <FloatingAddButton
+                onAddNode={onAddNode}
+                reactFlowWrapper={reactFlowWrapperRef}
+                nodes={nodes}
+              />
+            </div>
 
-                {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
-                  <ActionPanel
-                    nodeId={selectedNode.id}
-                    nodeType={selectedNode.data.action}
-                    formFields={formFields}
-                    salesforceObjects={salesforceObjects}
-                    mappings={mappings}
-                    setMappings={setMappings}
-                    setSalesforceObjects={setSalesforceObjects}
-                    fetchSalesforceFields={fetchSalesforceFields}
-                    onClose={() => setSelectedNode(null)}
-                    nodeLabel={selectedNode.data.label}
-                    setNodeLabel={setNodeLabel}
-                    nodes={nodes}
-                    edges={edges}
-                    credentials={googleSheetConfig?.credentials}
-                    sfToken={token}
-                  />
-                )}
-              </div>
+            {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
+              <ActionPanel
+                nodeId={selectedNode.id}
+                nodeType={selectedNode.data.action}
+                formFields={formFields}
+                salesforceObjects={salesforceObjects}
+                mappings={mappings}
+                setMappings={setMappings}
+                setSalesforceObjects={setSalesforceObjects}
+                fetchSalesforceFields={fetchSalesforceFields}
+                onClose={() => setSelectedNode(null)}
+                nodeLabel={selectedNode.data.label}
+                setNodeLabel={setNodeLabel}
+                nodes={nodes}
+                edges={edges}
+                credentials={googleSheetConfig?.credentials}
+                sfToken={token}
+              />
+            )}
+          </div>
 
           {/* {!isLoading && (
             <>
