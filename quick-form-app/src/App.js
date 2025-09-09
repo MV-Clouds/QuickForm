@@ -16,6 +16,8 @@ import NotificationPage from './components/NotificationSettings/NotificationSett
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
 import LargeFileUpload from './components/file-upload/multiple-file-upload';
+import CaptchaForm from './components/CaptchaForm';
+import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
 function App() {
   return (
     // Set up the router for navigation
@@ -40,6 +42,11 @@ function App() {
                 path="/home"
                 element={<ProtectedRoute element={<Home />} />}
               />
+              <Route
+              path="/captcha"
+              element={<GoogleReCaptchaProvider reCaptchaKey="6LepAsMrAAAAAPRLxQtx_7odhn9zq01VASfZeKTH">
+              <CaptchaForm />
+            </GoogleReCaptchaProvider>}/>
 
               {/* Duplicate protected route for Home (to support /app/home path) */}
               <Route
