@@ -7,7 +7,7 @@ import PayPalPaymentField from "./paypal/components/PayPalPaymentField";
  *
  * Simplified sidebar showing only payment fields for drag and drop
  */
-const PaymentSidebar = ({ fields = [], onDragStart, onDragEnd }) => {
+const PaymentSidebar = ({ fields = [], onDragStart, onDragEnd,isEditable }) => {
   // Check if payment field already exists
   const hasPaymentField = fields.some(
     (field) => field.type === "paypal_payment"
@@ -39,6 +39,7 @@ const PaymentSidebar = ({ fields = [], onDragStart, onDragEnd }) => {
           <PayPalPaymentField
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
+            isEditable={isEditable}
             fields={fields}
           />
 

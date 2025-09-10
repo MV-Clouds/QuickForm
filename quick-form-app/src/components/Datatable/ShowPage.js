@@ -10,9 +10,9 @@ const mapApiToTableData = (apiData) => {
   return apiData.map((item, idx) => ({
     id: item.Id || item.id || `row-${idx}`,
     srNo: idx + 1,
-    formName: item.FormVersions[0].Name || 'Untitled Form',
+    formName: item.FormVersions[0]?.Name || 'Untitled Form',
     activeVersion: item.Active_Version__c || 'V1',
-    submissionCount: item.FormVersions[0].Submission_Count__c,
+    submissionCount: item.FormVersions[0]?.Submission_Count__c,
     status: item.Status__c || '',
     lastmodDate : new Date(item.LastModifiedDate).toLocaleDateString(),
     fields : item.FormVersions[0].Fields

@@ -13,7 +13,7 @@ import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
 import ImageUploader from './ImageUploader';
 
-const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', dropdownOptions = [], onChange, onUpdateRows, onUpdateColumns }) => {
+const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', dropdownOptions = [], onChange, onUpdateRows, onUpdateColumns, isEditable }) => {
   const [selectedValues, setSelectedValues] = useState({});
   const [editingRow, setEditingRow] = useState(null);
   const [editingColumn, setEditingColumn] = useState(null);
@@ -72,7 +72,8 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
       <div className="absolute top-0 right-0">
         <button
           onClick={addColumn}
-          className="text-blue-600 hover:underline text-sm"
+          disabled = {!isEditable}
+          className={`text-[#028ab0] text-sm ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           + Add Column
         </button>
@@ -83,20 +84,9 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
             <th className="p-2 border-t border-l border-r-0 border-transparent invisible">.</th>
             {columnValues.map((colLabel, colIdx) => (
               <th key={colIdx} className="border border-gray-300 bg-blue-100/50 p-2 text-center">
-                {editingColumn === colIdx ? (
-                  <input
-                    type="text"
-                    value={colLabel}
-                    onChange={(e) => handleColumnEdit(colIdx, e.target.value)}
-                    onBlur={() => setEditingColumn(null)}
-                    className="w-full p-1 border rounded"
-                    autoFocus
-                  />
-                ) : (
-                  <span onClick={() => setEditingColumn(colIdx)} className="cursor-pointer">
+                <span onClick={() => setEditingColumn(colIdx)} className="cursor-pointer">
                     {colLabel}
                   </span>
-                )}
               </th>
             ))}
           </tr>
@@ -105,20 +95,9 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
           {rowValues.map((rowLabel, rowIdx) => (
             <tr key={rowIdx}>
               <td className="border border-gray-300 bg-blue-100/50 p-2 font-semibold">
-                {editingRow === rowIdx ? (
-                  <input
-                    type="text"
-                    value={rowLabel}
-                    onChange={(e) => handleRowEdit(rowIdx, e.target.value)}
-                    onBlur={() => setEditingRow(null)}
-                    className="w-full p-1 border rounded"
-                    autoFocus
-                  />
-                ) : (
-                  <span onClick={() => setEditingRow(rowIdx)} className="cursor-pointer">
+                <span onClick={() => setEditingRow(rowIdx)} className="cursor-pointer">
                     {rowLabel}
                   </span>
-                )}
               </td>
               {columnValues.map((colLabel, colIdx) => (
                 <td key={colIdx} className="border border-gray-300 p-2 text-center">
@@ -127,6 +106,7 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
                       type="radio"
                       name={`scale-row-${rowIdx}`}
                       value={colLabel}
+                      disabled={!isEditable}
                       checked={selectedValues[rowIdx] === colLabel}
                       onChange={() => handleChange(rowIdx, colLabel)}
                     />
@@ -136,6 +116,7 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
                       type="checkbox"
                       name={`scale-row-${rowIdx}-${colIdx}`}
                       value={colLabel}
+                      disabled={!isEditable}
                       checked={(selectedValues[rowIdx] || []).includes(colLabel)}
                       onChange={() => handleChange(rowIdx, colLabel, true)}
                     />
@@ -147,6 +128,7 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
                       onChange={(e) => handleChange(rowIdx, e.target.value)}
                       className="w-full p-1 border rounded"
                       placeholder="Enter text"
+                      disabled={!isEditable}
                     />
                   )}
                   {inputType === 'dropdown' && (
@@ -154,6 +136,7 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
                       value={selectedValues[rowIdx] || ''}
                       onChange={(e) => handleChange(rowIdx, e.target.value)}
                       className="w-full p-1 border rounded"
+                      disabled={!isEditable}
                     >
                       <option value="" disabled>Select an option</option>
                       {dropdownOptions.map((option, optIdx) => (
@@ -172,7 +155,8 @@ const DynamicScaleRating = ({ rows = [], columns = [], inputType = 'radio', drop
       <div className="flex justify-end mt-2">
         <button
           onClick={addRow}
-          className="text-blue-600 hover:underline text-sm"
+          disabled = {!isEditable}
+          className={`text-[#028ab0] text-sm ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           + Add Row
         </button>
@@ -238,7 +222,7 @@ const textToHtml = (text) => {
   return text ? `<p>${text.replace(/\n/g, '<br>')}</p>` : '';
 };
 
-function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme, selectedFieldId, selectedSectionSide }) {
+function FormField({ field, isSelected, onClick, onDrop, index, pageIndex, sectionSide = null, onUpdateField, onDeleteField, fields, setClipboard, clipboard, handlePaste, selectedTheme, selectedFieldId, selectedSectionSide, isEditable=true }) {
   const {
     type, subFields = {}, id, label, options: initialOptions, labelAlignment = 'top', heading, isRequired,
     rows, columns, formula = '', placeholder = {}, ratingType = 'emoji', isDisabled = false, showHelpText = false,
@@ -608,9 +592,11 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
       {/* Floating vertical button group */}
       {isSelected && type !== 'pagebreak' && (
         <div className="absolute top-1/2 -right-14 flex flex-col items-center gap-2 z-20 -translate-y-1/2 
-                bg-white border border-gray-200 shadow-md p-2">          <button
-            onClick={handleCut}
-            className="p-1"
+                bg-white border border-gray-200 shadow-md p-2">
+          <button
+            onClick={isEditable ? handleCut : undefined}
+            disabled={!isEditable}
+            className={`p-1 ${!isEditable ? "opacity-50 cursor-not-allowed" : ""}`}
             title="Cut Field"
           >
             <svg width="18" height="17" viewBox="0 0 18 17" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -620,25 +606,31 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
           </button>
           <button
             onClick={
-              type === 'paypal_payment'
-                ? (e) => {
-                  e.stopPropagation();
-                  alert(
-                    'Payment fields cannot be copied. Only one payment field is allowed per form.'
-                  );
-                }
-                : handleCopy
+              isEditable
+                ? type === "paypal_payment"
+                  ? (e) => {
+                    e.stopPropagation();
+                    alert(
+                      "Payment fields cannot be copied. Only one payment field is allowed per form."
+                    );
+                  }
+                  : handleCopy
+                : undefined
             }
-            className={`p-1 ${type === 'paypal_payment'
-              ? 'text-gray-500 cursor-not-allowed'
-              : ''
+            disabled={!isEditable || type === "paypal_payment"}
+            className={`p-1 ${!isEditable || type === "paypal_payment"
+              ? "opacity-50 cursor-not-allowed"
+              : ""
               }`}
             title={
-              type === 'paypal_payment'
-                ? 'Payment fields cannot be copied'
-                : 'Copy Field'
+              !isEditable
+                ? "Form is not editable"
+                : type === "paypal_payment"
+                  ? "Payment fields cannot be copied"
+                  : "Copy Field"
             }
           >
+
             <svg width="16" height="18" viewBox="0 0 16 18" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M11.2316 1.16602H0.787109V12.4808" stroke="#5F6165" stroke-width="1.5" />
               <path d="M4.2688 4.64844H14.7132V15.0929C14.7132 15.5546 14.5298 15.9973 14.2034 16.3238C13.8769 16.6502 13.4342 16.8336 12.9725 16.8336H6.00954C5.54787 16.8336 5.1051 16.6502 4.77865 16.3238C4.4522 15.9973 4.2688 15.5546 4.2688 15.0929V4.64844Z" stroke="#5F6165" stroke-width="1.5" />
@@ -646,12 +638,17 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
 
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDeleteField(id);
-            }}
-            className="p-1"
-            title="Delete Field"
+            onClick={
+              isEditable
+                ? (e) => {
+                  e.stopPropagation();
+                  onDeleteField(id);
+                }
+                : undefined
+            }
+            disabled={!isEditable}
+            className={`p-1 ${!isEditable ? "opacity-50 cursor-not-allowed" : ""}`}
+            title={isEditable ? "Delete Field" : "Form is not editable"}
           >
             <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="16" height="20" viewBox="0 0 48 48">
               <path d="M 24 4 C 20.491685 4 17.570396 6.6214322 17.080078 10 L 10.238281 10 A 1.50015 1.50015 0 0 0 9.9804688 9.9785156 A 1.50015 1.50015 0 0 0 9.7578125 10 L 6.5 10 A 1.50015 1.50015 0 1 0 6.5 13 L 8.6386719 13 L 11.15625 39.029297 C 11.427329 41.835926 13.811782 44 16.630859 44 L 31.367188 44 C 34.186411 44 36.570826 41.836168 36.841797 39.029297 L 39.361328 13 L 41.5 13 A 1.50015 1.50015 0 1 0 41.5 10 L 38.244141 10 A 1.50015 1.50015 0 0 0 37.763672 10 L 30.919922 10 C 30.429604 6.6214322 27.508315 4 24 4 z M 24 7 C 25.879156 7 27.420767 8.2681608 27.861328 10 L 20.138672 10 C 20.579233 8.2681608 22.120844 7 24 7 z M 11.650391 13 L 36.347656 13 L 33.855469 38.740234 C 33.730439 40.035363 32.667963 41 31.367188 41 L 16.630859 41 C 15.331937 41 14.267499 40.033606 14.142578 38.740234 L 11.650391 13 z M 20.476562 17.978516 A 1.50015 1.50015 0 0 0 19 19.5 L 19 34.5 A 1.50015 1.50015 0 1 0 22 34.5 L 22 19.5 A 1.50015 1.50015 0 0 0 20.476562 17.978516 z M 27.476562 17.978516 A 1.50015 1.50015 0 0 0 26 19.5 L 26 34.5 A 1.50015 1.50015 0 1 0 29 34.5 L 29 19.5 A 1.50015 1.50015 0 0 0 27.476562 17.978516 z"></path>
@@ -664,7 +661,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
       {children}
 
       {/* Paste Here button with full-width lines */}
-      {isHovered &&
+      {isHovered && isEditable &&
         clipboard.field &&
         type !== 'pagebreak' &&
         !sectionId &&
@@ -674,7 +671,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                 handlePaste(index, null, null);
+                handlePaste(index, null, null);
               }}
               className="px-4 py-1 text-center text-[#0b295ee6] hover:bg-blue-50 z-20 whitespace-nowrap"
             >
@@ -819,7 +816,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               <DatePicker
                 format={rsuiteToHtmlFormat(dateFormat).replace(/-/g, dateSeparator)}
                 defaultValue={defaultDate ? formatDateForRsuite(defaultDate) : null}
-                disabled={isDisabled}
+                disabled={!isEditable || isDisabled}
                 disabledDate={shouldDisableDate}
                 renderCell={renderCell}
                 placeholder={placeholder.main || 'Select a date'}
@@ -868,7 +865,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               <DatePicker
                 format={`${rsuiteToHtmlFormat(dateFormat).replace(/-/g, dateSeparator)} ${timeFormat === 'HH:mm' ? 'HH:mm' : 'hh:mm a'}`}
                 defaultValue={defaultDate ? formatDateForRsuite(defaultDate) : null}
-                disabled={isDisabled}
+                disabled={!isEditable || isDisabled}
                 disabledDate={shouldDisableDate}
                 renderCell={renderCell}
                 placeholder={placeholder.main || 'Select date and time'}
@@ -918,7 +915,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               <DatePicker
                 format={timeFormat === 'HH:mm' ? 'HH:mm' : 'hh:mm a'}
                 defaultValue={defaultTime ? formatDateForRsuite(`1970-01-01T${defaultTime}`) : null}
-                disabled={isDisabled}
+                disabled={!isEditable || isDisabled}
                 placeholder={placeholder.main || 'Select a time'}
                 className={`w-full ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                 showMeridian={timeFormat === 'hh:mm a'}
@@ -979,6 +976,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               placeholder={placeholder.main || 'Enter short text'}
               maxLength={shortTextMaxChars || 255}
               readOnly={isDisabled}
+              disabled={!isEditable}
               pattern={field?.validation?.pattern}
               title={field?.validation?.description}
             />
@@ -1006,6 +1004,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                 onChange={handleQuillChange}
                 className="min-h-[100px] bg-white"
                 readOnly={isDisabled}
+                disabled={!isEditable}
                 placeholder={placeholder.main || 'Enter long text'}
               />
             ) : (
@@ -1057,6 +1056,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               max={numberValueLimits.enabled ? numberValueLimits.max : undefined}
               onChange={handleNumberChange}
               readOnly={isDisabled}
+              disabled={!isEditable}
               pattern={field?.validation?.pattern}
               title={field?.validation?.description}
             />
@@ -1099,7 +1099,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                       dropdownClass="border rounded max-h-64 overflow-y-auto"
                       containerClass="flex items-center w-full"
                       inputProps={{ 'aria-label': 'Country code selector', readOnly: true }}
-                      disabled={isDisabled}
+                      disabled={!isEditable || isDisabled}
                       placeholder={subFields.countryCode?.placeholder || 'Select country code'}
                       enableSearch
                       searchPlaceholder="Search country"
@@ -1121,7 +1121,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                       }
                       className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                       placeholder={subFields.phoneNumber?.placeholder || 'Enter phone number'}
-                      disabled={isDisabled}
+                      disabled={!isEditable || isDisabled}
                       aria-label="Phone number input"
                     />
                   </div>
@@ -1138,7 +1138,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   }
                   className={`p-2 border rounded w-full text-sm ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={subFields.phoneNumber?.placeholder || 'Enter phone number'}
-                  disabled={isDisabled}
+                  disabled={!isEditable || isDisabled}
                   inputProps={{ 'aria-label': 'Phone number input' }}
                 />
               )}
@@ -1165,6 +1165,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                 maxLength={maxChars || undefined}
                 pattern={allowedDomains ? `.*@(${allowedDomains.split(',').map(d => d.trim()).join('|')})$` : undefined}
                 readOnly={isDisabled}
+                disabled={!isEditable}
                 title={allowedDomains ? `Email must be from: ${allowedDomains}` : undefined}
               />
               {enableConfirmation && (
@@ -1175,6 +1176,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   value={confirmationEmail}
                   onChange={(e) => setConfirmationEmail(e.target.value)}
                   readOnly={isDisabled}
+                  disabled={!isEditable}
                 />
               )}
               {enableVerification && (
@@ -1185,6 +1187,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   value={verificationCode}
                   onChange={(e) => setVerificationCode(e.target.value)}
                   readOnly={isDisabled}
+                  disabled={!isEditable}
                 />
               )}
             </div>
@@ -1215,27 +1218,32 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               >
                 {localOptions.map((opt, idx) => (
                   <div key={opt} className="flex items-center gap-1 min-w-0">
-                    <input type="checkbox" className="flex-shrink-0" disabled={isDisabled} pattern={field?.validation?.pattern} title={field?.validation?.description} />
+                    <input type="checkbox" className="flex-shrink-0" disabled={!isEditable || isDisabled} pattern={field?.validation?.pattern} title={field?.validation?.description} />
                     <div
                       className={`p-1 rounded flex-grow min-w-0 truncate ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                       title={opt}
                     >{opt}</div>
-                    <button
-                      onClick={() => handleRemoveOption(idx)}
-                      className={`text-red-500 hover:text-red-700 flex-shrink-0 ${selectedTheme?.buttonText || ''}`}
-                    >
-                      <FaTrash size={12} />
-                    </button>
+                    {isEditable && (
+                      <button
+                        onClick={() => handleRemoveOption(idx)}
+                        className={`text-red-500 hover:text-red-700 flex-shrink-0 ${selectedTheme?.buttonText || ''}`}
+                      >
+                        <FaTrash size={12} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-            <button
-              onClick={handleAddOption}
-              className={`text-blue-600 text-xs hover:underline mt-2 ${selectedTheme?.buttonText || ''}`}
-            >
-              + Add Item
-            </button>
+            {isEditable && (
+              <button
+                onClick={handleAddOption}
+                className={`text-[#028ab0] text-xs hover:underline mt-2 ${selectedTheme?.buttonText || ''}`}
+              >
+                + Add Item
+              </button>
+            )}
+
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1260,27 +1268,31 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               >
                 {localOptions.map((opt, idx) => (
                   <div key={opt} className="flex items-center gap-1 min-w-0">
-                    <input type="radio" name={`radio-${id}`} className="flex-shrink-0" disabled={isDisabled} />
+                    <input type="radio" name={`radio-${id}`} className="flex-shrink-0" disabled={!isEditable || isDisabled} />
                     <div
                       className={`p-1 flex-grow min-w-0 truncate ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                       title={opt}
                     >{opt}</div>
-                    <button
-                      onClick={() => handleRemoveOption(idx)}
-                      className={`text-red-500 hover:text-red-700 flex-shrink-0 ${selectedTheme?.buttonText || ''}`}
-                    >
-                      <FaTrash size={12} />
-                    </button>
+                    {isEditable && (
+                      <button
+                        onClick={() => handleRemoveOption(idx)}
+                        className={`text-red-500 hover:text-red-700 flex-shrink-0 ${selectedTheme?.buttonText || ''}`}
+                      >
+                        <FaTrash size={12} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-            <button
-              onClick={handleAddOption}
-              className={`text-blue-600 text-xs hover:underline mt-2 ${selectedTheme?.buttonText || ''}`}
-            >
-              + Add Item
-            </button>
+            {isEditable && (
+              <button
+                onClick={handleAddOption}
+                className={`text-[#028ab0] text-xs hover:underline mt-2 ${selectedTheme?.buttonText || ''}`}
+              >
+                + Add Item
+              </button>
+            )}
           </FieldWrapper>
         </SelectionWrapper>
       );
@@ -1297,8 +1309,8 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
           }>
             <div className="relative w-full" ref={dropdownRef}>
               <div
-                className={`w-full p-2 border rounded cursor-pointer flex justify-between items-center ${isDisabled ? 'bg-gray-200' : 'bg-white'} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                onClick={() => !isDisabled && setIsDropdownOpen(!isDropdownOpen)}
+                className={`w-full p-2 border rounded cursor-pointer flex justify-between items-center ${isDisabled || !isEditable ? 'bg-gray-50' : 'bg-white'} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
+                onClick={() => !isDisabled &&  isEditable && setIsDropdownOpen(!isDropdownOpen)}
               >
                 <span>
                   {allowMultipleSelections
@@ -1363,7 +1375,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   ref={fileInputRef}
                   accept={allowedFileTypes ? allowedFileTypes.split(',').map(type => `.${type.trim()}`).join(',') : undefined}
                   multiple={multipleFiles}
-                  disabled={isDisabled}
+                  disabled={!isEditable || isDisabled}
                   pattern={field?.validation?.pattern}
                   title={field?.validation?.description}
                 />
@@ -1373,31 +1385,41 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
         </SelectionWrapper>
       );
 
-    case 'imageuploader':
-      return (
-        <SelectionWrapper>
-          <FieldWrapper {...wrapperProps}>
-            <div style={{
-              display: 'flex',
-              justifyContent: field?.imageAlign || 'center',
-            }}>
-              <ImageUploader
-                defaultImage={field?.backgroundImage || imageDesign?.backgroundImage || "https://quickform-images.s3.us-east-1.amazonaws.com/quickform-only-logo.png"}
-                onImageUpload={(newDesign) => {
-                  setImageDesign(newDesign);
-                  if (onUpdateField) {
-                    onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
-                  }
-                }}
-                style={{
-                  width: field?.imageWidth ? `${field.imageWidth}px` : '200px',
-                  height: field?.imageHeight ? `${field.imageHeight}px` : '150px',
-                }}
-              />
-            </div>
-          </FieldWrapper>
-        </SelectionWrapper>
-      );
+   case 'imageuploader':
+  return (
+    <SelectionWrapper>
+      <FieldWrapper {...wrapperProps}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: field?.imageAlign || 'center',
+          }}
+        >
+          <ImageUploader
+            defaultImage={
+              field?.backgroundImage ||
+              imageDesign?.backgroundImage ||
+              "https://quickform-images.s3.us-east-1.amazonaws.com/quickform-only-logo.png"
+            }
+            onImageUpload={(newDesign) => {
+              if (!isEditable) return; // Prevent update if not editable
+              setImageDesign(newDesign);
+              if (onUpdateField) {
+                onUpdateField(id, { backgroundImage: newDesign.backgroundImage });
+              }
+            }}
+            style={{
+              width: field?.imageWidth ? `${field.imageWidth}px` : "200px",
+              height: field?.imageHeight ? `${field.imageHeight}px` : "150px",
+              opacity: 1, // Greyed out look if not editable
+              pointerEvents: !isEditable ? "none" : "auto", // Block interaction
+              cursor: !isEditable ? "not-allowed" : "pointer",
+            }}
+          />
+        </div>
+      </FieldWrapper>
+    </SelectionWrapper>
+  );
 
     case 'toggle':
       return (
@@ -1410,7 +1432,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
             </span>
           }>
             <label className="inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" disabled={isDisabled} checked={isChecked} onChange={handleToggleChange} pattern={field?.validation?.pattern}
+              <input type="checkbox" className="sr-only peer" disabled={!isEditable || isDisabled} checked={isChecked} onChange={handleToggleChange} pattern={field?.validation?.pattern}
                 title={field?.validation?.description} />
               <div className={`w-11 h-6 bg-gray-200 rounded-full peer ${isChecked ? 'peer-checked:bg-blue-600' : ''} ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}>
                 <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${isChecked ? 'translate-x-5' : 'translate-x-1'}`} />
@@ -1442,6 +1464,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                 placeholder={placeholder.main || 'Enter price'}
                 onChange={handlePriceChange}
                 readOnly={isDisabled}
+                disabled={!isEditable}
                 pattern={field?.validation?.pattern}
                 title={field?.validation?.description}
               />
@@ -1473,7 +1496,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                     value={subFields.salutation?.value || ''}
                     onChange={(e) => handleSubFieldChange('salutation', { value: e.target.value })}
                     className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
-                    disabled={isDisabled}
+                    disabled={isEditable || isDisabled}
                   >
                     <option value="" disabled>{subFields.salutation?.placeholder || 'Select Salutation'}</option>
                     {(subFields.salutation?.options || ['Mr.', 'Mrs.', 'Ms.', 'Dr.']).map((sal, idx) => (
@@ -1490,6 +1513,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   value={subFields.firstName?.value || ''}
                   onChange={(e) => handleSubFieldChange('firstName', { value: e.target.value })}
                   readOnly={isDisabled}
+                  disabled={!isEditable}
                   pattern={field?.validation?.pattern}
                   title={field?.validation?.description}
                 />
@@ -1500,6 +1524,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   className={`w-full p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
                   placeholder={subFields.lastName?.placeholder || 'Last Name'}
                   value={subFields.lastName?.value || ''}
+                  disabled={!isEditable}
                   onChange={(e) => handleSubFieldChange('lastName', { value: e.target.value })}
                   readOnly={isDisabled}
                 />
@@ -1534,6 +1559,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                     value={field?.value || ''}
                     onChange={(e) => handleSubFieldChange(key, { value: e.target.value })}
                     readOnly={isDisabled}
+                    disabled={!isEditable}
                     required={field?.isRequired}
                   />
                 </div>
@@ -1612,6 +1638,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               className={`p-2 border rounded ${selectedTheme?.inputText || ''} ${selectedTheme?.inputBg || ''}`}
               placeholder={placeholder.main || 'Enter link'}
               readOnly={isDisabled}
+              disabled={!isEditable}
               pattern={field?.validation?.pattern}
               title={field?.validation?.description}
             />
@@ -1620,37 +1647,63 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
       );
 
     case 'signature':
-      return (
-        <SelectionWrapper>
-          <FieldWrapper {...wrapperProps} labelContent={
-            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
-              {label || 'Signature'}
-              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
-              {isRequired && <span className="text-red-500 ml-1">*</span>}
-            </label>
-          }>
-            <div className="flex flex-col gap-2">
-              <SignatureCanvas
-                ref={sigCanvas}
-                canvasProps={{ className: 'border rounded w-full h-32', style: { backgroundColor: '#fff' } }}
-                onEnd={saveSignature}
+  return (
+    <SelectionWrapper>
+      <FieldWrapper
+        {...wrapperProps}
+        labelContent={
+          <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
+            {label || 'Signature'}
+            {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
+            {isRequired && <span className="text-red-500 ml-1">*</span>}
+          </label>
+        }
+      >
+        <div className="flex flex-col gap-2">
+          <div
+            className={`border rounded w-full h-32 bg-white relative ${
+              !isEditable || isDisabled ? 'opacity-60 cursor-not-allowed' : ''
+            }`}
+          >
+            <SignatureCanvas
+              ref={sigCanvas}
+              canvasProps={{
+                className: 'w-full h-full',
+                style: { backgroundColor: '#fff' },
+              }}
+              onEnd={() => {
+                if (isEditable && !isDisabled) {
+                  saveSignature();
+                }
+              }}
+            />
+            {/* Overlay when not editable */}
+            {(!isEditable || isDisabled) && (
+              <div className="absolute inset-0 bg-transparent cursor-not-allowed"></div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={clearSignature}
+              className={`px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 ${selectedTheme?.buttonText || ''}`}
+              disabled={!isEditable || isDisabled}
+            >
+              Clear
+            </button>
+
+            {isSigned && signatureData && (
+              <img
+                src={signatureData}
+                alt="Signature"
+                className="w-32 h-16 object-contain border rounded"
               />
-              <div className="flex gap-2">
-                <button
-                  onClick={clearSignature}
-                  className={`px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 ${selectedTheme?.buttonText || ''}`}
-                  disabled={isDisabled}
-                >
-                  Clear
-                </button>
-                {isSigned && signatureData && (
-                  <img src={signatureData} alt="Signature" className="w-32 h-16 object-contain" />
-                )}
-              </div>
-            </div>
-          </FieldWrapper>
-        </SelectionWrapper>
-      );
+            )}
+          </div>
+        </div>
+      </FieldWrapper>
+    </SelectionWrapper>
+  );
 
     case 'terms':
       return (
@@ -1666,7 +1719,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               <input
                 type="checkbox"
                 className="mr-2"
-                disabled={isDisabled}
+                disabled={!isEditable || isDisabled}
                 pattern={field?.validation?.pattern}
                 title={field?.validation?.description}
               />
@@ -1688,51 +1741,72 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
       );
 
     case 'displaytext':
-      return (
-        <SelectionWrapper>
-          <FieldWrapper {...wrapperProps} labelContent={
-            <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
-              {/* {label || 'Display Text'} */}
-              {isHidden && <FaEyeSlash className="text-gray-400" title="Hidden Field" />}
-            </label>
-          }>
+  return (
+    <SelectionWrapper>
+      <FieldWrapper
+        {...wrapperProps}
+        labelContent={
+          <label className={`text-gray-700 ${selectedTheme?.textColor || ''}`}>
+            {isHidden && (
+              <FaEyeSlash className="text-gray-400" title="Hidden Field" />
+            )}
+          </label>
+        }
+      >
+        <div
+          className={`bg-white rounded-lg shadow-sm p-3 my-2 min-h-[60px] ${
+            isEditable ? 'cursor-pointer' : 'cursor-default opacity-80'
+          }`}
+          ref={displayTextRef}
+          onClick={() => {
+            if (isEditable) {
+              setIsEditingDisplayText(true);
+            }
+          }}
+        >
+          {isEditingDisplayText && isEditable ? (
+            <ReactQuill
+              value={field.value || ''}
+              onChange={(value) => {
+                if (onUpdateField) onUpdateField(id, { value });
+              }}
+              theme="snow"
+              className="bg-white"
+              modules={{
+                toolbar: [
+                  [{ header: '1' }, { header: '2' }, { font: [] }],
+                  [{ size: [] }],
+                  [
+                    'bold',
+                    'italic',
+                    'underline',
+                    'strike',
+                    'blockquote',
+                  ],
+                  [
+                    { list: 'ordered' },
+                    { list: 'bullet' },
+                    { indent: '-1' },
+                    { indent: '+1' },
+                  ],
+                  ['link', 'image'],
+                  ['clean'],
+                ],
+              }}
+              placeholder="Enter display text"
+            />
+          ) : (
             <div
-              className="bg-white rounded-lg shadow-sm  p-3 my-2 min-h-[60px] cursor-pointer"
-              ref={displayTextRef}
-              onClick={() => setIsEditingDisplayText(true)}
-            >
-              {isEditingDisplayText ? (
-                <ReactQuill
-                  value={field.value || ''}
-                  onChange={value => {
-                    if (onUpdateField) onUpdateField(id, { value });
-                  }}
-                  theme="snow"
-                  className="bg-white"
-                  modules={{
-                    toolbar: [
-                      [{ 'header': '1' }, { 'header': '2' }, { 'font': [] }],
-                      [{ size: [] }],
-                      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                      [{ 'list': 'ordered' }, { 'list': 'bullet' }, { 'indent': '-1' }, { 'indent': '+1' }],
-                      ['link', 'image'],
-                      ['clean'] // remove formatting button
-                    ]
-                  }}
-                  placeholder="Enter display text"
-                />
-              ) : (
-                <div
-                  className=""
-                  dangerouslySetInnerHTML={{
-                    __html: field.value || placeholder.main || 'This is display text',
-                  }}
-                />
-              )}
-            </div>
-          </FieldWrapper>
-        </SelectionWrapper>
-      );
+              dangerouslySetInnerHTML={{
+                __html:
+                  field.value || placeholder.main || 'This is display text',
+              }}
+            />
+          )}
+        </div>
+      </FieldWrapper>
+    </SelectionWrapper>
+  );
 
     case 'formcalculation':
       return (
@@ -1773,7 +1847,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   <button
                     key={option.value}
                     onClick={() => handleRatingClick(option.value)}
-                    disabled={isDisabled}
+                    disabled={!isEditable || isDisabled}
                     className={`text-2xl ${selectedRating === option.value ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 focus:outline-none ${selectedTheme?.buttonText || ''}`}
                   >
                     {ratingType === 'star' ? (
@@ -1812,6 +1886,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
               dropdownOptions={field.dropdownOptions}
               onUpdateRows={(newRows) => onUpdateField(id, { rows: newRows })}
               onUpdateColumns={(newColumns) => onUpdateField(id, { columns: newColumns })}
+              isEditable={isEditable}
             />
           </FieldWrapper>
         </SelectionWrapper>
@@ -1875,6 +1950,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   selectedTheme={selectedTheme}
                   selectedFieldId={selectedFieldId}
                   selectedSectionSide={selectedSectionSide}
+                  isEditable={isEditable}
                 />
               </SelectionWrapper>
             ) : (
@@ -1925,6 +2001,7 @@ function FormField({ field, isSelected, onClick, onDrop,index, pageIndex, sectio
                   selectedTheme={selectedTheme}
                   selectedFieldId={selectedFieldId}
                   selectedSectionSide={selectedSectionSide}
+                  isEditable={isEditable}
                 />
               </SelectionWrapper>
             ) : (

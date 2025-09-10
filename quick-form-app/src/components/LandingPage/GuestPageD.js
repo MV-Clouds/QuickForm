@@ -28,10 +28,10 @@ import {
 import { Link } from 'react-router-dom';
 
 const QuickFormLanding = () => {
-  useEffect(()=>{
-    sessionStorage.setItem('userId' , '005gL000002qyRxQAI');
-    sessionStorage.setItem('instanceUrl','https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com')
-  },[])
+  // useEffect(()=>{
+  //   sessionStorage.setItem('userId' , '005gL000002qyRxQAI');
+  //   sessionStorage.setItem('instanceUrl','https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com')
+  // },[])
   return (
     <div className="font-sans text-gray-800 overflow-x-hidden">
       {/* Navigation */}

@@ -39,6 +39,7 @@ const PayPalFieldEditorTabsRefactored = ({
   selectedField,
   onUpdateField,
   className = "",
+  isEditable = true
 }) => {
   // Get payment context
   const { userId, formId } = usePaymentContext();
@@ -276,6 +277,7 @@ const PayPalFieldEditorTabsRefactored = ({
             onPaymentTypeChange={handlePaymentTypeChange}
             userId={userId}
             formId={formId}
+            isEditable = {isEditable}
           />
         )}
 
@@ -291,6 +293,7 @@ const PayPalFieldEditorTabsRefactored = ({
             onOpenManager={handleOpenManager}
             expandedSections={expandedSections}
             toggleSection={toggleSection}
+            isEditable = {isEditable}
           />
         )}
 
@@ -302,6 +305,7 @@ const PayPalFieldEditorTabsRefactored = ({
             onBehaviorChange={handleBehaviorChange}
             expandedSections={expandedSections}
             toggleSection={toggleSection}
+            isEditable = {isEditable}
           />
         )}
       </div>
@@ -313,6 +317,7 @@ const PayPalFieldEditorTabsRefactored = ({
         selectedField={selectedField}
         onUpdateField={onUpdateField}
         selectedMerchantId={state.selectedMerchantId}
+        isEditable = {isEditable}
       />
 
       <SubscriptionManagementModal
@@ -321,6 +326,7 @@ const PayPalFieldEditorTabsRefactored = ({
         selectedField={selectedField}
         onUpdateField={onUpdateField}
         selectedMerchantId={state.selectedMerchantId}
+        isEditable = {isEditable}
       />
     </div>
   );
@@ -337,6 +343,7 @@ const AccountTab = React.memo(
     onPaymentTypeChange,
     userId,
     formId,
+    isEditable = true
   }) => (
     <div className="space-y-6">
       {/* Merchant Account Section */}
@@ -372,6 +379,7 @@ const AccountTab = React.memo(
               className="mt-4"
               userId={userId}
               formId={formId}
+              isEditable = {isEditable}
             />
 
             {/* Account Status Display */}
@@ -422,6 +430,7 @@ const AccountTab = React.memo(
         <select
           value={state.paymentType}
           onChange={onPaymentTypeChange}
+          disabled={!isEditable}
           className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="product_wise">Product-wise Payment</option>
@@ -473,6 +482,7 @@ const ConfigurationTab = React.memo(
     onOpenManager,
     expandedSections,
     toggleSection,
+    isEditable = true
   }) => (
     <div className="space-y-6">
       {/* Product-wise Payment Configuration */}
@@ -508,7 +518,7 @@ const ConfigurationTab = React.memo(
                 </div>
                 <button
                   onClick={() => onOpenManager("product")}
-                  disabled={!state.selectedMerchantId}
+                  disabled={!state.selectedMerchantId || !isEditable}
                   title={
                     !state.selectedMerchantId
                       ? "Select a merchant account first"
@@ -562,6 +572,7 @@ const ConfigurationTab = React.memo(
               </label>
               <select
                 value={state.amount.type}
+                disabled={!isEditable}
                 onChange={(e) => onAmountConfigChange({ type: e.target.value })}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
@@ -581,6 +592,7 @@ const ConfigurationTab = React.memo(
                   </div>
                   <input
                     type="number"
+                    disabled={!isEditable}
                     step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
                     min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.value || ""}
@@ -618,6 +630,7 @@ const ConfigurationTab = React.memo(
                   </label>
                   <input
                     type="number"
+                    disabled={!isEditable}
                     step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
                     min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.minAmount}
@@ -638,6 +651,7 @@ const ConfigurationTab = React.memo(
                   </label>
                   <input
                     type="number"
+                    disabled={!isEditable}
                     step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
                     min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.maxAmount}
@@ -661,6 +675,7 @@ const ConfigurationTab = React.memo(
               </label>
               <select
                 value={state.amount.currency}
+                disabled={!isEditable}
                 onChange={(e) =>
                   onAmountConfigChange({ currency: e.target.value })
                 }
@@ -711,7 +726,7 @@ const ConfigurationTab = React.memo(
               </div>
               <button
                 onClick={() => onOpenManager("subscription")}
-                disabled={!state.selectedMerchantId}
+                disabled={!state.selectedMerchantId || !isEditable}
                 title={
                   !state.selectedMerchantId
                     ? "Select a merchant account first"
@@ -740,6 +755,7 @@ const ConfigurationTab = React.memo(
           <div className="bg-white border border-gray-200 rounded-lg">
             <button
               onClick={() => toggleSection("paymentMethods")}
+              disabled={!isEditable}
               className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
             >
               <div className="flex items-center gap-3">
@@ -764,6 +780,7 @@ const ConfigurationTab = React.memo(
                   <label className="flex items-center">
                     <input
                       type="checkbox"
+                      disabled={!isEditable}
                       checked={state.paymentMethods.paypal}
                       onChange={(e) =>
                         onPaymentMethodChange("paypal", e.target.checked)
@@ -776,6 +793,7 @@ const ConfigurationTab = React.memo(
                   <label className="flex items-center">
                     <input
                       type="checkbox"
+                      disabled={!isEditable}
                       checked={state.paymentMethods.cards}
                       onChange={(e) =>
                         onPaymentMethodChange("cards", e.target.checked)
@@ -791,7 +809,7 @@ const ConfigurationTab = React.memo(
                     <input
                       type="checkbox"
                       checked={state.paymentMethods.venmo}
-                      disabled={!state.capabilities?.venmo}
+                      disabled={!state.capabilities?.venmo || !isEditable} 
                       onChange={(e) =>
                         onPaymentMethodChange("venmo", e.target.checked)
                       }
@@ -813,7 +831,7 @@ const ConfigurationTab = React.memo(
                     <input
                       type="checkbox"
                       checked={state.paymentMethods.googlePay}
-                      disabled={!state.capabilities?.googlePay}
+                      disabled={!state.capabilities?.googlePay || !isEditable}
                       onChange={(e) =>
                         onPaymentMethodChange("googlePay", e.target.checked)
                       }
@@ -841,7 +859,7 @@ const ConfigurationTab = React.memo(
 
 // Advanced Tab Component
 const AdvancedTab = React.memo(
-  ({ state, actions, onBehaviorChange, expandedSections, toggleSection }) => (
+  ({ state, actions, onBehaviorChange, expandedSections, toggleSection,isEditable = true }) => (
     <div className="space-y-6">
       {/* Field Behavior */}
       <div className="bg-white border border-gray-200 rounded-lg">
@@ -867,6 +885,7 @@ const AdvancedTab = React.memo(
               <label className="flex items-center">
                 <input
                   type="checkbox"
+                  disabled={!isEditable}
                   checked={state.behavior.collectBillingAddress}
                   onChange={(e) =>
                     onBehaviorChange({
@@ -888,6 +907,7 @@ const AdvancedTab = React.memo(
               <label className="flex items-center">
                 <input
                   type="checkbox"
+                  disabled={!isEditable}
                   checked={state.behavior.collectShippingAddress}
                   onChange={(e) =>
                     onBehaviorChange({
@@ -967,6 +987,7 @@ const PayPalFieldEditorTabs = ({
   userId,
   formId,
   className = "",
+  isEditable =true,
 }) => {
   return (
     <PaymentProvider userId={userId} formId={formId}>
@@ -974,6 +995,7 @@ const PayPalFieldEditorTabs = ({
         selectedField={selectedField}
         onUpdateField={onUpdateField}
         className={className}
+        isEditable={isEditable}
       />
     </PaymentProvider>
   );

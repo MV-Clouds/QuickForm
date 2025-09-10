@@ -20,6 +20,7 @@ const PaymentFieldEditor = ({
   className = "",
   userId = null,
   formId = null,
+  isEditable = true,
 }) => {
   // Return null if no field is selected or it's not a payment field
   if (!selectedField || !isPaymentField(selectedField)) {
@@ -38,6 +39,7 @@ const PaymentFieldEditor = ({
           className={className}
           userId={userId}
           formId={formId}
+          isEditable={isEditable}
         />
       );
 

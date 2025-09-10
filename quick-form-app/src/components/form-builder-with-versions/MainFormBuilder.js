@@ -248,15 +248,14 @@ function MainFormBuilder({
   };
 
   const handlePreview = () => {
-    setPreviewStep(1); // fade out sidebar + mainmenubar and builder
+    setPreviewStep(1);
     setTimeout(() => {
       const { formVersion, formFields } = prepareFormData();
       setPreviewFormData({ formVersion, formFields });
       setShowPreview(true);
-      setPreviewStep(3); // fully show preview
-    }, 600); // single delay controlling fade out -> preview show
+      setPreviewStep(3);
+    }, 600);
   };
-
 
   const handleBackToBuilder = () => {
     // Find first draft version
@@ -605,6 +604,12 @@ function MainFormBuilder({
     }
   };
 
+  // Add a helper function to check if the current version is editable
+  const isEditableVersion = () => {
+    return currentFormVersion?.Stage__c === "Draft";
+  };
+
+  // Modify the handleVersionChange function
   const handleVersionChange = (e) => {
     const newVersionId = e.target.value;
     const selectedVersion = formVersions.find(v => v.Id === newVersionId);
@@ -615,20 +620,10 @@ function MainFormBuilder({
 
     if (userId && instanceUrl && selectedVersion) {
       navigate(`/form-builder/${newVersionId}`);
-      if (selectedVersion.Stage__c === "Draft") {
-        fetchFormData(userId, instanceUrl, newVersionId);
-      } else {
-        // Show preview for non-draft version after navigation
-        setPreviewStep(1);
-        setTimeout(() => setPreviewStep(2), 400);
-        setTimeout(() => setPreviewStep(3), 500);
-        setTimeout(() => {
-          setPreviewFormData({ formVersion: selectedVersion, formFields: selectedVersion.Fields || [] });
-          setShowPreview(true);
-        }, 1200);
-      }
+      fetchFormData(userId, instanceUrl, newVersionId);
     }
   };
+
 
   useEffect(() => {
     const userId = sessionStorage.getItem("userId");
@@ -1802,42 +1797,44 @@ function MainFormBuilder({
                       </span>
                       Preview
                     </button>
-                    <button
-                      onClick={saveFormToSalesforce}
-                      disabled={isSaving || currentFormVersion?.Stage__c !== "Draft"}
-                      className={`save-btn flex items-center gap-2 ${isSaving
-                        ? "opacity-50 cursor-not-allowed"
-                        : "hover:bg-white/10"
-                        }`}
-                      title="Save Form"
-                    >
-                      <span className="flex items-center">
-                        <svg
-                          width="25"
-                          height="24"
-                          viewBox="0 0 25 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M4.82031 7.2C4.82031 5.43269 6.253 4 8.02031 4H12.8203H15.0262C15.6627 4 16.2732 4.25286 16.7233 4.70294L20.1174 8.09706C20.5675 8.54714 20.8203 9.15759 20.8203 9.79411V12V16.8C20.8203 18.5673 19.3876 20 17.6203 20H8.02031C6.253 20 4.82031 18.5673 4.82031 16.8V7.2Z"
-                            stroke="white"
-                            strokeWidth="1.5"
-                          />
-                          <path
-                            d="M8.02026 14.4008C8.02026 13.5171 8.73661 12.8008 9.62026 12.8008H16.0203C16.9039 12.8008 17.6203 13.5171 17.6203 14.4008V20.0008H8.02026V14.4008Z"
-                            stroke="white"
-                            strokeWidth="1.5"
-                          />
-                          <path
-                            d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4"
-                            stroke="white"
-                            strokeWidth="1.5"
-                          />
-                        </svg>
-                      </span>
-                      Save
-                    </button>
+                    {isEditable && currentFormVersion?.Stage__c == "Draft" && (
+                      <button
+                        onClick={saveFormToSalesforce}
+                        disabled={isSaving || currentFormVersion?.Stage__c !== "Draft"}
+                        className={`save-btn flex items-center gap-2 ${isSaving
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-white/10"
+                          }`}
+                        title="Save Form"
+                      >
+                        <span className="flex items-center">
+                          <svg
+                            width="25"
+                            height="24"
+                            viewBox="0 0 25 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M4.82031 7.2C4.82031 5.43269 6.253 4 8.02031 4H12.8203H15.0262C15.6627 4 16.2732 4.25286 16.7233 4.70294L20.1174 8.09706C20.5675 8.54714 20.8203 9.15759 20.8203 9.79411V12V16.8C20.8203 18.5673 19.3876 20 17.6203 20H8.02031C6.253 20 4.82031 18.5673 4.82031 16.8V7.2Z"
+                              stroke="white"
+                              strokeWidth="1.5"
+                            />
+                            <path
+                              d="M8.02026 14.4008C8.02026 13.5171 8.73661 12.8008 9.62026 12.8008H16.0203C16.9039 12.8008 17.6203 13.5171 17.6203 14.4008V20.0008H8.02026V14.4008Z"
+                              stroke="white"
+                              strokeWidth="1.5"
+                            />
+                            <path
+                              d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4"
+                              stroke="white"
+                              strokeWidth="1.5"
+                            />
+                          </svg>
+                        </span>
+                        Save
+                      </button>
+                    )}
                     {(currentFormVersion?.Stage__c === "Draft" ||
                       currentFormVersion?.Stage__c === "Locked") && (
                         <button
@@ -1891,9 +1888,10 @@ function MainFormBuilder({
               setTheme={setTheme}
               isLoadingForm={isLoadingForm} formloadingtext={loadingText}
               setThankYouRecordId={setThankYouRecordId}
+              isEditable={isEditableVersion()}
             />
           ) : showCondition ? (
-            <Conditions formVersionId={formVersionId} />
+            <Conditions formVersionId={formVersionId} isEditable={isEditableVersion()} />
           ) : showShare ? (
             <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish} isLoadingForm={isLoadingForm} loadingText={loadingText} />
           ) : showSubmission ? (
@@ -1904,15 +1902,16 @@ function MainFormBuilder({
               formId={formId}
             />
           )
-            : showPrefill ? <Prefill /> : showNotification ? (
+            : showPrefill ? <Prefill isEditable={isEditableVersion()} /> : showNotification ? (
               <NotificationPage
                 currentFields={formVersions[0]?.Fields}
                 sendNotificationData={sendNotificationData}
                 GoogleData={googleData}
                 formRecords={sfFormRecords}
+                isEditable={isEditableVersion()}
               />
             ) : showMapping ? (
-              <MappingFields onSaveCallback={registerSaveCallback} />
+              <MappingFields onSaveCallback={registerSaveCallback} isEditable={isEditableVersion()} />
             ) : (
               <div className="flex w-full h-screen builder-start" style={{ position: "relative" }}>
                 {isLoadingForm && (
@@ -1925,11 +1924,11 @@ function MainFormBuilder({
                   {!showPreview && (
                     <FormBuilder
                       fields={fields}
-                      onDrop={handleDrop}
-                      onReorder={handleReorder}
-                      onUpdateField={handleUpdateField}
-                      onDeleteField={handleDeleteField}
-                      onDeletePage={handleDeletePage}
+                      onDrop={isEditableVersion() ? handleDrop : undefined}
+                      onReorder={isEditableVersion() ? handleReorder : () => { }}
+                      onUpdateField={isEditableVersion() ? handleUpdateField : () => { }}
+                      onDeleteField={isEditableVersion() ? handleDeleteField : () => { }}
+                      onDeletePage={isEditableVersion() ? handleDeletePage : () => { }}
                       showSidebar={showSidebar}
                       setShowSidebar={setShowSidebar}
                       setSelectedFieldId={setSelectedFieldId}
@@ -1937,21 +1936,22 @@ function MainFormBuilder({
                       setSelectedFooter={setSelectedFooter}
                       selectedFieldId={selectedFieldId}
                       selectedSectionSide={selectedSectionSide}
-                      setClipboard={setClipboard}
+                      setClipboard={isEditableVersion() ? setClipboard : () => { }} // And this line
                       clipboard={clipboard}
                       selectedTheme={selectedTheme}
                       currentPageIndex={currentPageIndex}
                       setCurrentPageIndex={setCurrentPageIndex}
-                      onAddPage={handleAddPage}
-                      onMovePageUp={handleMovePageUp}
-                      onMovePageDown={handleMovePageDown}
+                      onAddPage={isEditableVersion() ? handleAddPage : () => { }}
+                      onMovePageUp={isEditableVersion() ? handleMovePageUp : () => { }}
+                      onMovePageDown={isEditableVersion() ? handleMovePageDown : () => { }}
                       canUndo={canUndo}
                       canRedo={canRedo}
-                      onUndo={undo}
-                      onRedo={redo}
+                      onUndo={isEditableVersion() ? undo : () => { }}
+                      onRedo={isEditableVersion() ? redo : () => { }}
                       isSidebarOpen={isSidebarOpen}
                       footerConfigs={footerConfigs}
-                      setFooterConfigs={setFooterConfigs}
+                      setFooterConfigs={isEditableVersion() ? setFooterConfigs : () => { }} // And this line
+                      isEditable={isEditableVersion()}
                     />
                   )}
                 </div>
@@ -1960,8 +1960,9 @@ function MainFormBuilder({
                   {showSidebar && !selectedFieldId && !selectedFooter ? (
                     <Sidebar
                       selectedTheme={selectedTheme}
-                      onThemeSelect={setSelectedTheme}
+                      onThemeSelect={isEditableVersion() ? setSelectedTheme : undefined}
                       themes={themes}
+                      isEditable={isEditableVersion()} // Pass editability status
                     />
                   ) : (
                     <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
@@ -1969,8 +1970,8 @@ function MainFormBuilder({
                         <FieldEditor
                           selectedField={selectedField}
                           selectedFooter={selectedFooter}
-                          onUpdateField={handleUpdateField}
-                          onDeleteField={handleDeleteField}
+                          onUpdateField={isEditableVersion() ? handleUpdateField : () => { }} // Change this
+                          onDeleteField={isEditableVersion() ? handleDeleteField : () => { }} // And this
                           onClose={() => {
                             setSelectedFieldId(null);
                             setSelectedSectionSide(null);
@@ -1979,9 +1980,10 @@ function MainFormBuilder({
                           }}
                           fields={fields}
                           fieldsets={fieldsets}
-                          onAddFieldsFromFieldset={handleAddFieldsFromFieldset}
+                          onAddFieldsFromFieldset={isEditableVersion() ? handleAddFieldsFromFieldset : () => { }} // And this
                           footerConfigs={footerConfigs}
-                          setFooterConfigs={setFooterConfigs}
+                          setFooterConfigs={isEditableVersion() ? setFooterConfigs : () => { }} // And this
+                          isEditable={isEditableVersion()}
                         />
                       )}
                     </div>
@@ -1997,6 +1999,7 @@ function MainFormBuilder({
                         formFields={previewFormData.formFields}
                         formConditions={formConditions}
                         prefills={prefills}
+                        isEditable={true}
                       />
                     </div>
                   </div>
