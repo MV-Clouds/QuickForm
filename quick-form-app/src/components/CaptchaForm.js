@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import CustomImageCaptcha from "./CustomImageCaptcha";
 import "./CaptchaForm.css";
@@ -10,60 +10,97 @@ function CaptchaForm() {
   const [showCustomCaptcha, setShowCustomCaptcha] = useState(false);
   const [captchaType, setCaptchaType] = useState("math");
   const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    comment: "",
+  });
 
-  // Run captcha automatically when component loads
-  useEffect(() => {
-    const runCaptcha = async () => {
-      if (!executeRecaptcha) return; // hook not ready yet
-
-      const token = await executeRecaptcha("page_load");
-      console.log("reCAPTCHA token (page_load):", token);
-
-      const result = await verifyRecaptchaToken(token);
-      console.log("reCAPTCHA verification result:", result);
-
-      if (result.success && result.score > 0.5) {
-        setIsSuspicious(false);
-        setShowCustomCaptcha(false);
-        setCaptchaVerified(true);
-      } else {
-        setIsSuspicious(true);
-        setShowCustomCaptcha(true);
-        setCaptchaVerified(false);
-      }
-    };
-
-    runCaptcha();
-  }, [executeRecaptcha]); // run once when available
-
-  // Token verification (⚠️ testing only – secret in frontend)
-    const verifyRecaptchaToken = async (token) => {
-    const response = await fetch("https://52g1hqp0f8.execute-api.us-east-1.amazonaws.com/recaptchaVerify", {
+  // Verify reCAPTCHA token by calling Lambda backend
+  const verifyRecaptchaToken = async (token) => {
+    console.log('Token ',token);
+    
+    const response = await fetch(
+      "https://52g1hqp0f8.execute-api.us-east-1.amazonaws.com/recaptchaVerify",
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
-    });
-
+      }
+    );
     const result = await response.json();
-    console.log("Lambda verification result:", result);
+    console.log(result);
+    
     return result;
-    };
+  };
 
-  function handleCustomCaptchaVerified(valid) {
-    setCaptchaVerified(valid);
-  }
+  // Handle form field change
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-  function handleSubmit(e) {
+  // On Submit: execute recaptcha, verify score, show custom captcha if suspicious
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (captchaVerified) {
-      alert("Form submitted. Human verified!");
-    } else {
-      alert("Please solve captcha first.");
+    if (!executeRecaptcha) {
+      return;
     }
-  }
+
+    // Run reCAPTCHA with action 'form_submit'
+    const token = await executeRecaptcha("form_submit");
+    const result = await verifyRecaptchaToken(token);
+
+    if (result.success && result.score > 0.5) {
+      // Human detected
+      setIsSuspicious(false);
+      setShowCustomCaptcha(false);
+      setCaptchaVerified(true);
+      // proceed with form submission logic here if needed
+    } else {
+      // Bot suspected, show custom captcha
+      setIsSuspicious(true);
+      setShowCustomCaptcha(true);
+      setCaptchaVerified(false);
+    }
+  };
+
+  // Callback from custom captcha on successful verification
+  const handleCustomCaptchaVerified = (valid) => {
+    setCaptchaVerified(valid);
+    if (valid) {
+      alert("Custom Captcha passed. Form submitted!");
+      setShowCustomCaptcha(false);
+      setIsSuspicious(false);
+      // proceed with form submission logic here if needed
+    }
+  };
 
   return (
     <form className="captcha-main-form" onSubmit={handleSubmit}>
+      <div className="form-fields">
+        <label>
+          Name:
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            required
+          />
+        </label>
+
+        <label>
+          Comment:
+          <textarea
+            name="comment"
+            value={formData.comment}
+            onChange={handleChange}
+            required
+          />
+        </label>
+      </div>
+
       <div className="captcha-select-type">
         <label>
           <input
@@ -94,7 +131,7 @@ function CaptchaForm() {
         </label>
       </div>
 
-      {/* If Google thinks suspicious → show custom captcha */}
+      {/* Show custom captcha only if suspicious */}
       {showCustomCaptcha && (
         <CustomImageCaptcha
           type={captchaType}
@@ -104,7 +141,7 @@ function CaptchaForm() {
 
       <button
         className="captcha-main-submit"
-        disabled={!captchaVerified}
+        disabled={showCustomCaptcha && !captchaVerified}
         type="submit"
       >
         Submit

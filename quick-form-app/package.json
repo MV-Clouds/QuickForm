@@ -26,6 +26,7 @@
     "libphonenumber": "^0.0.10",
     "libphonenumber-js": "^1.12.9",
     "lucide-react": "^0.525.0",
+    "puppeteer": "^24.19.0",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
