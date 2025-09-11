@@ -6,7 +6,7 @@ import PopupMenu from "./PopupMenu";
 import "reactflow/dist/style.css";
 import './Mapping.css';
 
-const CustomControls = ({ handleUndo, handleRedo, canUndo, canRedo }) => {
+const CustomControls = ({ handleUndo, handleRedo, canUndo, canRedo, isEditable }) => {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
   const getButtonStyle = (canProceed) => ({
@@ -16,13 +16,13 @@ const CustomControls = ({ handleUndo, handleRedo, canUndo, canRedo }) => {
 
   return (
     <div className="react-flow__controls">
-      <ControlButton onClick={handleUndo} title="Undo" disabled={!canUndo} style={getButtonStyle(canUndo)}>
+      <ControlButton onClick={handleUndo} title="Undo" disabled={!canUndo || !isEditable} style={getButtonStyle(canUndo)}>
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M11 18H14.75C16.1424 18 17.4777 17.4469 18.4623 16.4623C19.4469 15.4777 20 14.1424 20 12.75C20 11.3576 19.4469 10.0223 18.4623 9.03769C17.4777 8.05312 16.1424 7.5 14.75 7.5H5M7.5 4L4 7.5L7.5 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
 
       </ControlButton>
-      <ControlButton onClick={handleRedo} title="Redo" disabled={!canRedo} style={getButtonStyle(canRedo)}>
+      <ControlButton onClick={handleRedo} title="Redo" disabled={!canRedo || !isEditable} style={getButtonStyle(canRedo)}>
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M13 18H9.25C7.85761 18 6.52226 17.4469 5.53769 16.4623C4.55312 15.4777 4 14.1424 4 12.75C4 11.3576 4.55312 10.0223 5.53769 9.03769C6.52226 8.05312 7.85761 7.5 9.25 7.5H19M16.5 4L20 7.5L16.5 11" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -52,7 +52,7 @@ const CustomControls = ({ handleUndo, handleRedo, canUndo, canRedo }) => {
   );
 };
 
-const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
+const CustomNode = ({ data, selected, id, onAddNode, edges = [], isEditable }) => {
   const [isHovered, setIsHovered] = useState(false);
   const { deleteElements } = useReactFlow();
   const [showPopup, setShowPopup] = useState(false);
@@ -180,7 +180,8 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
         {!hasTopConnection && (
           <button
             onClick={handleAddTop}
-            className="add-button absolute -top-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-gray-400 z-10 shadow-md"
+            disabled={!isEditable}
+            className={`add-button absolute -top-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-gray-400 z-10 shadow-md ${!isEditable ? 'pointer-events-none opacity-50' : ''}`}
           >
             +
           </button>
@@ -212,7 +213,8 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
         {showBottomButton && (
           <button
             onClick={handleAddBottom}
-            className="add-button absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-gray-400 z-10 shadow-md"
+            disabled={!isEditable}
+            className={`add-button absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-6 h-6 bg-gray-300 text-black rounded-full flex items-center justify-center text-sm hover:bg-gray-400 z-10 shadow-md ${!isEditable ? 'pointer-events-none opacity-50' : ''}`}
           >
             +
           </button>
@@ -225,6 +227,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
             onClick={handleDelete}
+            disabled={!isEditable}
             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-s shadow-md hover:bg-red-600 z-10"
             whileHover={{ scale: 1.1 }}
           >
@@ -280,7 +283,7 @@ const CustomNode = ({ data, selected, id, onAddNode, edges = [] }) => {
   );
 };
 
-const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges = [], nodes = [], onAddNode, onEdgeDelete, source, target }) => {
+const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges = [], nodes = [], onAddNode, onEdgeDelete, source, target, isEditable }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const path = `M${sourceX},${sourceY} L${targetX},${targetY}`;
@@ -330,8 +333,8 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges 
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
-              className="cursor-pointer"
-              onClick={handleSettingsClick}
+              className={`cursor-pointer ${!isEditable ? 'pointer-events-none opacity-50' : ''}`}
+    onClick={isEditable ? handleSettingsClick : undefined}
             >
               <g transform={`translate(${midX - 11}, ${midY - 11})`}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -406,7 +409,7 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style = {}, edges 
   );
 };
 
-const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: setParentNodes, setEdges: setParentEdges, onAddNode, selectedNode }) => {
+const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: setParentNodes, setEdges: setParentEdges, onAddNode, selectedNode,isEditable=true }) => {
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -853,11 +856,11 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
   );
 
   const nodeTypes = useMemo(() => ({
-    custom: (props) => <CustomNode {...props} edges={edges} onAddNode={onAddNode} />
+    custom: (props) => <CustomNode {...props} edges={edges} onAddNode={onAddNode} isEditable={isEditable} />
   }), [edges, onAddNode]);
 
   const edgeTypes = useMemo(() => ({
-    default: (props) => <CustomEdge {...props} nodes={nodes} edges={edges} onAddNode={onAddNode} onEdgeDelete={onEdgeDelete} source={props.source} target={props.target} />
+    default: (props) => <CustomEdge {...props} nodes={nodes} edges={edges} onAddNode={onAddNode} onEdgeDelete={onEdgeDelete} source={props.source} target={props.target} isEditable={isEditable} />
   }), [onEdgeDelete, edges, onAddNode]);
 
   const canUndo = historyIndex > 0;
@@ -895,6 +898,7 @@ const FlowDesigner = ({ initialNodes, initialEdges, setSelectedNode, setNodes: s
             handleRedo={handleRedo}
             canUndo={canUndo}
             canRedo={canRedo}
+            isEditable={isEditable}
           />
           <Background
             gap={24}

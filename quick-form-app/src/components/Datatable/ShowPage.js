@@ -15,7 +15,7 @@ const mapApiToTableData = (apiData) => {
     submissionCount: item.FormVersions[0]?.Submission_Count__c,
     status: item.Status__c || '',
     lastmodDate : new Date(item.LastModifiedDate).toLocaleDateString(),
-    fields : item.FormVersions[0].Fields
+    fields : item.FormVersions[0]?.Fields
   }));
 };
 
