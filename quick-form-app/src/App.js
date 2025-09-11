@@ -16,6 +16,7 @@ import NotificationPage from './components/NotificationSettings/NotificationSett
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
 import LargeFileUpload from './components/file-upload/multiple-file-upload';
+import ProgressCaptcha from './components/ProgressCaptcha';
 function App() {
   return (
     // Set up the router for navigation
@@ -92,6 +93,10 @@ function App() {
                     <MainFormBuilder showShare />
                   }/>
                 }
+              />
+              <Route 
+              path="/captcha"
+              element={<ProgressCaptcha/>}
               />
                <Route 
                 path="/prefill/:formVersionId"
