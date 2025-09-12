@@ -374,25 +374,129 @@ const PayPalPaymentProvider = ({
     [amountConfig]
   );
 
-  // Handle product selection
-  const handleProductSelection = useCallback((product) => {
-    setSelectedProduct(product);
-    if (product && product.price) {
-      setPaymentAmount(product.price.toString());
-      setAmountError("");
-    }
-    console.log("🛍️ Product selected:", product);
-  }, []);
+  // Handle product selection (supports both single product and multiple products)
+  const handleProductSelection = useCallback(
+    (productOrProducts) => {
+      setSelectedProduct(productOrProducts);
+
+      // Calculate total amount for selected products
+      let totalAmount = 0;
+      let productNames = [];
+
+      if (Array.isArray(productOrProducts)) {
+        // Multiple products selected
+        totalAmount = productOrProducts.reduce(
+          (sum, product) => sum + (product.price || 0),
+          0
+        );
+        productNames = productOrProducts.map((p) => p.name);
+      } else if (productOrProducts && productOrProducts.price) {
+        // Single product selected
+        totalAmount = productOrProducts.price;
+        productNames = [productOrProducts.name];
+      }
+
+      if (totalAmount > 0) {
+        setPaymentAmount(totalAmount.toString());
+        setAmountError("");
+
+        // Generate item number for the selected product(s)
+        const fieldId =
+          fieldConfig.id || fieldConfig.fieldId || "payment-field";
+        const itemNumber = (generateItemNumber || fallbackGenerateItemNumber)(
+          fieldId,
+          formId
+        );
+        setCurrentItemNumber(itemNumber);
+
+        // Notify parent that payment is ready but NOT auto-submit
+        // Notify parent using standardized keys
+        onPaymentRequirementChange({
+          requiresPayment: true,
+          paymentCompleted: false,
+          hideSubmitButton: true,
+          autoSubmit: false, // Don't auto-submit until payment completes
+          amount: totalAmount,
+          currency: subFields?.currency || "USD",
+          paymentMethod: "paypal_product",
+          itemNumber: itemNumber,
+        });
+
+        console.log("🛍️ Product(s) selected - Payment details updated:", {
+          products: productNames,
+          totalPrice: totalAmount,
+          itemNumber: itemNumber,
+          autoSubmit: false,
+        });
+      }
+
+      console.log("🛍️ Product selection updated:", {
+        isArray: Array.isArray(productOrProducts),
+        count: Array.isArray(productOrProducts)
+          ? productOrProducts.length
+          : productOrProducts
+          ? 1
+          : 0,
+        totalAmount,
+      });
+    },
+    [
+      fieldConfig.id,
+      fieldConfig.fieldId,
+      formId,
+      onPaymentRequirementChange,
+      subFields,
+    ]
+  );
 
   // Handle subscription selection
-  const handleSubscriptionSelection = useCallback((subscription) => {
-    setSelectedSubscription(subscription);
-    if (subscription && subscription.price) {
-      setPaymentAmount(subscription.price.toString());
-      setAmountError("");
-    }
-    console.log("📅 Subscription selected:", subscription);
-  }, []);
+  const handleSubscriptionSelection = useCallback(
+    (subscription) => {
+      setSelectedSubscription(subscription);
+      if (subscription && subscription.price) {
+        setPaymentAmount(subscription.price.toString());
+        setAmountError("");
+
+        // Generate item number for the selected subscription
+        const fieldId =
+          fieldConfig.id || fieldConfig.fieldId || "payment-field";
+        const itemNumber = (generateItemNumber || fallbackGenerateItemNumber)(
+          fieldId,
+          formId
+        );
+        setCurrentItemNumber(itemNumber);
+
+        // Notify parent that payment is ready but NOT auto-submit
+        // Notify parent using standardized keys
+        onPaymentRequirementChange({
+          requiresPayment: true,
+          paymentCompleted: false,
+          hideSubmitButton: true,
+          autoSubmit: false, // Wait for user approval before auto-submitting
+          amount: subscription.price,
+          currency: subscription.currency || subFields?.currency || "USD",
+          paymentMethod: "paypal_subscription",
+          itemNumber: itemNumber,
+        });
+
+        console.log("📅 Subscription selected - Payment details updated:", {
+          subscription: subscription.name,
+          price: subscription.price,
+          currency: subscription.currency,
+          itemNumber: itemNumber,
+          autoSubmit: false,
+        });
+      }
+      console.log("📅 Subscription selected:", subscription);
+    },
+    [
+      fieldConfig.id,
+      fieldConfig.fieldId,
+      formId,
+      onPaymentRequirementChange,
+      subFields,
+    ]
+  );
 
   // Check if payment input is ready (not form validation)
   const isPaymentInputReady = () => {
@@ -401,7 +505,15 @@ const PayPalPaymentProvider = ({
     }
 
     if (paymentType === "product_wise") {
-      return !!selectedProduct && !!paymentAmount && !!currentItemNumber;
+      // Handle both single product and multiple products
+      const hasProducts = Array.isArray(selectedProduct)
+        ? selectedProduct.length > 0
+      : !!selectedProduct;
+      return hasProducts && !!paymentAmount && !!currentItemNumber;
+    }
+
+    if (paymentType === "subscription") {
+      return !!selectedSubscription && !!paymentAmount && !!currentItemNumber;
     }
 
     if (paymentType === "custom_amount" && amountConfig.type === "static") {
@@ -427,160 +539,227 @@ const PayPalPaymentProvider = ({
       return false; // Donation button is rendered separately
     }
 
-    // For product_wise and subscription, need selection + last page
-    if (paymentType === "product_wise" || paymentType === "subscription") {
-      return (
+    // For subscription type, need selection + last page + payment method
+    if (paymentType === "subscription") {
+      const ready =
         isLastPage &&
+        !!selectedSubscription &&
         !!paymentAmount &&
         !!currentItemNumber &&
-        !!selectedPaymentMethod
-      );
+        !!selectedPaymentMethod;
+
+      console.log("🔍 Subscription payment button readiness check:", {
+        paymentType,
+        isLastPage,
+        selectedSubscription: selectedSubscription?.name,
+        paymentAmount,
+        currentItemNumber,
+        selectedPaymentMethod,
+        ready,
+      });
+
+      return ready;
     }
 
-    return isLastPage && isPaymentInputReady() && !!selectedPaymentMethod;
+    // For product_wise, need selection + last page
+    if (paymentType === "product_wise") {
+      // Handle both single product and multiple products
+      const hasProducts = Array.isArray(selectedProduct)
+        ? selectedProduct.length > 0
+        : !!selectedProduct;
+
+      const ready =
+        isLastPage &&
+        hasProducts &&
+        !!paymentAmount &&
+        !!currentItemNumber &&
+        !!selectedPaymentMethod;
+
+      console.log("🔍 Product payment button readiness check:", {
+        paymentType,
+        isLastPage,
+        hasProducts,
+        selectedProductType: Array.isArray(selectedProduct)
+          ? "array"
+          : "single",
+        selectedProductCount: Array.isArray(selectedProduct)
+          ? selectedProduct.length
+          : selectedProduct
+          ? 1
+          : 0,
+        paymentAmount,
+        currentItemNumber,
+        selectedPaymentMethod,
+        ready,
+      });
+
+      return ready;
+    }
+
+    const ready =
+      isLastPage && isPaymentInputReady() && !!selectedPaymentMethod;
+
+    console.log("🔍 Payment button readiness check (general):", {
+      paymentType,
+      isLastPage,
+      isPaymentInputReady: isPaymentInputReady(),
+      selectedPaymentMethod,
+      ready,
+    });
+
+    return ready;
   };
 
   // Create PayPal order
-  const createOrder = 
-    async (data, actions) => {
-      console.log("🎬 createOrder function called with data:", data);
-      console.log(
-        "🎬 createOrder actions available:",
-        Object.keys(actions || {})
+  const createOrder = async (data, actions) => {
+    console.log("🎬 createOrder function called with data:", data);
+    console.log(
+      "🎬 createOrder actions available:",
+      Object.keys(actions || {})
+    );
+
+    try {
+      // setIsProcessing(true);
+      console.log("🔄 Setting processing state to true");
+
+      // Validate form before starting payment - CRITICAL STEP
+      console.log("🔍 Validating form before payment...");
+      if (!checkFormValidation()) {
+        console.log("❌ Form validation failed - stopping payment");
+        // setStatusMessage({
+        //   type: "error",
+        //   message: "Please complete all required fields",
+        //   details:
+        //     "All required fields must be filled before processing payment.",
+        // });
+        // setIsProcessing(false);
+        // Throw to ensure PayPal SDK rejects onClick and does not open a window
+        throw new Error("Form validation failed");
+      }
+      console.log("✅ Form validation passed - proceeding with payment");
+
+      // Generate unique item number - Fixed field ID
+      const fieldId = fieldConfig.id || fieldConfig.fieldId || "payment-field";
+      const itemNumber = (generateItemNumber || fallbackGenerateItemNumber)(
+        fieldId,
+        formId
+      );
+      // setCurrentItemNumber(itemNumber);
+
+      // Validate amount for variable payments
+      if (
+        paymentType === "donation" ||
+        (paymentType === "custom_amount" && amountConfig.type === "variable")
+      ) {
+        const validation = validatePaymentAmount(paymentAmount, amountConfig);
+        if (!validation.isValid) {
+          throw new Error(validation.error);
+        }
+      }
+
+      // Create payment URLs - Fixed parameter order
+      const paymentUrls = createPaymentUrls(
+        formId,
+        fieldConfig.id || "payment-field"
       );
 
-      try {
-        // setIsProcessing(true);
-        console.log("🔄 Setting processing state to true");
+      // Validate required fields before sending
+      console.log("🔍 Validating required fields:", {
+        accountIdentifier,
+        merchantCredentials,
+        paymentType,
+        itemNumber,
+        fieldConfig,
+        subFields,
+      });
 
-        // Validate form before starting payment - CRITICAL STEP
-        console.log("🔍 Validating form before payment...");
-        if (!checkFormValidation()) {
-          console.log("❌ Form validation failed - stopping payment");
-          // setStatusMessage({
-          //   type: "error",
-          //   message: "Please complete all required fields",
-          //   details:
-          //     "All required fields must be filled before processing payment.",
-          // });
-          // setIsProcessing(false);
-          // Throw to ensure PayPal SDK rejects onClick and does not open a window
-          throw new Error("Form validation failed");
-        }
-        console.log("✅ Form validation passed - proceeding with payment");
+      // For Salesforce IDs, we need credentials. For direct merchant IDs, we can proceed
+      const isSalesforceId =
+        accountIdentifier &&
+        accountIdentifier.match(/^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/);
 
-
-        // Generate unique item number - Fixed field ID
-        const fieldId =
-          fieldConfig.id || fieldConfig.fieldId || "payment-field";
-        const itemNumber = (generateItemNumber || fallbackGenerateItemNumber)(
-          fieldId,
-          formId
-        );
-        // setCurrentItemNumber(itemNumber);
-
-        // Validate amount for variable payments
-        if (
-          paymentType === "donation" ||
-          (paymentType === "custom_amount" && amountConfig.type === "variable")
-        ) {
-          const validation = validatePaymentAmount(paymentAmount, amountConfig);
-          if (!validation.isValid) {
-            throw new Error(validation.error);
+      if (isSalesforceId && !merchantCredentials) {
+        console.error(
+          "❌ Merchant credentials not available for Salesforce ID:",
+          {
+            accountIdentifier,
+            credentialsError,
+            credentialsLoading,
           }
-        }
-
-        // Create payment URLs - Fixed parameter order
-        const paymentUrls = createPaymentUrls(
-          formId,
-          fieldConfig.id || "payment-field"
         );
+        throw new Error(
+          credentialsError ||
+            "Merchant credentials are required. Please check your payment field configuration."
+        );
+      }
 
-        // Validate required fields before sending
-        console.log("🔍 Validating required fields:", {
+      if (!isSalesforceId && !accountIdentifier) {
+        console.error("❌ No merchant identifier provided:", {
           accountIdentifier,
           merchantCredentials,
-          paymentType,
-          itemNumber,
-          fieldConfig,
-          subFields,
         });
+        throw new Error(
+          "Merchant ID is required. Please check your payment field configuration."
+        );
+      }
 
-        // For Salesforce IDs, we need credentials. For direct merchant IDs, we can proceed
-        const isSalesforceId =
-          accountIdentifier &&
-          accountIdentifier.match(/^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/);
+      // Check if we have a valid merchant ID (either from credentials or direct)
+      const effectiveMerchantId =
+        merchantCredentials?.merchantId || accountIdentifier;
+      if (!effectiveMerchantId) {
+        console.error("❌ No valid merchant ID available:", {
+          merchantCredentials,
+          accountIdentifier,
+          isSalesforceId,
+        });
+        throw new Error(
+          isSalesforceId
+            ? "Merchant ID is missing from credentials. Please check your merchant account configuration."
+            : "Merchant ID is required. Please check your payment field configuration."
+        );
+      }
+      if (!paymentType) {
+        console.error("❌ Payment type is invalid:", { paymentType });
+        throw new Error("Payment type is required");
+      }
+      if (!itemNumber) {
+        console.error("❌ Generated item number is invalid:", { itemNumber });
+        throw new Error("Item number is required");
+      }
+      if (!paymentUrls.returnUrl || !paymentUrls.cancelUrl) {
+        console.error("❌ Payment URLs are invalid:", { paymentUrls });
+        throw new Error("Return and cancel URLs are required");
+      }
 
-        if (isSalesforceId && !merchantCredentials) {
-          console.error(
-            "❌ Merchant credentials not available for Salesforce ID:",
-            {
-              accountIdentifier,
-              credentialsError,
-              credentialsLoading,
-            }
-          );
-          throw new Error(
-            credentialsError ||
-              "Merchant credentials are required. Please check your payment field configuration."
-          );
-        }
+      // Prepare payment request with all necessary parameters
+      const paymentRequest = {
+        action: "initiate-payment",
+        merchantId: merchantCredentials?.merchantId || accountIdentifier,
+        paymentType,
+        returnUrl: paymentUrls.returnUrl,
+        cancelUrl: paymentUrls.cancelUrl,
+        itemNumber: itemNumber,
+        amount: parseFloat(paymentAmount) || 0,
+        currency: amountConfig.currency || "USD",
+        itemName: fieldConfig.label || "Payment",
+        donationButtonId:
+          paymentType === "donation_button" ? donationButtonId : undefined,
+      };
 
-        if (!isSalesforceId && !accountIdentifier) {
-          console.error("❌ No merchant identifier provided:", {
-            accountIdentifier,
-            merchantCredentials,
-          });
-          throw new Error(
-            "Merchant ID is required. Please check your payment field configuration."
-          );
-        }
-
-        // Check if we have a valid merchant ID (either from credentials or direct)
-        const effectiveMerchantId =
-          merchantCredentials?.merchantId || accountIdentifier;
-        if (!effectiveMerchantId) {
-          console.error("❌ No valid merchant ID available:", {
-            merchantCredentials,
-            accountIdentifier,
-            isSalesforceId,
-          });
-          throw new Error(
-            isSalesforceId
-              ? "Merchant ID is missing from credentials. Please check your merchant account configuration."
-              : "Merchant ID is required. Please check your payment field configuration."
-          );
-        }
-        if (!paymentType) {
-          console.error("❌ Payment type is invalid:", { paymentType });
-          throw new Error("Payment type is required");
-        }
-        if (!itemNumber) {
-          console.error("❌ Generated item number is invalid:", { itemNumber });
-          throw new Error("Item number is required");
-        }
-        if (!paymentUrls.returnUrl || !paymentUrls.cancelUrl) {
-          console.error("❌ Payment URLs are invalid:", { paymentUrls });
-          throw new Error("Return and cancel URLs are required");
-        }
-
-        // Prepare payment request with all necessary parameters
-        const paymentRequest = {
-          action: "initiate-payment",
-          merchantId: merchantCredentials?.merchantId || accountIdentifier,
-          paymentType,
-          returnUrl: paymentUrls.returnUrl,
-          cancelUrl: paymentUrls.cancelUrl,
-          itemNumber: itemNumber,
-          amount: parseFloat(paymentAmount) || 0,
-          currency: amountConfig.currency || "USD",
-          itemName: fieldConfig.label || "Payment",
-          donationButtonId:
-            paymentType === "donation_button" ? donationButtonId : undefined,
-        };
-
-        // Add product-specific data for product_wise payments (use explicit selection)
-        if (paymentType === "product_wise" && selectedProduct) {
+      // Add product-specific data for product_wise payments (support both single and multiple products)
+      if (paymentType === "product_wise" && selectedProduct) {
+        if (Array.isArray(selectedProduct)) {
+          // Multiple products selected
+          paymentRequest.products = selectedProduct.map((product) => ({
+            productId: product.id,
+            quantity: 1,
+            amount: product.price,
+            name: product.name,
+            description: product.description,
+            sku: product.sku,
+          }));
+        } else {
+          // Single product selected
           paymentRequest.products = [
             {
               productId: selectedProduct.id,
@@ -592,105 +771,102 @@ const PayPalPaymentProvider = ({
             },
           ];
         }
-
-        // Add subscription-specific data for subscription payments (prefer explicit selection)
-        if (paymentType === "subscription" && selectedSubscription) {
-          paymentRequest.subscriptionPlan = {
-            planId: selectedSubscription.planId,
-            planName: selectedSubscription.name,
-            planData: selectedSubscription.planData,
-          };
-        }
-
-        // Add form values for additional context
-        if (formValues && Object.keys(formValues).length > 0) {
-          paymentRequest.formData = formValues;
-        }
-
-        console.log(
-          "🔍 Payment request debug (about to initiate):",
-          JSON.stringify(paymentRequest, null, 2)
-        );
-
-        // Call payment gateway API
-        const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(paymentRequest),
-        });
-
-        const result = await response.json();
-
-        if (!response.ok || !result.success) {
-          const errorMsg =
-            result.error ||
-            `HTTP ${response.status}: Failed to initiate payment`;
-          console.error("❌ Payment API error:", {
-            status: response.status,
-            result,
-            errorMsg,
-          });
-          throw new Error(errorMsg);
-        }
-
-        console.log("✅ Payment initiated:", result.data);
-        const orderId =
-          result.data?.orderId ||
-          result.data?.id ||
-          result.orderId ||
-          result.id;
-
-        if (!orderId) {
-          console.error("❌ Missing order ID in response:", result);
-          throw new Error(
-            "Order ID not received from payment service. Please try again."
-          );
-        }
-
-        // Extra debug payload resembling what actions.order.create would have used
-        const debugPayload = {
-          intent: paymentType === "subscription" ? "SUBSCRIPTION" : "CAPTURE",
-          purchase_units: [
-            {
-              amount: {
-                value: parseFloat(paymentAmount) || 0,
-                currency_code: amountConfig.currency || "USD",
-              },
-              custom_id: currentItemNumber,
-            },
-          ],
-        };
-        console.log(
-          "🆔 Returning order ID to PayPal SDK:",
-          orderId,
-          "\n🧾 Actions.create debug payload:",
-          JSON.stringify(debugPayload, null, 2)
-        );
-
-        // Don't set processing to false here - this is only order creation, not completion
-        // setIsProcessing(false);  // Keep processing true until approval/cancel/error
-        return orderId;
-      } catch (error) {
-        console.error("❌ Payment initiation error:", error);
-        console.error("❌ Full error details:", {
-          message: error.message,
-          stack: error.stack,
-          paymentType,
-          merchantId: merchantCredentials?.merchantId || accountIdentifier,
-          amount: paymentAmount,
-          currency: amountConfig.currency,
-        });
-        setStatusMessage({
-          type: "error",
-          message: "Payment initiation failed",
-          details: error.message,
-        });
-        setIsProcessing(false);
-        throw error;
       }
-    };
+
+      // Add subscription-specific data for subscription payments (prefer explicit selection)
+      if (paymentType === "subscription" && selectedSubscription) {
+        paymentRequest.subscriptionPlan = {
+          planId: selectedSubscription.planId,
+          planName: selectedSubscription.name,
+          planData: selectedSubscription.planData,
+        };
+      }
+
+      // Add form values for additional context
+      if (formValues && Object.keys(formValues).length > 0) {
+        paymentRequest.formData = formValues;
+      }
+
+      console.log(
+        "🔍 Payment request debug (about to initiate):",
+        JSON.stringify(paymentRequest, null, 2)
+      );
+
+      // Call payment gateway API
+      const response = await fetch(API_ENDPOINTS.UNIFIED_PAYMENT_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(paymentRequest),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        const errorMsg =
+          result.error || `HTTP ${response.status}: Failed to initiate payment`;
+        console.error("❌ Payment API error:", {
+          status: response.status,
+          result,
+          errorMsg,
+        });
+        throw new Error(errorMsg);
+      }
+
+      console.log("✅ Payment initiated:", result.data);
+      const orderId =
+        result.data?.orderId || result.data?.id || result.orderId || result.id;
+
+      if (!orderId) {
+        console.error("❌ Missing order ID in response:", result);
+        throw new Error(
+          "Order ID not received from payment service. Please try again."
+        );
+      }
+
+      // Extra debug payload resembling what actions.order.create would have used
+      const debugPayload = {
+        intent: paymentType === "subscription" ? "SUBSCRIPTION" : "CAPTURE",
+        purchase_units: [
+          {
+            amount: {
+              value: parseFloat(paymentAmount) || 0,
+              currency_code: amountConfig.currency || "USD",
+            },
+            custom_id: currentItemNumber,
+          },
+        ],
+      };
+      console.log(
+        "🆔 Returning order ID to PayPal SDK:",
+        orderId,
+        "\n🧾 Actions.create debug payload:",
+        JSON.stringify(debugPayload, null, 2)
+      );
+
+      // Don't set processing to false here - this is only order creation, not completion
+      // setIsProcessing(false);  // Keep processing true until approval/cancel/error
+      return orderId;
+    } catch (error) {
+      console.error("❌ Payment initiation error:", error);
+      console.error("❌ Full error details:", {
+        message: error.message,
+        stack: error.stack,
+        paymentType,
+        merchantId: merchantCredentials?.merchantId || accountIdentifier,
+        amount: paymentAmount,
+        currency: amountConfig.currency,
+      });
+      setStatusMessage({
+        type: "error",
+        message: "Payment initiation failed",
+        details: error.message,
+      });
+      setIsProcessing(false);
+      throw error;
+    }
+  };
 
   // For subscription intent, PayPal Buttons require a createSubscription callback
   const createSubscription = useCallback(
@@ -757,12 +933,28 @@ const PayPalPaymentProvider = ({
           subFields.subscriptions?.find(
             (s) => currentItemNumber && currentItemNumber.includes(s.id)
           );
+
+        // Try multiple sources for plan ID
         planId =
+          planFromSelection?.paypalPlanId ||
           planFromSelection?.planId ||
+          subFields.processingResult?.planId ||
           subFields.planId ||
+          subFields.subscriptions?.[0]?.paypalPlanId ||
           subFields.subscriptions?.[0]?.planId;
+
+        console.log("🔍 Plan ID resolution:", {
+          planFromSelection,
+          selectedSubscription,
+          processingResult: subFields.processingResult,
+          resolvedPlanId: planId,
+          subscriptions: subFields.subscriptions,
+        });
+
         if (!planId) {
-          throw new Error("Subscription plan is not selected or configured");
+          throw new Error(
+            "Subscription plan ID is not found. Please ensure the subscription is properly configured."
+          );
         }
 
         const paymentUrls = createPaymentUrls(
@@ -857,17 +1049,17 @@ const PayPalPaymentProvider = ({
       try {
         // setIsProcessing(true);
         console.log("🔄 Processing payment approval with data:", data);
-        
+
         // Validate orderID from PayPal
         if (!data.orderID) {
           throw new Error("Order ID is missing from PayPal approval data");
         }
 
-        // Capture payment
         const captureRequest = {
           action: "capture-payment",
           merchantId: merchantCredentials?.merchantId || accountIdentifier,
-          orderId: data.orderID,
+          orderId:
+            paymentType !== "subscription" ? data.orderID : data.subscriptionID,
           paymentType,
           itemNumber: currentItemNumber,
         };
@@ -1122,13 +1314,33 @@ const PayPalPaymentProvider = ({
   // Render product selection for product_wise payment type
   // eslint-disable-next-line no-unused-vars
   const renderProductSelection = () => {
-    const products = subFields.products || [];
+    // Extract products from multiple possible locations
+    const formItems = subFields.formItems || {};
+    const formItemsProducts = Object.values(formItems).filter(
+      (item) => item.type === "product"
+    );
+    const directProducts = subFields.products || [];
+
+    // Combine both sources, preferring direct products if available
+    const products =
+      directProducts.length > 0 ? directProducts : formItemsProducts;
+
+    console.log("🛍️ renderProductSelection - Checking product sources:", {
+      formItemsProducts,
+      directProducts,
+      finalProducts: products,
+      subFields,
+    });
 
     if (products.length === 0) {
       return (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-yellow-800 text-sm">
             No products configured for this payment field.
+          </p>
+          <p className="text-yellow-600 text-xs mt-1">
+            Products should be configured in the form builder using the "Manage
+            Products" option.
           </p>
         </div>
       );
@@ -1199,11 +1411,8 @@ const PayPalPaymentProvider = ({
                       e.preventDefault(); // Prevent form submission
                       e.stopPropagation(); // Stop event bubbling
 
-                      setSelectedProduct(product);
-                      setPaymentAmount(product.price.toString());
-                      setCurrentItemNumber(
-                        `${fieldConfig.id || fieldConfig.fieldId}-${product.id}`
-                      );
+                      // Use the proper product selection handler
+                      handleProductSelection(product);
 
                       console.log(
                         "🛍️ Product selected:",
@@ -1284,15 +1493,22 @@ const PayPalPaymentProvider = ({
                     </div>
                   </div>
                   <button
-                    onClick={() => {
-                      setPaymentAmount(price);
-                      setCurrentItemNumber(
-                        `${fieldConfig.id || fieldConfig.fieldId}-${
-                          subscription.id
-                        }`
+                    onClick={(e) => {
+                      e.preventDefault(); // Prevent form submission
+                      e.stopPropagation(); // Stop event bubbling
+
+                      // Use the proper subscription selection handler
+                      handleSubscriptionSelection(subscription);
+
+                      console.log(
+                        "📅 Subscription selected:",
+                        subscription.name,
+                        "Price:",
+                        price
                       );
                     }}
                     className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    type="button" // Explicitly set button type to prevent form submission
                   >
                     Select Plan
                   </button>
@@ -1431,7 +1647,6 @@ const PayPalPaymentProvider = ({
           console.debug("🔄 PayPal SDK loading started");
         }
         console.log("✅ PayPal SDK start loading");
-
       }}
       onLoadSuccess={() => {
         if (process.env.NODE_ENV !== "production") {
@@ -1539,7 +1754,7 @@ const PayPalPaymentProvider = ({
           subFields={subFields}
           paymentAmount={paymentAmount}
           amountError={amountError}
-          selectedProduct={selectedProduct}
+          selectedProduct={selectedProduct} // This can be single product or array of products
           selectedSubscription={selectedSubscription}
           onAmountChange={handleAmountChange}
           onProductSelection={handleProductSelection}

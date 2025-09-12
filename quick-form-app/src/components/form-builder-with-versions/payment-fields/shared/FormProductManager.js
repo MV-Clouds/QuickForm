@@ -63,7 +63,19 @@ const FormProductManager = ({
 
   const loadItemsFromFormData = () => {
     if (!selectedField?.subFields?.formItems) {
-      setItems([]);
+      // Check for legacy storage in direct arrays
+      const legacyProducts = selectedField?.subFields?.products || [];
+      const legacySubscriptions = selectedField?.subFields?.subscriptions || [];
+
+      let legacyItems = [];
+      if (typeFilter === "product") {
+        legacyItems = legacyProducts;
+      } else if (typeFilter === "subscription") {
+        legacyItems = legacySubscriptions;
+      }
+
+      console.log(`📥 Loading legacy ${typeFilter}s:`, legacyItems);
+      setItems(legacyItems);
       return;
     }
 
@@ -71,6 +83,8 @@ const FormProductManager = ({
     const filteredItems = Object.values(formItems).filter(
       (item) => item.type === typeFilter
     );
+
+    console.log(`📥 Loading ${typeFilter}s from formItems:`, filteredItems);
     setItems(filteredItems);
   };
 
@@ -92,11 +106,33 @@ const FormProductManager = ({
       newFormItems[item.id] = item;
     });
 
+    // For backward compatibility, also store products in the products array
+    const productsArray = updatedItems.filter(
+      (item) => item.type === "product"
+    );
+    const subscriptionsArray = updatedItems.filter(
+      (item) => item.type === "subscription"
+    );
+
     // Update the field
     const updatedSubFields = {
       ...selectedField.subFields,
       formItems: newFormItems,
+      // Add backward compatibility arrays
+      ...(typeFilter === "product" && { products: productsArray }),
+      ...(typeFilter === "subscription" && {
+        subscriptions: subscriptionsArray,
+      }),
     };
+
+    console.log("💾 Saving items to form data:", {
+      typeFilter,
+      updatedItems,
+      formItems: newFormItems,
+      productsArray: typeFilter === "product" ? productsArray : "N/A",
+      subscriptionsArray:
+        typeFilter === "subscription" ? subscriptionsArray : "N/A",
+    });
 
     onUpdateField(selectedField.id, { subFields: updatedSubFields });
     setItems(updatedItems);

@@ -262,12 +262,11 @@ class EnhancedFormPaymentProcessor {
    * Process subscription payment field with enhanced logic
    */
   async processSubscription(field, formId, formVersionId) {
+    console.log("🏆 ", field);
     const subFields = field.subFields || {};
     const provider = subFields.gateway || "paypal";
-    const currentMerchantId =
-      subFields.merchantAccountId || subFields.merchantId;
+    const currentMerchantId = subFields.merchantId;
     const previousMerchantId = subFields.previousMerchantId;
-
     // Create registry keys for current and previous merchants
     const currentRegistryKey = `${field.id}-${currentMerchantId}-${provider}`;
     const previousRegistryKey = previousMerchantId
@@ -378,7 +377,7 @@ class EnhancedFormPaymentProcessor {
     // Build correct payload structure based on PayPal integration
     const payload = {
       action: "create-subscription-plan",
-      merchantId: subFields.merchantAccountId || subFields.merchantId,
+      merchantId: subFields.merchantId,
       planData: {
         name: subscriptionConfig.name || `Form ${formId} Subscription`,
         description:

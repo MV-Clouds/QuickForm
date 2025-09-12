@@ -48,6 +48,7 @@ async function getPayPalAccessTokenForMerchant(merchantId) {
   const auth = Buffer.from(
     `${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`
   ).toString("base64");
+  console.log(merchantId);
   try {
     const response = await fetch(
       "https://api-m.sandbox.paypal.com/v1/oauth2/token",
@@ -210,6 +211,7 @@ export {
   getPayPalAccessTokenForProducts,
   getPayPalAccessTokenForMerchant,
   listPaypalSubscriptions,
+  createDonationSubscriptionPlan,
 };
 
 export const handler = async (event) => {
@@ -232,8 +234,18 @@ export const handler = async (event) => {
       case "update-subscription-plan":
         return await updateSubscriptionPlan(body);
 
+      // Aliases used by router/frontend
+      case "update-plan":
+        return await updateSubscriptionPlan(body);
+
       case "create-donation-plan":
         return await createDonationPlan(body);
+
+      case "list-plans":
+        return await listPlansAction(body);
+
+      case "delete-plan":
+        return await deletePlanAction(body);
 
       case "list-paypal-subscriptions":
         return await listPaypalSubscriptionsAction(body);
@@ -612,6 +624,148 @@ async function createDonationPlan(body) {
       }),
     };
   }
+}
+
+async function listPlansAction(body) {
+  console.log("🔄 Listing PayPal plans");
+  const { merchantId } = body;
+  if (!merchantId) {
+    return {
+      statusCode: 400,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        success: false,
+        error: "Missing required field: merchantId",
+      }),
+    };
+  }
+  try {
+    const plans = await listPaypalSubscriptions(merchantId);
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({ success: true, plans }),
+    };
+  } catch (error) {
+    console.error("❌ Error listing plans:", error);
+    return {
+      statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        success: false,
+        error: `Failed to list plans: ${error.message}`,
+      }),
+    };
+  }
+}
+
+async function deletePlanAction(body) {
+  console.log("🗑️ Deactivating PayPal plan");
+  const { merchantId, planId } = body;
+  if (!merchantId || !planId) {
+    return {
+      statusCode: 400,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        success: false,
+        error: "Missing required fields: merchantId, planId",
+      }),
+    };
+  }
+  try {
+    const accessToken = await getPayPalAccessTokenForMerchant(merchantId);
+    const resp = await fetch(
+      `https://api-m.sandbox.paypal.com/v1/billing/plans/${planId}/deactivate`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      }
+    );
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      console.error("PayPal plan deactivate failed:", err);
+      throw new Error(err.message || `Failed to deactivate plan ${planId}`);
+    }
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({ success: true, planId, status: "DEACTIVATED" }),
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({
+        success: false,
+        error: `Failed to deactivate plan: ${error.message}`,
+      }),
+    };
+  }
+}
+
+// Helper to create an ad-hoc donation subscription plan for recurring donations
+// Used by gateway when isDonationSubscription is true
+async function createDonationSubscriptionPlan(
+  merchantId,
+  recurringConfig,
+  donorInfo
+) {
+  const planData = {
+    name: `Donation for ${donorInfo?.email || "Donor"}`,
+    description: "Recurring donation plan",
+    billing_cycles: [
+      {
+        frequency: {
+          interval_unit: (recurringConfig?.frequency || "MONTH").toUpperCase(),
+          interval_count: Number(recurringConfig?.interval || 1),
+        },
+        tenure_type: "REGULAR",
+        sequence: 1,
+        total_cycles: Number(recurringConfig?.total_cycles || 0),
+        pricing_scheme: {
+          fixed_price: {
+            value: (recurringConfig?.amount || "1").toString(),
+            currency_code: recurringConfig?.currency_code || "USD",
+          },
+        },
+      },
+    ],
+    payment_preferences: {
+      auto_bill_outstanding: true,
+      setup_fee: {
+        value: "0.00",
+        currency_code: recurringConfig?.currency_code || "USD",
+      },
+      setup_fee_failure_action: "CONTINUE",
+      payment_failure_threshold: 3,
+    },
+    taxes: { percentage: "0", inclusive: false },
+  };
+
+  const plan = await createPayPalPlan(merchantId, planData);
+  return plan; // contains id
 }
 
 async function listPaypalSubscriptionsAction(body) {

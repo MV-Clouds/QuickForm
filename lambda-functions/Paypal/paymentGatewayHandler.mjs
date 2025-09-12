@@ -620,6 +620,9 @@ async function captureOrder(merchantId, orderId) {
   return data;
 }
 
+// Note: Subscriptions do not use order capture. After buyer approval, the subscription
+// is created and typically ACTIVE or APPROVAL_PENDING. Use getSubscriptionStatus instead.
+
 async function getSubscriptionStatus(merchantId, subscriptionId) {
   try {
     console.log("🔑 Getting PayPal access token for merchant:", merchantId);
@@ -827,7 +830,7 @@ export const handler = async (event) => {
 
           // Import the donation subscription function
           const { createDonationSubscriptionPlan } = await import(
-            "./productSubscriptionHandler.js"
+            "./productSubscriptionHandler.mjs"
           );
 
           // Create dynamic donation subscription plan
@@ -1041,37 +1044,80 @@ export const handler = async (event) => {
 
       try {
         console.log(`🎯 Capturing payment for order: ${orderId}`);
-        const captureResult = await captureOrder(merchantId, orderId);
-        const status =
-          captureResult.status === "COMPLETED" ? "completed" : "failed";
+        if (paymentType === "subscription") {
+          // orderId here is actually the subscriptionId from PayPal Buttons onApprove
+          const subscriptionState = await getSubscriptionStatus(
+            merchantId,
+            orderId
+          );
 
-        console.log(`✅ Payment capture ${status}:`, orderId);
+          const normalizedStatus = (subscriptionState || "").toUpperCase();
+          const status =
+            normalizedStatus === "ACTIVE" ||
+            normalizedStatus === "APPROVAL_PENDING"
+              ? "completed"
+              : normalizedStatus === "SUSPENDED" ||
+                normalizedStatus === "CANCELLED"
+              ? "failed"
+              : "pending";
 
-        // Return capture result (NO DATA STORAGE)
-        return {
-          statusCode: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-          body: JSON.stringify({
-            success: true,
-            message: "Payment captured successfully",
-            data: {
-              status: status,
-              orderId: orderId,
-              merchantId: merchantId,
-              paymentType: paymentType || "unknown",
-              itemNumber: itemNumber,
-              captureResult: captureResult,
-              transactionId: captureResult.id,
-              amount: captureResult.purchase_units?.[0]?.amount?.value,
-              currency:
-                captureResult.purchase_units?.[0]?.amount?.currency_code,
+          console.log(`✅ Subscription status: ${normalizedStatus}`, orderId);
+
+          return {
+            statusCode: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
             },
-            timestamp: new Date().toISOString(),
-          }),
-        };
+            body: JSON.stringify({
+              success: true,
+              message: "Subscription status retrieved successfully",
+              data: {
+                status: status,
+                orderId: orderId,
+                merchantId: merchantId,
+                paymentType: paymentType || "subscription",
+                itemNumber: itemNumber,
+                subscriptionStatus: normalizedStatus,
+                transactionId: orderId,
+              },
+              timestamp: new Date().toISOString(),
+            }),
+          };
+        } else {
+          const captureResult = await captureOrder(merchantId, orderId);
+
+          const status =
+            captureResult.status === "COMPLETED" ? "completed" : "failed";
+
+          console.log(`✅ Payment capture ${status}:`, orderId);
+
+          // Return capture result (NO DATA STORAGE)
+          return {
+            statusCode: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*",
+            },
+            body: JSON.stringify({
+              success: true,
+              message: "Payment captured successfully",
+              data: {
+                status: status,
+                orderId: orderId,
+                merchantId: merchantId,
+                paymentType: paymentType || "unknown",
+                itemNumber: itemNumber,
+                captureResult: captureResult,
+                transactionId: captureResult.id,
+                amount: captureResult.purchase_units?.[0]?.amount?.value,
+                currency:
+                  captureResult.purchase_units?.[0]?.amount?.currency_code,
+              },
+              timestamp: new Date().toISOString(),
+            }),
+          };
+        }
       } catch (error) {
         console.error("❌ Error capturing payment:", error);
         return {
@@ -1261,106 +1307,23 @@ export const handler = async (event) => {
         };
       }
 
-      try {
-        console.log("Attempting to get item from DynamoDB:", {
+      // No-op cancel handler (storage removed). Simply acknowledge cancel.
+      return {
+        statusCode: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+        body: JSON.stringify({
+          message: "Payment cancel acknowledged",
+          status: "canceled",
+          itemNumber: itemNumber,
           merchantId,
-          itemNumber,
-        });
-
-        // Get form data and check transaction status
-        const formData = await getFormData(userId, formId);
-        if (!formData || !formData.transactions) {
-          console.log(
-            "Form or transactions not found, creating cancellation record"
-          );
-
-          // Add cancellation record to form data
-          await addTransactionToForm(userId, formId, {
-            type: "transaction",
-            paymentType: paymentType || "unknown",
-            status: "canceled",
-            merchantId: merchantId,
-            itemNumber: itemNumber,
-            orderId: orderId || null,
-            subscriptionId: subscriptionId || null,
-          });
-        } else {
-          // Find existing transaction
-          const transactionIndex = formData.transactions.findIndex(
-            (txn) =>
-              txn.itemNumber === itemNumber && txn.merchantId === merchantId
-          );
-
-          if (transactionIndex !== -1) {
-            const transaction = formData.transactions[transactionIndex];
-
-            // Check if already completed
-            if (transaction.status === "completed") {
-              console.log("Cannot cancel completed payment");
-              return {
-                statusCode: 400,
-                headers: {
-                  "Content-Type": "application/json",
-                  "Access-Control-Allow-Origin": "*",
-                },
-                body: JSON.stringify({
-                  error: "Cannot cancel a completed payment",
-                }),
-              };
-            }
-
-            // Update transaction status to canceled
-            formData.transactions[transactionIndex] = {
-              ...transaction,
-              status: "canceled",
-              updatedAt: new Date().toISOString(),
-            };
-
-            await updateFormData(userId, formId, formData);
-          } else {
-            // Add new cancellation record
-            await addTransactionToForm(userId, formId, {
-              type: "transaction",
-              paymentType: paymentType || "unknown",
-              status: "canceled",
-              merchantId: merchantId,
-              itemNumber: itemNumber,
-              orderId: orderId || null,
-              subscriptionId: subscriptionId || null,
-            });
-          }
-        }
-
-        console.log(
-          `Payment ${itemNumber} canceled successfully for merchant ${merchantId}`
-        );
-
-        return {
-          statusCode: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-          body: JSON.stringify({
-            message: "Payment canceled successfully",
-            status: "canceled",
-            itemNumber: itemNumber,
-          }),
-        };
-      } catch (dbError) {
-        console.error("DynamoDB error in handle-cancel:", dbError);
-        return {
-          statusCode: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-          body: JSON.stringify({
-            error: "Failed to cancel payment",
-            details: dbError.message,
-          }),
-        };
-      }
+          paymentType: paymentType || "unknown",
+          orderId: orderId || null,
+          subscriptionId: subscriptionId || null,
+        }),
+      };
     }
 
     // Get subscription status
@@ -1392,27 +1355,6 @@ export const handler = async (event) => {
         console.log("🚀 Fetching subscription status from PayPal...");
         const status = await getSubscriptionStatus(merchantId, subscriptionId);
         console.log("✅ Subscription status received:", status);
-
-        // Update transaction status in form data
-        const formData = await getFormData(userId, formId);
-        if (formData && formData.transactions) {
-          const transactionIndex = formData.transactions.findIndex(
-            (txn) =>
-              txn.subscriptionId === subscriptionId &&
-              txn.merchantId === merchantId
-          );
-
-          if (transactionIndex !== -1) {
-            formData.transactions[transactionIndex] = {
-              ...formData.transactions[transactionIndex],
-              status: status,
-              updatedAt: new Date().toISOString(),
-            };
-
-            await updateFormData(userId, formId, formData);
-            console.log("✅ Form data updated successfully");
-          }
-        }
 
         return {
           statusCode: 200,
@@ -1468,13 +1410,7 @@ export const handler = async (event) => {
         };
       }
 
-      // Get transactions from form data
-      const formData = await getFormData(userId, formId);
-      const transactions =
-        formData?.transactions?.filter(
-          (txn) => txn.merchantId === merchantId && txn.type === "transaction"
-        ) || [];
-
+      // Storage removed; return empty list (not supported in gateway)
       return {
         statusCode: 200,
         headers: {
@@ -1483,10 +1419,10 @@ export const handler = async (event) => {
         },
         body: JSON.stringify({
           success: true,
-          message: "Transactions retrieved successfully",
+          message: "Transactions listing not supported in gateway",
           data: {
-            transactions: transactions,
-            count: transactions.length,
+            transactions: [],
+            count: 0,
             merchantId: merchantId,
           },
           timestamp: new Date().toISOString(),
@@ -1559,67 +1495,14 @@ export const handler = async (event) => {
 
     // Handle IPN
     if (body.txn_type) {
-      const verifyResponse = await fetch(
-        "https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${await getPayPalAccessTokenForGatewayMerchant(
-              body.business
-            )}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ event: body }),
-        }
-      );
-      const verification = await verifyResponse.json();
-      if (verification.verification_status !== "SUCCESS") {
-        console.error("Invalid IPN:", JSON.stringify(body, null, 2));
-        return {
-          statusCode: 400,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-          body: JSON.stringify({ error: "Invalid IPN" }),
-        };
-      }
-
-      if (
-        body.txn_type === "web_accept" ||
-        body.txn_type === "subscr_payment"
-      ) {
-        const productId = body.item_number || body.custom;
-        const paymentStatus = body.payment_status.toLowerCase();
-        if (productId) {
-          await dynamoClient.send(
-            new UpdateItemCommand({
-              TableName: TABLE_NAME,
-              Key: {
-                FormName: { S: body.business },
-                productId: { S: productId },
-              },
-              UpdateExpression:
-                "set #status = :status, #updatedAt = :updatedAt",
-              ExpressionAttributeNames: {
-                "#status": "status",
-                "#updatedAt": "updatedAt",
-              },
-              ExpressionAttributeValues: {
-                ":status": { S: paymentStatus },
-                ":updatedAt": { S: new Date().toISOString() },
-              },
-            })
-          );
-        }
-      }
+      // Legacy IPN handling is not supported; acknowledge receipt
       return {
         statusCode: 200,
         headers: {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
         },
-        body: JSON.stringify({ message: "IPN processed" }),
+        body: JSON.stringify({ message: "IPN received (not processed)" }),
       };
     }
 
@@ -1638,16 +1521,7 @@ export const handler = async (event) => {
         };
       }
 
-      // Get subscriptions from form data
-      const formData = await getFormData(userId, formId);
-      const subscriptions =
-        formData?.transactions?.filter(
-          (txn) =>
-            txn.merchantId === merchantId &&
-            txn.type === "subscription" &&
-            txn.isRecurring === true
-        ) || [];
-
+      // Storage removed; return empty list (not supported in gateway)
       return {
         statusCode: 200,
         headers: {
@@ -1656,10 +1530,10 @@ export const handler = async (event) => {
         },
         body: JSON.stringify({
           success: true,
-          message: "Subscriptions retrieved successfully",
+          message: "Subscriptions listing not supported in gateway",
           data: {
-            subscriptions: subscriptions,
-            count: subscriptions.length,
+            subscriptions: [],
+            count: 0,
             merchantId: merchantId,
           },
           timestamp: new Date().toISOString(),

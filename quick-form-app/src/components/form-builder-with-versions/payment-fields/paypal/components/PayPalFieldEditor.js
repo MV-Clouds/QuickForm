@@ -179,9 +179,31 @@ const PayPalFieldEditor = ({
           selectedMerchantId={selectedMerchantId}
           onMerchantChange={(merchantId) => {
             setSelectedMerchantId(merchantId);
+            // Clear merchant-bound items to avoid carrying over products/subscriptions from previous merchant
+            const sub = selectedField.subFields || {};
+            const oldFormItems = sub.formItems || {};
+            const filteredFormItems = Object.fromEntries(
+              Object.entries(oldFormItems).filter(([, v]) =>
+                v && v.type
+                  ? v.type !== "product" && v.type !== "subscription"
+                  : true
+              )
+            );
+
             const updatedSubFields = {
-              ...selectedField.subFields,
+              ...sub,
               merchantId: merchantId,
+              merchantAccountId: merchantId,
+              products: [],
+              subscriptions: [],
+              subscriptionConfig: undefined,
+              amount: sub.amount
+                ? { ...sub.amount, productId: undefined }
+                : sub.amount,
+              subscription: sub.subscription
+                ? { ...sub.subscription, planId: undefined }
+                : sub.subscription,
+              formItems: filteredFormItems,
             };
             onUpdateField(selectedField.id, { subFields: updatedSubFields });
           }}
