@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   FaInfoCircle,
   FaCog,
@@ -24,7 +24,6 @@ import {
   isZeroDecimal,
   isInCountryOnly,
 } from "../../../../../utils/paypalCurrencies";
-
 
 /**
  * Refactored PayPal Field Editor with Centralized State Management
@@ -56,6 +55,10 @@ const PayPalFieldEditorTabsRefactored = ({
     onUpdateField,
     fieldId
   );
+
+  useEffect(() => {
+    console.log("🎛️ PayPalFieldEditorTabsRefactored state:", state);
+  }, [state]);
 
   // Performance monitoring
   const performanceMonitor = usePerformanceMonitor("PayPalFieldEditorTabs");
@@ -114,8 +117,50 @@ const PayPalFieldEditorTabsRefactored = ({
       console.log("🔍 Merchant changed:", merchantId);
       performanceMonitor.trackStateChange("UPDATE_MERCHANT", { merchantId });
       actions.updateMerchant(merchantId);
+
+      // Also clear merchant-bound items from the field to avoid leaking previous merchant data
+      try {
+        if (selectedField && onUpdateField) {
+          const sub = selectedField.subFields || {};
+          // Filter out product/subscription items from formItems map while keeping other types (e.g., donation)
+          const oldFormItems = sub.formItems || {};
+          const filteredFormItems = Object.fromEntries(
+            Object.entries(oldFormItems).filter(([, v]) =>
+              v && v.type
+                ? v.type !== "product" && v.type !== "subscription"
+                : true
+            )
+          );
+
+          const clearedSubFields = {
+            ...sub,
+            // Persist the newly selected merchant account id; capabilities resolver will fill merchantId later
+            merchantAccountId: merchantId,
+            // Clear merchant-specific collections
+            products: [],
+            subscriptions: [],
+            // Remove any derived subscription config so validation doesn't reference stale data
+            subscriptionConfig: undefined,
+            // Remove any product/subscription references inside amount/subscription configs
+            amount: sub.amount
+              ? { ...sub.amount, productId: undefined }
+              : sub.amount,
+            subscription: sub.subscription
+              ? { ...sub.subscription, planId: undefined }
+              : sub.subscription,
+            formItems: filteredFormItems,
+          };
+
+          onUpdateField(selectedField.id, { subFields: clearedSubFields });
+        }
+      } catch (e) {
+        console.warn(
+          "Failed to clear merchant-bound items on merchant change:",
+          e
+        );
+      }
     },
-    [actions, performanceMonitor]
+    [actions, performanceMonitor, onUpdateField, selectedField]
   );
 
   const handlePaymentTypeChange = useCallback(
@@ -312,7 +357,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowProductModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
+        selectedMerchantId={state.capabilities?.merchantId || ""}
       />
 
       <SubscriptionManagementModal
@@ -320,7 +365,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowSubscriptionModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
+        selectedMerchantId={state.capabilities?.merchantId || ""}
       />
     </div>
   );

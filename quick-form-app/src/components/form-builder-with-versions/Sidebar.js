@@ -9,7 +9,7 @@ const fieldTypes = [
   { type: 'shorttext', label: 'Short Text' },
   { type: 'number', label: 'Number' },
   { type: 'displaytext', label: 'Display Text' },
-  
+
   // Essentials
   { type: 'checkbox', label: 'Checkbox' },
   { type: 'divider', label: 'Divider' },
@@ -20,27 +20,27 @@ const fieldTypes = [
   { type: 'dropdown', label: 'Dropdown Element' },
   { type: 'imageuploader', label: 'Image Uploader' },
   { type: 'section', label: 'Section' },
-  
+
   // Contact Details
   { type: 'fullname', label: 'Full Name' },
   { type: 'phone', label: 'Phone' },
   { type: 'email', label: 'Email' },
   { type: 'address', label: 'Address' },
-  
+
   // Upload And Consent
   { type: 'fileupload', label: 'File Upload' },
   { type: 'pagebreak', label: 'Page Break' },
   { type: 'link', label: 'Link' },
-  
+
   // Date & Time
   { type: 'date', label: 'Date' },
   { type: 'datetime', label: 'Date and Time' },
   { type: 'time', label: 'Time' },
-  
+
   // Rating
   { type: 'rating', label: 'Rating' },
   { type: 'scalerating', label: 'Scale Rating' },
-  
+
   // Others
   { type: 'formcalculation', label: 'Form Calculation' },
   { type: 'signature', label: 'Signature' },
@@ -49,7 +49,7 @@ const fieldTypes = [
 
 const getFieldIcon = (type) => {
   const iconProps = { className: "w-5 h-5 text-gray-600", fill: "none", stroke: "currentColor", strokeWidth: "1.5" };
-  
+
   switch (type) {
     case 'heading':
       return (
@@ -230,7 +230,7 @@ const getFieldIcon = (type) => {
   }
 };
 
-function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFieldsFromFieldset , fields = []}) {
+function Sidebar({ selectedTheme, onThemeSelect, themes, fieldsets, onAddFieldsFromFieldset, fields = [], isEditable = true }) {
   const [activeMainTab, setActiveMainTab] = useState('Form');
   const [activeSubTab, setActiveSubTab] = useState('Fields');
   const [searchTerm, setSearchTerm] = useState('');
@@ -251,7 +251,7 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
       }
     `;
     document.head.appendChild(style);
-    
+
     return () => {
       if (document.head.contains(style)) {
         document.head.removeChild(style);
@@ -262,11 +262,11 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
   const handleDragStart = (e, type) => {
     e.dataTransfer.setData('fieldType', type);
     e.dataTransfer.setData('fieldId', '');
-    
+
     // Add visual feedback to the source element
     e.currentTarget.style.opacity = '0.5';
     e.currentTarget.style.transform = 'scale(0.95)';
-    
+
     // Create custom drag image with reduced opacity and subtle effects
     const dragElement = e.currentTarget.cloneNode(true);
     dragElement.style.position = 'absolute';
@@ -282,10 +282,10 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
     textElements.forEach(el => {
       el.style.opacity = '0.8';
     });
-    
+
     document.body.appendChild(dragElement);
     e.dataTransfer.setDragImage(dragElement, e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-    
+
     // Clean up after drag
     setTimeout(() => {
       if (document.body.contains(dragElement)) {
@@ -293,7 +293,7 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
       }
     }, 0);
   };
-    const handleFieldsetDrop = (fieldset) => {
+  const handleFieldsetDrop = (fieldset) => {
     if (fieldset && fieldset.Fieldset_Fields__c) {
       const newFields = fieldset.Fieldset_Fields__c.map((fieldsetField) => {
         const properties = JSON.parse(fieldsetField.Properties__c || "{}");
@@ -325,21 +325,19 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
       {/* Main Tabs */}
       <div className="flex bg-gray-100 p-1 rounded-lg mx-4 my-2">
         <button
-          className={`flex-1 py-2 px-4 text-center font-medium rounded-md transition-all text-sm text-gray-600 hover:bg-gray-50 ${
-            activeMainTab === 'Form'
-              ? 'bg-white shadow-sm border border-gray-200'
-              : ''
-          }`}
+          className={`flex-1 py-2 px-4 text-center font-medium rounded-md transition-all text-sm text-gray-600 hover:bg-gray-50 ${activeMainTab === 'Form'
+            ? 'bg-white shadow-sm border border-gray-200'
+            : ''
+            }`}
           onClick={() => setActiveMainTab('Form')}
         >
           Form
         </button>
         <button
-          className={`flex-1 py-2 px-4 text-center font-medium rounded-md transition-all text-sm text-gray-600 hover:bg-gray-50 ${
-            activeMainTab === 'Theme'
-              ? 'bg-white shadow-sm border border-gray-200'
-              : ''
-          }`}
+          className={`flex-1 py-2 px-4 text-center font-medium rounded-md transition-all text-sm text-gray-600 hover:bg-gray-50 ${activeMainTab === 'Theme'
+            ? 'bg-white shadow-sm border border-gray-200'
+            : ''
+            }`}
           onClick={() => setActiveMainTab('Theme')}
         >
           Theme
@@ -351,11 +349,10 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
         <div className="flex border-b border-gray-200 px-4">
           <div className="relative flex justify-center w-full">
             <button
-              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
-                activeSubTab === 'Fields'
-                  ? 'text-gray-900 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${activeSubTab === 'Fields'
+                ? 'text-gray-900 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
               onClick={() => setActiveSubTab('Fields')}
             >
               Fields
@@ -367,11 +364,10 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
 
           <div className="relative flex justify-center w-full">
             <button
-              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
-                activeSubTab === 'Payments'
-                  ? 'text-gray-900 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${activeSubTab === 'Payments'
+                ? 'text-gray-900 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
               onClick={() => setActiveSubTab('Payments')}
             >
               Payments
@@ -383,11 +379,10 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
 
           <div className="relative flex justify-center w-full">
             <button
-              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${
-                activeSubTab === 'Fieldsets'
-                  ? 'text-gray-900 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`flex-1 py-2 text-sm text-center font-medium transition-colors ${activeSubTab === 'Fieldsets'
+                ? 'text-gray-900 border-b-2 border-blue-600'
+                : 'text-gray-600 hover:bg-gray-50'
+                }`}
               onClick={() => setActiveSubTab('Fieldsets')}
             >
               Fieldsets
@@ -424,10 +419,11 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
               {filteredFields.map(({ type, label }) => (
                 <div
                   key={type}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, type)}
-                  onDragEnd={handleDragEnd}
-                  className="field-item flex items-center justify-between p-2 border border-gray-200 rounded-lg hover:bg-blue-50 cursor-grab active:cursor-grabbing transition-all duration-150 group"
+                  draggable={isEditable}
+                  onDragStart={(e) => isEditable && handleDragStart(e, type)}
+                  onDragEnd={isEditable ? handleDragEnd : undefined}
+                  className={`field-item flex items-center justify-between p-2 border border-gray-200 rounded-lg transition-all duration-150 group
+    ${isEditable ? "hover:bg-blue-50 cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-60"}`}
                 >
                   <div className="flex items-center gap-1">
                     <div className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: 'rgba(240, 240, 240, 1)' }}>
@@ -437,8 +433,8 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
                   </div>
                   <div className='pr-1'>
                     <svg width="9" height="14" viewBox="0 0 9 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path fill-rule="evenodd" clip-rule="evenodd" d="M3 1.55556C3 2.41465 2.32841 3.11111 1.5 3.11111C0.671587 3.11111 0 2.41465 0 1.55556C0 0.696446 0.671587 0 1.5 0C2.32841 0 3 0.696446 3 1.55556ZM1.5 8.55556C2.32841 8.55556 3 7.85909 3 7C3 6.14091 2.32841 5.44444 1.5 5.44444C0.671587 5.44444 0 6.14091 0 7C0 7.85909 0.671587 8.55556 1.5 8.55556ZM1.5 14C2.32841 14 3 13.3035 3 12.4444C3 11.5854 2.32841 10.8889 1.5 10.8889C0.671587 10.8889 0 11.5854 0 12.4444C0 13.3035 0.671587 14 1.5 14Z" fill="#5F6165"/>
-                      <path fill-rule="evenodd" clip-rule="evenodd" d="M9 1.55556C9 2.41465 8.32841 3.11111 7.5 3.11111C6.67159 3.11111 6 2.41465 6 1.55556C6 0.696446 6.67159 0 7.5 0C8.32841 0 9 0.696446 9 1.55556ZM7.5 8.55556C8.32841 8.55556 9 7.85909 9 7C9 6.14091 8.32841 5.44444 7.5 5.44444C6.67159 5.44444 6 6.14091 6 7C6 7.85909 6.67159 8.55556 7.5 8.55556ZM7.5 14C8.32841 14 9 13.3035 9 12.4444C9 11.5854 8.32841 10.8889 7.5 10.8889C6.67159 10.8889 6 11.5854 6 12.4444C6 13.3035 6.67159 14 7.5 14Z" fill="#5F6165"/>
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M3 1.55556C3 2.41465 2.32841 3.11111 1.5 3.11111C0.671587 3.11111 0 2.41465 0 1.55556C0 0.696446 0.671587 0 1.5 0C2.32841 0 3 0.696446 3 1.55556ZM1.5 8.55556C2.32841 8.55556 3 7.85909 3 7C3 6.14091 2.32841 5.44444 1.5 5.44444C0.671587 5.44444 0 6.14091 0 7C0 7.85909 0.671587 8.55556 1.5 8.55556ZM1.5 14C2.32841 14 3 13.3035 3 12.4444C3 11.5854 2.32841 10.8889 1.5 10.8889C0.671587 10.8889 0 11.5854 0 12.4444C0 13.3035 0.671587 14 1.5 14Z" fill="#5F6165" />
+                      <path fill-rule="evenodd" clip-rule="evenodd" d="M9 1.55556C9 2.41465 8.32841 3.11111 7.5 3.11111C6.67159 3.11111 6 2.41465 6 1.55556C6 0.696446 6.67159 0 7.5 0C8.32841 0 9 0.696446 9 1.55556ZM7.5 8.55556C8.32841 8.55556 9 7.85909 9 7C9 6.14091 8.32841 5.44444 7.5 5.44444C6.67159 5.44444 6 6.14091 6 7C6 7.85909 6.67159 8.55556 7.5 8.55556ZM7.5 14C8.32841 14 9 13.3035 9 12.4444C9 11.5854 8.32841 10.8889 7.5 10.8889C6.67159 10.8889 6 11.5854 6 12.4444C6 13.3035 6.67159 14 7.5 14Z" fill="#5F6165" />
                     </svg>
 
                   </div>
@@ -450,11 +446,12 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
 
         {activeMainTab === 'Form' && activeSubTab === 'Fieldsets' && (
           <div className="p-2">
-          <FieldsetTab
-            fieldsets={fieldsets}
-            onDropFieldset={handleFieldsetDrop}
-          />
-       </div>
+            <FieldsetTab
+              fieldsets={fieldsets}
+              onDropFieldset={handleFieldsetDrop}
+              isEditable={isEditable}
+            />
+          </div>
         )}
 
         {activeMainTab === 'Form' && activeSubTab === 'Payments' && (
@@ -462,6 +459,7 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
             fields={fields}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            isEditable={isEditable}
           />
         )}
 
@@ -469,25 +467,33 @@ function Sidebar({ selectedTheme, onThemeSelect, themes ,fieldsets , onAddFields
           <div className="p-4">
             <div className="space-y-4">
               {themes.map((theme) => (
-                <div
-                  key={theme.name}
-                  className={`rounded-lg shadow border p-3 flex items-center gap-4 cursor-pointer hover:scale-105 hover:shadow-lg transition-transform duration-200 ${theme.preview} ${selectedTheme?.name === theme.name ? 'ring-4 ring-blue-400 border-blue-600' : 'border-gray-200'}`}
+                <button
+                  key={theme.id}
+                  type="button"
+                  disabled={!isEditable}
                   onClick={() => onThemeSelect(theme)}
-                  style={{ opacity: selectedTheme?.name === theme.name ? 1 : 0.85 }}
+                  className={`w-full flex items-center gap-3 border p-3 rounded-lg text-sm transition-all
+            ${selectedTheme?.id === theme.id
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300"}
+            ${!isEditable ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
                 >
                   <div className={`w-8 h-8 rounded-full ${theme.color} border-2 border-white shadow`} />
-                  <div>
-                    <div className="font-medium text-white drop-shadow">{theme.name}</div>
-                    <div className="text-xs text-white/80">Preview</div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">{theme.name}</div>
+                    <div className="text-xs text-gray-500">Preview</div>
                   </div>
-                  {selectedTheme?.name === theme.name && (
-                    <span className="ml-2 px-2 py-1 bg-white text-blue-600 text-xs rounded shadow">Selected</span>
+                  {selectedTheme?.id === theme.id && (
+                    <span className="ml-2 px-2 py-1 bg-white text-blue-600 text-xs rounded shadow">
+                      Selected
+                    </span>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

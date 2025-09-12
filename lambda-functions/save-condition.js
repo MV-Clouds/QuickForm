@@ -7,7 +7,28 @@ export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}');
     const { userId, instanceUrl, condition, formVersionId, conditionId } = body;
-    const token = event.headers.Authorization?.split(' ')[1];
+    let token = event.headers.Authorization?.split(' ')[1];
+
+    // const origin = event.headers.Origin || event.headers.origin;
+    
+    // if(origin !== "https://d2bri1qui9cr5s.cloudfront.net"){
+    //   return {
+    //     statusCode: 403,
+    //     headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    //     body: JSON.stringify({ error: 'Unauthorized' }),
+    //   };
+    // }
+    const fetchNewAccessToken = async (userId) => {
+      const response = await fetch('https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/getAccessToken/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch new access token');
+      const data = await response.json();
+      return data.access_token;
+    };
+    let tokenRefreshed = true;
 
     if (!userId || !instanceUrl || !condition || !token || !formVersionId) {
       return {
@@ -24,13 +45,25 @@ export const handler = async (event) => {
     let existingConditions = [];
 
     const query = `SELECT Id, Condition_Data__c FROM Form_Condition__c WHERE Form_Version__c = '${formVersionId}' LIMIT 1`;
-    const queryResponse = await fetch(`${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`, {
+    let queryResponse = await fetch(`${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
     });
+
+    if(!queryResponse.ok && queryResponse.status === 401) {
+      token = await fetchNewAccessToken(userId);
+      tokenRefreshed = true;
+      queryResponse = await fetch(`${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    }
 
     if (queryResponse.ok) {
       const queryData = await queryResponse.json();
@@ -124,7 +157,7 @@ export const handler = async (event) => {
 
     let salesforceConditionId;
     if (existingConditionId) {
-      const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
+      let response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -134,12 +167,26 @@ export const handler = async (event) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData[0]?.message || 'Failed to update condition');
+        if (response.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c/${existingConditionId}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sfCondition),
+          });
+        }
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData[0]?.message || 'Failed to update condition');
+        }
       }
       salesforceConditionId = existingConditionId;
     } else {
-      const response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c`, {
+      let response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -149,8 +196,22 @@ export const handler = async (event) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData[0]?.message || 'Failed to save condition');
+        if (response.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          response = await fetch(`${salesforceBaseUrl}/sobjects/Form_Condition__c`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sfCondition),
+          });
+        }
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData[0]?.message || 'Failed to save condition');
+        }
       }
       const conditionData = await response.json();
       salesforceConditionId = conditionData.id;
@@ -277,6 +338,14 @@ export const handler = async (event) => {
         RequestItems: { [METADATA_TABLE_NAME]: writeRequests },
       })
     );
+
+    if(tokenRefreshed){
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ success: true, condition: newCondition, newAccessToken: token }),
+      };
+    }
 
     return {
       statusCode: 200,

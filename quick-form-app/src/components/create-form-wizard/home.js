@@ -48,6 +48,7 @@ const Home = () => {
   const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
   const [isProcessing, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('Loading');
+  const [formNameSource, setFormNameSource] = useState(null); // 'scratch' or 'wizard'
 
   const handleCloneForm = (form) => {
   // Find published version or draft version to clone
@@ -79,7 +80,7 @@ const Home = () => {
     if (!cloningFormData) return;
 
     const { form, versionToClone } = cloningFormData;
-console.log('Cloning ',cloningFormData);
+    console.log('Cloning ',cloningFormData);
 
     const cloneFormData = {
       formVersion: {
@@ -137,6 +138,7 @@ console.log('Cloning ',cloningFormData);
       console.error('Error cloning form:', error);
       alert('Failed to clone form. Please try again.');
     } finally {
+      setIsLoading(false);
       setCloningFormData(null);
     }
   };
@@ -253,6 +255,7 @@ console.log('Cloning ',cloningFormData);
     if (option === 'salesforce') {
        setShowCreateFormWizard(true);  // Open the wizard modal right here
     } else if (option === 'scratch') {
+      setFormNameSource('scratch');
       setIsFormNameOpen(true);
     } else if (option === 'templates') {
       navigate('/template');
@@ -637,7 +640,10 @@ console.log('Cloning ',cloningFormData);
       )}
       {isFormNameOpen && (
         <FormName
-          onClose={() => setIsFormNameOpen(false)}
+          onClose={() => {
+            setIsFormNameOpen(false);
+            if (formNameSource === 'scratch') setIsModalOpen(true); // re-open create options if from scratch
+          }}
           fields={[
             {
               id: 'default-header',

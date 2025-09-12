@@ -32,6 +32,7 @@ function FieldEditor({
   setFooterConfigs,
   userId = null, // Add userId prop
   formId = null,
+  isEditable = true,
 }) {
   // State for common properties
   const [label, setLabel] = useState(selectedField?.label || "");
@@ -1401,8 +1402,8 @@ function FieldEditor({
 
   // Get dynamic country list
   const countries = getCountryList();
-   let footerEditor = null;
-   
+  let footerEditor = null;
+
   if (
     selectedFooter &&
     typeof selectedFooter.pageIndex === "number"
@@ -1484,31 +1485,30 @@ function FieldEditor({
       {/* Header and Close Button */}
       <div className="flex justify-between items-center m-3">
         <div className="flex gap-2 items-center">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+          <button
+            type="button"
+            onClick={onClose}
           >
-            <path
-              d="M11 18H14.75C16.1424 18 17.4777 17.4469 18.4623 16.4623C19.4469 15.4777 20 14.1424 20 12.75C20 11.3576 19.4469 10.0223 18.4623 9.03769C17.4777 8.05312 16.1424 7.5 14.75 7.5H5M7.5 4L4 7.5L7.5 11"
-              stroke="#0B0A0A"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <h2 className="text-xl font-semibold text-gray-800">Property</h2>
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M11 18H14.75C16.1424 18 17.4777 17.4469 18.4623 16.4623C19.4469 15.4777 20 14.1424 20 12.75C20 11.3576 19.4469 10.0223 18.4623 9.03769C17.4777 8.05312 16.1424 7.5 14.75 7.5H5M7.5 4L4 7.5L7.5 11"
+                stroke="#0B0A0A"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+
+          <h2 className="text-xl font-semibold text-gray-800">Properties</h2>
         </div>
 
-        <button
-          type="button"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={onClose}
-        >
-          ✕
-        </button>
       </div>
 
       <div className="bg-white">
@@ -1574,6 +1574,7 @@ function FieldEditor({
                         <input
                           type="text"
                           value={headingText}
+                          disabled={!isEditable}
                           onChange={handleHeadingTextChange}
                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           placeholder="Enter header text"
@@ -1586,6 +1587,7 @@ function FieldEditor({
                         <select
                           value={headingAlignment}
                           onChange={handleHeadingAlignmentChange}
+                          disabled={!isEditable}
                           className="w-full p-2 border rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="left">Left</option>
@@ -1603,6 +1605,7 @@ function FieldEditor({
                         type="number"
                         min="1"
                         value={selectedField.imageWidth || ""}
+                        disabled={!isEditable}
                         onChange={(e) =>
                           onUpdateField(selectedField.id, {
                             imageWidth: e.target.value,
@@ -1618,6 +1621,7 @@ function FieldEditor({
                         type="number"
                         min="1"
                         value={selectedField.imageHeight || ""}
+                        disabled={!isEditable}
                         onChange={(e) =>
                           onUpdateField(selectedField.id, {
                             imageHeight: e.target.value,
@@ -1631,6 +1635,7 @@ function FieldEditor({
                       </label>
                       <select
                         value={selectedField.imageAlign || "center"}
+                        disabled={!isEditable}
                         onChange={(e) =>
                           onUpdateField(selectedField.id, {
                             imageAlign: e.target.value,
@@ -1652,6 +1657,7 @@ function FieldEditor({
                         <input
                           type="text"
                           value={label}
+                          disabled={!isEditable}
                           onChange={handleLabelChange}
                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           placeholder="Enter field label"
@@ -1679,6 +1685,7 @@ function FieldEditor({
                                   <input
                                     type="text"
                                     value={subFields[key]?.placeholder || ""}
+                                    disabled={!isEditable}
                                     onChange={(e) =>
                                       handleAddressPlaceholderChange(
                                         key,
@@ -1700,6 +1707,7 @@ function FieldEditor({
                                   </label>
                                   <input
                                     type="text"
+                                    disabled={!isEditable}
                                     value={
                                       fullnameSubFields[key]?.placeholder || ""
                                     }
@@ -1723,6 +1731,7 @@ function FieldEditor({
                                 </label>
                                 <input
                                   type="text"
+                                  disabled={!isEditable}
                                   value={
                                     phoneSubFields.phoneNumber?.placeholder ||
                                     ""
@@ -1749,6 +1758,7 @@ function FieldEditor({
                             <input
                               type="text"
                               value={placeholder.main || ""}
+                              disabled={!isEditable}
                               onChange={(e) =>
                                 handlePlaceholderChange("main", e.target.value)
                               }
@@ -1767,6 +1777,7 @@ function FieldEditor({
                             <select
                               value={labelAlignment}
                               onChange={handleAlignmentChange}
+                              disabled={!isEditable}
                               className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer shadow-sm"
                               style={{ paddingRight: "2.5rem" }}
                             >
@@ -1795,6 +1806,7 @@ function FieldEditor({
                           <input
                             type="number"
                             value={defaultValue}
+                            disabled={!isEditable}
                             onChange={handleDefaultValueChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder="Enter default phone number"
@@ -1807,6 +1819,7 @@ function FieldEditor({
                           </label>
                           <textarea
                             value={defaultValue}
+                            disabled={!isEditable}
                             onChange={handleDefaultValueChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder="Enter default text"
@@ -1820,6 +1833,7 @@ function FieldEditor({
                           <input
                             type="number"
                             value={defaultValue}
+                            disabled={!isEditable}
                             onChange={handleDefaultValueChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder="Enter default number"
@@ -1834,7 +1848,7 @@ function FieldEditor({
                             Default Value
                           </label>
                           <DatePicker
-                            disabled={isDisabled}
+                            disabled={!isEditable || isDisabled}
                             placeholder={placeholder.main || "Default date"}
                             className={`w-full`}
                             isoWeek={weekStartDay === "Monday"}
@@ -1858,7 +1872,7 @@ function FieldEditor({
                             format={
                               timeFormat === "HH:mm" ? "HH:mm" : "hh:mm a"
                             }
-                            disabled={isDisabled}
+                            disabled={!isEditable || isDisabled}
                             placeholder={"Select a default time"}
                             className={`w-full `}
                             showMeridian={timeFormat === "hh:mm a"}
@@ -1878,7 +1892,7 @@ function FieldEditor({
                         <div className="mb-6">
                           <DatePicker
                             format={`dd/MM/yyyy HH:mm`}
-                            disabled={isDisabled}
+                            disabled={!isEditable || isDisabled}
                             placeholder={"Select default date and time"}
                             className={`w-full`}
                             isoWeek={weekStartDay === "Monday"}
@@ -1919,6 +1933,7 @@ function FieldEditor({
                               <input
                                 type="text"
                                 value={subFields[key]?.value || ""}
+                                disabled={!isEditable}
                                 onChange={(e) => {
                                   const newSubFields = {
                                     ...subFields,
@@ -1951,6 +1966,7 @@ function FieldEditor({
                             <input
                               type="number"
                               value={defaultValue}
+                              disabled={!isEditable}
                               onChange={handleDefaultValueChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Enter default price"
@@ -1965,6 +1981,7 @@ function FieldEditor({
                           <input
                             type="text"
                             value={defaultValue}
+                            disabled={!isEditable}
                             onChange={handleDefaultValueChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             placeholder="Enter default value"
@@ -1975,6 +1992,7 @@ function FieldEditor({
                         <div className="mb-4 flex items-center">
                           <ToggleSwitch
                             checked={isRequired}
+                            disabled={!isEditable}
                             onChange={handleRequiredChange}
                             id="required-toggle"
                           />
@@ -1986,6 +2004,7 @@ function FieldEditor({
                       <div className="mb-4 flex items-center">
                         <ToggleSwitch
                           checked={isDisabled}
+                          disabled={!isEditable}
                           onChange={handleDisabledChange}
                           id="disabled-toggle"
                         />
@@ -1996,6 +2015,7 @@ function FieldEditor({
                       <div className="mb-4 flex items-center">
                         <ToggleSwitch
                           checked={isHidden}
+                          disabled={!isEditable}
                           onChange={handleHiddenChange}
                           id="hidden-toggle"
                         />
@@ -2007,6 +2027,7 @@ function FieldEditor({
                         <div className="flex items-center">
                           <ToggleSwitch
                             checked={showHelpText}
+                            disabled={!isEditable}
                             onChange={handleShowHelpTextChange}
                             id="help-text-toggle"
                           />
@@ -2021,6 +2042,7 @@ function FieldEditor({
                             </label>
                             <textarea
                               value={helpText}
+                              disabled={!isEditable}
                               onChange={handleHelpTextChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                               placeholder="Enter help text"
@@ -2060,6 +2082,7 @@ function FieldEditor({
                           </label>
                           <select
                             value={predefinedOptionSet}
+                            disabled={!isEditable}
                             onChange={handlePredefinedOptionSetChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           >
@@ -2079,6 +2102,7 @@ function FieldEditor({
                               <input
                                 type="text"
                                 value={opt}
+                                disabled={!isEditable}
                                 onChange={(e) =>
                                   handleOptionChange(idx, e.target.value)
                                 }
@@ -2088,6 +2112,7 @@ function FieldEditor({
                               <input
                                 type="text"
                                 value={relatedValues[opt]}
+                                disabled={!isEditable}
                                 defaultValue={`Option ${idx + 1}`}
                                 onChange={(e) =>
                                   handleRelatedValueChange(opt, e.target.value)
@@ -2097,7 +2122,8 @@ function FieldEditor({
                               />
                               <button
                                 onClick={() => handleRemoveOption(idx)}
-                                className="text-red-500 hover:text-red-700 text-lg p-1 flex-shrink-0"
+                                disabled={!isEditable}
+                                className={`text-red-500 hover:text-red-700 text-sm p-1 flex-shrink-0 ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`}
                               >
                                 <FaTimes />
                               </button>
@@ -2105,7 +2131,7 @@ function FieldEditor({
                           ))}
                           <button
                             onClick={handleAddOption}
-                            className="text-blue-600 hover:underline"
+                            className={`text-[#028ab0] ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`}
                           >
                             + Add Item
                           </button>
@@ -2120,6 +2146,7 @@ function FieldEditor({
                               min="1"
                               max="10"
                               value={columnCount}
+                              disabled={!isEditable}
                               onChange={(e) => {
                                 const value = Math.min(
                                   Math.max(parseInt(e.target.value) || 1, 1),
@@ -2148,6 +2175,7 @@ function FieldEditor({
                           </label>
                           <select
                             value={predefinedOptionSet}
+                            disabled={!isEditable}
                             onChange={handlePredefinedOptionSetChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           >
@@ -2163,17 +2191,18 @@ function FieldEditor({
                             <div
                               key={idx}
                               className="flex items-center mb-3 gap-3"
-                              draggable={shuffleOptions}
+                              draggable={isEditable && shuffleOptions}
                               onDragStart={() => handleDragStart(idx)}
                               onDragOver={(e) => handleDragOver(e, idx)}
                               onDrop={() => handleDrop(idx)}
                             >
                               {shuffleOptions && (
-                                <FaArrowsAltV className="cursor-move text-gray-500 flex-shrink-0" />
+                                <FaArrowsAltV className={`cursor-move text-gray-500 flex-shrink-0 ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`} />
                               )}
                               <input
                                 type="text"
                                 value={opt}
+                                disabled={!isEditable}
                                 onChange={(e) =>
                                   handleDropdownOptionChange(
                                     idx,
@@ -2186,6 +2215,7 @@ function FieldEditor({
                               <input
                                 type="text"
                                 value={dropdownRelatedValues[opt]}
+                                disabled={!isEditable}
                                 defaultValue={`Option ${idx + 1}`}
                                 onChange={(e) =>
                                   handleDropdownRelatedValueChange(
@@ -2198,7 +2228,8 @@ function FieldEditor({
                               />
                               <button
                                 onClick={() => handleDropdownRemoveOption(idx)}
-                                className="text-red-500 hover:text-red-700 text-lg p-1 flex-shrink-0"
+                                disabled={!isEditable}
+                                className={`text-red-500 hover:text-red-700 text-sm p-1 flex-shrink-0 ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`}
                               >
                                 <FaTimes />
                               </button>
@@ -2206,13 +2237,14 @@ function FieldEditor({
                           ))}
                           <button
                             onClick={handleDropdownAddOption}
-                            className="text-blue-600 hover:underline"
+                            className={`text-[#028ab0] ${!isEditable ? 'cursor-not-allowed opacity-50' : ''}`}
                           >
                             + Add Item
                           </button>
                           <div className="flex items-center mt-4">
                             <ToggleSwitch
                               checked={allowMultipleSelections}
+                              disabled={!isEditable}
                               onChange={handleAllowMultipleSelectionsChange}
                               id="multiple-selections-toggle"
                             />
@@ -2223,6 +2255,7 @@ function FieldEditor({
                           <div className="flex items-center mt-2">
                             <ToggleSwitch
                               checked={shuffleOptions}
+                              disabled={!isEditable}
                               onChange={handleShuffleOptionsChange}
                               id="shuffle-toggle"
                             />
@@ -2242,6 +2275,7 @@ function FieldEditor({
                               min="0"
                               max={options.length}
                               value={minSelection}
+                              disabled={!isEditable}
                               onChange={e => {
                                 const value = Math.max(0, Math.min(options.length, Number(e.target.value)));
                                 setMinSelection(value);
@@ -2257,6 +2291,7 @@ function FieldEditor({
                               min={minSelection}
                               max={options.length}
                               value={maxSelection}
+                              disabled={!isEditable}
                               onChange={e => {
                                 const value = Math.max(minSelection, Math.min(options.length, Number(e.target.value)));
                                 setMaxSelection(value);
@@ -2275,6 +2310,7 @@ function FieldEditor({
                         </label>
                         <select
                           value={inputType}
+                          disabled={!isEditable}
                           onChange={handleInputTypeChange}
                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                         >
@@ -2290,6 +2326,7 @@ function FieldEditor({
                             </label>
                             <textarea
                               value={dropdownOptionsInput}
+                              disabled={!isEditable}
                               onChange={(e) =>
                                 setDropdownOptionsInput(e.target.value)
                               }
@@ -2300,7 +2337,8 @@ function FieldEditor({
                             <div className="flex justify-end mt-2">
                               <button
                                 onClick={handleDropdownOptionsSave}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                disabled={!isEditable}
+                                className="px-4 py-2 bg-[#028ab0] text-white rounded hover:bg-blue-700"
                               >
                                 Save
                               </button>
@@ -2315,6 +2353,7 @@ function FieldEditor({
                             <input
                               type="text"
                               value={rowLabel}
+                              disabled={!isEditable}
                               onChange={(e) =>
                                 handleRowChange(rowIdx, e.target.value)
                               }
@@ -2326,13 +2365,15 @@ function FieldEditor({
                         <div className="flex gap-2">
                           <button
                             onClick={handleAddRow}
-                            className="text-blue-600 hover:underline"
+                            disabled={!isEditable}
+                            className="text-[#028ab0] hover:underline"
                           >
                             + Add Row
                           </button>
                           <button
                             onClick={() => setShowMultiRowModal(true)}
-                            className="text-blue-600 hover:underline"
+                            disabled={!isEditable}
+                            className="text-[#028ab0] hover:underline"
                           >
                             + Add Multiple Rows
                           </button>
@@ -2344,6 +2385,7 @@ function FieldEditor({
                             </h3>
                             <textarea
                               value={multiRowInput}
+                              disabled={!isEditable}
                               onChange={(e) => setMultiRowInput(e.target.value)}
                               className="w-full p-2 border rounded-lg"
                               rows="5"
@@ -2352,13 +2394,15 @@ function FieldEditor({
                             <div className="flex justify-end gap-2 mt-4">
                               <button
                                 onClick={() => setShowMultiRowModal(false)}
+                                disabled={!isEditable}
                                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
                               >
                                 Cancel
                               </button>
                               <button
                                 onClick={handleMultiRowSave}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                disabled={!isEditable}
+                                className="px-4 py-2 bg-[#028ab0] text-white rounded hover:bg-blue-700"
                               >
                                 Save
                               </button>
@@ -2373,6 +2417,7 @@ function FieldEditor({
                             <input
                               type="text"
                               value={colLabel}
+                              disabled={!isEditable}
                               onChange={(e) =>
                                 handleColumnChange(colIdx, e.target.value)
                               }
@@ -2384,13 +2429,15 @@ function FieldEditor({
                         <div className="flex gap-2">
                           <button
                             onClick={handleAddColumn}
-                            className="text-blue-600 hover:underline"
+                            disabled={!isEditable}
+                            className="text-[#028ab0] hover:underline"
                           >
                             + Add Column
                           </button>
                           <button
                             onClick={() => setShowMultiColumnModal(true)}
-                            className="text-blue-600 hover:underline"
+                            disabled={!isEditable}
+                            className="text-[#028ab0] hover:underline"
                           >
                             + Add Multiple Columns
                           </button>
@@ -2404,6 +2451,7 @@ function FieldEditor({
                         </h3>
                         <textarea
                           value={multiColumnInput}
+                          disabled={!isEditable}
                           onChange={(e) => setMultiColumnInput(e.target.value)}
                           className="w-full p-2 border rounded-lg"
                           rows="5"
@@ -2412,13 +2460,15 @@ function FieldEditor({
                         <div className="flex justify-end gap-2 mt-4">
                           <button
                             onClick={() => setShowMultiColumnModal(false)}
+                            disabled={!isEditable}
                             className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={handleMultiColumnSave}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            disabled={!isEditable}
+                            className="px-4 py-2 bg-[#028ab0] text-white rounded hover:bg-blue-700"
                           >
                             Save
                           </button>
@@ -2438,9 +2488,10 @@ function FieldEditor({
                                 ratingType: "emoji",
                               });
                             }}
+                            disabled={!isEditable}
                             className={`text-2xl ${ratingType === "emoji"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                              ? "text-[#028ab0]"
+                              : "text-gray-400"
                               } hover:text-blue-500`}
                           >
                             😀
@@ -2452,9 +2503,10 @@ function FieldEditor({
                                 ratingType: "star",
                               });
                             }}
+                            disabled={!isEditable}
                             className={`text-2xl ${ratingType === "star"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                              ? "text-[#028ab0]"
+                              : "text-gray-400"
                               } hover:text-blue-500`}
                           >
                             <AiOutlineStar />
@@ -2466,9 +2518,10 @@ function FieldEditor({
                                 ratingType: "heart",
                               });
                             }}
+                            disabled={!isEditable}
                             className={`text-2xl ${ratingType === "heart"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                              ? "text-[#028ab0]"
+                              : "text-gray-400"
                               } hover:text-blue-500`}
                           >
                             <AiOutlineHeart />
@@ -2480,9 +2533,10 @@ function FieldEditor({
                                 ratingType: "bulb",
                               });
                             }}
+                            disabled={!isEditable}
                             className={`text-2xl ${ratingType === "bulb"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                              ? "text-[#028ab0]"
+                              : "text-gray-400"
                               } hover:text-blue-500`}
                           >
                             <FaRegLightbulb />
@@ -2494,9 +2548,10 @@ function FieldEditor({
                                 ratingType: "lightning",
                               });
                             }}
+                            disabled={!isEditable}
                             className={`text-2xl ${ratingType === "lightning"
-                                ? "text-blue-600"
-                                : "text-gray-400"
+                              ? "text-[#028ab0]"
+                              : "text-gray-400"
                               } hover:text-blue-500`}
                           >
                             <BiBoltCircle />
@@ -2508,6 +2563,7 @@ function FieldEditor({
                         <input
                           type="number"
                           value={ratingRange}
+                          disabled={!isEditable}
                           onChange={handleRatingRangeChange}
                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           placeholder="Enter number of rating options (e.g., 5)"
@@ -2528,6 +2584,7 @@ function FieldEditor({
                                   showEmojiPicker === idx ? null : idx
                                 )
                               }
+                              disabled={!isEditable}
                               className="text-2xl w-12 text-center text-gray-700 hover:text-blue-500"
                             >
                               {ratingType === "emoji" ? (
@@ -2553,12 +2610,14 @@ function FieldEditor({
                                     }
                                     width={300}
                                     height={400}
+                                    disabled={!isEditable}
                                   />
                                 </div>
                               )}
                             <input
                               type="text"
                               value={value}
+                              disabled={!isEditable}
                               onChange={(e) =>
                                 handleRatingValueChange(idx, e.target.value)
                               }
@@ -2576,6 +2635,7 @@ function FieldEditor({
                             checked={fullnameSubFields.salutation.enabled}
                             onChange={handleSalutationEnabledChange}
                             id="salutation-toggle"
+                            disabled={!isEditable}
                           />
                           <span className="text-sm font-medium text-gray-700">
                             Enable Salutation
@@ -2589,6 +2649,7 @@ function FieldEditor({
                               </label>
                               <input
                                 type="text"
+                                disabled={!isEditable}
                                 value={
                                   fullnameSubFields.salutation.placeholder || ""
                                 }
@@ -2613,6 +2674,7 @@ function FieldEditor({
                                 >
                                   <input
                                     type="text"
+                                    disabled={!isEditable}
                                     value={sal}
                                     onChange={(e) =>
                                       handleSalutationOptionChange(
@@ -2624,6 +2686,7 @@ function FieldEditor({
                                     placeholder={`Salutation ${idx + 1}`}
                                   />
                                   <button
+                                  disabled={!isEditable}
                                     onClick={() =>
                                       handleRemoveSalutationOption(idx)
                                     }
@@ -2635,8 +2698,9 @@ function FieldEditor({
                               )
                             )}
                             <button
+                              disabled={!isEditable}
                               onClick={handleAddSalutationOption}
-                              className="text-blue-600 hover:underline"
+                              className="text-[#028ab0]"
                             >
                               + Add Salutation
                             </button>
@@ -2668,6 +2732,7 @@ function FieldEditor({
                                 </label>
                                 <input
                                   type="text"
+                                  disabled={!isEditable}
                                   value={subFields[key]?.label || ""}
                                   onChange={(e) =>
                                     handleAddressSubLabelChange(
@@ -2703,6 +2768,7 @@ function FieldEditor({
                                       {key}
                                     </span>
                                     <ToggleSwitch
+                                      disabled={!isEditable}
                                       checked={subFields[key]?.visible || false}
                                       onChange={() =>
                                         handleAddressVisibilityChange(key)
@@ -2719,6 +2785,7 @@ function FieldEditor({
                                     </label>
                                     <input
                                       type="checkbox"
+                                      disabled={!isEditable}
                                       id={`address-${key}-required-toggle`}
                                       checked={
                                         subFields[key]?.isRequired || false
@@ -2748,6 +2815,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="number"
+                              disabled={!isEditable}
                               value={maxChars}
                               onChange={handleMaxCharsChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -2761,6 +2829,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="text"
+                              disabled={!isEditable}
                               value={allowedDomains}
                               onChange={handleAllowedDomainsChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -2769,6 +2838,7 @@ function FieldEditor({
                           </div>
                           <div className="flex items-center">
                             <ToggleSwitch
+                              disabled={!isEditable}
                               checked={enableConfirmation}
                               onChange={handleConfirmationChange}
                               id="confirmation-toggle"
@@ -2779,6 +2849,7 @@ function FieldEditor({
                           </div>
                           <div className="flex items-center">
                             <ToggleSwitch
+                            disabled={!isEditable}
                               checked={enableVerification}
                               onChange={handleVerificationChange}
                               id="verification-toggle"
@@ -2802,6 +2873,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="number"
+                              disabled={!isEditable}
                               value={maxFileSize}
                               onChange={handleMaxFileSizeChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -2815,6 +2887,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="text"
+                              disabled={!isEditable}
                               value={allowedFileTypes}
                               onChange={handleAllowedFileTypesChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -2829,6 +2902,7 @@ function FieldEditor({
                               <label className="inline-flex items-center">
                                 <input
                                   type="radio"
+                                  disabled={!isEditable}
                                   checked={!multipleFiles}
                                   onChange={() =>
                                     handleMultipleFilesChange(false)
@@ -2842,6 +2916,7 @@ function FieldEditor({
                               <label className="inline-flex items-center">
                                 <input
                                   type="radio"
+                                  disabled={!isEditable}
                                   checked={multipleFiles}
                                   onChange={() =>
                                     handleMultipleFilesChange(true)
@@ -2865,6 +2940,7 @@ function FieldEditor({
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center">
                             <ToggleSwitch
+                            disabled={!isEditable}
                               checked={makeAsLink}
                               onChange={handleMakeAsLinkChange}
                               id="link-toggle"
@@ -2880,6 +2956,7 @@ function FieldEditor({
                               </label>
                               <input
                                 type="url"
+                                disabled={!isEditable}
                                 value={termsLinkUrl}
                                 onChange={handleTermsLinkUrlChange}
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -2902,6 +2979,7 @@ function FieldEditor({
                             </label>
                             <select
                               value={dateSeparator}
+                              disabled={!isEditable}
                               onChange={handleDateSeparatorChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -2916,6 +2994,7 @@ function FieldEditor({
                             </label>
                             <select
                               value={dateFormat}
+                              disabled={!isEditable}
                               onChange={handleDateFormatChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -2930,6 +3009,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="date"
+                              disabled={!isEditable}
                               value={defaultDate}
                               onChange={handleDefaultDateChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -2941,6 +3021,7 @@ function FieldEditor({
                             </label>
                             <select
                               value={weekStartDay}
+                              disabled={!isEditable}
                               onChange={handleWeekStartDayChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -2956,6 +3037,7 @@ function FieldEditor({
                               <div key={idx} className="mb-2">
                                 <input
                                   type="text"
+                                  disabled={!isEditable}
                                   value={month}
                                   onChange={(e) =>
                                     handleCustomMonthLabelChange(
@@ -2977,6 +3059,7 @@ function FieldEditor({
                               <div key={idx} className="mb-2">
                                 <input
                                   type="text"
+                                  disabled={!isEditable}
                                   value={day}
                                   onChange={(e) =>
                                     handleCustomDayLabelChange(
@@ -2996,6 +3079,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="text"
+                              disabled={!isEditable}
                               value={customTodayLabel}
                               onChange={handleCustomTodayLabelChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -3004,6 +3088,7 @@ function FieldEditor({
                           </div>
                           <div className="flex items-center">
                             <ToggleSwitch
+                            disabled={!isEditable}
                               checked={enableAgeVerification}
                               onChange={handleAgeVerificationChange}
                               id="age-verification-toggle"
@@ -3019,6 +3104,7 @@ function FieldEditor({
                               </label>
                               <input
                                 type="number"
+                                disabled={!isEditable}
                                 value={minAge}
                                 onChange={handleMinAgeChange}
                                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -3041,6 +3127,7 @@ function FieldEditor({
                                     ? datetimeRange.start
                                     : dateRange.start
                                 }
+                                disabled={!isEditable}
                                 onChange={(e) =>
                                   isDateTime
                                     ? handleDatetimeRangeChange(
@@ -3060,6 +3147,7 @@ function FieldEditor({
                                 value={
                                   isDateTime ? datetimeRange.end : dateRange.end
                                 }
+                                disabled={!isEditable}
                                 onChange={(e) =>
                                   isDateTime
                                     ? handleDatetimeRangeChange(
@@ -3088,6 +3176,7 @@ function FieldEditor({
                                 <input
                                   type={isDateTime ? "datetime-local" : "date"}
                                   value={date}
+                                  disabled={!isEditable}
                                   onChange={(e) =>
                                     handleDisabledDateChange(
                                       idx,
@@ -3099,6 +3188,7 @@ function FieldEditor({
                                 />
                                 <button
                                   onClick={() => handleRemoveDisabledDate(idx)}
+                                  disabled={!isEditable}
                                   className="text-red-500 hover:text-red-700"
                                 >
                                   <FaTimes />
@@ -3107,7 +3197,8 @@ function FieldEditor({
                             ))}
                             <button
                               onClick={handleAddDisabledDate}
-                              className="text-blue-600 hover:underline"
+                              disabled={!isEditable}
+                              className="text-[#028ab0] hover:underline"
                             >
                               + Add Disabled Date
                             </button>
@@ -3127,6 +3218,7 @@ function FieldEditor({
                             </label>
                             <select
                               value={timeFormat}
+                              disabled={!isEditable}
                               onChange={handleTimeFormatChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -3142,6 +3234,7 @@ function FieldEditor({
                             </label>
                             <input
                               type="time"
+                              disabled={!isEditable}
                               value={defaultTime}
                               onChange={handleDefaultTimeChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -3153,6 +3246,7 @@ function FieldEditor({
                             </label>
                             <select
                               value={restrictAmPm}
+                              disabled={!isEditable}
                               onChange={handleRestrictAmPmChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -3171,6 +3265,7 @@ function FieldEditor({
                         </label>
                         <input
                           type="number"
+                          disabled={!isEditable}
                           value={shortTextMaxChars}
                           onChange={handleShortTextMaxCharsChange}
                           className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -3185,6 +3280,7 @@ function FieldEditor({
                           </label>
                           <select
                             value={validationType}
+                            disabled={!isEditable}
                             onChange={handleValidationTypeChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           >
@@ -3204,6 +3300,7 @@ function FieldEditor({
                         </label>
                         <div className="flex items-center">
                           <ToggleSwitch
+                          disabled={!isEditable}
                             checked={isRichText}
                             onChange={handleIsRichTextChange}
                             id="rich-text-toggle"
@@ -3218,6 +3315,7 @@ function FieldEditor({
                           </label>
                           <input
                             type="number"
+                            disabled={!isEditable}
                             value={longTextMaxChars}
                             onChange={handleLongTextMaxCharsChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
@@ -3233,6 +3331,7 @@ function FieldEditor({
                           </label>
                           <select
                             value={validationType}
+                            disabled={!isEditable}
                             onChange={handleValidationTypeChange}
                             className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                           >
@@ -3249,6 +3348,7 @@ function FieldEditor({
                       <div className="mb-4">
                         <div className="flex items-center mb-2">
                           <ToggleSwitch
+                          disabled={!isEditable}
                             checked={numberValueLimits.enabled}
                             onChange={(e) =>
                               handleNumberValueLimitsChange(
@@ -3270,6 +3370,7 @@ function FieldEditor({
                               </label>
                               <input
                                 type="number"
+                                disabled={!isEditable}
                                 value={numberValueLimits.min}
                                 onChange={(e) =>
                                   handleNumberValueLimitsChange(
@@ -3287,6 +3388,7 @@ function FieldEditor({
                               </label>
                               <input
                                 type="number"
+                                disabled={!isEditable}
                                 value={numberValueLimits.max}
                                 onChange={(e) =>
                                   handleNumberValueLimitsChange(
@@ -3313,6 +3415,7 @@ function FieldEditor({
                           {/* Enable Country Code Checkbox */}
                           <div className="flex items-center">
                             <ToggleSwitch
+                            disabled={!isEditable}
                               checked={
                                 phoneSubFields.countryCode?.enabled || false
                               }
@@ -3362,6 +3465,7 @@ function FieldEditor({
                                 Default Country Code
                               </label>
                               <select
+                              disabled={!isEditable}
                                 value={
                                   phoneSubFields.countryCode?.value || "US"
                                 }
@@ -3408,6 +3512,7 @@ function FieldEditor({
                                 />
                               </label>
                               <input
+                              disabled={!isEditable}
                                 type="text"
                                 value={
                                   phoneSubFields.phoneNumber?.phoneMask ||
@@ -3448,6 +3553,7 @@ function FieldEditor({
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center">
                             <ToggleSwitch
+                            disabled={!isEditable}
                               checked={priceLimits.enabled}
                               onChange={(e) =>
                                 handlePriceLimitsChange(
@@ -3469,6 +3575,7 @@ function FieldEditor({
                                 </label>
                                 <input
                                   type="number"
+                                  disabled={!isEditable}
                                   value={priceLimits.min}
                                   onChange={(e) =>
                                     handlePriceLimitsChange(
@@ -3487,6 +3594,7 @@ function FieldEditor({
                                 </label>
                                 <input
                                   type="number"
+                                  disabled={!isEditable}
                                   value={priceLimits.max}
                                   onChange={(e) =>
                                     handlePriceLimitsChange(
@@ -3507,6 +3615,7 @@ function FieldEditor({
                             </label>
                             <select
                               value={currencyType}
+                              disabled={!isEditable}
                               onChange={handleCurrencyTypeChange}
                               className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                             >
@@ -3550,6 +3659,7 @@ function FieldEditor({
                     </label>
                     <input
                       type="text"
+                      disabled={!isEditable}
                       defaultValue={uniqueName}
                       onChange={handleUniqueNameChange}
                       className={`w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800 ${uniqueNameError ? "border-red-500" : ""
@@ -3578,54 +3688,14 @@ function FieldEditor({
                   className="mb-4"
                   userId={userId}
                   formId={formId}
+                  isEditable={isEditable}
                 />
               )}
             </div>
           </div>
         )}
-{/* 
-         {activeTab === "settings" && (selectedFooter.buttonType==null) && (
-    <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-      <h3 className="font-semibold mb-2">Footer Configuration</h3>
-      <div className="mb-2">
-        <label className="block text-sm font-medium mb-1">Footer Text</label>
-        <input
-          type="text"
-          value={footerConfigs.text}
-          onChange={handleFooterButtonTextChange}
-          className="w-full p-2 border rounded"
-          placeholder="Enter footer text"
-        />
-      </div>
-      <div className="mb-2">
-        <label className="block text-sm font-medium mb-1">Footer Alignment</label>
-        <select
-          value={footerConfigs.alignment}
-          onChange={handleFooterAlignmentChange}
-          className="w-full p-2 border rounded"
-        >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-          <option value="split">Split (for 2 buttons)</option>
-        </select>
-      </div>
-      <div className="mb-2 flex gap-4 items-center">
-        <label className="block text-sm font-medium mb-1">Button Background</label>
-        <ColorPicker
-          value={footerConfigs.buttonBg}
-          onChange={handleFooterButtonBgChange}
-        />
-        <label className="block text-sm font-medium mb-1">Button Text Color</label>
-        <ColorPicker
-          value={footerConfigs.buttonTextColor}
-          onChange={handleFooterButtonTextColorChange}
-        />
-      </div>
-    </div>
-  )} */}
 
-  {footerEditor}
+        {footerEditor}
 
         {activeTab === "widget" && isFormCalculation && (
           <div className="px-4 py-2 bg-gray-50 rounded-b-lg">
@@ -3633,6 +3703,7 @@ function FieldEditor({
               selectedField={selectedField}
               onUpdateField={onUpdateField}
               fields={fields}
+              isEditable={isEditable}
             />
           </div>
         )}

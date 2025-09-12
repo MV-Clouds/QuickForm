@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { decrypt } from "../form-builder-with-versions/crypto";
@@ -21,12 +20,13 @@ import {
   parsePhoneNumberFromString,
   getExampleNumber,
 } from "libphonenumber-js";
-import { Select, Tooltip , message} from "antd";
+import { Select, Tooltip, message } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
 import { evaluateFormula } from './FormulaEvaluator';
 // import PaymentFieldRenderer from "./PaymentFieldRenderer";
 import PaymentFieldRenderer from "./payment/PaymentFieldRenderer";
+import MultipartUploader from "../file-upload/multiple-file-upload";
 
 const { Option } = Select;
 
@@ -61,12 +61,13 @@ function PublicFormViewer({ runPrefill = false }) {
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [notificationData , setNotificationData] = useState([]);
-  const [twilioData , setTwilioData] = useState([]);
+  const [notificationData, setNotificationData] = useState([]);
+  const [twilioData, setTwilioData] = useState([]);
   // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [hasPaymentField, setHasPaymentField] = useState(false);
+  const [uploadedFileUrls, setUploadedFileUrls] = useState({});
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -149,7 +150,6 @@ function PublicFormViewer({ runPrefill = false }) {
             }
           }
         });
-        console.log('Local id ', localIdToSFId);
 
         // Parse Prefill array from formVersion.Prefills if available
         if (formVersion.Prefills && Array.isArray(formVersion.Prefills)) {
@@ -459,7 +459,6 @@ function PublicFormViewer({ runPrefill = false }) {
                         LIMIT 1`;
 
       try {
-        const startTime = Date.now();
         const resp = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -475,7 +474,6 @@ function PublicFormViewer({ runPrefill = false }) {
         if (data.newAccessToken) {
           setAccessToken(data.newAccessToken);
         }
-        console.log(`Prefill query returned in ${Date.now() - startTime}ms`);
         if (data.record) {
           const updates = {};
           Object.entries(prefill.fieldMappings).forEach(([localId, sfName]) => {
@@ -811,168 +809,6 @@ function PublicFormViewer({ runPrefill = false }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   if (!validateForm() || !linkData || !accessToken || !formData.mappings) {
-  //     return;
-  //   }
-
-  //   setIsSubmitting(true);
-  //   try {
-  //     const submissionData = {};
-  //     const filesToUpload = {};
-
-  //     for (const key of Object.keys(formValues)) {
-  //       const field = formData.Fields.find((f) => f.Id === key);
-  //       const fieldType = field?.Field_Type__c;
-
-  //       if (['fileupload', 'imageuploader'].includes(fieldType) && formValues[key] instanceof File) {
-  //         filesToUpload[key] = formValues[key];
-  //         submissionData[key] = formValues[key].name;
-  //       } else if (fieldType === 'signature' && signatures[key]) {
-  //         const signatureBlob = await (await fetch(signatures[key])).blob();
-  //         const signatureFile = new File([signatureBlob], `${key}.png`, { type: 'image/png' });
-  //         filesToUpload[key] = signatureFile;
-  //         submissionData[key] = `${key}.png`;
-  //       } else {
-  //         // For phone fields, clean the input to digits only for submission
-  //         if (fieldType === 'phone') {
-  //           submissionData[key] = formValues[key] ? formValues[key].replace(/\D/g, '') : '';
-  //         } else {
-  //           submissionData[key] = formValues[key];
-  //         }
-  //       }
-  //     }
-
-  //     const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${accessToken}`,
-  //       },
-  //       body: JSON.stringify({
-  //         userId: linkData.userId,
-  //         submissionData: {
-  //           formId: formData.Form__c,
-  //           formVersionId: formData.Id,
-  //           data: submissionData,
-  //           signatures: signatures,
-  //         },
-  //       }),
-  //     });
-
-  //     const data = await response.json();
-  //     if (!response.ok) {
-  //       throw new Error(data.error || 'Failed to submit form');
-  //     }
-
-  //     const submissionId = data.submissionId;
-
-  //     const updatedSubmissionData = { ...submissionData };
-  //     for (const [key, file] of Object.entries(filesToUpload)) {
-  //       const documentId = await uploadFileToSalesforce(file, submissionId);
-  //       updatedSubmissionData[key] = documentId;
-  //     }
-
-  //     const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //         Authorization: `Bearer ${accessToken}`,
-  //       },
-  //       body: JSON.stringify({
-  //         userId: linkData.userId,
-  //         instanceUrl,
-  //         formVersionId: formData.Id,
-  //         formData: updatedSubmissionData,
-  //         nodes: formData.mappings,
-  //       }),
-  //     });
-
-  //     const flowData = await flowResponse.json();
-  //     if (!flowResponse.ok) {
-  //       const newErrors = {};
-  //       if (flowData.results) {
-  //         Object.entries(flowData.results).forEach(([nodeId, result]) => {
-  //           if (result.error) {
-  //             const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-  //             if (mapping?.Formatter_Config__c) {
-  //               const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-  //               let fieldId = formatterConfig.inputField;
-  //               if (fieldId.includes('_phoneNumber')) {
-  //                 fieldId = fieldId.replace('_phoneNumber', '');
-  //               }
-  //               newErrors[fieldId] = result.error;
-  //             }
-  //           }
-  //         });
-  //         if (Object.keys(newErrors).length > 0) {
-  //           setErrors(newErrors);
-  //           throw new Error('Form submission completed but flow execution had errors');
-  //         }
-  //       }
-  //       throw new Error(flowData.error || 'Failed to execute flow');
-  //     }
-
-  //     alert('Form submitted and flow executed successfully!');
-
-  //     const initialValues = {};
-  //     formData.Fields.forEach((field) => {
-  //       const properties = JSON.parse(field.Properties__c || '{}');
-  //       const fieldType = field.Field_Type__c;
-  //       if (fieldType === 'phone' && properties.subFields?.countryCode?.enabled) {
-  //         initialValues[`${field.Id}_countryCode`] = properties.subFields.countryCode.value || 'US';
-  //         initialValues[field.Id] = '';
-  //       } else if (fieldType === 'checkbox' || (fieldType === 'dropdown' && properties.allowMultipleSelections)) {
-  //         initialValues[field.Id] = [];
-  //       } else if (fieldType === 'datetime' || fieldType === 'date') {
-  //         initialValues[field.Id] = null;
-  //       } else if (fieldType === 'scalerating') {
-  //         initialValues[field.Id] = {};
-  //       } else {
-  //         initialValues[field.Id] = '';
-  //       }
-  //     });
-  //     setFormValues(initialValues);
-  //     setErrors({});
-  //     setSignatures({});
-  //     setFilePreviews({});
-  //     setSelectedRatings({});
-  //     setSelectedOptions({});
-  //     setToggles({});
-  //     setCurrentPage(0);
-  //   } catch (error) {
-  //     if (error.message.includes('INVALID_JWT_FORMAT')) {
-  //       let decrypted;
-  //       try {
-  //         decrypted = decrypt(linkId);
-  //       } catch (e) {
-  //         throw new Error(e.message || 'Invalid link format');
-  //       }
-
-  //       const [userId, formId] = decrypted.split('$');
-  //       const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({ userId }),
-  //       });
-
-  //       const tokenData = await tokenResponse.json();
-  //       if (!tokenResponse.ok || tokenData.error) {
-  //         throw new Error(tokenData.error || 'Failed to fetch access token');
-  //       }
-  //       const token = tokenData.access_token;
-  //       setAccessToken(token);
-  //       handleSubmit(e);
-  //     } else {
-  //       console.error('Error submitting form:', error);
-  //       setErrors((prev) => ({ ...prev, submit: error.message || 'Failed to submit form' }));
-  //     }
-  //   } finally {
-  //     setIsSubmitting(false);
-  //   }
-  // };
-
   // Utility: Validation for a single field (returns an error message string if invalid, or null if valid)
   const validateSingleField = (field, value, allValues, { signaturesObj, uiState } = {}) => {
     let properties = {};
@@ -1197,6 +1033,21 @@ function PublicFormViewer({ runPrefill = false }) {
     return null; // No error
   };
 
+  const handleFileUploadComplete = (fieldId, urls) => {
+    setUploadedFileUrls(prev => ({
+      ...prev,
+      [fieldId]: urls
+    }));
+
+    // Update form values with the uploaded URL(s)
+    if (urls && urls.length > 0) {
+      setFormValues(prev => ({
+        ...prev,
+        [fieldId]: urls // Store the array of URLs, not just the first one
+      }));
+    }
+  };
+
   // In handleSubmit function
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1222,6 +1073,7 @@ function PublicFormViewer({ runPrefill = false }) {
           }
         }
       });
+
       const submissionData = {};
       const filesToUpload = {};
 
@@ -1340,13 +1192,31 @@ function PublicFormViewer({ runPrefill = false }) {
         );
       }
 
+      // Use the uploaded file URLs
+      Object.keys(uploadedFileUrls).forEach(fieldId => {
+        if (uploadedFileUrls[fieldId] && uploadedFileUrls[fieldId].length > 0) {
+          // For fileupload fields, store the array of URLs
+          const field = formData.Fields.find(f => f.Id === fieldId);
+          if (field && field.Field_Type__c === 'fileupload') {
+            submissionData[fieldId] = uploadedFileUrls[fieldId];
+          } else {
+            // For other field types (imageuploader, signature), use the first URL
+            submissionData[fieldId] = uploadedFileUrls[fieldId][0];
+          }
+        }
+      });
+
       for (const key of Object.keys(filteredFormValues)) {
         const field = formData.Fields.find((f) => f.Id === key);
         const fieldType = field?.Field_Type__c;
         const properties = field ? JSON.parse(field.Properties__c || '{}') : {};
 
+        // Skip footer fields (they're visual only, no submission)
+        if (fieldType === 'footer') {
+          continue;
+        }
+
         if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
-          filesToUpload[key] = filteredFormValues[key];
           submissionData[key] = filteredFormValues[key].name;
         } else if (fieldType === 'signature' && signatures[key]) {
           const signatureBlob = await (await fetch(signatures[key])).blob();
@@ -1387,45 +1257,6 @@ function PublicFormViewer({ runPrefill = false }) {
         }
       }
 
-      const uploadToS3 = async (file) => {
-        const reader = new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result.split(',')[1]);
-          r.onerror = reject;
-          r.readAsDataURL(file);
-        });
-
-        const base64String = await reader;
-
-        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          body: base64String,
-          headers: { 'Content-Type': 'application/octet-stream' }
-        });
-
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.message || 'Upload to S3 failed');
-        }
-
-        const data = await response.json();
-        return data.fileUrl;  // S3 URL
-      };
-
-      // Upload all files and assign URLs into submissionData
-      for (const [key, file] of Object.entries(filesToUpload)) {
-        try {
-          const s3Url = await uploadToS3(file);
-          submissionData[key] = s3Url;
-        } catch (uploadErr) {
-          console.error(`Failed to upload ${key}`, uploadErr);
-          setIsSubmitting(false);
-          return;  // stop submission on error or handle as needed
-        }
-      }
-
       const response = await fetch(process.env.REACT_APP_SUBMIT_FORM_URL, {
         method: 'POST',
         headers: {
@@ -1449,8 +1280,6 @@ function PublicFormViewer({ runPrefill = false }) {
         throw new Error(data.error || 'Failed to submit form');
       }
 
-      const submissionId = data.submissionId;
-
       const updatedSubmissionData = { ...submissionData };
 
       // Show success message based on whether payment was involved
@@ -1462,48 +1291,52 @@ function PublicFormViewer({ runPrefill = false }) {
         alert("Form submitted successfully!");
       }
 
-      const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          userId: linkData.userId,
-          instanceUrl,
-          formVersionId: formData.Id,
-          formData: updatedSubmissionData,
-          nodes: formData.mappings,
-        }),
-      });
+      if (formData?.mappings && formData?.mappings?.length > 0) {
+        const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            userId: linkData.userId,
+            instanceUrl,
+            formVersionId: formData.Id,
+            formData: updatedSubmissionData,
+            nodes: formData.mappings,
+            ...(data.submissionId ? { submissionId: data.submissionId } : { submissionId: data.tempSubmissionId })
+          }),
+        });
 
-      const flowData = await flowResponse.json();
-      if (!flowResponse.ok) {
-        const newErrors = {};
-        if (flowData.results) {
-          Object.entries(flowData.results).forEach(([nodeId, result]) => {
-            if (result.error) {
-              const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
-              if (mapping?.Formatter_Config__c) {
-                const formatterConfig = JSON.parse(mapping.Formatter_Config__c || '{}');
-                let fieldId = formatterConfig.inputField;
-                if (fieldId.includes('_phoneNumber')) {
-                  fieldId = fieldId.replace('_phoneNumber', '');
+        const flowData = await flowResponse.json();
+        if (!flowResponse.ok) {
+          const newErrors = {};
+          if (flowData.results) {
+            Object.entries(flowData.results).forEach(([nodeId, result]) => {
+              if (result.error) {
+                const mapping = formData.mappings.find((m) => m.Node_Id__c === nodeId);
+                if (mapping?.Config__c) {
+                  const config = JSON.parse(mapping.Config__c || '{}');
+                  let fieldId = config.inputField;
+                  if (fieldId.includes('_phoneNumber')) {
+                    fieldId = fieldId.replace('_phoneNumber', '');
+                  }
+                  newErrors[fieldId] = result.error;
                 }
-                newErrors[fieldId] = result.error;
               }
+            });
+            if (Object.keys(newErrors).length > 0) {
+              setErrors(newErrors);
+              throw new Error('Form submission completed but flow execution had errors');
             }
-          });
-          if (Object.keys(newErrors).length > 0) {
-            setErrors(newErrors);
-            throw new Error('Form submission completed but flow execution had errors');
           }
+          throw new Error(flowData.error || 'Failed to execute flow');
         }
-        throw new Error(flowData.error || 'Failed to execute flow');
+      } else {
+        console.log("⏭️ Skipping mapping execution: no mappings for this form version.");
       }
-      console.log('formData exist ',notificationData)
-     if(notificationData.length > 0){
-      if(notificationData){
+      if (notificationData?.length > 0) {
+        if (notificationData) {
           console.log("Twilio SMS sending started");
           try {
             const smsResponse = await fetch(
@@ -1517,13 +1350,13 @@ function PublicFormViewer({ runPrefill = false }) {
                   userId: linkData.userId,
                   instanceUrl,
                   to: JSON.parse(notificationData[0].Receipe__c || '{}')?.to,
-                  message : notificationData[0].Body__c,
+                  message: notificationData[0].Body__c,
                   formId: formData.Form__c,
-                  twilioConnected : true
+                  twilioConnected: true
                 }),
               }
             );
-        
+
             if (!smsResponse.ok) {
               const smsErrorData = await smsResponse.json().catch(() => ({}));
               console.error(
@@ -1537,39 +1370,39 @@ function PublicFormViewer({ runPrefill = false }) {
           } catch (smsError) {
             console.error("Exception during Twilio SMS fetch:", smsError);
           }
-      }else{
-        console.log('Message sending started ')
-        try {
-          const mailResponse = await fetch('https://0oue66drzd.execute-api.us-east-1.amazonaws.com/sendMail', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userId: linkData.userId,
-              instanceUrl,
-              submissionData: updatedSubmissionData,
-              sftoken: accessToken,
-              formId : formData.Form__c,
-            }),
-          });
-  
-          if (!mailResponse.ok) {
-            const mailErrorData = await mailResponse.json().catch(() => ({}));
-            console.error('Error sending mail:', mailErrorData.error || mailResponse.statusText);
-          } else {
-            // Optionally handle success, e.g. log or ignore
-            const mailResult = await mailResponse.json();
-            console.log('Mail result' , mailResult)
+        } else {
+          console.log('Message sending started ')
+          try {
+            const mailResponse = await fetch('https://0oue66drzd.execute-api.us-east-1.amazonaws.com/sendMail', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: linkData.userId,
+                instanceUrl,
+                submissionData: updatedSubmissionData,
+                sftoken: accessToken,
+                formId: formData.Form__c,
+              }),
+            });
+
+            if (!mailResponse.ok) {
+              const mailErrorData = await mailResponse.json().catch(() => ({}));
+              console.error('Error sending mail:', mailErrorData.error || mailResponse.statusText);
+            } else {
+              // Optionally handle success, e.g. log or ignore
+              const mailResult = await mailResponse.json();
+              console.log('Mail result', mailResult)
+            }
+          } catch (mailError) {
+            console.error('Exception during sendMail fetch:', mailError);
           }
-        } catch (mailError) {
-          console.error('Exception during sendMail fetch:', mailError);
         }
+
+        alert('Form submitted and flow executed successfully!');
       }
 
-      alert('Form submitted and flow executed successfully!');
-     }
-     
 
       // Set to show thank you page
       setThankyouData(formData?.ThankYou || null);
@@ -1733,6 +1566,8 @@ function PublicFormViewer({ runPrefill = false }) {
 
   const getFieldUiState = (fieldId, formValues) => {
     let state = { hidden: false, required: undefined, mask: null, disabled: undefined };
+    if (fieldId.includes('_'))
+      fieldId = Object.keys(localIdToSFId).find(key => localIdToSFId[key] === fieldId) || fieldId;
     formConditions.forEach(c => {
       if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
@@ -1774,18 +1609,18 @@ function PublicFormViewer({ runPrefill = false }) {
             const intermediatePageFields = pages[i];
             for (const field of intermediatePageFields) {
               const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
-              const fieldId =  properties.id || field.Id;
+              const fieldId = properties.id || field.Id;
               // Get UI state from conditions (required/don't require)
               const uiState = getFieldUiState(fieldId, formValues);
               const required = properties.isRequired || uiState.required;
-              
+
               if (required) {
                 // Dynamically don't require
                 const dontRequire = uiState && uiState.required === false && properties.isRequired;
-                
+
                 // Only block if not dynamically set to "don't require"
                 if (!dontRequire && (formValues[fieldId] === undefined || formValues[fieldId] === "" ||
-                    (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
+                  (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
                   blockSkip = true;
                   break;
                 }
@@ -2159,7 +1994,6 @@ function PublicFormViewer({ runPrefill = false }) {
       }
     });
 
-    console.log(properties.formula);
 
 
     // Evaluate the formula using the mapped values
@@ -2215,12 +2049,12 @@ function PublicFormViewer({ runPrefill = false }) {
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
-    const isDisabled = 
+    const isDisabled =
       typeof state.disabled === 'boolean'
         ? state.disabled
         : !!properties.isDisabled;
 
-    const isRequired = 
+    const isRequired =
       typeof state.required === 'boolean'
         ? state.required
         : !!properties.isRequired;
@@ -2561,6 +2395,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
       case 'phone':
         if (isHidden) return null;
+        const countryCodeState = getFieldUiState(`${fieldId}_countryCode`, formValues);
         const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
         let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
         try {
@@ -2580,7 +2415,7 @@ function PublicFormViewer({ runPrefill = false }) {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            {properties.subFields?.countryCode?.enabled ? (
+            {properties.subFields?.countryCode?.enabled && !countryCodeState.hidden ? (
               <div className="flex items-center gap-3">
                 <div className="w-1/3">
                   <PhoneInput
@@ -2838,7 +2673,7 @@ function PublicFormViewer({ runPrefill = false }) {
               })}
             </div>
 
-             {/* Selection count and validation messages */}
+            {/* Selection count and validation messages */}
             <div className="mt-1 text-sm text-gray-500">
               Selected: {selectedCount}
               {(minSelection > 0 || maxSelection < Infinity) && ` of ${maxSelection < Infinity ? maxSelection : '∞'}`}
@@ -2895,7 +2730,7 @@ function PublicFormViewer({ runPrefill = false }) {
             <Select
               style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
-onChange={(val) => {
+              onChange={(val) => {
                 // Validate selection limits for multiple selections
                 if (properties.allowMultipleSelections && Array.isArray(val)) {
                   if (val.length <= properties.maxSelection) {
@@ -2904,9 +2739,9 @@ onChange={(val) => {
                 } else {
                   handleChange(fieldId, val);
                 }
-              }}              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              }} onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               mode={properties.allowMultipleSelections ? 'multiple' : undefined}
-                            maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
+              maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
 
               placeholder={properties.placeholder?.main || 'Select an option'}
               disabled={isDisabled}
@@ -2923,7 +2758,7 @@ onChange={(val) => {
                 {`Select between ${properties.minSelection} and ${properties.maxSelection < Infinity ? properties.maxSelection : 'unlimited'} options`}
               </div>
             )}
-            
+
             {renderError()}
           </div>
         );
@@ -2938,16 +2773,25 @@ onChange={(val) => {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            <input
-              type="file"
-              {...commonProps}
-              onChange={(e) => handleFileChange(fieldId, e, 'fileupload')}
-              accept={properties.allowedFileTypes || 'image/*,application/pdf,.doc,.docx'}
+            <MultipartUploader
               multiple={properties.multipleFiles}
+              onChange={(urls) => handleFileUploadComplete(fieldId, urls)}
+              onRemove={() => handleFileUploadComplete(fieldId, [])}
             />
-            {filePreviews[fieldId] && (
+            {uploadedFileUrls[fieldId] && uploadedFileUrls[fieldId].length > 0 && (
               <div className="mt-2">
-                <img src={filePreviews[fieldId]} alt="Preview" className="max-h-32" onError={(e) => (e.target.style.display = 'none')} />
+                {uploadedFileUrls[fieldId].map((url, index) => (
+                  <div key={index} className="flex items-center mt-1">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      View uploaded file {index + 1}
+                    </a>
+                  </div>
+                ))}
               </div>
             )}
             {properties.maxFileSize && (
@@ -2959,7 +2803,6 @@ onChange={(val) => {
             {renderError()}
           </div>
         );
-
       case 'imageuploader':
         if (isHidden) return null;
         return (
@@ -3023,6 +2866,9 @@ onChange={(val) => {
 
       case 'fullname':
         if (isHidden) return null;
+        const salutationFieldState = getFieldUiState(`${fieldId}_salutation`, formValues);
+        const firstNameFieldState = getFieldUiState(`${fieldId}_firstName`, formValues);
+        const lastNameFieldState = getFieldUiState(`${fieldId}_lastName`, formValues);
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -3032,13 +2878,14 @@ onChange={(val) => {
               </Tooltip>
             )}
             <div className="flex gap-3">
-              {properties.subFields?.salutation?.enabled && (
+              {properties.subFields?.salutation?.enabled && !salutationFieldState.hidden && (
                 <Select
                   style={{ width: '33%' }}
+                  required={salutationFieldState.required}
                   value={formValues[`${fieldId}_salutation`] || properties.subFields.salutation.placeholder}
                   onChange={(value) => handleChange(`${fieldId}_salutation`, value)}
                   onBlur={() => dependentFields.has(`${fieldId}_salutation`) && runPrefillForField(`${fieldId}_salutation`)}
-                  disabled={isDisabled}
+                  disabled={salutationFieldState.disabled}
                   className="w-1/5"
                   placeholder={properties.subFields.salutation.placeholder || 'Select'}
                   options={(properties.subFields.salutation.options || []).map((option) => ({
@@ -3047,24 +2894,30 @@ onChange={(val) => {
                   }))}
                 />
               )}
-              <input
-                type="text"
-                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                value={formValues[`${fieldId}_firstName`] || ''}
-                onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
-                onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
-                placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
-                disabled={isDisabled}
-              />
-              <input
-                type="text"
-                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                value={formValues[`${fieldId}_lastName`] || ''}
-                onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
-                onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
-                placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
-                disabled={isDisabled}
-              />
+              {!firstNameFieldState.hidden && (
+                <input
+                  type="text"
+                  className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                  value={formValues[`${fieldId}_firstName`] || ''}
+                  onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
+                  placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
+                  disabled={firstNameFieldState.disabled}
+                  required={firstNameFieldState.required}
+                />
+              )}
+              {!lastNameFieldState.hidden && (
+                <input
+                  type="text"
+                  className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                  value={formValues[`${fieldId}_lastName`] || ''}
+                  onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
+                  placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
+                  disabled={lastNameFieldState.disabled}
+                  required={lastNameFieldState.required}
+                />
+              )}
             </div>
             {renderError()}
           </div>
@@ -3072,85 +2925,102 @@ onChange={(val) => {
 
       case 'address':
         if (isHidden) return null;
+
+        // Get subfield UI states
+        const streetFieldState = getFieldUiState(`${fieldId}_street`, formValues);
+        const cityFieldState = getFieldUiState(`${fieldId}_city`, formValues);
+        const stateFieldState = getFieldUiState(`${fieldId}_state`, formValues);
+        const countryFieldState = getFieldUiState(`${fieldId}_country`, formValues);
+        const postalFieldState = getFieldUiState(`${fieldId}_postal`, formValues);
+
         return (
           <div className="mb-4">
             {renderLabel()}
             {helpText && (
               <Tooltip title={helpText}>
-                <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
+                <InfoCircleOutlined />
               </Tooltip>
             )}
             <div className="space-y-3">
-              {properties.subFields?.street?.visiblesubFields !== false && (
+              {properties?.subFields?.street?.visiblesubFields !== false && !streetFieldState.hidden && (
                 <div>
-                  <label className="text-xs text-gray-500">{properties.subLabels?.street || 'Street Address'}</label>
+                  <label className="text-xs text-gray-500">{properties?.subLabels?.street || 'Street Address'}</label>
                   <input
                     type="text"
-                    className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                    value={formValues[`${fieldId}_street`] || ''}
-                    onChange={(e) => handleChange(`${fieldId}_street`, e.target.value)}
+                    className={`w-full p-2 border rounded ${streetFieldState.required && !formValues[`${fieldId}_street`] ? 'border-red-500' : 'border-gray-300'}`}
+                    value={formValues?.[`${fieldId}_street`] || ''}
+                    onChange={e => handleChange(`${fieldId}_street`, e.target.value)}
                     onBlur={() => dependentFields.has(`${fieldId}_street`) && runPrefillForField(`${fieldId}_street`)}
-                    placeholder={properties.placeholder?.street || 'Street Address'}
-                    disabled={isDisabled}
+                    placeholder={properties?.placeholder?.street || 'Street Address'}
+                    disabled={streetFieldState.disabled}
+                    required={streetFieldState.required}
                   />
                 </div>
               )}
+
               <div className="flex gap-3">
-                {properties.subFields?.city?.visible !== false && (
+                {properties?.subFields?.city?.visible !== false && !cityFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.city || 'City'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.city || 'City'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_city`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_city`, e.target.value)}
+                      className={`w-full p-2 border rounded ${cityFieldState.required && !formValues[`${fieldId}_city`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_city`] || ''}
+                      onChange={e => handleChange(`${fieldId}_city`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_city`) && runPrefillForField(`${fieldId}_city`)}
-                      placeholder={properties.placeholder?.city || 'City'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.city || 'City'}
+                      disabled={cityFieldState.disabled}
+                      required={cityFieldState.required}
                     />
                   </div>
                 )}
-                {properties.subFields?.city?.visible !== false && (
+
+                {properties?.subFields?.state?.visible !== false && !stateFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.state || 'State'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.state || 'State'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_state`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_state`, e.target.value)}
+                      className={`w-full p-2 border rounded ${stateFieldState.required && !formValues[`${fieldId}_state`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_state`] || ''}
+                      onChange={e => handleChange(`${fieldId}_state`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_state`) && runPrefillForField(`${fieldId}_state`)}
-                      placeholder={properties.placeholder?.state || 'State'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.state || 'State'}
+                      disabled={stateFieldState.disabled}
+                      required={stateFieldState.required}
                     />
                   </div>
                 )}
               </div>
+
               <div className="flex gap-3">
-                {properties.subFields?.city?.visible !== false && (
+                {properties?.subFields?.country?.visible !== false && !countryFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.country || 'Country'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.country || 'Country'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_country`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_country`, e.target.value)}
+                      className={`w-full p-2 border rounded ${countryFieldState.required && !formValues[`${fieldId}_country`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_country`] || ''}
+                      onChange={e => handleChange(`${fieldId}_country`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_country`) && runPrefillForField(`${fieldId}_country`)}
-                      placeholder={properties.placeholder?.country || 'Country'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.country || 'Country'}
+                      disabled={countryFieldState.disabled}
+                      required={countryFieldState.required}
                     />
                   </div>
                 )}
-                {properties.subFields?.city?.visible !== false && (
+
+                {properties?.subFields?.postal?.visible !== false && !postalFieldState.hidden && (
                   <div className="w-1/2">
-                    <label className="text-xs text-gray-500">{properties.subLabels?.postal || 'Postal Code'}</label>
+                    <label className="text-xs text-gray-500">{properties?.subLabels?.postal || 'Postal Code'}</label>
                     <input
                       type="text"
-                      className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                      value={formValues[`${fieldId}_postal`] || ''}
-                      onChange={(e) => handleChange(`${fieldId}_postal`, e.target.value)}
+                      className={`w-full p-2 border rounded ${postalFieldState.required && !formValues[`${fieldId}_postal`] ? 'border-red-500' : 'border-gray-300'}`}
+                      value={formValues?.[`${fieldId}_postal`] || ''}
+                      onChange={e => handleChange(`${fieldId}_postal`, e.target.value)}
                       onBlur={() => dependentFields.has(`${fieldId}_postal`) && runPrefillForField(`${fieldId}_postal`)}
-                      placeholder={properties.placeholder?.postal || 'Postal Code'}
-                      disabled={isDisabled}
+                      placeholder={properties?.placeholder?.postal || 'Postal Code'}
+                      disabled={postalFieldState.disabled}
+                      required={postalFieldState.required}
                     />
                   </div>
                 )}
@@ -3556,7 +3426,15 @@ onChange={(val) => {
   return (
     <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
-      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
+      <form onSubmit={(e) => {
+          e.preventDefault();
+          const clickedButtonName = e.nativeEvent.submitter.name;
+          if (clickedButtonName === "SubmitBtn") {
+            handleSubmit(e);
+          }
+        }}
+        className="space-y-6" 
+        aria-label="Public Form">
         <div className="page">
           {pages[currentPage]?.map((field) => (
             <div key={field.Unique_Key__c}>{renderField(field)}</div>
@@ -3598,6 +3476,7 @@ onChange={(val) => {
             !hasPaymentField || paymentCompleted ? (
               <button
                 type="submit"
+                name="SubmitBtn"
                 disabled={isSubmitting || !accessToken}
                 className={`py-2 px-4 rounded-md font-medium transition ${isSubmitting || !accessToken
                   ? "opacity-50 cursor-not-allowed"

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { PayPalPaymentProvider } from "./providers";
 import PaymentLoadingScreen from "./components/PaymentLoadingScreen";

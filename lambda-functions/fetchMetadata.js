@@ -21,7 +21,17 @@ export const handler = async (event) => {
   }
 
   let { userId, instanceUrl, formId, accessToken, requestType, formVersionId  } = body;
-  console.log('Request type',requestType);
+  let tokenRefreshed = false;
+  const fetchNewAccessToken = async (userId) => {
+    const response = await fetch('https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/getAccessToken/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    if (!response.ok) throw new Error('Failed to fetch new access token');
+    const data = await response.json();
+    return data.access_token;
+  };
   
   if (!userId) {
     return {
@@ -83,7 +93,6 @@ export const handler = async (event) => {
       }
       // Parse soql query string from body (expect it in body.sobject or body.soql)
       const { soql } = body;
-      console.log('SOQL :', soql);
       if (!soql) {
         return {
           statusCode: 400,
@@ -96,7 +105,7 @@ export const handler = async (event) => {
         const cleanedInstanceUrl = instanceUrl.replace(/^https?:\/\//, '');
         const queryUrl = `https://${cleanedInstanceUrl}/services/data/v60.0/query?q=${encodeURIComponent(soql)}`;
     
-        const sfResponse = await fetch(queryUrl, {
+        let sfResponse = await fetch(queryUrl, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -105,12 +114,28 @@ export const handler = async (event) => {
         });
     
         if (!sfResponse.ok) {
-          const errData = await sfResponse.json();
-          return {
-            statusCode: sfResponse.status,
-            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-            body: JSON.stringify({ error: errData.message || 'Salesforce query failed' }),
-          };
+          if (sfResponse.status === 401 && !tokenRefreshed) {
+            // Refresh the access token
+            accessToken = await fetchNewAccessToken(userId);
+            tokenRefreshed = true;
+
+            // Retry the original request
+            sfResponse = await fetch(queryUrl, {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            });
+          }
+          if (!sfResponse.ok) {
+            const errData = await sfResponse.json();
+            return {
+              statusCode: sfResponse.status,
+              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+              body: JSON.stringify({ error: errData.message || 'Salesforce query failed' }),
+            };
+          }
         }
     
         const data = await sfResponse.json();
@@ -128,6 +153,13 @@ export const handler = async (event) => {
             firstRecord = data.records[0];
           }
         }
+        if(tokenRefreshed){
+          return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            body: JSON.stringify({ record: firstRecord, newAccessToken: accessToken }),
+          };
+        }
         return {
           statusCode: 200,
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
@@ -144,7 +176,7 @@ export const handler = async (event) => {
     
     if(accessToken){
       const cleanedInstanceUrl = instanceUrl.replace(/^https?:\/\//, '');
-      const objectsRes = await fetch(`${instanceUrl}/services/data/v60.0/sobjects/`, {
+      let objectsRes = await fetch(`${instanceUrl}/services/data/v60.0/sobjects/`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -153,8 +185,24 @@ export const handler = async (event) => {
       });
   
       if (!objectsRes.ok) {
-        const errorData = await objectsRes.json();
-        throw new Error(errorData.message || 'Failed to fetch objects');
+        if(objectsRes.status === 401 && !tokenRefreshed){
+          // Refresh the access token
+          accessToken = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+
+          // Retry the original request
+          objectsRes = await fetch(`${instanceUrl}/services/data/v60.0/sobjects/`, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+        }
+        if (!objectsRes.ok) {
+          const errorData = await objectsRes.json();
+          throw new Error(errorData.message || 'Failed to fetch objects');
+        }
       }
   
       const objectsData = await objectsRes.json();
@@ -218,9 +266,19 @@ export const handler = async (event) => {
             Metadata: { S: JSON.stringify(metadata) },
             CreatedAt: { S: metadataItem?.CreatedAt?.S || now },
             UpdatedAt: { S: now },
-            UserProfile : { S: metadataItem?.UserProfile?.S }
+            UserProfile : { S: metadataItem?.UserProfile?.S },
+            GoogleData : { S: metadataItem?.GoogleData?.S  || '[]'},
+            TwilioData : { S: metadataItem?.TwilioData?.S  || '[]'},
           }
         }));
+
+        if(tokenRefreshed){
+          return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+            body: JSON.stringify({ success: true, metadata : JSON.stringify(metadata), newAccessToken: accessToken }),
+          };
+        }
 
         return {
           statusCode: 200,
@@ -350,6 +408,7 @@ export const handler = async (event) => {
             ThankYou : publishedVersion.ThankYou,
             Prefills: publishedVersion.Prefills,
           },
+          Notifications : matchedForm.Notifications || null
         }),
       };
     }
@@ -364,7 +423,6 @@ export const handler = async (event) => {
         body: JSON.stringify({ error: 'Metadata not found for this user and instance' }),
       };
     }
-
     return {
       statusCode: 200,
       headers: {
@@ -378,6 +436,8 @@ export const handler = async (event) => {
         UserProfile : metadataItem.UserProfile?.S,
         Fieldset : metadataItem.Fieldset?.S || [],
         Folders : metadataItem.Folders?.S || [],
+        GoogleData : metadataItem.GoogleData?.S || [],
+        TwilioData : metadataItem.TwilioData?.S || null,
       }), 
     };
   } catch (error) {

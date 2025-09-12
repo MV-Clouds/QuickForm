@@ -5,20 +5,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import FlowDesigner from "./FlowDesigner";
 import ActionPanel from "./ActionPanel";
 import { XMarkIcon, PlusIcon } from '@heroicons/react/24/solid';
-import { useSalesforceData } from '../Context/MetadataContext';
 import FloatingAddButton from "./FloatingAddButton";
 import Loader from '../Loader';
 
-const MappingFields = ({ onSaveCallback }) => {
+const MappingFields = ({ onSaveCallback, isEditable = true }) => {
   const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId = urlFormVersionId || (location.state?.formVersionId || null);
-  const { metadata, formRecords, refreshData } = useSalesforceData();
+  const [metadata, setMetadata] = useState([]);
+  const [formRecords, setFormRecords] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [mappings, setMappings] = useState({});
   const [formFields, setFormFields] = useState([]);
   const [salesforceObjects, setSalesforceObjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true); // Start with loading true
+  const [loadingText, setLoadingText] = useState('');
   const [token, setToken] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -31,6 +32,7 @@ const MappingFields = ({ onSaveCallback }) => {
   const [addButtonPosition, setAddButtonPosition] = useState({ x: 0, y: 0 });
   const initialNodes = [];
   const initialEdges = [];
+  const nonEditableMode = !isEditable && Object.keys(mappings).length === 0;
 
   // Calculate center position on mount and resize
   useEffect(() => {
@@ -101,6 +103,50 @@ const MappingFields = ({ onSaveCallback }) => {
     setTimeout(() => {
       setSaveError(null);
     }, 5000);
+  };
+
+  // Local metadata fetching (direct API), replacing MetadataContext usage
+  const parseFormRecords = (formRecordsString) => {
+    if (!formRecordsString || formRecordsString === 'null') return [];
+    try {
+      const parsed = JSON.parse(formRecordsString);
+      return parsed;
+    } catch (e) {
+      try {
+        const fixed = formRecordsString
+          .replace(/\](?=\s*\[)/g, '],')
+          .replace(/\}(?=\s*\{)/g, '},')
+          .replace(/,\s*([\]}])/g, '$1');
+        return JSON.parse(fixed);
+      } catch {
+        return [];
+      }
+    }
+  };
+
+  const fetchMetadata = async (userIdParam, instanceUrlParam) => {
+    const userId = userIdParam || sessionStorage.getItem('userId');
+    const instanceUrl = instanceUrlParam || sessionStorage.getItem('instanceUrl');
+    if (!userId || !instanceUrl) {
+      showToast('Missing userId or instanceUrl', 'error');
+      return;
+    }
+    try {
+      const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+      const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch metadata');
+      const data = await response.json();
+      const parsedMetadata = JSON.parse(data.metadata || '[]');
+      const parsedFormRecords = parseFormRecords(data.FormRecords);
+      setMetadata(parsedMetadata);
+      setFormRecords(parsedFormRecords);
+    } catch (err) {
+      showToast(err.message || 'Failed to fetch metadata', 'error');
+    }
   };
 
   // Initialize Salesforce objects from metadata
@@ -176,9 +222,211 @@ const MappingFields = ({ onSaveCallback }) => {
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
     if (userId && instanceUrl && (!formRecords || formRecords.length === 0)) {
-      refreshData();
+      const fetchAllData = async () => {
+        setIsLoading(true);
+        setLoadingText('Fetch Mapping');
+        try {
+          // First fetch metadata and form records
+          // await fetchMetadata(userId, instanceUrl);
+          const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
+          const response = await fetch(process.env.REACT_APP_FETCH_METADATA_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, instanceUrl: cleanedInstanceUrl }),
+          });
+          if (!response.ok) throw new Error('Failed to fetch metadata');
+          const data = await response.json();
+          const parsedMetadata = JSON.parse(data.metadata || '[]');
+          const parsedFormRecords = parseFormRecords(data.FormRecords);
+          setMetadata(parsedMetadata);
+          setFormRecords(parsedFormRecords);
+          // Then fetch access token
+          const accessToken = await fetchAccessToken(userId, instanceUrl);
+          if (accessToken) {
+            setToken(accessToken);
+          }
+          // Now initialize the data if we have formVersionId and formRecords
+          if (formVersionId && parsedFormRecords && parsedFormRecords.length > 0) {
+            setIsLoading(true);
+            try {
+              // Find the form version in parsedFormRecords
+              const formVersion = parsedFormRecords
+                .flatMap(form => form.FormVersions || [])
+                .find(version => version.Id === formVersionId);
+              if (!formVersion) {
+                showToast(`Form version ${formVersionId} not found`, 'error');
+                setIsLoading(false);
+                return;
+              }
+              // Extract mappings data from formVersion
+              const mappingsData = formVersion.Mappings || {};
+              console.log('Mappings ', mappingsData)
+              // Process the mappings data to match your component's expected format
+              const processedMappings = {};
+              const processedNodes = [];
+              const processedEdges = [];
+              if (mappingsData.Mappings) {
+                // Process mappings
+                Object.entries(mappingsData.Mappings).forEach(([nodeId, mapping]) => {
+                  processedMappings[nodeId] = {
+                    nodeId,
+                    actionType: mapping.actionType,
+                    label: mapping.label,
+                    order: mapping.order,
+                    formVersionId: mapping.formVersionId,
+                    previousNodeId: mapping.previousNodeId,
+                    nextNodeIds: mapping.nextNodeIds || [],
+                    salesforceObject: mapping.salesforceObject,
+                    fieldMappings: mapping.fieldMappings || [],
+                    conditions: mapping.conditions || [],
+                    logicType: mapping.logicType || 'AND',
+                    customLogic: mapping.customLogic || '',
+                    pathOption: mapping.pathOption || 'Rules',
+                    returnLimit: mapping.returnLimit,
+                    sortField: mapping.sortField,
+                    sortOrder: mapping.sortOrder || 'ASC',
+                    enableConditions: mapping.enableConditions || false,
+                    loopConfig: mapping.loopConfig || {
+                      loopCollection: '',
+                      currentItemVariableName: '',
+                      maxIterations: '',
+                      loopIterationOrder: 'ASC',
+                      loopVariables: {
+                        currentIndex: false,
+                        counter: false,
+                        indexBase: "0"
+                      },
+                      exitConditions: [],
+                      logicType: 'AND',
+                      customLogic: ''
+                    },
+                    formatterConfig: mapping.formatterConfig || {
+                      formatType: 'date',
+                      operation: '',
+                      inputField: '',
+                      outputVariable: '',
+                      options: {},
+                      inputField2: '',
+                      useCustomInput: false,
+                      customValue: ''
+                    },
+                    id: mapping.id || '',
+                    type: (mapping.actionType === 'Condition' || mapping.actionType === 'Path' ||
+                      mapping.actionType === 'Loop' || mapping.actionType === 'Formatter')
+                      ? 'utility'
+                      : 'action',
+                    displayLabel: mapping.label || mapping.actionType,
+                    storeAsContentDocument: mapping.storeAsContentDocument || false,
+                    selectedFileUploadFields: mapping.selectedFileUploadFields || [],
+                    selectedSheetName: mapping.selectedSheetName || '',
+                    spreadsheetId: mapping.spreadsheetId || '',
+                    sheetConditions: mapping.sheetConditions || [],
+                    conditionsLogic: mapping.conditionsLogic || 'AND', // Add this
+                    sheetcustomLogic: mapping.sheetcustomLogic || '', // Add this
+                    updateMultiple: mapping.updateMultiple || false,
+                    googleSheetReturnLimit: mapping.googleSheetReturnLimit || '',
+                    googleSheetSortField: mapping.googleSheetSortField || '',
+                    googleSheetSortOrder: mapping.googleSheetSortOrder || 'ASC'
+                  };
+                });
+                // Process nodes
+                if (mappingsData.Nodes && Array.isArray(mappingsData.Nodes)) {
+                  mappingsData.Nodes.forEach(node => {
+                    const mapping = processedMappings[node.id];
+                    if (mapping) {
+                      processedNodes.push({
+                        ...node,
+                        type: "custom",
+                        data: {
+                          ...node.data,
+                          label: mapping.label,
+                          displayLabel: mapping.displayLabel || mapping.label,
+                          action: mapping.actionType === "CreateUpdate" ? "Create/Update" : mapping.actionType,
+                          type: mapping.type,
+                          order: mapping.order,
+                          salesforceObject: mapping.salesforceObject,
+                          fieldMappings: mapping.fieldMappings,
+                          conditions: mapping.conditions,
+                          logicType: mapping.logicType,
+                          customLogic: mapping.customLogic,
+                          pathOption: mapping.pathOption,
+                          returnLimit: mapping.returnLimit,
+                          sortField: mapping.sortField,
+                          sortOrder: mapping.sortOrder,
+                          enableConditions: mapping.enableConditions,
+                          loopConfig: mapping.loopConfig,
+                          formatterConfig: mapping.formatterConfig
+                        }
+                      });
+                    } else {
+                      // Fallback for nodes without mappings
+                      processedNodes.push({
+                        ...node,
+                        type: "custom",
+                        data: {
+                          ...node.data,
+                          action: node.data.action || 'Unknown',
+                          type: node.data.type || 'action',
+                          order: node.data.order || 0
+                        }
+                      });
+                    }
+                  });
+                }
+                // Process edges
+                if (mappingsData.Edges && Array.isArray(mappingsData.Edges)) {
+                  processedEdges.push(...mappingsData.Edges);
+                }
+              }
+              // If no mappings data found, initialize with default nodes
+              if (Object.keys(processedMappings).length === 0) {
+                setNodes(initialNodes);
+                setEdges(initialEdges);
+              } else {
+                setMappings(processedMappings);
+                setNodes(processedNodes);
+                setEdges(processedEdges);
+              }
+            } catch (error) {
+              showToast(`Initialization failed: ${error.message}`, 'error');
+              console.error('Error initializing mappings:', error);
+              // Fallback to initial nodes if there's an error
+              setNodes(initialNodes);
+              setEdges(initialEdges);
+            } finally {
+              setIsLoading(false);
+            }
+          }
+        } catch (error) {
+          showToast(`Failed to load data: ${error.message}`, 'error');
+          console.error('Error loading data:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchAllData();
     }
-  }, []);
+  }, []); // Keep empty dependency array
+
+  useEffect(() => {
+    const initializeIfReady = async () => {
+      if (formVersionId && formRecords && formRecords.length > 0 && !isLoading) {
+        // Check if we already have nodes (meaning initialization was already done)
+        if (nodes.length === 0) {
+          setIsLoading(true);
+          try {
+            await initializeData();
+          } catch (error) {
+            showToast(`Failed to initialize: ${error.message}`, 'error');
+          } finally {
+            setIsLoading(false);
+          }
+        }
+      }
+    };
+
+    initializeIfReady();
+  }, [formRecords, formVersionId]);
 
 
   const setNodeLabel = React.useCallback((nodeId, newLabel) => {
@@ -354,10 +602,12 @@ const MappingFields = ({ onSaveCallback }) => {
 
     return updatedNodes;
   }, []);
-  
+
   const saveAllConfiguration = useCallback(async () => {
     setIsSaving(true);
     setSaveError(null);
+    setIsLoading(true);
+    setLoadingText('Save Mapping');
 
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -595,27 +845,14 @@ const MappingFields = ({ onSaveCallback }) => {
           }
         });
         setMappings(updatedMappings);
-        showToast("All configurations saved successfully!", 'success');
-        await refreshData();
+        // showToast("All configurations saved successfully!", 'success');
+        await fetchMetadata(userId, instanceUrl);
+        setIsLoading(false);
       } else {
         throw new Error(`Save failed: ${data.message || "Unknown error"}`);
       }
     } catch (error) {
       console.log('Error in Saving mapping', error)
-      // if (error.message.includes('INVALID_JWT_FORMAT')) {
-      //   const tokenResponse = await fetch(process.env.REACT_APP_GET_ACCESS_TOKEN_URL, {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ userId }),
-      //   });
-
-      //   const tokenData = await tokenResponse.json();
-      //   if (!tokenResponse.ok || tokenData.error) {
-      //     throw new Error(tokenData.error || 'Failed to fetch access token');
-      //   }
-      //   tokenRef.current = tokenData.access_token;
-      //   saveAllConfiguration();
-      // }
     } finally {
       setIsSaving(false);
     }
@@ -627,6 +864,17 @@ const MappingFields = ({ onSaveCallback }) => {
       onSaveCallback(saveAllConfiguration);
     }
   }, [onSaveCallback, saveAllConfiguration]);
+
+  // Check for node deletion and clear selection
+  useEffect(() => {
+    // Check if the selected node still exists
+    if (selectedNode) {
+      const nodeExists = nodes.some(node => node.id === selectedNode.id);
+      if (!nodeExists) {
+        setSelectedNode(null);
+      }
+    }
+  }, [nodes, selectedNode, setSelectedNode]);
 
   const initializeData = async () => {
     setIsLoading(true);
@@ -684,6 +932,7 @@ const MappingFields = ({ onSaveCallback }) => {
               loopCollection: '',
               currentItemVariableName: '',
               maxIterations: '',
+              loopIterationOrder: 'ASC',
               loopVariables: {
                 currentIndex: false,
                 counter: false,
@@ -794,11 +1043,6 @@ const MappingFields = ({ onSaveCallback }) => {
     }
   };
 
-  useEffect(() => {
-    initializeData();
-  }, [formVersionId, formRecords]);
-
-
   const onAddNode = useCallback((nodeType, action, sourceNodeId = null, connectionType = null, targetNodeId = null, edgeIdToReplace = null) => {
     const reactFlowWrapper = document.querySelector('.react-flow');
     if (!reactFlowWrapper) return;
@@ -859,6 +1103,7 @@ const MappingFields = ({ onSaveCallback }) => {
             loopCollection: "",
             currentItemVariableName: "",
             maxIterations: "",
+            loopIterationOrder: "ASC",
             loopVariables: {
               currentIndex: false,
               counter: false,
@@ -953,64 +1198,64 @@ const MappingFields = ({ onSaveCallback }) => {
       updatedNodes = [...nds, newNode];
 
       // Check if source node is a Path node
-    if (sourceNode && sourceNode.data.action === "Path") {
-      // Create a condition node in between
-      const conditionNodeId = `condition_${randomNum}`;
+      if (sourceNode && sourceNode.data.action === "Path") {
+        // Create a condition node in between
+        const conditionNodeId = `condition_${randomNum}`;
 
-      // Position condition node between source and target (newly added node)
-      const midX = (sourceNode.position.x + centerX) / 2;
-      const midY = (sourceNode.position.y + centerY) / 2;
+        // Position condition node between source and target (newly added node)
+        const midX = (sourceNode.position.x + centerX) / 2;
+        const midY = (sourceNode.position.y + centerY) / 2;
 
-      const conditionNode = {
-        id: conditionNodeId,
-        type: "custom",
-        position: { x: midX, y: midY },
-        data: {
-          label: "Condition",
-          displayLabel: "Condition",
-          action: "Condition",
-          type: "condition",
-          order: null,
-          pathNodeId: sourceNodeId,
-          targetNodeId: newNodeId,
-          pathOption: "Rules",
-          conditions: [],
-          logicType: "AND",
-          customLogic: "",
-        },
-        draggable: true,
-      };
-
-      updatedNodes = [...updatedNodes, conditionNode];
-
-      setEdges((eds) => {
-        const newEdges = [
-          {
-            id: `e${sourceNodeId}-${conditionNodeId}`,
-            source: sourceNodeId,
-            sourceHandle: connectionType === 'top' ? "top" : "bottom",
-            target: conditionNodeId,
-            targetHandle: "top",
-            type: "default",
-            conditionNodeId,
+        const conditionNode = {
+          id: conditionNodeId,
+          type: "custom",
+          position: { x: midX, y: midY },
+          data: {
+            label: "Condition",
+            displayLabel: "Condition",
+            action: "Condition",
+            type: "condition",
+            order: null,
+            pathNodeId: sourceNodeId,
+            targetNodeId: newNodeId,
+            pathOption: "Rules",
+            conditions: [],
+            logicType: "AND",
+            customLogic: "",
           },
-          {
-            id: `e${conditionNodeId}-${newNodeId}`,
-            source: conditionNodeId,
-            sourceHandle: "bottom",
-            target: newNodeId,
-            targetHandle: "top",
-            type: "default",
-            conditionNodeId,
-          }
-        ];
+          draggable: true,
+        };
 
-        const updatedEdges = [...eds, ...newEdges];
-        const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
-        setNodes(recalculatedNodes);
-        return updatedEdges;
-      });
-    }  else {
+        updatedNodes = [...updatedNodes, conditionNode];
+
+        setEdges((eds) => {
+          const newEdges = [
+            {
+              id: `e${sourceNodeId}-${conditionNodeId}`,
+              source: sourceNodeId,
+              sourceHandle: connectionType === 'top' ? "top" : "bottom",
+              target: conditionNodeId,
+              targetHandle: "top",
+              type: "default",
+              conditionNodeId,
+            },
+            {
+              id: `e${conditionNodeId}-${newNodeId}`,
+              source: conditionNodeId,
+              sourceHandle: "bottom",
+              target: newNodeId,
+              targetHandle: "top",
+              type: "default",
+              conditionNodeId,
+            }
+          ];
+
+          const updatedEdges = [...eds, ...newEdges];
+          const recalculatedNodes = calculateNodeOrders(updatedNodes, updatedEdges);
+          setNodes(recalculatedNodes);
+          return updatedEdges;
+        });
+      } else {
         // Regular connection for non-Path nodes
         let newEdge;
 
@@ -1051,66 +1296,184 @@ const MappingFields = ({ onSaveCallback }) => {
       return updatedNodes;
     });
 
-    console.log(`New Node ID: ${newNodeId}`);
-    console.log("Updated Nodes:", JSON.stringify(nodes));
-    console.log("Updated Edges:", JSON.stringify(edges));
-
     return newNodeId;
   }, [setNodes, calculateNodeOrders, setEdges]);
+
+  // return (
+  //   <div className="flex p-6 h-screen bg-[#f8fafc]">
+  //     <div className="flex-1 flex flex-col relative transition-all duration-300">
+  //       <div className="flex flex-col border rounded bg-gray-50 font-sans relative">
+  //         {isLoading && (
+  //           <Loader text="Loading Mappings" fullScreen={false} />
+  //         )}
+
+  //         <div className="flex flex-1 overflow-hidden">
+  //           <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
+  //             <ReactFlowProvider>
+  //               <FlowDesigner
+  //                 initialNodes={nodes}
+  //                 initialEdges={edges}
+  //                 setSelectedNode={setSelectedNode}
+  //                 setNodes={setNodes}
+  //                 setEdges={setEdges}
+  //                 onAddNode={onAddNode}
+  //                 selectedNode={selectedNode}
+  //                 isEditable={isEditable}
+  //               />
+  //             </ReactFlowProvider>
+
+  //             {/* Add the floating button component */}
+  //             <FloatingAddButton
+  //               onAddNode={onAddNode}
+  //               reactFlowWrapper={reactFlowWrapperRef}
+  //               nodes={nodes}
+  //             />
+  //           </div>
+
+  //           {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
+  //             <ActionPanel
+  //               nodeId={selectedNode.id}
+  //               nodeType={selectedNode.data.action}
+  //               formFields={formFields}
+  //               salesforceObjects={salesforceObjects}
+  //               mappings={mappings}
+  //               setMappings={setMappings}
+  //               setSalesforceObjects={setSalesforceObjects}
+  //               fetchSalesforceFields={fetchSalesforceFields}
+  //               onClose={() => setSelectedNode(null)}
+  //               nodeLabel={selectedNode.data.label}
+  //               setNodeLabel={setNodeLabel}
+  //               nodes={nodes}
+  //               edges={edges}
+  //               credentials={googleSheetConfig?.credentials}
+  //               sfToken={token}
+  //               isEditable={isEditable}
+  //             />
+  //           )}
+  //         </div>
+
+  //         <AnimatePresence>
+  //           {saveError && (
+  //             <motion.div
+  //               className={`fixed top-24 right-4 ${saveError.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white px-5 py-3 rounded-md shadow-lg flex items-center space-x-3 z-50 max-w-sm`}
+  //               initial={{ x: "100%", opacity: 0 }}
+  //               animate={{ x: 0, opacity: 1 }}
+  //               exit={{ x: "100%", opacity: 0 }}
+  //               transition={{ type: "spring", stiffness: 300, damping: 30 }}
+  //             >
+  //               <svg
+  //                 xmlns="http://www.w3.org/2000/svg"
+  //                 className="h-6 w-6"
+  //                 fill="none"
+  //                 viewBox="0 0 24 24"
+  //                 stroke="currentColor"
+  //                 strokeWidth={2}
+  //               >
+  //                 <path
+  //                   strokeLinecap="round"
+  //                   strokeLinejoin="round"
+  //                   d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+  //                 />
+  //               </svg>
+  //               <p className="font-medium text-sm flex-grow">{saveError.message}</p>
+  //               <button
+  //                 onClick={() => setSaveError(null)}
+  //                 className="p-1 rounded-full hover:bg-red-700 transition-colors"
+  //               >
+  //                 <XMarkIcon className="h-4 w-4" />
+  //               </button>
+  //             </motion.div>
+  //           )}
+  //         </AnimatePresence>
+  //       </div>
+  //     </div>
+  //   </div>
+  // );
 
   return (
     <div className="flex p-6 h-screen bg-[#f8fafc]">
       <div className="flex-1 flex flex-col relative transition-all duration-300">
         <div className="flex flex-col border rounded bg-gray-50 font-sans relative">
-           {isLoading && (
-            <Loader text="Loading Mappings" fullScreen={false} />
+          {isLoading && (
+            <Loader
+              text={loadingText}
+              fullScreen={loadingText === "Save Mapping"}
+            />
           )}
 
-          {!isLoading && (
-            <>
-              <div className="flex flex-1 overflow-hidden">
-                <div className="flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100" ref={reactFlowWrapperRef}>
-                  <ReactFlowProvider>
-                    <FlowDesigner
-                      initialNodes={nodes}
-                      initialEdges={edges}
-                      setSelectedNode={setSelectedNode}
-                      setNodes={setNodes}
-                      setEdges={setEdges}
-                      onAddNode={onAddNode}
-                    />
-                  </ReactFlowProvider>
-
-                  {/* Add the floating button component */}
-                  <FloatingAddButton
-                    onAddNode={onAddNode}
-                    reactFlowWrapper={reactFlowWrapperRef}
-                    nodes={nodes}
+          {/* Overlay for non-editable state */}
+          {!isLoading && nonEditableMode && (
+            <div className="absolute inset-0 bg-white bg-opacity-40 backdrop-grayscale z-50 flex items-center justify-center">
+              <div className="text-center p-8 bg-transparent max-w-md">
+                <svg
+                  className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                   />
-                </div>
-
-                {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
-                  <ActionPanel
-                    nodeId={selectedNode.id}
-                    nodeType={selectedNode.data.action}
-                    formFields={formFields}
-                    salesforceObjects={salesforceObjects}
-                    mappings={mappings}
-                    setMappings={setMappings}
-                    setSalesforceObjects={setSalesforceObjects}
-                    fetchSalesforceFields={fetchSalesforceFields}
-                    onClose={() => setSelectedNode(null)}
-                    nodeLabel={selectedNode.data.label}
-                    setNodeLabel={setNodeLabel}
-                    nodes={nodes}
-                    edges={edges}
-                    credentials={googleSheetConfig?.credentials}
-                    sfToken={token}
-                  />
-                )}
+                </svg>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Create Mapping Restricted
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  You can only create mappings in draft versions.
+                </p>
               </div>
-            </>
+            </div>
           )}
+
+          <div className="flex flex-1 overflow-hidden">
+            <div className={`flex-1 relative z-0 h-[80vh] overflow-hidden bg-gray-100 ${nonEditableMode ? 'filter blur-sm' : ''}`} ref={reactFlowWrapperRef}>
+              <ReactFlowProvider>
+                <FlowDesigner
+                  initialNodes={nodes}
+                  initialEdges={edges}
+                  setSelectedNode={setSelectedNode}
+                  setNodes={setNodes}
+                  setEdges={setEdges}
+                  onAddNode={onAddNode}
+                  selectedNode={selectedNode}
+                  isEditable={isEditable}
+                />
+              </ReactFlowProvider>
+
+              {/* Add the floating button component */}
+              {isEditable && (
+                <FloatingAddButton
+                  onAddNode={onAddNode}
+                  reactFlowWrapper={reactFlowWrapperRef}
+                  nodes={nodes}
+                />
+              )}
+            </div>
+
+            {selectedNode && ["Create/Update", "CreateUpdate", "Find", "Filter", "Loop", "Formatter", "Condition", 'Google Sheet', 'FindGoogleSheet'].includes(selectedNode.data.action) && (
+              <ActionPanel
+                nodeId={selectedNode.id}
+                nodeType={selectedNode.data.action}
+                formFields={formFields}
+                salesforceObjects={salesforceObjects}
+                mappings={mappings}
+                setMappings={setMappings}
+                setSalesforceObjects={setSalesforceObjects}
+                fetchSalesforceFields={fetchSalesforceFields}
+                onClose={() => setSelectedNode(null)}
+                nodeLabel={selectedNode.data.label}
+                setNodeLabel={setNodeLabel}
+                nodes={nodes}
+                edges={edges}
+                credentials={googleSheetConfig?.credentials}
+                sfToken={token}
+                isEditable={isEditable}
+              />
+            )}
+          </div>
 
           <AnimatePresence>
             {saveError && (

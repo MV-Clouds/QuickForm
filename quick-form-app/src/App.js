@@ -16,6 +16,8 @@ import NotificationPage from './components/NotificationSettings/NotificationSett
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
 import LargeFileUpload from './components/file-upload/multiple-file-upload';
+import SetupPage  from './components/setup-page/SetupPage';
+
 function App() {
   return (
     // Set up the router for navigation
@@ -34,6 +36,11 @@ function App() {
                 path="/wizard"
                 element={<ProtectedRoute element={<CreateFormWizard />} />}
               />
+
+               <Route
+               path="/setup"
+               element={<SetupPage />}
+               />
 
               {/* Protected route for Home component */}
               <Route

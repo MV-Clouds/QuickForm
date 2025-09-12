@@ -6,14 +6,24 @@ const METADATA_TABLE_NAME = 'SalesforceChunkData';
 export const handler = async (event) => {
   try {
     // Log the incoming event for debugging
-    console.log('Received event:', JSON.stringify(event, null, 2));
+    console.log('Received event:', JSON.stringify(event.body, null, 2));
 
     // Parse the request body
     const body = JSON.parse(event.body || '{}');
     const { userId, instanceUrl, flowId, nodes, edges, mappings } = body;
-
     // Extract the Authorization token
-    const token = event.headers.Authorization?.split(' ')[1] || event.headers.authorization?.split(' ')[1];
+    let token = event.headers.Authorization?.split(' ')[1] || event.headers.authorization?.split(' ')[1];
+    const fetchNewAccessToken = async (userId) => {
+      const response = await fetch('https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/getAccessToken/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch new access token');
+      const data = await response.json();
+      return data.access_token;
+    };
+    let tokenRefreshed = false;
 
     // Validate required input parameters
     if (
@@ -38,7 +48,7 @@ export const handler = async (event) => {
     }
 
     // Validate that the flow contains at least one action node
-    const actionNodes = nodes.filter((node) => !['start', 'end'].includes(node.id));
+    const actionNodes = nodes;
     if (actionNodes.length === 0) {
       return {
         statusCode: 400,
@@ -62,7 +72,7 @@ export const handler = async (event) => {
       };
     }
 
-    const formFieldsQuery = await fetch(
+    let formFieldsQuery = await fetch(
       `${salesforceBaseUrl}/query?q=${encodeURIComponent(
         `SELECT Id FROM Form_Field__c WHERE Form_Version__c = '${formVersionId}'`
       )}`,
@@ -72,12 +82,27 @@ export const handler = async (event) => {
       }
     );
 
-    const formFieldsData = await formFieldsQuery.json();
     if (!formFieldsQuery.ok) {
-      throw new Error(
-        formFieldsData[0]?.message || `Failed to query Form_Field__c: ${formFieldsQuery.status}`
-      );
+      if (formFieldsQuery.status === 401 && !tokenRefreshed) {
+        token = await fetchNewAccessToken(userId);
+        tokenRefreshed = true;
+        formFieldsQuery = await fetch(
+          `${salesforceBaseUrl}/query?q=${encodeURIComponent(
+            `SELECT Id FROM Form_Field__c WHERE Form_Version__c = '${formVersionId}'`
+          )}`,
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      if (!formFieldsQuery.ok) {
+        throw new Error(
+          formFieldsData[0]?.message || `Failed to query Form_Field__c: ${formFieldsQuery.status}`
+        );
+      }
     }
+    const formFieldsData = await formFieldsQuery.json();
 
     const validFormFieldIds = new Set(formFieldsData.records.map(record => record.Id));
 
@@ -97,6 +122,8 @@ export const handler = async (event) => {
         returnLimit,
         sortField,
         sortOrder,
+        selectedFileUploadFields,
+        storeAsContentDocument,
         pathOption,
         nextNodeIds,
         previousNodeId,
@@ -115,430 +142,7 @@ export const handler = async (event) => {
         };
       }
 
-      const isSpecialNode = nodeId === 'start' || nodeId === 'end';
-      const effectiveActionType = actionType || (isSpecialNode ? (nodeId === 'start' ? 'Start' : 'End') : null);
-
-      // Basic mapping validation
-      if (
-        !nodeId ||
-        !label ||
-        !Number.isInteger(order) ||
-        !mappingFormVersionId ||
-        (!effectiveActionType && !isSpecialNode)
-      ) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-          body: JSON.stringify({
-            error: `Missing or invalid mapping data for node ${nodeId}: nodeId, label, order (must be integer), formVersionId, or actionType`,
-          }),
-        };
-      }
-
-      // Validate formFieldId in fieldMappings for CreateUpdate nodes
-      if (effectiveActionType === 'CreateUpdate' && fieldMappings && Array.isArray(fieldMappings)) {
-        for (const fieldMapping of fieldMappings) {
-          if (fieldMapping.formFieldId) {
-            // Support joined subfield (e.g., a0DgL000007fzecUAA_lastName)
-            const baseFormFieldId = fieldMapping.formFieldId.split('_')[0];
-            if (!validFormFieldIds.has(baseFormFieldId)) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Invalid formFieldId ${fieldMapping.formFieldId} for node ${nodeId} in fieldMappings`,
-                }),
-              };
-            }
-          }
-        }
-      }
-
-      // Validate non-special nodes
-      if (!isSpecialNode) {
-        if (effectiveActionType === 'Path') {
-          if (!nextNodeIds || !Array.isArray(nextNodeIds) || nextNodeIds.length === 0) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({ error: `Path node ${nodeId} must include at least one next node ID` }),
-            };
-          }
-        } else if (effectiveActionType === 'CreateUpdate') {
-          if (
-            !salesforceObject ||
-            !fieldMappings ||
-            !Array.isArray(fieldMappings) ||
-            fieldMappings.length === 0
-          ) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Create/Update node ${nodeId} must include a Salesforce object and at least one field mapping`,
-              }),
-            };
-          }
-          if (enableConditions && (!conditions || !Array.isArray(conditions) || conditions.length === 0)) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Create/Update node ${nodeId} must include at least one valid condition if conditions are enabled`,
-              }),
-            };
-          }
-          if (enableConditions && conditions.length > 1 && !logicType) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Create/Update node ${nodeId} must include logicType for multiple conditions`,
-              }),
-            };
-          }
-          if (logicType === 'Custom' && !customLogic) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Create/Update node ${nodeId} must include customLogic when logicType is Custom`,
-              }),
-            };
-          }
-        } else if (effectiveActionType === 'Find' || effectiveActionType === 'Filter') {
-          if (
-            !salesforceObject ||
-            !conditions ||
-            !Array.isArray(conditions) ||
-            conditions.length === 0
-          ) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `${effectiveActionType} node ${nodeId} must include a Salesforce object and at least one condition`,
-              }),
-            };
-          }
-          if (conditions.length > 1 && !logicType) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `${effectiveActionType} node ${nodeId} must include logicType for multiple conditions`,
-              }),
-            };
-          }
-          if (logicType === 'Custom' && !customLogic) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `${effectiveActionType} node ${nodeId} must include customLogic when logicType is Custom`,
-              }),
-            };
-          }
-          if (returnLimit && (isNaN(returnLimit) || returnLimit < 1 || returnLimit > 100)) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Return limit for node ${nodeId} must be a number between 1 and 100`,
-              }),
-            };
-          }
-        } else if (effectiveActionType === 'Condition') {
-          if (!pathOption || !['Rules', 'Always Run', 'Fallback'].includes(pathOption)) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Condition node ${nodeId} must have a valid pathOption (Rules, Always Run, or Fallback)`,
-              }),
-            };
-          }
-          if (pathOption === 'Rules') {
-            if (
-              !salesforceObject ||
-              !conditions ||
-              !Array.isArray(conditions) ||
-              conditions.length === 0
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Condition node ${nodeId} with pathOption 'Rules' must include a Salesforce object and at least one condition`,
-                }),
-              };
-            }
-            if (conditions.length > 1 && !logicType) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Condition node ${nodeId} must include logicType for multiple conditions`,
-                }),
-              };
-            }
-            if (logicType === 'Custom' && !customLogic) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Condition node ${nodeId} must include customLogic when logicType is Custom`,
-                }),
-              };
-            }
-          }
-        } else if (effectiveActionType === 'Loop') {
-          if (!loopConfig || !loopConfig.loopCollection || !loopConfig.currentItemVariableName) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Loop node ${nodeId} must include a collection and current item variable name`,
-              }),
-            };
-          }
-          const findNodeIds = mappings.filter((m) => m.actionType === 'Find').map((m) => m.nodeId);
-          if (!findNodeIds.includes(loopConfig.loopCollection)) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Invalid Find node ID in loop collection for node ${nodeId}: ${loopConfig.loopCollection}`,
-              }),
-            };
-          }
-          if (
-            loopConfig.maxIterations &&
-            (isNaN(loopConfig.maxIterations) || loopConfig.maxIterations < 1)
-          ) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Max iterations must be a positive number for node ${nodeId}`,
-              }),
-            };
-          }
-          if (
-            loopConfig.loopVariables &&
-            (typeof loopConfig.loopVariables !== 'object' ||
-              typeof loopConfig.loopVariables.currentIndex !== 'boolean' ||
-              typeof loopConfig.loopVariables.counter !== 'boolean' ||
-              !['0', '1'].includes(loopConfig.loopVariables.indexBase))
-          ) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Invalid loop variables configuration for node ${nodeId}`,
-              }),
-            };
-          }
-          if (loopConfig.exitConditions && !Array.isArray(loopConfig.exitConditions)) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Exit conditions must be an array for node ${nodeId}`,
-              }),
-            };
-          }
-          if (
-            loopConfig.exitConditions &&
-            loopConfig.exitConditions.length > 1 &&
-            !loopConfig.logicType
-          ) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Loop node ${nodeId} must include logicType for multiple exit conditions`,
-              }),
-            };
-          }
-          if (loopConfig.logicType === 'Custom' && !loopConfig.customLogic) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Loop node ${nodeId} must include customLogic when logicType is Custom`,
-              }),
-            };
-          }
-        } else if (effectiveActionType === 'Formatter') {
-          if (!formatterConfig || !formatterConfig.inputField || !formatterConfig.operation) {
-            return {
-              statusCode: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-              body: JSON.stringify({
-                error: `Formatter node ${nodeId} must include an input field and operation`,
-              }),
-            };
-          }
-          if (formatterConfig.formatType === 'date') {
-            if (
-              (
-                formatterConfig.operation === 'format_datetime' ||
-                formatterConfig.operation === 'format_time') &&
-              (!formatterConfig.options?.format || !formatterConfig.options?.timezone)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a date format and timezone`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'timezone_conversion' &&
-              (!formatterConfig.options?.timezone || !formatterConfig.options?.targetTimezone)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include source and target timezones`,
-                }),
-              };
-            }
-            if (
-              (formatterConfig.operation === 'add_date' ||
-                formatterConfig.operation === 'subtract_date') &&
-              (!formatterConfig.options?.unit || formatterConfig.options?.value === undefined)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a date unit and value`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'date_difference' &&
-              (!formatterConfig.inputField2 && !formatterConfig.useCustomInput)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a second input field or use custom input for date difference`,
-                }),
-              };
-            }
-            if (formatterConfig.useCustomInput && !formatterConfig.customValue) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a custom compare date`,
-                }),
-              };
-            }
-          }
-          if (formatterConfig.formatType === 'number') {
-            if (formatterConfig.operation === 'locale_format' && !formatterConfig.options?.locale) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a locale`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'currency_format' &&
-              (!formatterConfig.options?.currency || !formatterConfig.options?.locale)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a currency and locale`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'round_number' &&
-              formatterConfig.options?.decimals === undefined
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include number of decimals`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'phone_format' &&
-              (!formatterConfig.options?.countryCode || !formatterConfig.options?.format)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a country code and format`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'math_operation' &&
-              (!formatterConfig.options?.operation ||
-                (!formatterConfig.inputField2 && !formatterConfig.useCustomInput))
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a math operation and second input field or custom value`,
-                }),
-              };
-            }
-            if (formatterConfig.useCustomInput && formatterConfig.customValue === undefined) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a custom value for math operation`,
-                }),
-              };
-            }
-          }
-          if (formatterConfig.formatType === 'text') {
-            if (
-              formatterConfig.operation === 'replace' &&
-              (!formatterConfig.options?.searchValue || !formatterConfig.options?.replaceValue)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include search and replace values`,
-                }),
-              };
-            }
-            if (
-              formatterConfig.operation === 'split' &&
-              (!formatterConfig.options?.delimiter || formatterConfig.options?.index === undefined)
-            ) {
-              return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({
-                  error: `Formatter node ${nodeId} must include a delimiter and index`,
-                }),
-              };
-            }
-          }
-        }
-      }
+      const effectiveActionType = actionType;
 
       // Prepare conditions JSON for storage
       let conditionsJson = null;
@@ -566,24 +170,13 @@ export const handler = async (event) => {
           sortOrder: (effectiveActionType === 'Find' || effectiveActionType === 'Filter') ? sortOrder || null : null,
         });
       }
-
       const nodeData = nodes.find((node) => node.id === nodeId);
+      console.log('nodeData', nodeData)
       const nodeConfiguration = nodeData
         ? {
-            position: nodeData.position || { x: 0, y: 0 },
-          }
+          position: nodeData.position || { x: 0, y: 0 },
+        }
         : null;
-
-      // Validate position data
-      if (nodeData && (!nodeData.position || typeof nodeData.position.x !== 'number' || typeof nodeData.position.y !== 'number')) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-          body: JSON.stringify({
-            error: `Invalid position data for node ${nodeId}: position must include numeric x and y coordinates`,
-          }),
-        };
-      }
 
       // Build Salesforce mapping payload
       const mappingPayload = {
@@ -593,35 +186,51 @@ export const handler = async (event) => {
         Next_Node_Id__c: nextNodeIds ? nextNodeIds.join(',') : null,
         Salesforce_Object__c:
           effectiveActionType === 'CreateUpdate' ||
-          effectiveActionType === 'Find' ||
-          effectiveActionType === 'Filter' ||
-          (effectiveActionType === 'Condition' && pathOption === 'Rules')
+            effectiveActionType === 'Find' ||
+            effectiveActionType === 'Filter' ||
+            (effectiveActionType === 'Condition' && pathOption === 'Rules')
             ? salesforceObject || null
             : null,
         Conditions__c: conditionsJson,
         Field_Mappings__c:
-          effectiveActionType === 'CreateUpdate' && fieldMappings && fieldMappings.length > 0
+          effectiveActionType === 'CreateUpdate' || effectiveActionType === 'Google Sheet' && fieldMappings && fieldMappings.length > 0
             ? JSON.stringify(fieldMappings)
             : null,
-        Loop_Config__c:
-          effectiveActionType === 'Loop' && loopConfig
-            ? JSON.stringify({
-                ...loopConfig,
-                exitConditions: loopConfig.exitConditions || [],
-                logicType: loopConfig.exitConditions?.length > 1 ? loopConfig.logicType || 'AND' : null,
-                customLogic: loopConfig.logicType === 'Custom' ? loopConfig.customLogic || '' : null,
-              })
-            : null,
-        Formatter_Config__c:
-          effectiveActionType === 'Formatter' && formatterConfig ? JSON.stringify(formatterConfig) : null,
         Node_Configuration__c: nodeConfiguration ? JSON.stringify(nodeConfiguration) : null,
         Order__c: order.toString(),
         Form_Version__c: formVersionId,
         Node_Id__c: nodeId,
+        Config__c: effectiveActionType === 'Loop' && loopConfig
+          ? JSON.stringify({
+            ...loopConfig,
+            exitConditions: loopConfig.exitConditions || [],
+            logicType: loopConfig.exitConditions?.length > 1 ? loopConfig.logicType || 'AND' : null,
+            customLogic: loopConfig.logicType === 'Custom' ? loopConfig.customLogic || '' : null,
+          })
+          : effectiveActionType === 'Formatter' && formatterConfig ? JSON.stringify(formatterConfig) :
+           effectiveActionType === 'Google Sheet' ?
+              JSON.stringify({
+                sheetName: mapping.selectedSheetName,
+                spreadsheetId: mapping.spreadsheetId,
+                conditionsLogic : mapping.conditionsLogic,
+                sheetConditions : mapping.sheetConditions,
+                updateMultiple : mapping.updateMultiple
+              }) :  effectiveActionType === 'FindGoogleSheet' ? JSON.stringify({
+                  findNodeName: mapping.findNodeName,
+                    selectedSheetName: mapping.selectedSheetName,
+                    spreadsheetId: mapping.spreadsheetId,
+                    findSheetConditions: mapping.findSheetConditions,
+                    updateMultiple: mapping.updateMultiple,
+                    googleSheetReturnLimit: mapping.googleSheetReturnLimit,
+                    googleSheetSortOrder: mapping.googleSheetSortOrder,
+                    googleSheetSortField : mapping.googleSheetSortField,
+                    logicType : mapping.logicType,
+                    customLogic : mapping.customLogic,
+              }) : null
       };
 
       // Query Salesforce for existing mapping
-      const queryResponse = await fetch(
+      let queryResponse = await fetch(
         `${salesforceBaseUrl}/query?q=${encodeURIComponent(
           `SELECT Id FROM QF_Mapping__c WHERE Form_Version__c = '${formVersionId}' AND Node_Id__c = '${nodeId}'`
         )}`,
@@ -631,18 +240,33 @@ export const handler = async (event) => {
         }
       );
 
-      const queryData = await queryResponse.json();
       if (!queryResponse.ok) {
-        throw new Error(
-          queryData[0]?.message || `Failed to query QF_Mapping__c for node ${nodeId}: ${queryResponse.status}`
-        );
+        if(queryResponse.status === 401){
+          tokenRefreshed = true;
+          token = await fetchNewAccessToken(userId);
+          queryResponse = await fetch(
+            `${salesforceBaseUrl}/query?q=${encodeURIComponent(
+              `SELECT Id FROM QF_Mapping__c WHERE Form_Version__c = '${formVersionId}' AND Node_Id__c = '${nodeId}'`
+            )}`,
+            {
+              method: 'GET',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            }
+          );
+        }
+        if(!queryResponse.ok){
+          throw new Error(
+            queryData[0]?.message || `Failed to query QF_Mapping__c for node ${nodeId}: ${queryResponse.status}`
+          );
+        }
       }
+      const queryData = await queryResponse.json();
 
       let finalMappingId;
       if (queryData.records.length > 0) {
         // Update existing Salesforce record
         const existingRecordId = queryData.records[0].Id;
-        const mappingResponse = await fetch(
+        let mappingResponse = await fetch(
           `${salesforceBaseUrl}/sobjects/QF_Mapping__c/${existingRecordId}`,
           {
             method: 'PATCH',
@@ -651,26 +275,51 @@ export const handler = async (event) => {
           }
         );
         if (!mappingResponse.ok) {
-          const errorData = await mappingResponse.json();
-          throw new Error(
-            errorData[0]?.message ||
+          if(mappingResponse.status === 401){
+            tokenRefreshed = true;
+            token = await fetchNewAccessToken(userId);
+            mappingResponse = await fetch(
+              `${salesforceBaseUrl}/sobjects/QF_Mapping__c/${existingRecordId}`,
+              {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(mappingPayload),
+              }
+            );
+          }
+          if(!mappingResponse.ok){
+            const errorData = await mappingResponse.json();
+            throw new Error(
+              errorData[0]?.message ||
               `Failed to update QF_Mapping__c record for node ${nodeId}: ${mappingResponse.status}`
-          );
+            );
+          }
         }
         finalMappingId = existingRecordId;
       } else {
         // Create new Salesforce record
-        const mappingResponse = await fetch(`${salesforceBaseUrl}/sobjects/QF_Mapping__c`, {
+        let mappingResponse = await fetch(`${salesforceBaseUrl}/sobjects/QF_Mapping__c`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(mappingPayload),
         });
         if (!mappingResponse.ok) {
-          const errorData = await mappingResponse.json();
-          throw new Error(
-            errorData[0]?.message ||
+          if(mappingResponse.status === 401){
+            tokenRefreshed = true;
+            token = await fetchNewAccessToken(userId);
+            mappingResponse = await fetch(`${salesforceBaseUrl}/sobjects/QF_Mapping__c`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(mappingPayload),
+            });
+          }
+          if(!mappingResponse.ok){
+            const errorData = await mappingResponse.json();
+            throw new Error(
+              errorData[0]?.message ||
               `Failed to create QF_Mapping__c record for node ${nodeId}: ${mappingResponse.status}`
-          );
+            );
+          }
         }
         const mappingDataResponse = await mappingResponse.json();
         finalMappingId = mappingDataResponse.id;
@@ -705,112 +354,117 @@ export const handler = async (event) => {
     } while (ExclusiveStartKey);
 
     // Reconstruct the full FormRecords from chunks
-let combinedFormRecords = '';
-const formRecordChunks = allItems
-  .filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'))
-  .sort((a, b) => {
-    const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
-    const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
-    return aNum - bNum;
-  });
+    let combinedFormRecords = '';
+    const formRecordChunks = allItems
+      .filter(item => item.ChunkIndex?.S.startsWith('FormRecords_'))
+      .sort((a, b) => {
+        const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
+        const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
+        return aNum - bNum;
+      });
 
-for (const chunk of formRecordChunks) {
-  combinedFormRecords += chunk.FormRecords.S;
-}
+    for (const chunk of formRecordChunks) {
+      combinedFormRecords += chunk.FormRecords.S;
+    }
 
-let formRecords = [];
-try {
-  formRecords = JSON.parse(combinedFormRecords || '[]');
-} catch (e) {
-  console.error('Failed to parse FormRecords:', e);
-  formRecords = [];
-}
+    let formRecords = [];
+    try {
+      formRecords = JSON.parse(combinedFormRecords || '[]');
+    } catch (e) {
+      console.error('Failed to parse FormRecords:', e);
+      formRecords = [];
+    }
 
-// Create mappings structure with Salesforce IDs
-const updatedMappings = {};
-mappings.forEach((mapping) => {
-  updatedMappings[mapping.nodeId] = {
-    id: mappingIds.get(mapping.nodeId),
-    ...mapping,
-  };
-});
+    // Create mappings structure with Salesforce IDs
+    const updatedMappings = {};
+    mappings.forEach((mapping) => {
+      updatedMappings[mapping.nodeId] = {
+        id: mappingIds.get(mapping.nodeId),
+        ...mapping,
+      };
+    });
+
+    console.log('updatedmapping---> ',updatedMappings);
+    
 
 
-   // Find and update the specific form version in formRecords
-let formVersionFound = false;
-formRecords = formRecords.map(form => {
-  const versionIndex = form.FormVersions?.findIndex(v => v.Id === formVersionId);
-  if (versionIndex >= 0) {
-    formVersionFound = true;
-    return {
-      ...form,
-      FormVersions: form.FormVersions.map((version, idx) => {
-        if (idx === versionIndex) {
-          return {
-            ...version,
-            Mappings: {
-              Id: version.Id,
-              FlowId: flowId,
-              Mappings: updatedMappings,
-              Nodes: nodes, // Use nodes exactly as received in request
-              Edges: edges, // Use edges exactly as received in request
+    // Find and update the specific form version in formRecords
+    let formVersionFound = false;
+    formRecords = formRecords.map(form => {
+      const versionIndex = form.FormVersions?.findIndex(v => v.Id === formVersionId);
+      if (versionIndex >= 0) {
+        formVersionFound = true;
+        return {
+          ...form,
+          FormVersions: form.FormVersions.map((version, idx) => {
+            if (idx === versionIndex) {
+              return {
+                ...version,
+                Mappings: {
+                  Id: version.Id,
+                  FlowId: flowId,
+                  Mappings: updatedMappings,
+                  Nodes: nodes, // Use nodes exactly as received in request
+                  Edges: edges, // Use edges exactly as received in request
+                }
+              };
             }
-          };
-        }
-        return version;
-      })
-    };
-  }
-  return form;
-});
+            return version;
+          })
+        };
+      }
+      return form;
+    });
 
-if (!formVersionFound) {
-  return {
-    statusCode: 404,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    body: JSON.stringify({
-      error: `Form version ${formVersionId} not found in existing records`,
-    }),
-  };
-}
+    if (!formVersionFound) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          error: `Form version ${formVersionId} not found in existing records`,
+        }),
+      };
+    }
 
-// Chunk formRecords for DynamoDB
-const formRecordsString = JSON.stringify(formRecords);
-const CHUNK_SIZE = 370000;
-const chunks = [];
-for (let i = 0; i < formRecordsString.length; i += CHUNK_SIZE) {
-  chunks.push(formRecordsString.slice(i, i + CHUNK_SIZE));
-}
+    // Chunk formRecords for DynamoDB
+    const formRecordsString = JSON.stringify(formRecords);
+    const CHUNK_SIZE = 370000;
+    const chunks = [];
+    for (let i = 0; i < formRecordsString.length; i += CHUNK_SIZE) {
+      chunks.push(formRecordsString.slice(i, i + CHUNK_SIZE));
+    }
 
     // Prepare batch write requests
-const writeRequests = [
-  {
-    PutRequest: {
-      Item: {
-        UserId: { S: userId },
-        ChunkIndex: { S: 'Metadata' },
-        InstanceUrl: { S: cleanedInstanceUrl },
-        Metadata: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.Metadata?.S || '{}' },
-        UserProfile: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.UserProfile?.S || '{}' },
-        CreatedAt: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.CreatedAt?.S || currentTime },
-        UpdatedAt: { S: currentTime },
-        FlowId: { S: flowId },
+    const writeRequests = [
+      {
+        PutRequest: {
+          Item: {
+            UserId: { S: userId },
+            ChunkIndex: { S: 'Metadata' },
+            InstanceUrl: { S: cleanedInstanceUrl },
+            Metadata: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.Metadata?.S || '{}' },
+            UserProfile: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.UserProfile?.S || '{}' },
+            Fieldset: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.Fieldset?.S || '{}' },
+            CreatedAt: { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.CreatedAt?.S || currentTime },
+            GoogleData : { S: allItems.find(item => item.ChunkIndex?.S === 'Metadata')?.GoogleData?.S || {} },
+            UpdatedAt: { S: currentTime },
+            FlowId: { S: flowId },
+          },
+        },
       },
-    },
-  },
-  ...chunks.map((chunk, index) => ({
-    PutRequest: {
-      Item: {
-        UserId: { S: userId },
-        ChunkIndex: { S: `FormRecords_${index}` },
-        FormRecords: { S: chunk },
-        CreatedAt: { S: currentTime },
-        UpdatedAt: { S: currentTime },
-        FlowId: { S: flowId },
-      },
-    },
-  })),
-];
+      ...chunks.map((chunk, index) => ({
+        PutRequest: {
+          Item: {
+            UserId: { S: userId },
+            ChunkIndex: { S: `FormRecords_${index}` },
+            FormRecords: { S: chunk },
+            CreatedAt: { S: currentTime },
+            UpdatedAt: { S: currentTime },
+            FlowId: { S: flowId },
+          },
+        },
+      })),
+    ];
 
     // Write to DynamoDB
     await dynamoClient.send(
@@ -821,6 +475,18 @@ const writeRequests = [
       })
     );
 
+    if(tokenRefreshed){
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          success: true,
+          message: 'All mappings saved successfully',
+          mappingIds: Array.from(mappingIds.values()),
+          newAccessToken: token
+        }),
+      };
+    }
     // Return success response
     return {
       statusCode: 200,

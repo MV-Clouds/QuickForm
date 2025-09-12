@@ -4,13 +4,14 @@ import { FaCheck, FaShoppingCart, FaTag } from "react-icons/fa";
 
 /**
  * Product Selection Component
- * Allows users to select from available products
+ * Allows users to select multiple products and shows total price
  */
 const ProductSelection = ({
   products = [],
-  selectedProduct,
+  selectedProducts = [], // Changed from selectedProduct to selectedProducts array
   onProductSelection,
   currency = "USD",
+  allowMultiple = true, // New prop to control single vs multiple selection
 }) => {
   if (!products || products.length === 0) {
     return (
@@ -28,93 +29,142 @@ const ProductSelection = ({
     );
   }
 
+  // Handle product selection/deselection
+  const handleProductClick = (product) => {
+    console.log("Product clicked:", product);
+    console.log("allow : ", allowMultiple);
+    if (!allowMultiple) {
+      // Single selection mode
+      onProductSelection(product);
+      return;
+    }
+
+
+    // Multiple selection mode - ensure selectedProducts is an array
+    const currentSelection = Array.isArray(selectedProducts) ? selectedProducts : [];
+    const isSelected = currentSelection.some((p) => p.id === product.id);
+    let newSelection;
+
+    if (isSelected) {
+      // Remove product from selection
+      newSelection = currentSelection.filter((p) => p.id !== product.id);
+    } else {
+      // Add product to selection
+      newSelection = [...currentSelection, product];
+    }
+
+    onProductSelection(newSelection);
+  };
+
+  // Calculate total price for selected products
+  const calculateTotal = () => {
+    if (Array.isArray(selectedProducts)) {
+      return selectedProducts.reduce(
+        (total, product) => total + (product.price || 0),
+        0
+      );
+    } else {
+      return selectedProducts?.price || 0;
+    }
+  };
+
+  const totalPrice = calculateTotal();
+  const hasSelection = Array.isArray(selectedProducts)
+    ? selectedProducts.length > 0
+    : !!selectedProducts;
+
   return (
     <div className="mb-6">
       <h4 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
         <FaShoppingCart className="text-blue-600" />
-        Select a Product
+        {allowMultiple ? "Select Products" : "Select a Product"}
       </h4>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {products.map((product) => {
-          const isSelected = selectedProduct?.id === product.id;
+          const isSelected = Array.isArray(selectedProducts)
+            ? selectedProducts.some((p) => p.id === product.id)
+            : selectedProducts?.id === product.id;
 
           return (
             <button
+            // type="button"
               key={product.id}
-              onClick={() => onProductSelection(product)}
+              onClick={() => handleProductClick(product)}
               className={`p-4 border-2 rounded-lg transition-all duration-200 text-left relative ${
                 isSelected
                   ? "border-blue-500 bg-blue-50 shadow-md transform scale-105"
                   : "border-gray-200 hover:border-gray-300 hover:shadow-sm hover:bg-gray-50"
               }`}
             >
+              {/* Selection indicator */}
+              {isSelected && (
+                <div className="absolute top-2 right-2">
+                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                    <FaCheck className="w-3 h-3 text-white" />
+                  </div>
+                </div>
+              )}
+
               {/* Discount badge */}
               {product.originalPrice &&
                 product.originalPrice > product.price && (
                   <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    <FaTag className="inline w-2 h-2 mr-1" />
+                    Save{" "}
                     {Math.round(
-                      (1 - product.price / product.originalPrice) * 100
+                      ((product.originalPrice - product.price) /
+                        product.originalPrice) *
+                        100
                     )}
-                    % OFF
+                    %
                   </div>
                 )}
 
-              <div className="flex justify-between items-start mb-2">
-                <h5 className="font-medium text-gray-900 text-sm pr-2">
-                  {product.name}
-                </h5>
-                {isSelected && (
-                  <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <FaCheck className="w-3 h-3 text-white" />
-                  </div>
-                )}
-              </div>
+              {/* Product name */}
+              <h5 className="font-medium text-gray-900 mb-2 pr-8">
+                {product.name}
+              </h5>
 
+              {/* Product description */}
               {product.description && (
-                <p className="text-gray-600 text-xs mb-3 line-clamp-2">
+                <p className="text-gray-600 text-sm mb-3 line-clamp-2">
                   {product.description}
                 </p>
               )}
 
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-lg font-bold text-gray-900">
-                  {formatCurrency(product.price, currency)}
-                </span>
-
+              {/* Price */}
+              <div className="mb-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-bold text-gray-900">
+                    {formatCurrency(product.price, currency)}
+                  </span>
+                  {product.originalPrice &&
+                    product.originalPrice > product.price && (
+                      <span className="text-sm text-gray-500 line-through">
+                        {formatCurrency(product.originalPrice, currency)}
+                      </span>
+                    )}
+                </div>
                 {product.originalPrice &&
                   product.originalPrice > product.price && (
-                    <span className="text-sm text-gray-500 line-through">
-                      {formatCurrency(product.originalPrice, currency)}
-                    </span>
+                    <div className="text-xs text-green-600 font-medium">
+                      Save{" "}
+                      {formatCurrency(
+                        product.originalPrice - product.price,
+                        currency
+                      )}
+                    </div>
                   )}
               </div>
 
-              {/* Stock status */}
-              {product.stock !== undefined && (
-                <div className="mb-3">
-                  {product.stock > 0 ? (
-                    <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
-                      {product.stock > 10
-                        ? "In Stock"
-                        : `${product.stock} left`}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-                      Out of Stock
-                    </span>
-                  )}
-                </div>
-              )}
-
+              {/* Features */}
               {product.features && product.features.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="mb-3">
                   <ul className="text-xs text-gray-600 space-y-1">
                     {product.features.slice(0, 3).map((feature, index) => (
                       <li key={index} className="flex items-center gap-1">
-                        <div className="w-1 h-1 bg-blue-400 rounded-full flex-shrink-0"></div>
-                        <span className="truncate">{feature}</span>
+                        <FaTag className="w-2 h-2 text-blue-500 flex-shrink-0" />
+                        {feature}
                       </li>
                     ))}
                     {product.features.length > 3 && (
@@ -139,30 +189,61 @@ const ProductSelection = ({
         })}
       </div>
 
-      {selectedProduct && (
+      {/* Selection summary */}
+      {hasSelection && (
         <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <FaCheck className="text-green-600" />
             <span className="text-green-800 font-medium">
-              Selected: {selectedProduct.name}
+              {Array.isArray(selectedProducts)
+                ? `Selected ${selectedProducts.length} product${
+                    selectedProducts.length !== 1 ? "s" : ""
+                  }`
+                : `Selected: ${selectedProducts.name}`}
             </span>
           </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-green-700">
-              Price: {formatCurrency(selectedProduct.price, currency)}
-            </span>
-            {selectedProduct.originalPrice &&
-              selectedProduct.originalPrice > selectedProduct.price && (
-                <span className="text-green-600 font-medium">
-                  You save{" "}
-                  {formatCurrency(
-                    selectedProduct.originalPrice - selectedProduct.price,
-                    currency
-                  )}
-                  !
+
+          {Array.isArray(selectedProducts) ? (
+            <div className="space-y-2">
+              {/* List selected products */}
+              <div className="text-sm text-green-700">
+                {selectedProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex justify-between items-center"
+                  >
+                    <span>{product.name}</span>
+                    <span>{formatCurrency(product.price, currency)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total price */}
+              <div className="flex justify-between items-center pt-2 border-t border-green-300">
+                <span className="font-medium text-green-800">Total:</span>
+                <span className="font-bold text-green-800 text-lg">
+                  {formatCurrency(totalPrice, currency)}
                 </span>
-              )}
-          </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-green-700">
+                Price: {formatCurrency(selectedProducts.price, currency)}
+              </span>
+              {selectedProducts.originalPrice &&
+                selectedProducts.originalPrice > selectedProducts.price && (
+                  <span className="text-green-600 font-medium">
+                    You save{" "}
+                    {formatCurrency(
+                      selectedProducts.originalPrice - selectedProducts.price,
+                      currency
+                    )}
+                    !
+                  </span>
+                )}
+            </div>
+          )}
         </div>
       )}
     </div>

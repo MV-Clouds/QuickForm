@@ -133,7 +133,7 @@ const parseFormulaText = (text, fields, functionCategories) => {
   return parts;
 };
 
-function FormCalculationWidget({ selectedField, onUpdateField, fields }) {
+function FormCalculationWidget({ selectedField, onUpdateField, fields, isEditable=true }) {
   const [formulaParts, setFormulaParts] = useState([]);
   const [manualInput, setManualInput] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
@@ -519,78 +519,6 @@ function FormCalculationWidget({ selectedField, onUpdateField, fields }) {
     return { errors, warnings };
   };
 
-  // const handleSaveFormula = () => {
-  //   const rawFormula = convertPartsToRawFormula(formulaParts);
-  //   const { errors, warnings } = validateFormula(formulaParts);
-
-  //   setValidationErrors(errors);
-  //   setValidationWarnings(warnings);
-
-  //   if (errors.length > 0) {
-  //     // Clear invalid formula
-  //     if (errors.some(e => e.includes('Invalid field reference') ||
-  //       e.includes('Function is not defined') ||
-  //       e.includes('Invalid consecutive operators'))) {
-  //       setManualInput('');
-  //       setFormulaParts([]);
-  //     }
-  //     return;
-  //   }
-
-  //   const fieldReferences = formulaParts
-  //     .filter(p => p.type === 'field')
-  //     .map(p => p.id)
-  //     .filter((id, index, self) => self.indexOf(id) === index);
-
-  //   onUpdateField(selectedField.id, {
-  //     formula: rawFormula,
-  //     fieldReferences,
-  //     decimalPlaces,
-  //     ignoreHiddenFields,
-  //     isReadOnly
-  //   });
-  //   setShowOptionsInterface(false);
-  // };
-
-
-  // const handleTextareaBlur = () => {
-  //   // First check if there are any invalid function calls with dot notation
-  //   if (manualInput.includes('".') || manualInput.includes("'.")) {
-  //     setValidationErrors(['Invalid syntax: Use comma (,) to separate function arguments, not dot (.)']);
-  //     setValidationWarnings([]);
-  //     setManualInput('');
-  //     setFormulaParts([]);
-  //     return;
-  //   }
-
-  //   const parts = parseFormulaText(manualInput, fields, functionCategories);
-
-  //   // Check if there's any invalid text that wasn't parsed into parts
-  //   const hasInvalidText = manualInput.trim() && parts.length === 0;
-
-  //   if (hasInvalidText) {
-  //     setValidationErrors(['Invalid formula syntax. Please use valid fields, functions, or operators.']);
-  //     setValidationWarnings([]);
-  //     setManualInput('');
-  //     setFormulaParts([]);
-  //     return;
-  //   }
-
-  //   const { errors, warnings } = validateFormula(parts);
-
-  //   setValidationErrors(errors);
-  //   setValidationWarnings(warnings);
-
-  //   // Only update if there are no critical errors
-  //   if (!errors.some(e => e.includes('Invalid field reference') ||
-  //     e.includes('Function is not defined') ||
-  //     e.includes('Invalid syntax'))) {
-  //     setFormulaParts(parts);
-  //   }
-
-  //   setIsEditMode(false);
-  // };
-
 const handleSaveFormula = () => {
   let partsToSave = [...formulaParts];
   const warnings = [];
@@ -792,6 +720,7 @@ const handleTextareaBlur = () => {
             <div className="space-y-4">
               <div className="mb-4 flex items-center">
                 <ToggleSwitch
+                disabled={!isEditable}
                   checked={isReadOnly}
                   onChange={(e) => setIsReadOnly(e.target.checked)}
                   id="required-toggle"
@@ -800,6 +729,7 @@ const handleTextareaBlur = () => {
               </div>
               <div className="mb-4 flex items-center">
                 <ToggleSwitch
+                disabled={!isEditable}
                   checked={ignoreHiddenFields}
                   onChange={(e) => setIgnoreHiddenFields(e.target.checked)}
                   id="required-toggle"
@@ -813,6 +743,7 @@ const handleTextareaBlur = () => {
                   type="number"
                   min="0"
                   max="10"
+                  disabled={!isEditable}
                   value={decimalPlaces}
                   onChange={handleDecimalPlacesChange}
                   className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
@@ -822,6 +753,7 @@ const handleTextareaBlur = () => {
 
             <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
               <button
+              disabled={!isEditable}
                 onClick={handleSaveFormula}
                 className="px-4 py-2 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors"
               >
@@ -843,7 +775,7 @@ const handleTextareaBlur = () => {
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">Calculation Area</label>
 
-              {isEditMode ? (
+              {isEditMode && isEditable ? (
                 <textarea
                   ref={textareaRef}
                   value={manualInput}
@@ -874,6 +806,7 @@ const handleTextareaBlur = () => {
             {/* ADD FIELD Button */}
             <div className="mb-4 relative" ref={fieldsDropdownRef}>
               <button
+              disabled={!isEditable}
                 onClick={() => setShowFields(!showFields)}
                 className="w-full px-4 py-2 bg-[#028AB0] text-white rounded-lg hover:bg-[#017393] flex items-center justify-center gap-2 transition-colors"
               >
@@ -896,7 +829,7 @@ const handleTextareaBlur = () => {
                           <button
                             key={field.id}
                             onClick={() => !isDisabled && handleFieldSelect(field)}
-                            disabled={isDisabled}
+                            disabled={!isEditable || isDisabled}
                             className={`w-full text-left px-4 py-2 text-sm transition-colors ${isDisabled
                               ? 'text-gray-400 cursor-not-allowed bg-gray-50'
                               : 'text-gray-700 hover:bg-blue-50'
@@ -917,25 +850,25 @@ const handleTextareaBlur = () => {
             {/* Calculator Keypad */}
             <div className="mb-4">
               <div className="grid grid-cols-4 gap-2">
-                {['7', '8', '9'].map((char) => (<button key={char} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
-                <button onClick={() => handleOperatorOrNumberSelect('/', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">÷</button>
+                {['7', '8', '9'].map((char) => (<button key={char} disabled={!isEditable}  onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
+                <button disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect('/', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">÷</button>
 
-                {['4', '5', '6'].map((char) => (<button key={char} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
-                <button onClick={() => handleOperatorOrNumberSelect('*', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">×</button>
+                {['4', '5', '6'].map((char) => (<button key={char} disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
+                <button disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect('*', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">×</button>
 
-                {['1', '2', '3'].map((char) => (<button key={char} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
-                <button onClick={() => handleOperatorOrNumberSelect('-', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">-</button>
+                {['1', '2', '3'].map((char) => (<button key={char} disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
+                <button disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect('-', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">-</button>
 
-                {['0', '.'].map((char) => (<button key={char} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
-                <button onClick={handleBackspace} disabled={isEditMode} className={`p-3 text-white rounded-lg transition-colors flex items-center justify-center ${isEditMode ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-700 hover:bg-red-800'}`}>←</button>
-                <button onClick={() => handleOperatorOrNumberSelect('+', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">+</button>
+                {['0', '.'].map((char) => (<button key={char} disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect(char, 'number')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">{char}</button>))}
+                <button onClick={handleBackspace} disabled={!isEditable || isEditMode} className={`p-3 text-white rounded-lg transition-colors flex items-center justify-center ${isEditMode ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-700 hover:bg-red-800'}`}>←</button>
+                <button disabled={!isEditable}  onClick={() => handleOperatorOrNumberSelect('+', 'operator')} className="p-3 bg-[#029EC9] text-white rounded-lg hover:bg-[#0290b7] transition-colors">+</button>
               </div>
 
               <div className="grid grid-cols-3 gap-2 mt-2">
-                <button onClick={() => handleOperatorOrNumberSelect('(', 'parenthesis')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">(</button>
-                <button onClick={() => handleOperatorOrNumberSelect(')', 'parenthesis')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">)</button>
+                <button disabled={!isEditable}  onClick={() => handleOperatorOrNumberSelect('(', 'parenthesis')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">(</button>
+                <button disabled={!isEditable} onClick={() => handleOperatorOrNumberSelect(')', 'parenthesis')} className="p-3 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 transition-colors">)</button>
                 <div className="relative" ref={functionsDropdownRef}>
-                  <button onClick={() => setShowFunctions(!showFunctions)} className="p-3 w-full bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center justify-center transition-colors">
+                  <button disabled={!isEditable} onClick={() => setShowFunctions(!showFunctions)} className="p-3 w-full bg-purple-500 text-white rounded-lg hover:bg-purple-600 flex items-center justify-center transition-colors">
                     <span>f(x)</span>
                   </button>
                   <AnimatePresence>
@@ -952,6 +885,7 @@ const handleTextareaBlur = () => {
                               return (
                                 <button
                                   key={func}
+                                  disabled={!isEditable} 
                                   onClick={() => handleFunctionSelect(funcName)}
                                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-purple-50 transition-colors"
                                 >
@@ -998,6 +932,7 @@ const handleTextareaBlur = () => {
               </button>
               <button
                 onClick={handleSaveFormula}
+                disabled={!isEditable} 
                 className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm flex items-center gap-1 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

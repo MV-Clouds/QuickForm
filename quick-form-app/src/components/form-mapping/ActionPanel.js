@@ -81,7 +81,8 @@ const ActionPanel = ({
   setNodeLabel,
   nodes,
   edges,
-  sfToken
+  sfToken,
+  isEditable=true
 }) => {
   const isFindNode = nodeType === "Find";
   const isCreateUpdateNode = nodeType === "Create/Update";
@@ -105,6 +106,7 @@ const ActionPanel = ({
   const [currentItemVariableName, setCurrentItemVariableName] = useState("");
   const [loopVariables, setLoopVariables] = useState({ currentIndex: false, indexBase: "0", counter: false });
   const [maxIterations, setMaxIterations] = useState("");
+  const [loopIterationOrder, setLoopIterationOrder] = useState("ASC");
   const [formatterConfig, setFormatterConfig] = useState({
     formatType: "date",
     operation: "",
@@ -170,7 +172,7 @@ const ActionPanel = ({
 
   const selectedFindNode = mappings[nodeId]?.selectedFindNode || "";
 
-// Clear error state when switching nodes to prevent stale messages
+  // Clear error state when switching nodes to prevent stale messages
   useEffect(() => {
     setSaveError(null);
   }, [nodeId]);
@@ -208,6 +210,7 @@ const ActionPanel = ({
     setCurrentItemVariableName(loopConfig.currentItemVariableName || "item");
     setLoopVariables(loopConfig.loopVariables || { currentIndex: false, indexBase: "0", counter: false });
     setMaxIterations(loopConfig.maxIterations || "");
+    setLoopIterationOrder(loopConfig.loopIterationOrder || "ASC");
     setExitConditions(
       loopConfig.exitConditions?.length > 0
         ? loopConfig.exitConditions.map(c => ({ ...c, logic: undefined }))
@@ -814,6 +817,10 @@ const ActionPanel = ({
         return { error: "Max iterations must be a positive number." };
       }
 
+      if (loopIterationOrder && !["ASC", "DESC"].includes(loopIterationOrder)) {
+        return { error: "Invalid iteration order. Please select Ascending or Descending." };
+      }
+
       const validCollectionOptions = getAncestorNodes(nodeId, edges, nodes)
         .filter((node) => node.data.action === "Find")
         .map((node) => node.id);
@@ -893,8 +900,18 @@ const ActionPanel = ({
         if (formatterConfig.operation === "currency_format" && (!formatterConfig.options.currency || !formatterConfig.options.locale)) {
           return { error: "Please provide currency and locale." };
         }
-        if (formatterConfig.operation === "round_number" && formatterConfig.options.decimals === undefined) {
-          return { error: "Please provide number of decimals." };
+        if (formatterConfig.operation === "round_number") {
+          const decimals = formatterConfig.options.decimals;
+
+          // Check if decimals is undefined, null, or not a number
+          if (decimals === undefined || decimals === null || isNaN(decimals)) {
+            return { error: "Please provide number of decimals." };
+          }
+
+          // Check if decimals is within valid range
+          if (decimals < 0 || decimals > 15) {
+            return { error: "Decimals must be between 0 and 15." };
+          }
         }
         if (formatterConfig.operation === "phone_format" && (!formatterConfig.options.countryCode || !formatterConfig.options.format)) {
           return { error: "Please provide country code and format." };
@@ -966,9 +983,9 @@ const ActionPanel = ({
 
     // FindGoogleSheet validations
     if (isFindGoogleSheet) {
-      if (!findSpreadsheetId) {
-        return { error: "Please select a Google Sheet." };
-      }
+      // if (!findSpreadsheetId) {
+      //   return { error: "Please select a Google Sheet." };
+      // }
       if (findreturnLimit && (isNaN(findreturnLimit) || findreturnLimit < 1 || findreturnLimit > 100)) {
         return { error: "Return Limit must be a number between 1 and 100." };
       }
@@ -1001,6 +1018,7 @@ const ActionPanel = ({
       ? {
         loopCollection,
         currentItemVariableName,
+        loopIterationOrder,
         ...(loopVariables.currentIndex || loopVariables.counter ? { loopVariables } : {}),
         ...(maxIterations ? { maxIterations } : {}),
         ...(validExitConditions.length > 0 ? { exitConditions: validExitConditions } : {}),
@@ -1280,6 +1298,7 @@ const ActionPanel = ({
               <div className="col-span-1">
                 <Select
                   value={logicOptions.find((opt) => opt.value === logicType) || null}
+                  disabled={!isEditable}
                   onChange={(selected) => {
                     setLogicType(selected ? selected.value : "AND");
                     if (selected?.value !== "Custom") {
@@ -1318,6 +1337,7 @@ const ActionPanel = ({
                   <input
                     type="text"
                     value={customLogic}
+                    disabled={!isEditable}
                     onChange={(e) => setCustomLogic(e.target.value)}
                     placeholder="e.g., (1 AND 2) OR 3"
                     className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500 h-9"
@@ -1403,7 +1423,7 @@ const ActionPanel = ({
                         }))
                         : getFieldOptionsForConditions()
                     }
-                    disabled={!getFieldOptionsForConditions().length}
+                    disabled={!getFieldOptionsForConditions().length || !isEditable}
                     allowClear
                     size="small"
                   />
@@ -1415,6 +1435,7 @@ const ActionPanel = ({
                     style={{ width: "100%" }}
                     placeholder="Op"
                     value={condition.operator || undefined}
+                    disabled={!isEditable}
                     onChange={(value) =>
                       handleConditionChange(index, "operator", value, conditionType)
                     }
@@ -1432,7 +1453,7 @@ const ActionPanel = ({
                       value={condition.value}
                       onChange={(e) => handleConditionChange(index, "value", e.target.value, conditionType)}
                       placeholder={condition.operator === "BETWEEN" ? "From Value" : "Enter Value"}
-                      disabled={!condition.operator}
+                      disabled={!condition.operator || !isEditable}
                     />
                   </div>
                 )}
@@ -1442,6 +1463,7 @@ const ActionPanel = ({
                   {conditionsList.length > 1 && (
                     <button
                       onClick={() => removeCondition(index, conditionType)}
+                      disabled={!isEditable}
                       className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
                       title="Remove condition"
                     >
@@ -1470,6 +1492,7 @@ const ActionPanel = ({
                       <input
                         type="text"
                         value={condition.value2}
+                        disabled={!isEditable}
                         onChange={(e) => handleConditionChange(index, "value2", e.target.value, conditionType)}
                         placeholder="To Value"
                         className="w-full border border-gray-300 rounded-md shadow-sm p-2 text-sm focus:ring-blue-500 focus:border-blue-500 h-9"
@@ -1483,6 +1506,7 @@ const ActionPanel = ({
             {/* Add Condition Button */}
             <button
               onClick={() => addCondition(conditionType)}
+              disabled={!isEditable}
               className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium mt-3"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1549,6 +1573,7 @@ const ActionPanel = ({
               <label className="block text-sm font-medium text-gray-700 mb-1">Label</label>
               <Input
                 value={customLabel}
+                disabled={!isEditable}
                 onChange={(e) => setCustomLabel(e.target.value)}
                 onBlur={handleLabelBlur}
                 maxLength={25}
@@ -1577,7 +1602,7 @@ const ActionPanel = ({
             exit={{ x: 300, opacity: 0 }}
           >
             <GoogleSheetPanel setFieldMappings={setFieldMappings} setSheetName={setSheetName} sheetName={sheetName} fieldMappings={fieldMappings} formFields={formFields} sheetLink={sheetLink} setsheetLink={setSheetLink} sfToken={sfToken} instanceUrl={instanceUrl} userId={userId} sheetconditions={sheetConditions} setsheetConditions={setsheetConditions} conditionsLogic={conditionsLogic} setConditionsLogic={setConditionsLogic}
-              sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns} />
+              sheetcustomLogic={sheetcustomLogic} setsheetCustomLogic={setsheetCustomLogic} spreadsheetId={spreadsheetId} setSpreadsheetId={setSpreadsheetId} updateMultiple={updateMultiple} setUpdateMultiple={setUpdateMultiple} setFindGoogleSheetColumns={setFindGoogleSheetColumns} isEditable={isEditable} />
           </motion.div>
         )}
         {isFindGoogleSheet && (
@@ -1593,6 +1618,7 @@ const ActionPanel = ({
               instanceUrl={instanceUrl}
               token={sfToken}
               sheetsApiUrl={process.env.REACT_APP_GOOGLE_SHEET}
+              isEditable={isEditable}
             />
           </motion.div>
         )}
@@ -1607,6 +1633,7 @@ const ActionPanel = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Path Option</label>
                 <AntSelect
                   value={pathOption || undefined}
+                  disabled={!isEditable}
                   onChange={(value) => setPathOption(value || "Rules")}
                   options={pathOptions}
                   placeholder="Select Path Option"
@@ -1638,7 +1665,7 @@ const ActionPanel = ({
                 showSearch
                 options={objectOptions}
                 optionFilterProp="label"
-                disabled={!objectOptions.length}
+                disabled={!objectOptions.length || !isEditable}
                 getPopupContainer={(t) => document.body}
               />
 
@@ -1659,6 +1686,7 @@ const ActionPanel = ({
                   value={
                     (isLoopNode ? loopCollection : selectedFindNode) || undefined
                   }
+                  disabled={!isEditable}
                   onChange={(value) => handleFindNodeChange(value, isLoopNode)}
                   options={collectionOptions}
                   placeholder={
@@ -1686,6 +1714,25 @@ const ActionPanel = ({
               className="space-y-6"
             >
               <div>
+                {/* Iteration order */}
+                <div className="mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Iteration Order
+                  </label>
+                  <AntSelect
+                    value={loopIterationOrder}
+                    disabled={!isEditable}
+                    onChange={(value) => setLoopIterationOrder(value || "ASC")}
+                    options={[
+                      { value: "ASC", label: "Ascending (First to Last)" },
+                      { value: "DESC", label: "Descending (Last to First)" }
+                    ]}
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Choose whether to iterate through the collection from first to last or last to first
+                  </p>
+                </div>
                 {/* Max Iterations Accordion */}
                 <div className="">
                   <button
@@ -1712,6 +1759,7 @@ const ActionPanel = ({
                       <input
                         type="number"
                         value={maxIterations}
+                        disabled={!isEditable}
                         onChange={(e) => setMaxIterations(e.target.value)}
                         placeholder="Enter max iterations (e.g., 3)"
                         className="mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
@@ -1788,6 +1836,7 @@ const ActionPanel = ({
                         <div>
                           <Input
                             type="number"
+                            disabled={!isEditable}
                             value={returnLimit}
                             onChange={(e) => setReturnLimit(e.target.value)}
                             placeholder="Leave blank for all records"
@@ -1831,7 +1880,7 @@ const ActionPanel = ({
                                 value={sortField || undefined}
                                 onChange={(value) => setSortField(value)}
                                 placeholder="Select Field"
-                                disabled={!selectedObject}
+                                disabled={!selectedObject || !isEditable}
                                 allowClear
                                 showSearch={false} // disables search
                                 style={{ width: "100%", marginTop: 4 }}
@@ -1848,6 +1897,7 @@ const ActionPanel = ({
                               <label className="block text-xs font-medium text-gray-500">Sort Order</label>
                               <AntSelect
                                 value={sortOrder || undefined}
+                                disabled={!isEditable}
                                 onChange={(value) => setSortOrder(value || "ASC")}
                                 placeholder="Select Order"
                                 allowClear
@@ -1933,7 +1983,7 @@ const ActionPanel = ({
                             value={mapping.salesforceField || undefined}
                             onChange={(value) => handleMappingChange(index, "salesforceField", value || "")}
                             allowClear={!isRequiredField}
-                            disabled={!selectedObject || isRequiredField}
+                            disabled={!selectedObject || isRequiredField || !isEditable}
                             dropdownStyle={{ zIndex: 9999 }}
                             getPopupContainer={(trigger) => document.body} // prevents clipping
                             showSearch={false} // 🔹 disables search
@@ -1983,7 +2033,7 @@ const ActionPanel = ({
                               }
                             }}
                             allowClear
-                            disabled={!formFieldOptions(index).length}
+                            disabled={!formFieldOptions(index).length || !isEditable}
                             showSearch={false} // 🔹 disables search
                           >
                             {formFieldOptions(index).flatMap(group =>
@@ -2015,6 +2065,7 @@ const ActionPanel = ({
                           {localMappings.length > 1 && !isRequiredField && (
                             <button
                               onClick={() => removeMapping(index)}
+                              disabled={!isEditable}
                               className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
                               title="Remove mapping"
                             >
@@ -2033,7 +2084,7 @@ const ActionPanel = ({
                   <button
                     onClick={addMapping}
                     className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={safeSalesforceObjects.length === 0 || !selectedObject}
+                    disabled={safeSalesforceObjects.length === 0 || !selectedObject || !isEditable}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -2048,6 +2099,7 @@ const ActionPanel = ({
                 <div className="flex items-center">
                   <ToggleSwitch
                     checked={storeAsContentDocument}
+                    disabled={!isEditable}
                     onChange={() => setStoreAsContentDocument(!storeAsContentDocument)}
                     id="content-document-toggle"
                   />
@@ -2067,6 +2119,7 @@ const ActionPanel = ({
                     <AntSelect
                       mode="multiple"
                       value={selectedFileUploadFields}
+                      disabled={!isEditable}
                       onChange={(value) => setSelectedFileUploadFields(value)}
                       placeholder="Select file upload fields"
                       style={{ width: "100%" }}
@@ -2094,6 +2147,7 @@ const ActionPanel = ({
                     <div className="mb-4 flex items-center">
                       <ToggleSwitch
                         checked={enableConditions}
+                        disabled={!isEditable}
                         onChange={() => {
                           if (enableConditions) {
                             setConditions([{ field: "", operator: "=", value: "", value2: "" }]);
@@ -2141,6 +2195,7 @@ const ActionPanel = ({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Formatter Type</label>
                   <AntSelect
                     value={formatterConfig.formatType || undefined}
+                    disabled={!isEditable}
                     onChange={(value) => {
                       handleFormatterChange("formatType", value || "date");
                       handleFormatterChange("inputField", "");
@@ -2176,7 +2231,7 @@ const ActionPanel = ({
                     }
                     onChange={(value) => handleFormatterChange("operation", value || "")}
                     placeholder="Select Operation"
-                    disabled={!formatterConfig.formatType}
+                    disabled={!formatterConfig.formatType || !isEditable}
                     allowClear
                     showSearch={false}   // 🔹 disables search
                     style={{ width: "100%", marginTop: 4 }}
@@ -2207,6 +2262,7 @@ const ActionPanel = ({
                   <AntSelect
                     value={formatterConfig.inputField || undefined}
                     onChange={(value) => handleFormatterChange("inputField", value || "")}
+                    disabled={!isEditable}
                     placeholder={
                       formFieldOptions().length
                         ? "Select Form Field"
@@ -2255,7 +2311,7 @@ const ActionPanel = ({
                         }
                         allowClear
                         showSearch={false}
-                        disabled={formatterConfig.useCustomInput}
+                        disabled={formatterConfig.useCustomInput || !isEditable}
                         style={{ width: "100%", marginTop: 4 }}
                       >
                         {formFieldOptions(undefined, true).map((group) => (
@@ -2287,6 +2343,7 @@ const ActionPanel = ({
                   <div className="flex items-center">
                     <ToggleSwitch
                       checked={formatterConfig.useCustomInput}
+                      disabled={!isEditable}
                       onChange={(e) => handleFormatterChange("useCustomInput", e.target.checked)}
                       id="custom-input-toggle"
                     />
@@ -2304,6 +2361,7 @@ const ActionPanel = ({
                       </label>
                       <Input
                         value={formatterConfig.customValue}
+                        disabled={!isEditable}
                         onChange={(e) => handleFormatterChange("customValue", e.target.value)}
                         placeholder={
                           formatterConfig.operation === "date_difference" ? "e.g., 2025-06-20" : "e.g., 200"
@@ -2325,6 +2383,7 @@ const ActionPanel = ({
                       <label className="block text-sm font-medium text-gray-700 mb-1">Date Format</label>
                       <AntSelect
                         value={formatterConfig.options.format || undefined}
+                        disabled={!isEditable}
                         onChange={(val) => handleFormatterOptionChange("format", val)}
                         placeholder="Select Date Format"
                         style={{ width: "100%", marginTop: 4 }}
@@ -2346,6 +2405,7 @@ const ActionPanel = ({
                       <label className="block text-sm font-medium text-gray-700 mb-1">Time Format</label>
                       <AntSelect
                         value={formatterConfig.options.format || undefined}
+                        disabled={!isEditable}
                         onChange={(val) => handleFormatterOptionChange("format", val)}
                         placeholder="Select Time Format"
                         style={{ width: "100%", marginTop: 4 }}
@@ -2369,6 +2429,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Source Timezone</label>
                         <AntSelect
                           value={formatterConfig.options.timezone || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("timezone", val)}
                           placeholder="Select Source Timezone"
                           style={{ width: "100%", marginTop: 4 }}
@@ -2388,6 +2449,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Target Timezone</label>
                         <AntSelect
                           value={formatterConfig.options.targetTimezone || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("targetTimezone", val)}
                           placeholder="Select Target Timezone"
                           style={{ width: "100%", marginTop: 4 }}
@@ -2412,6 +2474,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
                         <AntSelect
                           value={formatterConfig.options.unit || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("unit", val)}
                           placeholder="Select Unit"
                           style={{ width: "100%", marginTop: 4 }}
@@ -2429,6 +2492,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700">Value</label>
                         <Input
                           type="number"
+                          disabled={!isEditable}
                           value={formatterConfig.options.value || undefined}
                           onChange={(val) => handleFormatterOptionChange("value", val)}
                           placeholder="e.g., 3"
@@ -2452,6 +2516,7 @@ const ActionPanel = ({
                       <label className="block text-sm font-medium text-gray-700 mb-1">Locale</label>
                       <AntSelect
                         value={formatterConfig.options.locale || undefined}
+                        disabled={!isEditable}
                         onChange={(val) => handleFormatterOptionChange("locale", val)}
                         placeholder="Select Locale"
                         style={{ width: "100%", marginTop: 4 }}
@@ -2474,6 +2539,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
                         <AntSelect
                           value={formatterConfig.options.currency || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("currency", val)}
                           placeholder="Select Currency"
                           style={{ width: "100%", marginTop: 4 }}
@@ -2493,6 +2559,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Locale</label>
                         <AntSelect
                           value={formatterConfig.options.locale || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("locale", val)}
                           placeholder="Select Locale"
                           style={{ width: "100%", marginTop: 4 }}
@@ -2512,16 +2579,23 @@ const ActionPanel = ({
                   {formatterConfig.operation === "round_number" && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Decimals</label>
-                      <Input
+                      <input
                         type="number"
-                        value={formatterConfig.options.decimals ?? undefined}
-                        onChange={(val) => handleFormatterOptionChange("decimals", val ?? "")}
+                        value={formatterConfig.options.decimals ?? ""}
+                        disabled={!isEditable}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleFormatterOptionChange(
+                            "decimals",
+                            value === "" ? undefined : parseInt(value)
+                          );
+                        }}
                         placeholder="e.g., 2"
                         min={0}
-                        style={{ width: "100%" }}
+                        max={15}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-
                   )}
                   {formatterConfig.operation === "phone_format" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2529,6 +2603,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Country Code</label>
                         <AntSelect
                           value={formatterConfig.options.countryCode || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("countryCode", val)}
                           options={countryOptions}
                           placeholder="Select Country Code"
@@ -2541,6 +2616,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
                         <AntSelect
                           value={formatterConfig.options.format || undefined}
+                          disabled={!isEditable}
                           onChange={(val) => handleFormatterOptionChange("format", val)}
                           options={phoneFormatOptions}
                           placeholder="Select Format"
@@ -2555,6 +2631,7 @@ const ActionPanel = ({
                       <label className="block text-sm font-medium text-gray-700 mb-1">Operation</label>
                       <AntSelect
                         value={formatterConfig.options.operation || undefined}
+                        disabled={!isEditable}
                         onChange={(val) => handleFormatterOptionChange("operation", val)}
                         options={operationOptions}
                         placeholder="Select Operation"
@@ -2577,6 +2654,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700">Search Value</label>
                         <Input
                           value={formatterConfig.options.searchValue || ""}
+                          disabled={!isEditable}
                           onChange={(e) => handleFormatterOptionChange("searchValue", e.target.value)}
                           placeholder="Text to replace"
                         />
@@ -2585,6 +2663,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700">Replace Value</label>
                         <Input
                           value={formatterConfig.options.replaceValue || ""}
+                          disabled={!isEditable}
                           onChange={(e) => handleFormatterOptionChange("replaceValue", e.target.value)}
                           placeholder="Replacement text"
                         />
@@ -2597,6 +2676,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700">Delimiter</label>
                         <Input
                           value={formatterConfig.options.delimiter || ""}
+                          disabled={!isEditable}
                           onChange={(e) => handleFormatterOptionChange("delimiter", e.target.value)}
                           placeholder="e.g., ,"
                         />
@@ -2606,6 +2686,7 @@ const ActionPanel = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Index</label>
                         <AntSelect
                           value={formatterConfig.options.index || undefined}
+                          disabled={!isEditable}
                           onChange={(value) => handleFormatterOptionChange("index", value)}
                           options={splitIndexOptions}
                           placeholder="Select Index"
@@ -2631,7 +2712,8 @@ const ActionPanel = ({
             </button>
             <button
               onClick={saveLocalMappings}
-              className="px-4 py-2 text-sm font-medium save-local"
+              disabled={!isEditable}
+              className={`${!isEditable ? "cursor-not-allowed opacity-50" : ''} px-4 py-2 text-sm font-medium save-local`}
             >
               Save
             </button>
@@ -2642,7 +2724,7 @@ const ActionPanel = ({
   );
 };
 
-const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
+const ConditionRow = ({ condition, index, onChange, onRemove, columns, isEditable }) => {
   const STRING_OPERATORS = [
     { label: "Equals", value: "=" },
     { label: "Not Equals", value: "!=" },
@@ -2674,6 +2756,7 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
           style={{ width: "100%" }}
           placeholder="Select Column"
           value={condition.field || undefined}
+          disabled={!isEditable}
           onChange={(value) =>
             onChange(index, {
               field: value,
@@ -2695,7 +2778,7 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
           value={condition.operator || undefined}
           onChange={(operator) => onChange(index, { ...condition, operator })}
           options={operators.map((op) => ({ label: op.label, value: op.value }))}
-          disabled={!condition.field}
+          disabled={!condition.field || !isEditable}
           size="small"
         />
       </div>
@@ -2711,7 +2794,7 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
           onChange={(e) =>
             onChange(index, { ...condition, value: e.target.value })
           }
-          disabled={!condition.operator}
+          disabled={!condition.operator || !isEditable}
           size="small"
         />
       </div>
@@ -2720,6 +2803,7 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
       <div className="col-span-1 flex justify-center opacity-30 group-hover:opacity-100 transition-opacity duration-150">
         <button
           onClick={() => onRemove(index)}
+          disabled={!isEditable}
           className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
           title="Remove condition"
         >
@@ -2734,7 +2818,7 @@ const ConditionRow = ({ condition, index, onChange, onRemove, columns }) => {
 
 };
 
-const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, setsheetLogicType, customLogic, setCustomLogic, updateMultiple, setUpdateMultiple }) => {
+const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, setsheetLogicType, customLogic, setCustomLogic, updateMultiple, setUpdateMultiple, isEditable }) => {
   const selectedLogic = sheetlogicType || 'AND';
   const [conditionsEnabled, setConditionsEnabled] = useState(false);
 
@@ -2770,6 +2854,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
       <div className="mb-4 flex items-center">
         <ToggleSwitch
           checked={conditionsEnabled}
+          disabled={!isEditable}
           onChange={() => {
             if (conditionsEnabled) {
               // Turning OFF
@@ -2792,6 +2877,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
       <div className="mb-4 flex items-center">
         <ToggleSwitch
           checked={updateMultiple}
+          disabled={!isEditable}
           onChange={() => setUpdateMultiple(!updateMultiple)}
           id="multiple-update-toggle"
         />
@@ -2813,6 +2899,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
                 <div className="col-span-1">
                   <Select
                     className="w-full"
+                    disabled={!isEditable}
                     value={
                       selectedLogic
                         ? { label: selectedLogic, value: selectedLogic }
@@ -2840,6 +2927,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
                   <div className="col-span-2">
                     <input
                       type="text"
+                      disabled={!isEditable}
                       value={customLogic}
                       onChange={(e) => setCustomLogic(e.target.value)}
                       onKeyDown={handleKeyDown}
@@ -2937,6 +3025,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
                           setConditions(conds => conds.filter((_, ii) => ii !== idx))
                         }
                         columns={columns}
+                        isEditable={isEditable}
                       />
                     ))}
 
@@ -2948,6 +3037,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
                           { field: '', operator: '', value: '', fieldType: '' }
                         ])
                       }
+                      disabled={!isEditable}
                       className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium mt-3"
                     >
                       <svg
@@ -2978,7 +3068,7 @@ const ConditionsPanel = ({ columns, conditions, setConditions, sheetlogicType, s
   );
 };
 
-const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, sheetconditions, setsheetConditions, instanceUrl, userId, sfToken, conditionsLogic, setConditionsLogic, sheetcustomLogic, setsheetCustomLogic, spreadsheetId, setSpreadsheetId, updateMultiple, setUpdateMultiple, setFindGoogleSheetColumns }) => {
+const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappings, setSheetName, sheetconditions, setsheetConditions, instanceUrl, userId, sfToken, conditionsLogic, setConditionsLogic, sheetcustomLogic, setsheetCustomLogic, spreadsheetId, setSpreadsheetId, updateMultiple, setUpdateMultiple, setFindGoogleSheetColumns, isEditable }) => {
   const [error, setError] = useState("");
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -3152,6 +3242,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
           <AntSelect
             style={{ marginTop: 10 }}
             placeholder="Select a spreadsheet"
+            disabled={!isEditable}
             value={sheetName || undefined}
             onChange={onSpreadsheetChange}
             allowClear
@@ -3213,6 +3304,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
                   <div className="col-span-5 relative">
                     <CreatableSelect
                       value={mapping.column ? { value: mapping.column, label: mapping.label } : null}
+                      disabled={!isEditable}
                       onChange={val => handleColumnChange(index, val)}
                       options={formFields
                         .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
@@ -3230,6 +3322,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
                   <div className="col-span-6 relative">
                     <Select
                       value={mapping.id ? { value: mapping.id, label: mapping.name } : null}
+                      disabled={!isEditable}
                       onChange={val => handleFieldChange(index, val)}
                       options={formFields
                         .filter(f => !fieldMappings.some((m, i) => m.id === f.id && i !== index))
@@ -3248,6 +3341,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
                     {fieldMappings.length > 1 && (
                       <button
                         onClick={() => removeFieldMapping(index)}
+                        disabled={!isEditable}
                         className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
                         title="Remove mapping"
                       >
@@ -3265,6 +3359,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
             {/* Add More Fields Button */}
             <button
               onClick={addFieldMapping}
+              disabled={!isEditable}
               className="flex items-center justify-center w-full bg-[#c9eaff70] text-[#028AB0] px-4 py-2 text-sm font-medium mt-3"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3294,6 +3389,7 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
           setCustomLogic={setsheetCustomLogic}
           updateMultiple={updateMultiple}
           setUpdateMultiple={setUpdateMultiple}
+          isEditable={isEditable}
         />
       )}
     </div>
@@ -3303,7 +3399,8 @@ const GoogleSheetPanel = ({ formFields, sheetName, fieldMappings, setFieldMappin
 const GoogleSheetFindPanel = ({
   instanceUrl, userId, token,
   sheetsApiUrl, // API endpoint for list of sheets
-  initialConfig // { spreadsheetId, sheetName, columnMappings, conditions, returnLimit, sortField, sortOrder }
+  initialConfig, // { spreadsheetId, sheetName, columnMappings, conditions, returnLimit, sortField, sortOrder }
+  isEditable
 }) => {
   const [spreadsheets, setSpreadsheets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -3379,6 +3476,7 @@ const GoogleSheetFindPanel = ({
         ) : (
           <Select
             value={spreadsheetId ? { value: spreadsheetId, label: sheetName } : null}
+            disabled={!isEditable}
             onChange={opt => setSpreadsheetId(opt?.value || "")}
             options={spreadsheets.map(s => ({ value: s.spreadsheetId, label: s.spreadsheetName }))}
             placeholder="Choose Google Sheet"
@@ -3393,7 +3491,7 @@ const GoogleSheetFindPanel = ({
       {/* Conditions Panel placeholder */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
         <ConditionsPanel columns={columns} conditions={findconditions} setConditions={setConditions}
-          logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} />
+          logicType={findlogicType} setLogicType={setLogicType} customLogic={findcustomLogic} setCustomLogic={setCustomLogic} updateMultiple={findupdateMultiple} setUpdateMultiple={setupdateMultiple} sheetlogicType={findlogicType} setsheetLogicType={setLogicType} isEditable={isEditable} />
         {columns.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -3411,6 +3509,7 @@ const GoogleSheetFindPanel = ({
       <div className="mb-2">
         <button
           className="w-full flex justify-between items-center py-3 text-left font-medium text-gray-700"
+          disabled={!isEditable}
           onClick={() =>
             setAccordionOpen(prev => ({ ...prev, findreturnLimit: !prev.findreturnLimit }))
           }
@@ -3437,6 +3536,7 @@ const GoogleSheetFindPanel = ({
             <Input
               type="number"
               value={findreturnLimit}
+              disabled={!isEditable}
               min='1'
               max='100'
               onChange={(e) => setReturnLimit(e.target.value)}
@@ -3451,6 +3551,7 @@ const GoogleSheetFindPanel = ({
       <div className="mb-2">
         <button
           className="w-full flex justify-between items-center py-3 text-left font-medium text-gray-700"
+          disabled={!isEditable}
           onClick={() =>
             setAccordionOpen(prev => ({ ...prev, findsortRecords: !prev.findsortRecords }))
           }
@@ -3479,6 +3580,7 @@ const GoogleSheetFindPanel = ({
                 <label className="block text-xs font-medium text-gray-500 mb-1">Sort Field</label>
                 <AntSelect
                   value={findsortField ? { value: findsortField, label: findsortField } : null}
+                  disabled={!isEditable}
                   onChange={(opt) => setSortField(opt?.value || "")}
                   options={columnOptions}
                   placeholder="Sort Field"
@@ -3491,6 +3593,7 @@ const GoogleSheetFindPanel = ({
                     value: findsortOrder,
                     label: findsortOrder === "ASC" ? "Ascending" : "Descending",
                   }}
+                  disabled={!isEditable}
                   onChange={(opt) => setSortOrder(opt)}
                   options={[
                     { value: "ASC", label: "Ascending" },
