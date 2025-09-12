@@ -353,7 +353,7 @@ const ColorGridCaptcha = ({ onVerify, onGenerate }) => {
   return (
     <div className="captcha-color-grid enhanced" aria-label="Select the color captcha" role="region">
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-        <p>Select the color: <span style={{color:targetColor, fontWeight:"700"}}>{targetColor.toUpperCase()}</span></p>
+        <p>Select the color: <span style={{ color: targetColor, fontWeight: "700" }}>{targetColor.toUpperCase()}</span></p>
         <button onClick={generateColorGrid} className="btn-generate" aria-label="Generate new color grid">
           ↻
         </button>
@@ -387,7 +387,7 @@ const ColorGridCaptcha = ({ onVerify, onGenerate }) => {
 // Google reCAPTCHA component
 const GoogleRecaptcha = ({ onVerify, onGenerate }) => {
   const recaptchaRef = useRef(null);
-  
+
   const resetRecaptcha = () => {
     if (recaptchaRef.current) {
       recaptchaRef.current.reset();
@@ -416,87 +416,87 @@ const GoogleRecaptcha = ({ onVerify, onGenerate }) => {
 };
 
 const CirclesStepProgress = ({ steps = 4, current = 3 }) => (
-    <div className="progress-circles-bar">
-      {Array.from({ length: steps }).map((_, idx) => (
-        <div key={idx} className="step-circle-group">
-          <div className={`step-circle ${idx < current ? "done" : ""} ${idx === current ? "active" : ""}`}>
-            {idx < current ? <span>&#10003;</span> : ""}
-          </div>
-          {idx < steps - 1 && <div className={`step-line ${idx < current - 1 ? "filled" : ""}`}></div>}
+  <div className="progress-circles-bar">
+    {Array.from({ length: steps }).map((_, idx) => (
+      <div key={idx} className="step-circle-group">
+        <div className={`step-circle ${idx < current ? "done" : ""} ${idx === current ? "active" : ""}`}>
+          {idx < current ? <span>&#10003;</span> : ""}
+        </div>
+        {idx < steps - 1 && <div className={`step-line ${idx < current - 1 ? "filled" : ""}`}></div>}
+      </div>
+    ))}
+  </div>
+);
+
+const ArrowStepsProgress = ({
+  steps = ["Step 1", "Step 2", "Step 3"],
+  current = 2,
+  completedColor = "#3f51b5",
+  activeColor = "#a9c7fa",
+  defaultColor = "#f1f5fc"
+}) => {
+  return (
+    <div className="progress-arrow-bar">
+      {steps.map((step, idx) => (
+        <div
+          key={idx}
+          className={`arrow-step ${idx < current ? "completed" : ""} ${idx === current ? "active" : ""}`}
+          style={{
+            '--completed-color': completedColor,
+            '--active-color': activeColor,
+            '--default-color': defaultColor
+          }}
+        >
+          {step}
+          {idx < steps.length - 1 && <div className="arrow-divider"></div>}
         </div>
       ))}
     </div>
   );
+};
 
-  const ArrowStepsProgress = ({ 
-    steps = ["Step 1", "Step 2", "Step 3"], 
-    current = 2,
-    completedColor = "#3f51b5",
-    activeColor = "#a9c7fa",
-    defaultColor = "#f1f5fc"
-  }) => {
-    return (
-      <div className="progress-arrow-bar">
-        {steps.map((step, idx) => (
-          <div 
-            key={idx} 
-            className={`arrow-step ${idx < current ? "completed" : ""} ${idx === current ? "active" : ""}`}
-            style={{
-              '--completed-color': completedColor,
-              '--active-color': activeColor,
-              '--default-color': defaultColor
-            }}
-          >
-            {step}
-            {idx < steps.length - 1 && <div className="arrow-divider"></div>}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  const SquareStepsProgress = ({
-    steps = ["Step 1", "Step 2", "Step 3"],
-    current = 2, // 1-based index (so 2 means step 2 active)
-  }) => (
-    <div className="progress-square-bar">
-      {steps.map((step, idx) => (
-        <div key={idx} className="square-step-block">
+const SquareStepsProgress = ({
+  steps = ["Step 1", "Step 2", "Step 3"],
+  current = 2, // 1-based index (so 2 means step 2 active)
+}) => (
+  <div className="progress-square-bar">
+    {steps.map((step, idx) => (
+      <div key={idx} className="square-step-block">
+        <div
+          className={[
+            "square-step",
+            idx + 1 < current ? "completed" : "",
+            idx + 1 === current ? "active" : "",
+          ].join(" ")}
+        >
+          {idx + 1}
+        </div>
+        <div className="step-label">{step}</div>
+        {idx < steps.length - 1 && (
           <div
             className={[
-              "square-step",
-              idx + 1 < current ? "completed" : "",
-              idx + 1 === current ? "active" : "",
+              "square-line",
+              idx + 1 < current ? "filled" : "",
             ].join(" ")}
-          >
-            {idx + 1}
-          </div>
-          <div className="step-label">{step}</div>
-          {idx < steps.length - 1 && (
-            <div
-              className={[
-                "square-line",
-                idx + 1 < current ? "filled" : "",
-              ].join(" ")}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
+          />
+        )}
+      </div>
+    ))}
+  </div>
+);
 
-  // 1. Simple Progress Bar Component
- const SimpleProgressBar = ({ percent = 0, height = 20, bgColor = "#e0e0e0", fillColor = "#4caf50" }) => {
+// 1. Simple Progress Bar Component
+const SimpleProgressBar = ({ percent = 0, height = 20, bgColor = "#e0e0e0", fillColor = "#4caf50" }) => {
   return (
     <div className="simple-progress-bar">
       <div className="bar-bg" style={{ height: `${height}px`, backgroundColor: bgColor }}>
-        <div 
-          className="bar-fill" 
-          style={{ 
-            width: `${percent}%`, 
+        <div
+          className="bar-fill"
+          style={{
+            width: `${percent}%`,
             backgroundColor: fillColor,
             height: `${height}px`
-          }} 
+          }}
         />
       </div>
       <span className="bar-percent-text">{percent}%</span>
@@ -505,12 +505,12 @@ const CirclesStepProgress = ({ steps = 4, current = 3 }) => (
 };
 
 // 2. Circular Progress Component
-const CircularProgress = ({ 
-  percent = 0, 
-  size = 60, 
-  strokeWidth = 4, 
-  bgColor = "#e0e0e0", 
-  fillColor = "#4caf50" 
+const CircularProgress = ({
+  percent = 0,
+  size = 60,
+  strokeWidth = 4,
+  bgColor = "#e0e0e0",
+  fillColor = "#4caf50"
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -521,11 +521,11 @@ const CircularProgress = ({
       <div className="circle-spinner">
         <div className="spinner-text">{percent}%</div>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <circle 
-            cx={size / 2} 
-            cy={size / 2} 
-            r={radius} 
-            className="circle-bg" 
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            className="circle-bg"
             stroke={bgColor}
             strokeWidth={strokeWidth}
             fill="none"
@@ -557,7 +557,7 @@ const PaginationProgress = ({ current = 1, total = 3, textColor = "#333" }) => {
   );
 };
 
-  
+
 const captchaComponents = {
   'Canvas Text': CanvasTextCaptcha,
   'Arithmetic': ArithmeticCaptcha,
@@ -839,16 +839,16 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       Object_Info__c: JSON.stringify(objectInfo),
     };
 
-     const defaultThankyoudata = {
-    "Heading__c": "{\"id\":\"title\",\"type\":\"title\",\"x\":100,\"y\":370,\"width\":800,\"height\":60,\"zIndex\":2,\"alignment\":\"center\",\"text\":\"Thank You for Your Submission!\"}",
-    "Sub_Heading__c": "{\"id\":\"subtitle\",\"type\":\"subtitle\",\"x\":100,\"y\":450,\"width\":800,\"height\":40,\"zIndex\":2,\"alignment\":\"center\",\"text\":\"We have received your message and will get back to you shortly.\"}",
-    "Actions__c": "{\"id\":\"button\",\"type\":\"button\",\"x\":400,\"y\":510,\"width\":200,\"height\":50,\"zIndex\":2,\"alignment\":\"center\",\"buttonText\":\"Explore More\",\"buttonLink\":\"https://example.com\"}",
-    "Image_Url__c": "{\"id\":\"image\",\"type\":\"image\",\"x\":100,\"y\":30,\"width\":800,\"height\":320,\"zIndex\":1,\"alignment\":\"center\",\"imageId\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\",\"images\":[{\"id\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\",\"url\":\"/images/quickform-only-logo.png\",\"name\":\"Default Image\"}]}",
-    "Body__c": "{\"layout\":[{\"id\":\"image\",\"type\":\"image\",\"x\":100,\"y\":30,\"width\":800,\"height\":320,\"zIndex\":1,\"alignment\":\"center\",\"imageId\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\"},{\"id\":\"title\",\"type\":\"title\",\"x\":100,\"y\":370,\"width\":800,\"height\":60,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"subtitle\",\"type\":\"subtitle\",\"x\":100,\"y\":450,\"width\":800,\"height\":40,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"button\",\"type\":\"button\",\"x\":400,\"y\":510,\"width\":200,\"height\":50,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"social\",\"type\":\"social\",\"x\":400,\"y\":580,\"width\":200,\"height\":60,\"zIndex\":2,\"alignment\":\"center\"}],\"socialLinks\":{\"facebook\":{\"enabled\":true,\"url\":\"https://facebook.com\"},\"instagram\":{\"enabled\":true,\"url\":\"https://instagram.com\"},\"linkedin\":{\"enabled\":true,\"url\":\"https://linkedin.com\"},\"message\":{\"enabled\":true,\"url\":\"mailto:contact@example.com\"}},\"customTexts\":[]}",
-    "Description__c": "Default Thank you",
-  }
+    const defaultThankyoudata = {
+      "Heading__c": "{\"id\":\"title\",\"type\":\"title\",\"x\":100,\"y\":370,\"width\":800,\"height\":60,\"zIndex\":2,\"alignment\":\"center\",\"text\":\"Thank You for Your Submission!\"}",
+      "Sub_Heading__c": "{\"id\":\"subtitle\",\"type\":\"subtitle\",\"x\":100,\"y\":450,\"width\":800,\"height\":40,\"zIndex\":2,\"alignment\":\"center\",\"text\":\"We have received your message and will get back to you shortly.\"}",
+      "Actions__c": "{\"id\":\"button\",\"type\":\"button\",\"x\":400,\"y\":510,\"width\":200,\"height\":50,\"zIndex\":2,\"alignment\":\"center\",\"buttonText\":\"Explore More\",\"buttonLink\":\"https://example.com\"}",
+      "Image_Url__c": "{\"id\":\"image\",\"type\":\"image\",\"x\":100,\"y\":30,\"width\":800,\"height\":320,\"zIndex\":1,\"alignment\":\"center\",\"imageId\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\",\"images\":[{\"id\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\",\"url\":\"/images/quickform-only-logo.png\",\"name\":\"Default Image\"}]}",
+      "Body__c": "{\"layout\":[{\"id\":\"image\",\"type\":\"image\",\"x\":100,\"y\":30,\"width\":800,\"height\":320,\"zIndex\":1,\"alignment\":\"center\",\"imageId\":\"fb50e6f7-83e9-4a1b-8c34-71de3cee13d1\"},{\"id\":\"title\",\"type\":\"title\",\"x\":100,\"y\":370,\"width\":800,\"height\":60,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"subtitle\",\"type\":\"subtitle\",\"x\":100,\"y\":450,\"width\":800,\"height\":40,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"button\",\"type\":\"button\",\"x\":400,\"y\":510,\"width\":200,\"height\":50,\"zIndex\":2,\"alignment\":\"center\"},{\"id\":\"social\",\"type\":\"social\",\"x\":400,\"y\":580,\"width\":200,\"height\":60,\"zIndex\":2,\"alignment\":\"center\"}],\"socialLinks\":{\"facebook\":{\"enabled\":true,\"url\":\"https://facebook.com\"},\"instagram\":{\"enabled\":true,\"url\":\"https://instagram.com\"},\"linkedin\":{\"enabled\":true,\"url\":\"https://linkedin.com\"},\"message\":{\"enabled\":true,\"url\":\"mailto:contact@example.com\"}},\"customTexts\":[]}",
+      "Description__c": "Default Thank you",
+    }
 
-    return { formVersion, formFields, allFields,defaultThankyoudata };
+    return { formVersion, formFields, allFields, defaultThankyoudata };
   };
 
   const prepareMappingData = (formVersionId, objectInfo, salesforceFieldToFormFieldId) => {
@@ -981,7 +981,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       if (!token) throw new Error('Failed to obtain access token.');
 
       // Create the form version and fields
-       const { formVersion, formFields, allFields , defaultThankyoudata } = prepareFormData();
+      const { formVersion, formFields, allFields, defaultThankyoudata } = prepareFormData();
       const formResponse = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
         method: 'POST',
         headers: {
@@ -992,7 +992,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
           userId,
           instanceUrl: instanceUrl.replace(/https?:\/\//, ''),
           formData: { formVersion, formFields },
-          thankyouData : defaultThankyoudata
+          thankyouData: defaultThankyoudata
         }),
       });
 
@@ -1169,7 +1169,7 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
                     <SelectedCaptchaComponent
                       key={captchaGenerateKey}
                       onVerify={onCaptchaVerify}
-                      onGenerate={handleCaptchaGenerate}  
+                      onGenerate={handleCaptchaGenerate}
                     />
                   )}
                 </div>
@@ -1191,12 +1191,12 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
                   {SelectedProgressComponent && (
                     // Provide props for preview for all progress bar types
                     SelectedProgressComponent === SimpleProgressBar ? <SimpleProgressBar percent={50} />
-                    : SelectedProgressComponent === CircularProgress ? <CircularProgress percent={75} />
-                    : SelectedProgressComponent === PaginationProgress ? <PaginationProgress current={1} total={3} />
-                    : SelectedProgressComponent === CirclesStepProgress ? <CirclesStepProgress steps={4} current={2} />
-                    : SelectedProgressComponent === ArrowStepsProgress ? <ArrowStepsProgress steps={["Step 1", "Step 2", "Step 3"]} current={1} />
-                    : SelectedProgressComponent === SquareStepsProgress ? <SquareStepsProgress steps={["Step 1", "Step 2", "Step 3", "Step 4"]} current={3} />
-                    : null
+                      : SelectedProgressComponent === CircularProgress ? <CircularProgress percent={75} />
+                        : SelectedProgressComponent === PaginationProgress ? <PaginationProgress current={1} total={3} />
+                          : SelectedProgressComponent === CirclesStepProgress ? <CirclesStepProgress steps={4} current={2} />
+                            : SelectedProgressComponent === ArrowStepsProgress ? <ArrowStepsProgress steps={["Step 1", "Step 2", "Step 3"]} current={1} />
+                              : SelectedProgressComponent === SquareStepsProgress ? <SquareStepsProgress steps={["Step 1", "Step 2", "Step 3", "Step 4"]} current={3} />
+                                : null
                   )}
                 </div>
               </div>
@@ -1225,13 +1225,13 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
                 Cancel
               </button>
             </div>
-            <div className={` ${!formName.trim() ? 'next-button' : 'next-button-enabled'}`}>
+            <div className='next-button-enabled'>
               <button
                 onClick={handleFormNameSubmit}
                 disabled={isSaving}
                 className="wizard-btn wizard-btn-primary"
               >
-                {isSaving ? "Creating..." : "Create Form"}
+                Create Form
               </button>
             </div>
           </div>

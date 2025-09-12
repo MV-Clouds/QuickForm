@@ -3,44 +3,6 @@ import React, { useEffect, useState } from "react";
 const GetFormTemplate = () => {
   const templates = [
     {
-      id: "blank",
-      Name: "New Form",
-      Description__c: "",
-      category: "General",
-      isPopular: false,
-      isNew: true,
-      usageCount: 0,
-      completionRate: 0,
-      hasPayment: false,
-      hasConditionalLogic: false,
-      isMobileFriendly: true,
-      formVersion: {
-        Name: "New Form",
-        Version__c: "1",
-        Stage__c: "Draft",
-      },
-      formFields: [
-        {
-          Unique_Key__c:
-            "field-" +
-            Date.now() +
-            "-" +
-            Math.random().toString(36).substring(2, 11),
-          Field_Type__c: "text",
-
-          Properties__c: {
-            pattern: ".*",
-            description: "",
-            required: false,
-          },
-          Name: "Sample Field",
-          placeholder: {
-            main: "",
-          },
-        },
-      ],
-    },
-    {
       id: "order-form",
       Name: "Order Form",
       Description__c: "Build Order Form",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { FaRegStar } from "react-icons/fa";
+import { FaRegStar, FaEdit } from "react-icons/fa";
 import { BsStack } from "react-icons/bs";
 import { IoIosUndo } from "react-icons/io";
 import { Tooltip, Whisper } from "rsuite";
@@ -123,6 +123,7 @@ function MainFormBuilder({
   const [showFormNamePopup, setShowFormNamePopup] = useState(!formVersionId);
   // const [formName, setFormName] = useState('');
   const [formName, setFormName] = useState(currentFormVersion?.Name || "");
+  const [formDescription, setFormDescription] = useState(currentFormVersion?.Description__c || "");
   const [formNameError, setFormNameError] = useState(null);
   const [showVersionDropdown, setShowVersionDropdown] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -144,7 +145,7 @@ function MainFormBuilder({
   const [prefills, setPrefills] = useState([]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [pendingVersionId, setPendingVersionId] = useState(null);
-  const [fieldsets , setfieldsets] = useState([]);
+  const [fieldsets, setfieldsets] = useState([]);
 
   const [fieldsState, { set: setFields, undo, redo, canUndo, canRedo }] =
     useUndo([]);
@@ -492,10 +493,10 @@ function MainFormBuilder({
         throw new Error(data.error || "Failed to fetch metadata");
       }
 
-      if(data.Fieldset){
-        const parsedFieldset = JSON.parse(data.Fieldset)
-        setfieldsets(parsedFieldset);
-      }
+      // if (data.Fieldset) {
+      //   const parsedFieldset = JSON.parse(data.Fieldset)
+      //   setfieldsets(parsedFieldset);
+      // }
 
       let formRecords = [];
       if (data.FormRecords) {
@@ -678,7 +679,8 @@ function MainFormBuilder({
 
 
   useEffect(() => {
-    console.log('currentFormVersion changed', currentFormVersion);
+    setFormName(currentFormVersion?.Name || "");
+    setFormDescription(currentFormVersion?.Description__c || "");
 
     if (currentFormVersion && currentFormVersion.Conditions) {
       // Parse conditions if needed
@@ -1673,6 +1675,127 @@ function MainFormBuilder({
     return null;
   };
 
+  // const handleSaveFormDetails = async () => {
+  //   try {
+  //     setIsLoadingForm(true);
+  //     setLoadingText('Updating Form Details');
+
+  //     const userId = sessionStorage.getItem("userId");
+  //     const instanceUrl = sessionStorage.getItem("instanceUrl");
+
+  //     // Prepare the update payload with only name and description
+  //     const updatePayload = {
+  //       formVersion: {
+  //         Id: currentFormVersion?.Id,
+  //         Name: formName,
+  //         Description__c: formDescription,
+  //         // Include the Form__c reference to avoid errors
+  //         Form__c: currentFormVersion?.Form__c || formId
+  //       },
+  //       // Empty formFields array since we're only updating metadata
+  //       formFields: []
+  //     };
+
+  //     const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({
+  //         userId,
+  //         instanceUrl: instanceUrl.replace(/https?:\/\//, ""),
+  //         formData: updatePayload,
+  //       }),
+  //     });
+
+  //     const data = await response.json();
+  //     if (!response.ok) {
+  //       throw new Error(data.error || "Failed to update form details");
+  //     }
+
+  //     // Update local state
+  //     setCurrentFormVersion(prev => ({
+  //       ...prev,
+  //       Name: formName,
+  //       Description__c: formDescription
+  //     }));
+  //     setShowFormNamePopup(false);
+
+  //     // Show success message
+  //     setSaveError(null);
+
+  //     // Refresh data to get the latest changes
+  //     await refreshData();
+
+  //   } catch (error) {
+  //     console.error("Error updating form details:", error);
+  //     setSaveError(error.message || "Failed to update form details");
+  //   } finally {
+  //     setIsLoadingForm(false);
+  //   }
+  // };
+
+  const handleSaveFormDetails = async () => {
+    try {
+      setIsLoadingForm(true);
+      setLoadingText('Updating Form Details');
+
+      const userId = sessionStorage.getItem("userId");
+      const instanceUrl = sessionStorage.getItem("instanceUrl");
+
+      const token = await fetchAccessToken(userId, instanceUrl);
+
+      // Prepare the formData payload 
+      const formData = {
+        formVersion: {
+          Id: currentFormVersion?.Id,
+          Name: formName,
+          Description__c: formDescription,
+          Form__c: currentFormVersion?.Form__c || formId
+        },
+        formFields: []
+      };
+
+      const response = await fetch(process.env.REACT_APP_SAVE_FORM_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          instanceUrl: instanceUrl.replace(/https?:\/\//, ""),
+          formData: formData,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update form details");
+      }
+
+      // Update local state
+      setCurrentFormVersion(prev => ({
+        ...prev,
+        Name: formName,
+        Description__c: formDescription
+      }));
+      setShowFormNamePopup(false);
+
+      // Show success message
+      setSaveError(null);
+
+      // Refresh data to get the latest changes
+      await refreshData();
+
+    } catch (error) {
+      console.error("Error updating form details:", error);
+      setSaveError(error.message || "Failed to update form details");
+    } finally {
+      setIsLoadingForm(false);
+    }
+  };
+
   const selectedField = getSelectedField();
 
   return (
@@ -1711,7 +1834,14 @@ function MainFormBuilder({
                     {currentFormVersion?.Name || 'Contact Form'}
                   </span>
                   {!showPreview && (
-                    <FaRegStar className="text-white text-base" />
+                    <>
+                      <FaRegStar className="text-white text-base" />
+                      <FaEdit
+                        className="text-white text-base cursor-pointer hover:text-blue-200"
+                        onClick={() => setShowFormNamePopup(true)}
+                        title="Edit Form Details"
+                      />
+                    </>
                   )}
                 </span>
               </AnimatedTooltip>
@@ -2131,6 +2261,63 @@ function MainFormBuilder({
                   }}
                 >
                   Confirm
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showFormNamePopup && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <motion.div
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="bg-white rounded-lg p-6 w-96"
+            >
+              <h2 className="text-xl font-semibold mb-4">Edit Form Details</h2>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Form Name
+                </label>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  placeholder="Enter form name"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md"
+                  rows="3"
+                  placeholder="Enter form description"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowFormNamePopup(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveFormDetails}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Save
                 </button>
               </div>
             </motion.div>

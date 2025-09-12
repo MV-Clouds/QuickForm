@@ -1291,7 +1291,7 @@ function PublicFormViewer({ runPrefill = false }) {
         alert("Form submitted successfully!");
       }
 
-      if (formData.mappings && formData.mappings.length > 0) {
+      if (formData?.mappings && formData?.mappings?.length > 0) {
         const flowResponse = await fetch(process.env.REACT_APP_RUN_MAPPINGS_URL, {
           method: 'POST',
           headers: {
@@ -1335,7 +1335,7 @@ function PublicFormViewer({ runPrefill = false }) {
       } else {
         console.log("⏭️ Skipping mapping execution: no mappings for this form version.");
       }
-      if (notificationData.length > 0) {
+      if (notificationData?.length > 0) {
         if (notificationData) {
           console.log("Twilio SMS sending started");
           try {
