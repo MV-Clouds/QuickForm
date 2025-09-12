@@ -38,8 +38,8 @@ border: #E4E7EC;
 }
 
 .share-label {
-font-weight: 700;
-font-size: 0.75rem;
+font-weight: 500;
+font-size: 0.875rem;
 margin-bottom: 16px;
 letter-spacing: 0.5%;
 color: #0B0A0A;
@@ -176,7 +176,7 @@ font-family: 'Nunito Sans', 'Helvetica Neue', sans-serif;
 }
 
 .share-embed-label {
-font-size: 0.75rem;
+font-size: 0.875rem;
 line-height: 20px;
 margin-bottom: 12px;
 color: #000000;
