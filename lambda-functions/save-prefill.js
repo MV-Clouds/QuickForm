@@ -7,7 +7,8 @@ export const handler = async (event) => {
   try {
     const body = JSON.parse(event.body || '{}');
     const { userId, instanceUrl, prefillData, formVersionId, prefillId } = body
-    const token = event.headers.Authorization?.split(' ')[1];
+    let token = event.headers.Authorization?.split(' ')[1];
+    let tokenRefreshed = false;
 
     if (!userId || !instanceUrl || !prefillData || !formVersionId || !token) {
       return {
@@ -16,6 +17,17 @@ export const handler = async (event) => {
         body: JSON.stringify({ error: 'Missing required parameters' }),
       };
     }
+
+    const fetchNewAccessToken = async (userId) => {
+      const response = await fetch('https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/getAccessToken/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch new access token');
+      const data = await response.json();
+      return data.access_token;
+    };
 
     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
     const salesforceBaseUrl = `https://${cleanedInstanceUrl}/services/data/v60.0`;
@@ -38,7 +50,7 @@ export const handler = async (event) => {
     // ==== 3. Save/Update in Salesforce ====
     let salesforcePrefillId = prefillId;
     if (salesforcePrefillId) {
-      const response = await fetch(`${salesforceBaseUrl}/sobjects/Prefill__c/${salesforcePrefillId}`, {
+      let response = await fetch(`${salesforceBaseUrl}/sobjects/Prefill__c/${salesforcePrefillId}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -48,11 +60,29 @@ export const handler = async (event) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData[0]?.message || 'Failed to update prefill');
+        if (response.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+    
+          // Retry with new token
+          response = await fetch(`${salesforceBaseUrl}/sobjects/Prefill__c/${salesforcePrefillId}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sfPrefill),
+          });
+        }
+    
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData[0]?.message || 'Failed to update prefill');
+        }
       }
+      
     } else {
-      const response = await fetch(`${salesforceBaseUrl}/sobjects/Prefill__c`, {
+      let response = await fetch(`${salesforceBaseUrl}/sobjects/Prefill__c`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -62,8 +92,25 @@ export const handler = async (event) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData[0]?.message || 'Failed to save prefill');
+        if (response.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+    
+          // Retry with new token
+          response = await fetch(`${salesforceBaseUrl}/sobjects/Prefill__c`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sfPrefill),
+          });
+        }
+    
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData[0]?.message || 'Failed to save prefill');
+        }
       }
       const prefillResp = await response.json();
       salesforcePrefillId = prefillResp.id;
@@ -182,20 +229,6 @@ export const handler = async (event) => {
     }
 
     let writeRequests = [
-      {
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: 'Metadata' },
-            InstanceUrl: { S: cleanedInstanceUrl },
-            Metadata: { S: JSON.stringify(existingMetadata) },
-            UserProfile: { S: metadataItem.UserProfile?.S || '{}' },
-            // Fieldset: { S: metadataItem.Fieldset?.S || '{}' },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: new Date().toISOString() },
-          },
-        },
-      },
       ...chunks.map((chunk, index) => ({
         PutRequest: {
           Item: {
@@ -215,6 +248,13 @@ export const handler = async (event) => {
       })
     );
 
+    if(tokenRefreshed){
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ success: true, prefill: prefillData, newAccessToken: token }),
+      };
+    }
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
