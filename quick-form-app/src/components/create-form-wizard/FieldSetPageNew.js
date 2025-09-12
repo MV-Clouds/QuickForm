@@ -15,7 +15,9 @@ const themes = [
 const gradientBtn = {
   background: 'linear-gradient(to right, #1D6D9E, #0B295E)',
 };
-function FieldsetBuilder({ prepareFormData , fields  ,setFields , canUndo , canRedo , undo , redo ,saveFieldSet ,setModalOpen}) {
+function FieldsetBuilder({ prepareFormData , fields  ,setFields , canUndo , canRedo , undo , redo ,saveFieldSet ,setModalOpen , setshowTopbar
+  , setSelectedFields , setFieldsetName,setFieldsetDesc,setshowModal,setEditingFieldset,handleUpdateFieldset , editingFieldset ,protectedIds
+}) {
   const [selectedTheme, setSelectedTheme] = useState(themes[0]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   console.log('fields in fieldset ==>' , fields)
@@ -516,8 +518,19 @@ function FieldsetBuilder({ prepareFormData , fields  ,setFields , canUndo , canR
     console.warn(`No field found for selectedFieldId: ${selectedFieldId}, selectedSectionSide: ${selectedSectionSide}`);
     return null;
   };
-
+  const resetFormState = () => {
+    setFields([]);
+    setSelectedFields([]);
+    setFieldsetName('');
+    setFieldsetDesc('');
+    setEditingFieldset(null);
+    setModalOpen(false);
+    setshowModal(false);
+    setshowTopbar(true);
+  };
+  
   const selectedField = getSelectedField();
+  const saveHandler = editingFieldset ? handleUpdateFieldset : saveFieldSet;
 
   return (
     <div className="flex ">
@@ -533,17 +546,17 @@ function FieldsetBuilder({ prepareFormData , fields  ,setFields , canUndo , canR
                 transition={{ duration: 0.5 }}
                 className="mb-4 flex gap-4"
               >
-                <span className="w-10 h-10 flex items-center justify-center cursor-pointer" onClick={() => {setModalOpen(false); setSelectedFieldId(null);}}>
+                <span className="w-10 h-10 flex items-center justify-center cursor-pointer" onClick={() => {resetFormState()}}>
                 <IoIosUndo className="text-[#f2f6f7] text-3xl" />
               </span>
                 <h1 className="text-3xl font-bold text-white mb-1">Fieldsets</h1>
               </motion.div>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => {saveFieldSet(); setSelectedFieldId(null); }}
+                onClick={() => {saveHandler()}}
                 disabled={isSaving}
                 className={`save-btn flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
-                title="Save Form"
+                title={editingFieldset ? `Update` : `Save`}
               >
                 <span className="flex items-center">
                   <svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -552,7 +565,7 @@ function FieldsetBuilder({ prepareFormData , fields  ,setFields , canUndo , canR
                     <path d="M9.62036 4V7.2C9.62036 7.64183 9.97853 8 10.4204 8H15.2204C15.6622 8 16.0204 7.64183 16.0204 7.2V4" stroke="white" strokeWidth="1.5" />
                   </svg>
                 </span>
-                Save
+                {editingFieldset ? `Update` : `Save`}
               </button>
             </div>
           </div>
@@ -586,6 +599,7 @@ function FieldsetBuilder({ prepareFormData , fields  ,setFields , canUndo , canR
                     canRedo={canRedo}
                     onUndo={undo}
                     onRedo={redo}
+                    isEditable = {!protectedIds.includes(editingFieldset?.id)}
                   />
                 </div>
               </div>

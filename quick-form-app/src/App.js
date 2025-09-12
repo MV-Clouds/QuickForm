@@ -16,6 +16,11 @@ import NotificationPage from './components/NotificationSettings/NotificationSett
 import NotFound from './components/not-found/NotFound';
 import SharePage from './components/share-page/SharePage'; // adjust path as necessary
 import LargeFileUpload from './components/file-upload/multiple-file-upload';
+import FolderManager from './components/create-form-wizard/FolderManager';
+import FavoriteTab from './components/create-form-wizard/FavoriteTab';
+import FieldsetPage from './components/create-form-wizard/FieldsetPage';
+import Integrations from './components/integrations/Integrations';
+import Bin from './components/create-form-wizard/Bin';
 function App() {
   return (
     // Set up the router for navigation
@@ -40,7 +45,12 @@ function App() {
                 path="/home"
                 element={<ProtectedRoute element={<Home />} />}
               />
-
+              <Route path="/home" element={<ProtectedRoute element={<Home />}/>} />
+              <Route path="/folders" element={<ProtectedRoute element={<FolderManager/>} />} />
+              <Route path='/favorite' element={<ProtectedRoute element={<FavoriteTab/>}/>}/>
+              <Route path='/fieldset' element={<ProtectedRoute element={<FieldsetPage/>}/>}/>
+              <Route path={'/integration'} element={<ProtectedRoute element={<Integrations/>}/>}/>
+              <Route path={'/bin'} element={<ProtectedRoute element={<Bin/>}/>}/>
               {/* Duplicate protected route for Home (to support /app/home path) */}
               <Route
                 path="/app/home"

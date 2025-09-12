@@ -1,37 +1,51 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState , useEffect } from 'react';
 import { useSalesforceData } from '../Context/MetadataContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaTrashRestore } from 'react-icons/fa';
 import { ArchiveRestore, Search, MoreVertical, Grid2x2, List, LayoutGrid } from 'lucide-react';
-
+import Loader from '../Loader'
 /**
  * Gradient style for primary actions
  */
 const gradientBtn = {
   background: 'linear-gradient(to right, #1D6D9E, #0B295E)',
 };
+// Style constants for reuse
+const cardBaseClasses = "bg-white rounded-xl shadow-sm border border-gray-200 transition-shadow duration-200 hover:shadow-md";
 
 /**
  * DeletedFormsPage - shows trashed forms and allows restoring them.
  * @param {{ token?: string }} props
  */
-const DeletedFormsPage = ({ token }) => {
+const Bin = ({ token }) => {
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const { deletedData = [], isLoading, refreshData } = useSalesforceData();
   const [search, setSearch] = useState('');
   const [restoringIds, setRestoringIds] = useState(new Set());
   const [openMenuId, setOpenMenuId] = useState(null);
   const [isGridView, setIsGridView] = useState(true);
-
+  const [localDeletedData, setLocalDeletedData] = useState(deletedData);
+  useEffect(() => {
+    setLocalDeletedData(deletedData);
+  }, [deletedData]);
   const toggleMenu = (id) => {
     setOpenMenuId((prev) => (prev === id ? null : id));
   };
-
+  const toggleSelect = (formId) => {
+    setSelectedIds((prev) => {
+      const copy = new Set(prev);
+      if (copy.has(formId)) copy.delete(formId);
+      else copy.add(formId);
+      return copy;
+    });
+  };
+  
   const filteredDeletedForms = useMemo(
     () =>
-      deletedData.filter(f =>
+      localDeletedData.filter(f =>
         (f.FormVersions?.[0]?.Name || '').toLowerCase().includes(search.toLowerCase())
       ),
-    [deletedData, search]
+    [localDeletedData, search]
   );
 
   const renderFieldPreview = (fields = []) => (
@@ -60,7 +74,7 @@ const DeletedFormsPage = ({ token }) => {
               type="text"
               className="w-full rounded border border-gray-200 px-2 py-1 text-xs bg-white"
               placeholder={f.placeholder?.main || f.Name || 'Field'}
-              disabled
+              readOnly
             />
           </div>
         ))
@@ -71,6 +85,8 @@ const DeletedFormsPage = ({ token }) => {
   const handleRestore = async (form) => {
     const formId = form.Id || 'unknown';
     if (restoringIds.has(formId)) return;
+    const prevState = [...localDeletedData];
+    setLocalDeletedData((forms) => forms.filter(f => f.Id !== formId));
 
     const userId = sessionStorage.getItem('userId');
     const instanceUrl = sessionStorage.getItem('instanceUrl');
@@ -78,7 +94,6 @@ const DeletedFormsPage = ({ token }) => {
 
     if (!userId || !instanceUrl || !storedToken) {
       console.error('Restore failed: missing userId, instanceUrl, or token in sessionStorage');
-      alert('Cannot restore: missing authentication/session info.');
       return;
     }
 
@@ -103,28 +118,21 @@ const DeletedFormsPage = ({ token }) => {
         }
       );
 
-      const text = await response.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { raw: text };
-      }
+      const data = await response.json();
 
       if (!response.ok) {
         console.error('Restore API error', { status: response.status, body: data });
-        alert(`Restore failed: ${data.error || response.statusText}`);
+        setLocalDeletedData(prevState);
       } else {
         console.log('Restore successful', { formId, response: data });
       }
-      const res = await response.json();
-      if(res.newAccessToken){
-        token = res.newAccessToken;
+      if (data.newAccessToken) {
+        token = data.newAccessToken;
       }
     } catch (err) {
       console.error('Exception during restore', { formId, error: err });
+      setLocalDeletedData(prevState);
     } finally {
-      await refreshData();
       setRestoringIds(prev => {
         const copy = new Set(prev);
         copy.delete(formId);
@@ -133,24 +141,53 @@ const DeletedFormsPage = ({ token }) => {
     }
   };
 
-  const handleEmptyBin = async () => {
-    if (!window.confirm('Are you sure you want to empty the bin? This action cannot be undone.')) {
-      return;
-    }
+  const handleRestoreAll = async (ids) => {
+     const prevState = [...localDeletedData];
+  setLocalDeletedData([]);
     try {
-      // Implement empty bin functionality
-    } catch (error) {
-      console.error('Error emptying bin:', error);
+      const payload = {
+        userId: sessionStorage.getItem('userId'),
+        instanceUrl: sessionStorage.getItem('instanceUrl'),
+        token,
+      };
+      const res = await fetch('https://e757lm9v21.execute-api.us-east-1.amazonaws.com/undelete/restoreAll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setSelectedIds(new Set());
+    } catch (err) {
+      setLocalDeletedData(prevState); // rollback
+      console.error('Restore all failed', err);
     }
   };
-
-  const handleRestoreAll = async () => {
-    console.log('restoring all...');
-    // Implement restore all functionality
+  
+  const handleEmptyBin = async (ids) => {
+    if (!window.confirm('Are you sure you want to empty the bin?')) return;
+    const prevState = [...localDeletedData];
+    setLocalDeletedData((forms) => forms.filter(f => !ids.includes(f.Id)));  
+    try {
+      const payload = {
+        userId: sessionStorage.getItem('userId'),
+        instanceUrl: sessionStorage.getItem('instanceUrl'),
+        token,
+        ids, // pass array of IDs to delete
+      };
+      const res = await fetch('https://e757lm9v21.execute-api.us-east-1.amazonaws.com/undelete/emptyAll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setSelectedIds(new Set());
+    } catch (err) {
+      setLocalDeletedData(prevState); // rollback
+      console.error('Empty bin failed', err);
+    }
   };
+  
 
   return (
-    <div className="mx-auto ">
+    <div className="mx-auto relative">
       {/* Header with gradient background */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -209,43 +246,31 @@ const DeletedFormsPage = ({ token }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            
-          <div className="flex rounded-lg border border-gray-300 p-1 bg-gray-50 shadow-sm">
-            <button
-              className={`p-2 ${!isGridView ? 'text-white login-button' : 'text-gray-700'}   rounded-lg transition-colors`}
-              onClick={() => setIsGridView(false)}
-            >
-              <List className="h-4 w-4" />
-            </button>
-            <button
-              className={`p-2 ${isGridView ? 'text-white login-button' : 'text-gray-700'}  rounded-lg transition-colors`}
-              onClick={() => setIsGridView(true)}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-          </div>
+
+            <div className="flex rounded-lg border border-gray-300 p-1 bg-gray-50 shadow-sm">
+              <button
+                className={`p-2 ${!isGridView ? 'text-white login-button' : 'text-gray-700'}   rounded-lg transition-colors`}
+                onClick={() => setIsGridView(false)}
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                className={`p-2 ${isGridView ? 'text-white login-button' : 'text-gray-700'}  rounded-lg transition-colors`}
+                onClick={() => setIsGridView(true)}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </motion.div>
 
         {/* Forms grid */}
-        <div className={`${isGridView ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'flex flex-col'} gap-6`}>
+        <div className={`relative ${isGridView ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'flex flex-col'} gap-6`}>
           <AnimatePresence mode="sync">
             {isLoading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <motion.div
-                  key={i}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.3 }}
-                  className="bg-white rounded-xl shadow p-4 border border-gray-200 animate-pulse h-[260px]"
-                >
-                  <div className="h-24 bg-gray-200 rounded mb-4"></div>
-                  <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
-                  <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-                </motion.div>
-              ))
+              <div>
+                <Loader text ={'Loading Deleted Forms'} fullscreen = {false}/>
+              </div>
             ) : (
               <>
                 {filteredDeletedForms.length === 0 && (
@@ -258,39 +283,56 @@ const DeletedFormsPage = ({ token }) => {
                   </motion.div>
                 )}
                 {filteredDeletedForms.map((form, idx) => {
-                  let fields = [];
-                  try {
-                    fields = form.FormVersions?.[0]?.Fields || [];
-                  } catch {
-                    fields = [];
-                  }
                   const formId = form.Id || idx;
                   const isRestoring = restoringIds.has(formId);
                   const menuOpen = openMenuId === formId;
 
+                  // Calculate count of fields from the first version or zero default
+                  const fieldsCount = (form.FormVersions?.[0]?.Fields?.length) || 0;
+                  const versionName = form.FormVersions?.[0]?.Name || 'Untitled';
+
                   return (
-                    <AnimatePresence mode= 'sync'>
-                      <motion.div
-                      key={formId}
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 20 }}
-                      transition={{ duration: 0.3 }}
-                      className={`${isGridView ? '' : 'flex'} bg-white rounded-xl shadow-md hover:shadow-lg transition-all border border-red-100 overflow-hidden`}
-                    >
+                    <AnimatePresence mode="sync" key={formId}>
                       <motion.div
                         layout
-                        className={`${isGridView ? 'flex flex-col' : 'flex flex-row flex-1'} relative group`}
-                      >
-                        {/* Field preview */}
-                        <div className={`${isGridView ? 'w-full' : 'w-48'} flex-shrink-0 p-2`}>
-                          {renderFieldPreview(fields)}
-                        </div>
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        transition={{ duration: 0.3 }}
+                        className={`${cardBaseClasses} ${isGridView ? 'relative group' : 'flex items-center gap-4 px-4 py-3'}`}
+                        >
+                        <div className={`${isGridView ? 'flex flex-col p-4' : 'flex flex-col flex-1 min-w-0'}`}>
+                          {isGridView ? (
+                            <div className="w-full mb-4">
+                              {renderFieldPreview(form.FormVersions?.[0]?.Fields || [])}
+                            </div>
+                          ) : null}
 
-                        {/* Content */}
-                        <div className={`${isGridView ? 'p-4' : 'p-4 flex-1'} flex flex-col`}>
-                          {/* 3-dot menu - shows on hover */}
+                          <div className={isGridView ? '' : ''}>
+                            <h3 className={`${isGridView ? 'font-semibold text-lg' : 'font-semibold text-md'} truncate text-gray-900`}>
+                              {versionName}
+                            </h3>
+                            <p className={`${isGridView ? 'text-gray-500 text-sm mt-1 line-clamp-2' : 'text-gray-500 text-xs mt-1 truncate'}`}>
+                              {form.Description || 'No description'}
+                            </p>
+                            {!isGridView && (
+                              <div className="text-gray-400 text-xs mt-1">
+                                {fieldsCount} field{fieldsCount !== 1 ? 's' : ''}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                         {/* Checkbox in top-left corner */}
+                        {isGridView && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(formId)}
+                            onChange={() => toggleSelect(formId)}
+                            className="absolute top-3 left-3 w-4 h-4 text-blue-600 border-gray-300 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                          />
+                        )}
+                        {/* Show 3-dot menu button only for grid view on hover */}
+                        {isGridView && (
                           <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                             <motion.div
                               whileHover={{ scale: 1.1 }}
@@ -316,9 +358,14 @@ const DeletedFormsPage = ({ token }) => {
                                   className="absolute right-0 mt-2 w-32 bg-white border border-gray-200 rounded-md shadow-md z-10 overflow-hidden"
                                 >
                                   <button
-                                    onClick={() => { handleRestore(form); setOpenMenuId(null); }}
+                                    onClick={() => {
+                                      handleRestore(form);
+                                      setOpenMenuId(null);
+                                    }}
                                     disabled={isRestoring}
-                                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${isRestoring ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700'}`}
+                                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                                      isRestoring ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700'
+                                    }`}
                                   >
                                     {isRestoring ? 'Restoring...' : 'Restore'}
                                   </button>
@@ -326,39 +373,105 @@ const DeletedFormsPage = ({ token }) => {
                               )}
                             </AnimatePresence>
                           </div>
+                        )}
+                        {/* Actions */}
+                        {!isGridView && (
+                          <div className="flex items-center gap-3">
+                            {/* 3-dot menu icon */}
+                            <motion.div
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleMenu(formId);
+                              }}
+                              className="p-1 rounded-full hover:bg-gray-200 cursor-pointer"
+                              title="More options"
+                            >
+                              <MoreVertical size={20} className="text-gray-500 hover:text-gray-700" />
+                            </motion.div>
 
-                          {/* Form info */}
-                          <div className={`${isGridView ? 'mt-2' : 'ml-4'} flex-1`}>
-                            <h3 className="font-bold text-lg truncate">
-                              {form.FormVersions?.[0]?.Name || 'Untitled'}
-                            </h3>
-                            <p className="text-gray-500 text-sm mt-1 line-clamp-2">
-                              {form.Description || 'No description'}
-                            </p>
+                            {/* Restore icon button */}
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleRestore(form)}
+                              disabled={isRestoring}
+                              className={`flex items-center justify-center w-8 h-8 rounded-md text-sm font-semibold transition-colors ${isRestoring ? 'bg-gray-300 cursor-not-allowed text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'
+                                }`}
+                              aria-label="Restore form"
+                            >
+                              {isRestoring ? (
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                </svg>
+                              ) : (
+                                '⭮'
+                              )}
+                            </motion.button>
+
+                            {/* Dropdown menu */}
+                            <AnimatePresence>
+                              {menuOpen && (
+                                <motion.div
+                                  initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                                  exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                                  transition={{ type: 'spring', stiffness: 250, damping: 20 }}
+                                  className="absolute right-0 mt-10 w-32 bg-white border border-gray-200 rounded-md shadow-md z-20"
+                                >
+                                  <button
+                                    onClick={() => {
+                                      handleRestore(form);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={isRestoring}
+                                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${isRestoring ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700'
+                                      }`}
+                                  >
+                                    {isRestoring ? 'Restoring...' : 'Restore'}
+                                  </button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-
-                          {/* Restore button */}
-                          {!isGridView && (
-                            <div className="mt-4 flex justify-end">
-                              <motion.button
-                                whileHover={{ scale: 1.03 }}
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => handleRestore(form)}
-                                disabled={isRestoring}
-                                className={`login-button px-4 py-2 rounded-md text-sm font-semibold ${isRestoring ? 'bg-gray-300 cursor-not-allowed' : ''
-                                  }`}
-                                style={gradientBtn}
-                              >
-                                {isRestoring ? 'Restoring...' : 'Restore'}
-                              </motion.button>
-                            </div>
-                          )}
-                        </div>
+                        )}
+                        
                       </motion.div>
-                    </motion.div>
-                   </AnimatePresence> 
+                    </AnimatePresence>
                   );
                 })}
+                <AnimatePresence>
+  {selectedIds.size > 0 && (
+    <motion.div
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-lg px-6 py-4 flex items-center gap-4 border border-gray-200 z-50"
+    >
+      <span className="text-sm text-gray-700">
+        {selectedIds.size} selected
+      </span>
+
+      <button
+        onClick={() => handleRestoreAll([...selectedIds])}
+        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+      >
+        Restore Selected
+      </button>
+
+      <button
+        onClick={() => handleEmptyBin([...selectedIds])}
+        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+      >
+        Empty Bin
+      </button>
+    </motion.div>
+  )}
+</AnimatePresence>
+
               </>
             )}
           </AnimatePresence>
@@ -368,4 +481,4 @@ const DeletedFormsPage = ({ token }) => {
   );
 };
 
-export default DeletedFormsPage;
+export default Bin;

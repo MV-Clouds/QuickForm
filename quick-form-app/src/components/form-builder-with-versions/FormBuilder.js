@@ -28,7 +28,7 @@ function FormBuilder({
   onMovePageUp,
   onMovePageDown,
   isSidebarOpen = true,
-  footerConfigs,
+  footerConfigs = [],
   setFooterConfigs
 }) {
   const fieldsContainerRef = useRef(null);
@@ -110,6 +110,7 @@ function FormBuilder({
         const properties = JSON.parse(fieldsetField.Properties__c || "{}");
         return {
           ...properties,
+          type : fieldsetField.Field_Type__c,
           id: `field-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate unique ID
         };
       });

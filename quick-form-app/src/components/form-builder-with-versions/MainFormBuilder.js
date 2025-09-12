@@ -109,7 +109,8 @@ function MainFormBuilder({
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
     urlFormVersionId || location.state?.formVersionId || null;
-  const { refreshData, formRecords: sfFormRecords, Fieldset: fieldsets, googleData } = useSalesforceData();
+  const { refreshData, formRecords: sfFormRecords, googleData } = useSalesforceData();
+  const [fieldsets , setfieldsets] = useState([]);
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -491,7 +492,10 @@ function MainFormBuilder({
       if (!response.ok) {
         throw new Error(data.error || "Failed to fetch metadata");
       }
-
+      if(data.Fieldset){
+        const parsedFieldset = JSON.parse(data.Fieldset)
+        setfieldsets(parsedFieldset);
+      }
       let formRecords = [];
       if (data.FormRecords) {
         try {
@@ -1962,6 +1966,7 @@ function MainFormBuilder({
                       selectedTheme={selectedTheme}
                       onThemeSelect={setSelectedTheme}
                       themes={themes}
+                      fieldsets = {fieldsets}
                     />
                   ) : (
                     <div className="bg-white dark:bg-gray-800 h-full rounded-lg">

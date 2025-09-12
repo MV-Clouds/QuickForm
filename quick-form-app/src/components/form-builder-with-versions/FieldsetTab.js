@@ -18,7 +18,7 @@ const DragDotsIcon = () => (
 
 function FieldsetTab({ fieldsets }) {
   const [draggedFieldset, setDraggedFieldset] = useState(null);
-
+  console.log('fieldset in builder' , fieldsets)
   const handleDragStart = (fieldset) => {
     setDraggedFieldset(fieldset);
     window.draggedFieldset = fieldset;
@@ -32,9 +32,9 @@ function FieldsetTab({ fieldsets }) {
   return (
     <div className="fieldset-tab mx-auto">
       <div className="fieldset-list space-y-3">
-        {fieldsets.map((fieldset) => (
+        {fieldsets?.map((fieldset) => (
           <motion.div
-            key={fieldset.Id}
+            key={fieldset?.Id || 'def'}
             className="fieldset-item flex items-center bg-white p-4 w-full rounded-lg shadow hover:shadow-lg transition cursor-grab border border-gray-100"
             draggable
             onDragStart={() => handleDragStart(fieldset)}

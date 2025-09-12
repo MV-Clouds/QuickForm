@@ -1,5 +1,5 @@
-import React, { useState, useEffect , useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect , useRef, useMemo } from 'react';
+import { useNavigate , useLocation } from 'react-router-dom';
 import FormName from './FormName';
 import ShowPage from '../Datatable/ShowPage';
 import Sidebar from './sidebar';
@@ -16,6 +16,7 @@ import Bin from './Bin'
 import FavoriteTab from './FavoriteTab';
 import Loader from '../Loader';
 const Home = () => {
+  const location = useLocation(); // ✅ call hook at top
   const {
     metadata,
     formRecords,
@@ -41,13 +42,29 @@ const Home = () => {
   // Analytics data (dynamic)
   const totalForms = formRecords.length;
   const activeForms = formRecords.filter(f => f.Status__c === 'Active').length;
-  const totalSubmissions = formRecords.reduce((acc, f) => acc + (f.Total_Submission_Count__c || 500), 0);
+  const totalSubmissions = formRecords.reduce((acc, f) => acc + (f.Total_Submission_Count__c || 0), 0);
   const [isCreating ,setisCreating] = useState(false);
   const [cloningFormData, setCloningFormData] = useState(null); 
   const [isCloneFormNameOpen, setIsCloneFormNameOpen] = useState(false);
   const [cloneFormNameDesc, setCloneFormNameDesc] = useState({ name: '', description: '' });
   const [isProcessing, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('Loading');
+
+  const routeMap = useMemo(() => ({
+    home : '/home',
+    folders : '/folders',
+    favorite : '/favourite',
+    fieldset : '/fieldset',
+    integration : '/integration',
+    bin : '/bin'
+  }), []);
+
+  useEffect(() => {
+    // Use the React Router useLocation hook instead of the global location object
+    // This avoids lint errors and is the recommended way in React Router v6+
+    const currentKey = Object.keys(routeMap).find(k => routeMap[k] === location.pathname) || 'home';
+    setSelectedNav(currentKey);
+  }, [routeMap]);
 
   const handleCloneForm = (form) => {
   // Find published version or draft version to clone
@@ -200,7 +217,11 @@ console.log('Cloning ',cloningFormData);
     initializePage();
     const tab = localStorage.getItem('tab');
     if(tab){
-      setSelectedNav(tab);
+      // Navigate to the stored tab as a top-level route (not /home/*) // CHANGE
+      const target = routeMap[tab] || '/home';
+      if (location.pathname !== target) {
+        navigate(target);
+      }
     }
   }, []);
 
@@ -475,13 +496,17 @@ console.log('Cloning ',cloningFormData);
           </div>
         ) : ''
       }
-      {/* <InactivityTracker /> */}
-      <Sidebar
-        username={userProfile.user_name}
-        selected={selectedNav}
-        open={sidebarOpen}
-        setOpen={setSidebarOpen}
-        onSelect={setSelectedNav}
+        {/* <InactivityTracker /> */}
+        <Sidebar
+          username={userProfile.user_name}
+          selected={selectedNav}
+          open={sidebarOpen}
+          setOpen={setSidebarOpen}
+          onSelect={(key) => { // CHANGE: navigate by route instead of local state only
+            const target = routeMap[key] || '/home';
+            localStorage.setItem('tab', key);
+            navigate(target);
+          }}
       />
       <div className={`flex-1 transition-all  duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         {selectedNav === 'integration' ? (
@@ -508,7 +533,8 @@ console.log('Cloning ',cloningFormData);
           </div>
         ) : selectedNav === 'fieldset' ? (
           <FieldsetPage token={token} instanceUrl={instanceUrl} Fieldset = {Fieldset} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading ={contextLoading} />
-        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} loading = {contextLoading} favoriteData = {favoriteData}/> :  selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} /> : (
+        ) :  selectedNav === 'favourite' ? <FavoriteTab handleEditForm={handleEditForm} loading = {contextLoading} favoriteData = {favoriteData}/> : 
+         selectedNav === 'bin' ? <Bin instanceUrl = {instanceUrl} userId = {userId} fetchMetadata = {fetchSalesforceData} isLoading = {contextLoading} token = {token}/> : (
           <>
             <div className=" px-10 py-1  relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
               <motion.div

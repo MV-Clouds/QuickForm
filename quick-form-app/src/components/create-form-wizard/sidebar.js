@@ -90,7 +90,7 @@ const Sidebar = ({ username , selected = 'home', open, setOpen, onSelect }) => {
                 <button
                   key={opt.key}
                   className={`relative flex items-center gap-2 px-6 py-3 text-base font-medium rounded-sm transition-colors duration-200 overflow-hidden ${selected === opt.key ? '' : 'text-gray-700 hover:bg-gray-50'}`}
-                  onClick={() => {onSelect(opt.key); localStorage.setItem('tab',opt.key) }}
+                  onClick={() => {onSelect && onSelect(opt.key); localStorage.setItem('tab',opt.key) }}
                 >
                   {selected === opt.key && (
                     <div
