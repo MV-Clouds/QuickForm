@@ -10,36 +10,9 @@ const gradientBtn = {
 
 const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isLoading }) => {
   const fieldsets = Fieldset;
-
-  // // All available field types with their configurations
-  // const allFields = useMemo(() => [
-  //   { Field_Type__c: 'fullname', Name: 'Full Name', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'email', Name: 'Email', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'address', Name: 'Address', requiresLabel: true, subFields: true },
-  //   { Field_Type__c: 'file', Name: 'File Upload', requiresLabel: true },
-  //   { Field_Type__c: 'signature', Name: 'Signature', requiresLabel: true },
-  //   { Field_Type__c: 'terms', Name: 'Terms of Service', requiresLabel: true },
-  //   { Field_Type__c: 'link', Name: 'Link', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'date', Name: 'Date', requiresLabel: true },
-  //   { Field_Type__c: 'datetime', Name: 'Date and Time', requiresLabel: true },
-  //   { Field_Type__c: 'time', Name: 'Time', requiresLabel: true },
-  //   { Field_Type__c: 'emoji', Name: 'Emoji and Star Rating', requiresLabel: true },
-  //   { Field_Type__c: 'scale', Name: 'Scale Rating', requiresLabel: true },
-  //   { Field_Type__c: 'shorttext', Name: 'Short Text', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'longtext', Name: 'Long Text', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'number', Name: 'Number', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'checkbox', Name: 'Checkbox', requiresLabel: true },
-  //   { Field_Type__c: 'display', Name: 'Display Text', requiresLabel: true },
-  //   { Field_Type__c: 'phone', Name: 'Phone', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'price', Name: 'Price', requiresLabel: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'radio', Name: 'Radio Button', requiresLabel: true, requiresOptions: true },
-  //   { Field_Type__c: 'toggle', Name: 'Toggle Button', requiresLabel: true },
-  //   { Field_Type__c: 'dropdown', Name: 'Dropdown Elements', requiresLabel: true, requiresOptions: true, requiresPlaceholder: true },
-  //   { Field_Type__c: 'image', Name: 'Image Uploader', requiresLabel: true },
-  //   { Field_Type__c: 'section', Name: 'Section', requiresLabel: true }
-  // ], []);
-
   // UI state
+  const protectedIds = ["a0OgL000004wCg1UAE", "a0OgL000004N9TWUA0", "a0OgL000004N9TVUA0" , "a0OgL000004N9TUUA0" , 'a0OgL000004N9TTUA0' , 'a0OgL000004N9TSUA0']; // example Ids
+
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [showModal, setshowModal] = useState(false);
@@ -51,7 +24,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
   const [success, setSuccess] = useState('');
   const [editingFieldset, setEditingFieldset] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
-
+  const [showTopbar , setshowTopbar] = useState(true);
   // Filtered fieldsets for search
   const filteredFieldsets = useMemo(() =>
     fieldsets?.filter(f =>
@@ -393,91 +366,140 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
     };
     return validations[field] || validations['default'];
   };
-  // 2. Modify handleEdit
-  const handleEdit = (fieldsetId) => {
-    const fieldset = fieldsets.find(f => f.Id === fieldsetId);
-    console.log('Fieldset' , fieldset)
-    if (!fieldset) return;
-    let fields = [];
-    try {
-      fields = typeof fieldset.Fieldset_Fields__c === 'string' ? JSON.parse(fieldset.Fieldset_Fields__c) : fieldset.Fieldset_Fields__c;
-    } catch {
-      fields = [];
+  const handleCreateModalSubmit = () => {
+    if (!fieldsetName.trim()) {
+      setError('Fieldset name required');
+      return;
     }
-    console.log('fieldset ==>', fields)
-
+    setError('');
+    
+    // create a default header field with the entered name
     const headerField = {
       id: 'default-header',
       type: 'header',
-      heading: fieldset.Name || 'Fieldset',
+      heading: fieldsetName.trim(),
       alignment: 'center',
     };
-    const pages = {};
-    fields.forEach((field) => {
-      const pageNumber = field.Page_Number__c || 1;
-      if (!pages[pageNumber]) {
-        pages[pageNumber] = [];
-      }
-      let properties;
-      try {
-        properties = JSON.parse(field.Properties__c || '{}');
-      } catch (e) {
-        console.warn(`Failed to parse Properties__c for field ${field.Unique_Key__c}:`, e);
-        properties = {};
-      }
-      pages[pageNumber].push({
-        ...properties,
-        id: field.Unique_Key__c,
-        validation: properties.validation || getDefaultValidation(field.Field_Type__c),
-        subFields: properties.subFields || getDefaultSubFields(field.Field_Type__c),
-      });
-    });
-
-    Object.keys(pages).forEach((pageNum) => {
-      pages[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0));
-    });
-
-    const reconstructedFields = [];
-    Object.keys(pages)
-      .sort((a, b) => a - b)
-      .forEach((pageNum, index) => {
-        const fieldsInPage = pages[pageNum];
-        reconstructedFields.push(...fieldsInPage);
-        if (index < Object.keys(pages).length - 1) {
-          reconstructedFields.push({
-            id: `pagebreak-${pageNum}`,
-            type: 'pagebreak',
-          });
-        }
-      });
-
-    setFields([headerField, ...reconstructedFields]);
-    console.log('Reconstructed fields ==>', fields)
-    setFieldsetName(fieldset.Name);
-    setFieldsetDesc(fieldset.Description__c || '');
-    setSelectedFields(fields);
-    setEditingFieldset(fieldset);
+    
+    // set fields state with the default header only
+    setFields([headerField]);
+    
+    // close the create modal and open the form builder modal
+    setshowModal(false);
     setModalOpen(true);
-
-    // setFields(fields)
+    
+    setshowTopbar(false); // hide topbar in editor
   };
+  
+// 2. Modify handleEdit
+const handleEdit = (fieldsetId) => {
+  setshowModal(false);   // close create modal if open
+  setshowTopbar(false);  // hide topbar
+  const fieldset = fieldsets.find(f => f.Id === fieldsetId);
+  console.log('Fieldset' , fieldsets , fieldsetId)
+  if (!fieldset) return;
+  let fields = [];
+  try {
+    fields = typeof fieldset.Fieldset_Fields__c === 'string' ? JSON.parse(fieldset.Fieldset_Fields__c) : fieldset.Fieldset_Fields__c;
+  } catch {
+    fields = [];
+  }
+  console.log('fieldset new ==>', fields)
+
+  const headerField = {
+    id: 'default-header',
+    type: 'header',
+    heading: fieldsetName.trim() || fieldset.Name ,
+    alignment: 'center',
+  };
+  if(!fields){
+    fields = typeof fieldset.Fields__c === 'string' ? JSON.parse(fieldset.Fields__c) : fieldset.Fields__c
+  }
+  const pages = {};
+  fields.forEach((field) => {
+    const pageNumber = field.Page_Number__c || 1;
+    if (!pages[pageNumber]) {
+      pages[pageNumber] = [];
+    }
+    let properties;
+    try {
+      properties = JSON.parse(field.Properties__c || '{}');
+    } catch (e) {
+      console.warn(`Failed to parse Properties__c for field ${field.Unique_Key__c}:`, e);
+      properties = {};
+    }
+    
+    // Convert fieldset field format to FormBuilder format
+    const formBuilderField = {
+      id: field.Unique_Key__c,
+      type: field.Field_Type__c,
+      label: properties.label || field.Name,
+      validation: properties.validation || getDefaultValidation(field.Field_Type__c),
+      subFields: properties.subFields || getDefaultSubFields(field.Field_Type__c),
+      // Copy other properties from the parsed Properties__c
+      ...properties,
+      // Ensure these specific properties are set correctly
+      placeholder: properties.placeholder || { main: '' },
+      options: properties.options || (field.Field_Type__c === 'radio' || field.Field_Type__c === 'dropdown' ? ['Option 1', 'Option 2'] : undefined),
+    };
+    
+    pages[pageNumber].push(formBuilderField);
+  });
+
+  Object.keys(pages).forEach((pageNum) => {
+    pages[pageNum].sort((a, b) => (a.Order_Number__c || 0) - (b.Order_Number__c || 0));
+  });
+
+  const reconstructedFields = [];
+  Object.keys(pages)
+    .sort((a, b) => a - b)
+    .forEach((pageNum, index) => {
+      const fieldsInPage = pages[pageNum];
+      reconstructedFields.push(...fieldsInPage);
+      if (index < Object.keys(pages).length - 1) {
+        reconstructedFields.push({
+          id: `pagebreak-${pageNum}`,
+          type: 'pagebreak',
+        });
+      }
+    });
+
+  setFields([headerField, ...reconstructedFields]);
+  console.log('Reconstructed fields ==>', [headerField, ...reconstructedFields])
+  setFieldsetName(fieldset.Name);
+  setFieldsetDesc(fieldset.Description__c || '');
+  setSelectedFields(fields);
+  setEditingFieldset({...fieldset , Id : fieldsetId});
+  setModalOpen(true);
+};
+const openCreateModal = () => {
+  setSelectedFields([]);
+  setEditingFieldset(null);
+  setshowModal(true);
+};
+
 
   // 3. Add handleUpdateFieldset
   const handleUpdateFieldset = async () => {
     setIsUpdating(true);
     setError('');
     setSuccess('');
-
+  
     try {
       if (!fieldsetName.trim()) throw new Error('Fieldset name required');
-      if (selectedFields.length === 0) throw new Error('Select at least one field');
+      if (fields.length === 0) throw new Error('Add at least one field');
+  
+      // Prepare the form fields data like in saveFieldSet
+      const { formFields } = prepareFormData();
+  
       const body = {
-        Id: editingFieldset.Id,
+        Id: editingFieldset?.Id,
         Name: fieldsetName.trim(),
-        Fields__c: JSON.stringify([]),
+        Fields__c: JSON.stringify(formFields),  // Correctly assign form fields JSON
         Description__c: fieldsetDesc,
       };
-      console.log('Body ==> ', body)
+      console.log('Body ==> ', body);
+  
       const resp = await fetch('https://yhylbmq7uc.execute-api.us-east-1.amazonaws.com/set', {
         method: 'PATCH',
         headers: {
@@ -487,17 +509,17 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
           Fieldsetobject: body,
           instanceUrl,
           token,
-          userId
+          userId,
         }),
       });
-
+  
       const data = await resp.json();
-      console.log('PATCH response =>', data);
+      console.log('PATCH response ==> ', data);
       if (!resp.ok) throw new Error(data.error || 'Failed to update fieldset');
-      if(data.newAccessToken){
+      if (data.newAccessToken) {
         token = data.newAccessToken;
       }
-
+  
       setSuccess('Fieldset updated successfully!');
       setModalOpen(false);
       setEditingFieldset(null);
@@ -509,8 +531,10 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       setError(e.message);
     } finally {
       setIsUpdating(false);
+      setshowTopbar(true)
     }
   };
+  
 
   const handleDelete = async (fieldset) => {
     console.log("Deleting...", fieldset);
@@ -589,6 +613,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       setError(e.message);
     } finally {
       setIsCreating(false);
+      setshowTopbar(true);
     }
   };
 
@@ -599,7 +624,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
       {fields.length === 0 ? (
         <div className="text-gray-400 text-xs text-center py-4">No fields</div>
       ) : (
-        fields.slice(0, 4).map((f, i) => (
+        fields.filter((f) => f.Id !== "default-header").slice(0, 4).map((f, i) => (
           <div key={i} className="flex flex-col gap-1 bg-gray-50 rounded-md px-2 py-1 border border-gray-100">
             <label className="text-xs font-semibold text-gray-700 truncate">{f.Name || f.label || 'Field'}</label>
             {f.Field_Type__c === 'checkbox' ? (
@@ -635,7 +660,8 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
 
   return (
     <div>
-      <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
+      {showTopbar && (
+        <div className="px-10 py-8 shadow-lg relative" style={{ background: 'linear-gradient(to right, #008AB0, #8FDCF1)' }}>
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -647,13 +673,14 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
             <button
               className="save-btn flex items-center gap-2 rounded-lg px-5 py- text-white font-semibold shadow-md"
               style={gradientBtn}
-              onClick={() => setshowModal(true)}
+              onClick={() => openCreateModal()}
             >
               <PlusCircle className="h-5 w-5" /> Create Fieldset
             </button>
           </div>
         </motion.div>
       </div>
+      )}
       {!modalOpen && (
         <div className="ml-10 mr-10 shadow-lg rounded-lg p-6 bg-white">
           {/* Top Row */}
@@ -685,19 +712,17 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <Loader text="Fetching Fieldsets..." fullscreen={false} />
+                <Loader text="Fetching Fieldset" fullscreen={false} />
               </motion.div>
               ) : (
                 <>
                   {filteredFieldsets.length === 0 && (
                     <div className="col-span-4 text-gray-400 text-center py-12">No fieldsets found.</div>
-                  )}
+                  )}  
                   {filteredFieldsets.map((fs, idx) => {
                     let fields = [];
                     try {
-                      console.log('Data filtered =>', fs)
-                      fields = fs.Fieldset_Fields__c || [];
-                      console.log('Fields==> ', fields)
+                      fields = fs.Fieldset_Fields__c || JSON.parse(fs.Fields__c);
                     } catch {
                       fields = [];
                     }
@@ -729,18 +754,21 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
                               <Edit className='w-5 h-5' />
                             </motion.button>
 
-                            <motion.button
-                              onClick={() => handleDelete(fs.Id)}
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              className="text-red-500 bg-white-50 rounded-lg hover:text-red-700"
-                              title="Delete"
-                              initial={{ opacity: 0, x: 10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              <Trash2 className='w-5 h-5' />
-                            </motion.button>
+                             {/* Delete button only if not in predefined fieldsets */}
+                            {!protectedIds.includes(fs.Id) && (
+                              <motion.button
+                                onClick={() => handleDelete(fs.Id)}
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                className="text-red-500 bg-white-50 rounded-lg hover:text-red-700"
+                                title="Delete"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.3 }}
+                              >
+                                <Trash2 className="w-5 h-5" />
+                              </motion.button>
+                            )}
                           </div>
                         </div>
                       </motion.div>
@@ -758,7 +786,9 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
         {modalOpen &&
           (<div>
             <FieldSetBuilder prepareFormData={prepareFormData} fields={fields} setFields={setFields}
-              canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} saveFieldSet={saveFieldSet} setModalOpen={setModalOpen} />
+              canUndo={canUndo} canRedo={canRedo} undo={undo} redo={redo} saveFieldSet={saveFieldSet} setModalOpen={setModalOpen} setshowTopbar = {setshowTopbar}
+               setSelectedFields ={setSelectedFields} setFieldsetName = {setFieldsetName} setFieldsetDesc = {setFieldsetDesc} setshowModal = {setshowModal} setEditingFieldset= {setEditingFieldset}
+               editingFieldset ={editingFieldset} handleUpdateFieldset= {handleUpdateFieldset} protectedIds={protectedIds}/>
           </div>)
         }
       </AnimatePresence>
@@ -795,7 +825,7 @@ const FieldsetPage = ({ token, instanceUrl, Fieldset, userId, fetchMetadata, isL
             <button
               className="w-full py-2 rounded-lg font-semibold text-white mt-2"
               style={gradientBtn}
-              onClick={() => { setModalOpen(true); setshowModal(false); }}
+              onClick={() => {handleCreateModalSubmit()}}
               disabled={isCreating || isUpdating}
             >
               {editingFieldset ? (isUpdating ? 'Updating...' : 'Update Fieldset') : (isCreating ? 'Creating...' : 'Create Fieldset')}

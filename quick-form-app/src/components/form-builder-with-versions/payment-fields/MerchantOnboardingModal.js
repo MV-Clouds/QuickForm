@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FaTimes,
@@ -217,13 +218,13 @@ const MerchantOnboardingModal = ({
   };
 
   // Handle modal close
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (isProcessing) {
       // Don't allow closing while processing
       return;
     }
     onClose();
-  };
+  }, [isProcessing, onClose]);
 
   // Handle backdrop click
   const handleBackdropClick = (e) => {
@@ -249,7 +250,7 @@ const MerchantOnboardingModal = ({
       document.removeEventListener("keydown", handleEscape);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen, isProcessing]);
+  }, [isOpen, isProcessing, handleClose]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -268,7 +269,7 @@ const MerchantOnboardingModal = ({
 
   if (!isOpen) return null;
 
-  return (
+  const modalUi = (
     <AnimatePresence>
       <motion.div
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -282,7 +283,7 @@ const MerchantOnboardingModal = ({
 
         {/* Modal */}
         <motion.div
-          className="relative w-full max-w-md bg-white rounded-lg shadow-xl"
+          className="relative w-full max-w-2xl bg-white rounded-lg shadow-xl"
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -435,6 +436,9 @@ const MerchantOnboardingModal = ({
       </motion.div>
     </AnimatePresence>
   );
+
+  // Render via portal to ensure it overlays the entire app
+  return ReactDOM.createPortal(modalUi, document.body);
 };
 
 export default MerchantOnboardingModal;

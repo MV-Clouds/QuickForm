@@ -117,11 +117,11 @@ async function generatePayPalOnboardingUrl(returnUrl, cancelUrl) {
         },
       ],
       partner_config_override: {
-        partner_logo_url: "https://example.com/logo.png",
+        // partner_logo_url: "https://example.com/logo.png",
         return_url: returnUrl,
         return_url_description: "Return to your application",
-        action_renewal_url: cancelUrl,
-        show_add_credit_card: true,
+        // action_renewal_url: cancelUrl,
+        // show_add_credit_card: true,
       },
     };
 

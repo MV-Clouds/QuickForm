@@ -1,4 +1,3 @@
-
 import React, { useMemo } from "react";
 import { PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
 

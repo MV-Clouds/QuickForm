@@ -3426,7 +3426,15 @@ function PublicFormViewer({ runPrefill = false }) {
   return (
     <div className="max-w-4xl mx-auto mt-8 p-4 bg-white rounded-lg inset-shadow-2xs">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">{formData.Name}</h1>
-      <form onSubmit={handleSubmit} className="space-y-6" aria-label="Public Form">
+      <form onSubmit={(e) => {
+          e.preventDefault();
+          const clickedButtonName = e.nativeEvent.submitter.name;
+          if (clickedButtonName === "SubmitBtn") {
+            handleSubmit(e);
+          }
+        }}
+        className="space-y-6" 
+        aria-label="Public Form">
         <div className="page">
           {pages[currentPage]?.map((field) => (
             <div key={field.Unique_Key__c}>{renderField(field)}</div>
@@ -3468,6 +3476,7 @@ function PublicFormViewer({ runPrefill = false }) {
             !hasPaymentField || paymentCompleted ? (
               <button
                 type="submit"
+                name="SubmitBtn"
                 disabled={isSubmitting || !accessToken}
                 className={`py-2 px-4 rounded-md font-medium transition ${isSubmitting || !accessToken
                   ? "opacity-50 cursor-not-allowed"

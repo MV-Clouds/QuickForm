@@ -74,24 +74,129 @@ const PaymentContent = ({
           </div>
         );
       }
-      case "product_wise":
+      case "product_wise": {
+        // Extract products from multiple possible locations
+        const formItems = subFields?.formItems || {};
+        const formItemsProducts = Object.values(formItems).filter(
+          (item) => item.type === "product"
+        );
+        const directProducts = subFields?.products || [];
+
+        // Combine both sources, preferring direct products if available
+        const products =
+          directProducts.length > 0 ? directProducts : formItemsProducts;
+
+        console.log("🛍️ ProductSelection - Checking product sources:", {
+          formItemsProducts,
+          directProducts,
+          finalProducts: products,
+          subFields,
+        });
+
         return (
           <ProductSelection
-            products={subFields?.products || []}
-            selectedProduct={selectedProduct}
+            products={products}
+            selectedProducts={selectedProduct} // Pass as selectedProducts for backward compatibility
             onProductSelection={onProductSelection}
             currency={subFields?.currency || "USD"}
+            allowMultiple={true} // Enable multiple selection for product-wise payments
           />
         );
-      case "subscription":
+      }
+      case "subscription": {
+        // Extract subscriptions from multiple possible locations
+        const formItems = subFields?.formItems || {};
+        const formItemsSubscriptions = Object.values(formItems).filter(
+          (item) => item.type === "subscription"
+        );
+        const directSubscriptions = subFields?.subscriptions || [];
+
+        // Combine both sources, preferring direct subscriptions if available
+        const rawSubscriptions =
+          directSubscriptions.length > 0
+            ? directSubscriptions
+            : formItemsSubscriptions;
+
+        // Transform subscription data to match SubscriptionSelection component format
+        const transformedSubscriptions = rawSubscriptions.map((sub) => {
+          // Extract price from nested structure
+          let price = 0;
+          let currency = subFields?.currency || "USD";
+          let billingPeriod = "month";
+          let billingFrequency = 1;
+
+          if (
+            sub.planData &&
+            sub.planData.billing_cycles &&
+            sub.planData.billing_cycles.length > 0
+          ) {
+            const billingCycle = sub.planData.billing_cycles[0];
+            if (
+              billingCycle.pricing_scheme &&
+              billingCycle.pricing_scheme.fixed_price
+            ) {
+              price =
+                parseFloat(billingCycle.pricing_scheme.fixed_price.value) || 0;
+              currency =
+                billingCycle.pricing_scheme.fixed_price.currency_code ||
+                currency;
+            }
+
+            // Extract billing frequency and period
+            if (billingCycle.frequency) {
+              billingFrequency = billingCycle.frequency.interval_count || 1;
+              const intervalUnit = billingCycle.frequency.interval_unit;
+              if (intervalUnit === "MONTH") billingPeriod = "month";
+              else if (intervalUnit === "YEAR") billingPeriod = "year";
+              else if (intervalUnit === "WEEK") billingPeriod = "week";
+              else if (intervalUnit === "DAY") billingPeriod = "day";
+            }
+          }
+
+          // Handle legacy price format for backward compatibility
+          if (!price && sub.price) {
+            price = parseFloat(sub.price) || 0;
+          }
+
+          return {
+            id: sub.id,
+            name: sub.name || "Subscription Plan",
+            description: sub.description || "",
+            price: price,
+            currency: currency,
+            billingPeriod: billingPeriod,
+            billingFrequency: billingFrequency,
+            status: sub.status || "ACTIVE",
+            paypalPlanId: sub.paypalPlanId,
+            planData: sub.planData, // Keep original plan data for PayPal integration
+            // Add any other fields that might be used
+            features: sub.features || [],
+            isPopular: sub.isPopular || false,
+            recommended: sub.recommended || false,
+            trialDays: sub.trialDays || 0,
+            setupFee: sub.setupFee || 0,
+            cancelAnytime: sub.cancelAnytime !== false,
+          };
+        });
+
+        console.log(
+          "📅 SubscriptionSelection - Transformed subscription data:",
+          {
+            rawSubscriptions,
+            transformedSubscriptions,
+            subFields,
+          }
+        );
+
         return (
           <SubscriptionSelection
-            subscriptions={subFields?.subscriptions || []}
+            subscriptions={transformedSubscriptions}
             selectedSubscription={selectedSubscription}
             onSubscriptionSelection={onSubscriptionSelection}
             currency={subFields?.currency || "USD"}
           />
         );
+      }
       case "custom_amount": {
         const amountType = subFields?.amount?.type;
         const staticAmount = subFields?.amount?.value;
@@ -147,6 +252,23 @@ const PaymentContent = ({
   };
 
   const renderPaymentInterface = () => {
+    // For subscriptions, force PayPal-only subscribe button regardless of selected payment method
+    if (paymentType === "subscription") {
+      return (
+        <div className="mt-6">
+          <SimplePayPalButton
+            createOrder={undefined}
+            createSubscription={createSubscription}
+            onApprove={onApprove}
+            onCancel={onCancel}
+            onError={onError}
+            disabled={!isPaymentButtonReady || isProcessing}
+            style={paypalBtnStyle}
+          />
+        </div>
+      );
+    }
+
     if (!paymentMethod) return null;
     switch (paymentMethod) {
       case "paypal":
@@ -154,9 +276,7 @@ const PaymentContent = ({
           <div className="mt-6">
             <SimplePayPalButton
               createOrder={createOrder}
-              createSubscription={
-                paymentType === "subscription" ? createSubscription : undefined
-              }
+              createSubscription={undefined}
               onApprove={onApprove}
               onCancel={onCancel}
               onError={onError}
@@ -199,9 +319,23 @@ const PaymentContent = ({
   const renderPaymentSummary = () => {
     let amount = 0;
     let description = "";
+
     if (paymentType === "product_wise" && selectedProduct) {
-      amount = selectedProduct.price || 0;
-      description = selectedProduct.name || "Selected Product";
+      if (Array.isArray(selectedProduct)) {
+        // Multiple products
+        amount = selectedProduct.reduce(
+          (sum, product) => sum + (product.price || 0),
+          0
+        );
+        description =
+          selectedProduct.length === 1
+            ? selectedProduct[0].name
+            : `${selectedProduct.length} Products Selected`;
+      } else {
+        // Single product
+        amount = selectedProduct.price || 0;
+        description = selectedProduct.name || "Selected Product";
+      }
     } else if (paymentType === "subscription" && selectedSubscription) {
       amount = selectedSubscription.price || 0;
       description = `${selectedSubscription.name} - ${selectedSubscription.billingPeriod}`;
@@ -217,7 +351,9 @@ const PaymentContent = ({
               <p className="text-sm font-medium text-gray-900">{description}</p>
               <p className="text-xs text-gray-600">
                 Payment via{" "}
-                {paymentMethod === "paypal"
+                {paymentType === "subscription"
+                  ? "PayPal"
+                  : paymentMethod === "paypal"
                   ? "PayPal"
                   : paymentMethod === "card"
                   ? "Credit/Debit Card"

@@ -109,7 +109,7 @@ function MainFormBuilder({
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
     urlFormVersionId || location.state?.formVersionId || null;
-  const { refreshData, formRecords: sfFormRecords, Fieldset: fieldsets, googleData } = useSalesforceData();
+  const { refreshData, formRecords: sfFormRecords, googleData } = useSalesforceData();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -144,6 +144,7 @@ function MainFormBuilder({
   const [prefills, setPrefills] = useState([]);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [pendingVersionId, setPendingVersionId] = useState(null);
+  const [fieldsets , setfieldsets] = useState([]);
 
   const [fieldsState, { set: setFields, undo, redo, canUndo, canRedo }] =
     useUndo([]);
@@ -489,6 +490,11 @@ function MainFormBuilder({
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Failed to fetch metadata");
+      }
+
+      if(data.Fieldset){
+        const parsedFieldset = JSON.parse(data.Fieldset)
+        setfieldsets(parsedFieldset);
       }
 
       let formRecords = [];

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   FaInfoCircle,
   FaCog,
@@ -25,7 +25,6 @@ import {
   isInCountryOnly,
 } from "../../../../../utils/paypalCurrencies";
 
-
 /**
  * Refactored PayPal Field Editor with Centralized State Management
  *
@@ -39,7 +38,6 @@ const PayPalFieldEditorTabsRefactored = ({
   selectedField,
   onUpdateField,
   className = "",
-  isEditable = true
 }) => {
   // Get payment context
   const { userId, formId } = usePaymentContext();
@@ -57,6 +55,10 @@ const PayPalFieldEditorTabsRefactored = ({
     onUpdateField,
     fieldId
   );
+
+  useEffect(() => {
+    console.log("🎛️ PayPalFieldEditorTabsRefactored state:", state);
+  }, [state]);
 
   // Performance monitoring
   const performanceMonitor = usePerformanceMonitor("PayPalFieldEditorTabs");
@@ -115,8 +117,50 @@ const PayPalFieldEditorTabsRefactored = ({
       console.log("🔍 Merchant changed:", merchantId);
       performanceMonitor.trackStateChange("UPDATE_MERCHANT", { merchantId });
       actions.updateMerchant(merchantId);
+
+      // Also clear merchant-bound items from the field to avoid leaking previous merchant data
+      try {
+        if (selectedField && onUpdateField) {
+          const sub = selectedField.subFields || {};
+          // Filter out product/subscription items from formItems map while keeping other types (e.g., donation)
+          const oldFormItems = sub.formItems || {};
+          const filteredFormItems = Object.fromEntries(
+            Object.entries(oldFormItems).filter(([, v]) =>
+              v && v.type
+                ? v.type !== "product" && v.type !== "subscription"
+                : true
+            )
+          );
+
+          const clearedSubFields = {
+            ...sub,
+            // Persist the newly selected merchant account id; capabilities resolver will fill merchantId later
+            merchantAccountId: merchantId,
+            // Clear merchant-specific collections
+            products: [],
+            subscriptions: [],
+            // Remove any derived subscription config so validation doesn't reference stale data
+            subscriptionConfig: undefined,
+            // Remove any product/subscription references inside amount/subscription configs
+            amount: sub.amount
+              ? { ...sub.amount, productId: undefined }
+              : sub.amount,
+            subscription: sub.subscription
+              ? { ...sub.subscription, planId: undefined }
+              : sub.subscription,
+            formItems: filteredFormItems,
+          };
+
+          onUpdateField(selectedField.id, { subFields: clearedSubFields });
+        }
+      } catch (e) {
+        console.warn(
+          "Failed to clear merchant-bound items on merchant change:",
+          e
+        );
+      }
     },
-    [actions, performanceMonitor]
+    [actions, performanceMonitor, onUpdateField, selectedField]
   );
 
   const handlePaymentTypeChange = useCallback(
@@ -277,7 +321,6 @@ const PayPalFieldEditorTabsRefactored = ({
             onPaymentTypeChange={handlePaymentTypeChange}
             userId={userId}
             formId={formId}
-            isEditable = {isEditable}
           />
         )}
 
@@ -293,7 +336,6 @@ const PayPalFieldEditorTabsRefactored = ({
             onOpenManager={handleOpenManager}
             expandedSections={expandedSections}
             toggleSection={toggleSection}
-            isEditable = {isEditable}
           />
         )}
 
@@ -305,7 +347,6 @@ const PayPalFieldEditorTabsRefactored = ({
             onBehaviorChange={handleBehaviorChange}
             expandedSections={expandedSections}
             toggleSection={toggleSection}
-            isEditable = {isEditable}
           />
         )}
       </div>
@@ -316,8 +357,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowProductModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
-        isEditable = {isEditable}
+        selectedMerchantId={state.capabilities?.merchantId || ""}
       />
 
       <SubscriptionManagementModal
@@ -325,8 +365,7 @@ const PayPalFieldEditorTabsRefactored = ({
         onClose={() => setShowSubscriptionModal(false)}
         selectedField={selectedField}
         onUpdateField={onUpdateField}
-        selectedMerchantId={state.selectedMerchantId}
-        isEditable = {isEditable}
+        selectedMerchantId={state.capabilities?.merchantId || ""}
       />
     </div>
   );
@@ -343,7 +382,6 @@ const AccountTab = React.memo(
     onPaymentTypeChange,
     userId,
     formId,
-    isEditable = true
   }) => (
     <div className="space-y-6">
       {/* Merchant Account Section */}
@@ -379,7 +417,6 @@ const AccountTab = React.memo(
               className="mt-4"
               userId={userId}
               formId={formId}
-              isEditable = {isEditable}
             />
 
             {/* Account Status Display */}
@@ -430,7 +467,6 @@ const AccountTab = React.memo(
         <select
           value={state.paymentType}
           onChange={onPaymentTypeChange}
-          disabled={!isEditable}
           className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="product_wise">Product-wise Payment</option>
@@ -482,7 +518,6 @@ const ConfigurationTab = React.memo(
     onOpenManager,
     expandedSections,
     toggleSection,
-    isEditable = true
   }) => (
     <div className="space-y-6">
       {/* Product-wise Payment Configuration */}
@@ -518,7 +553,7 @@ const ConfigurationTab = React.memo(
                 </div>
                 <button
                   onClick={() => onOpenManager("product")}
-                  disabled={!state.selectedMerchantId || !isEditable}
+                  disabled={!state.selectedMerchantId}
                   title={
                     !state.selectedMerchantId
                       ? "Select a merchant account first"
@@ -572,7 +607,6 @@ const ConfigurationTab = React.memo(
               </label>
               <select
                 value={state.amount.type}
-                disabled={!isEditable}
                 onChange={(e) => onAmountConfigChange({ type: e.target.value })}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
@@ -592,7 +626,6 @@ const ConfigurationTab = React.memo(
                   </div>
                   <input
                     type="number"
-                    disabled={!isEditable}
                     step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
                     min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.value || ""}
@@ -630,7 +663,6 @@ const ConfigurationTab = React.memo(
                   </label>
                   <input
                     type="number"
-                    disabled={!isEditable}
                     step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
                     min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.minAmount}
@@ -651,7 +683,6 @@ const ConfigurationTab = React.memo(
                   </label>
                   <input
                     type="number"
-                    disabled={!isEditable}
                     step={isZeroDecimal(state.amount.currency) ? 1 : 0.01}
                     min={isZeroDecimal(state.amount.currency) ? 1 : 0}
                     value={state.amount.maxAmount}
@@ -675,7 +706,6 @@ const ConfigurationTab = React.memo(
               </label>
               <select
                 value={state.amount.currency}
-                disabled={!isEditable}
                 onChange={(e) =>
                   onAmountConfigChange({ currency: e.target.value })
                 }
@@ -726,7 +756,7 @@ const ConfigurationTab = React.memo(
               </div>
               <button
                 onClick={() => onOpenManager("subscription")}
-                disabled={!state.selectedMerchantId || !isEditable}
+                disabled={!state.selectedMerchantId}
                 title={
                   !state.selectedMerchantId
                     ? "Select a merchant account first"
@@ -755,7 +785,6 @@ const ConfigurationTab = React.memo(
           <div className="bg-white border border-gray-200 rounded-lg">
             <button
               onClick={() => toggleSection("paymentMethods")}
-              disabled={!isEditable}
               className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
             >
               <div className="flex items-center gap-3">
@@ -780,7 +809,6 @@ const ConfigurationTab = React.memo(
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      disabled={!isEditable}
                       checked={state.paymentMethods.paypal}
                       onChange={(e) =>
                         onPaymentMethodChange("paypal", e.target.checked)
@@ -793,7 +821,6 @@ const ConfigurationTab = React.memo(
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      disabled={!isEditable}
                       checked={state.paymentMethods.cards}
                       onChange={(e) =>
                         onPaymentMethodChange("cards", e.target.checked)
@@ -809,7 +836,7 @@ const ConfigurationTab = React.memo(
                     <input
                       type="checkbox"
                       checked={state.paymentMethods.venmo}
-                      disabled={!state.capabilities?.venmo || !isEditable} 
+                      disabled={!state.capabilities?.venmo}
                       onChange={(e) =>
                         onPaymentMethodChange("venmo", e.target.checked)
                       }
@@ -831,7 +858,7 @@ const ConfigurationTab = React.memo(
                     <input
                       type="checkbox"
                       checked={state.paymentMethods.googlePay}
-                      disabled={!state.capabilities?.googlePay || !isEditable}
+                      disabled={!state.capabilities?.googlePay}
                       onChange={(e) =>
                         onPaymentMethodChange("googlePay", e.target.checked)
                       }
@@ -859,7 +886,7 @@ const ConfigurationTab = React.memo(
 
 // Advanced Tab Component
 const AdvancedTab = React.memo(
-  ({ state, actions, onBehaviorChange, expandedSections, toggleSection,isEditable = true }) => (
+  ({ state, actions, onBehaviorChange, expandedSections, toggleSection }) => (
     <div className="space-y-6">
       {/* Field Behavior */}
       <div className="bg-white border border-gray-200 rounded-lg">
@@ -885,7 +912,6 @@ const AdvancedTab = React.memo(
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  disabled={!isEditable}
                   checked={state.behavior.collectBillingAddress}
                   onChange={(e) =>
                     onBehaviorChange({
@@ -907,7 +933,6 @@ const AdvancedTab = React.memo(
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  disabled={!isEditable}
                   checked={state.behavior.collectShippingAddress}
                   onChange={(e) =>
                     onBehaviorChange({
@@ -987,7 +1012,6 @@ const PayPalFieldEditorTabs = ({
   userId,
   formId,
   className = "",
-  isEditable =true,
 }) => {
   return (
     <PaymentProvider userId={userId} formId={formId}>
@@ -995,7 +1019,6 @@ const PayPalFieldEditorTabs = ({
         selectedField={selectedField}
         onUpdateField={onUpdateField}
         className={className}
-        isEditable={isEditable}
       />
     </PaymentProvider>
   );

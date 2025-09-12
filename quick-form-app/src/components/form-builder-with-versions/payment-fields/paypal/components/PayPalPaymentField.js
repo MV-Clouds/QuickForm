@@ -77,7 +77,7 @@ export const paypalFieldDefaultConfig = {
  * PayPal Payment Field Component
  * Draggable component for the payments tab in the form builder sidebar
  */
-const PayPalPaymentField = ({ onDragStart, onDragEnd, fields = [], isEditable }) => {
+const PayPalPaymentField = ({ onDragStart, onDragEnd, fields = [] }) => {
   const fieldType = "paypal_payment";
   const label = "PayPal Payment";
 
@@ -154,35 +154,35 @@ const PayPalPaymentField = ({ onDragStart, onDragEnd, fields = [], isEditable })
 
   return (
     <div
-      draggable={isEditable && !hasPaymentField}
-      onDragStart={isEditable ? handleDragStart : undefined}
-      onDragEnd={isEditable ? handleDragEnd : undefined}
-      className={`field-item flex items-center justify-between p-2 border rounded-lg transition-all duration-150 group ${hasPaymentField || !isEditable
+      draggable={!hasPaymentField}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      className={`field-item flex items-center justify-between p-2 border rounded-lg transition-all duration-150 group ${
+        hasPaymentField
           ? "border-gray-300 bg-gray-100 cursor-not-allowed opacity-60"
           : "border-gray-200 hover:bg-blue-50 cursor-grab active:cursor-grabbing"
-        }`}
+      }`}
       title={
-        !isEditable
-          ? "Editing is disabled"
-          : hasPaymentField
-            ? "Only one payment field is allowed per form"
-            : "Drag to add PayPal payment field to your form"
+        hasPaymentField
+          ? "Only one payment field is allowed per form"
+          : "Drag to add PayPal payment field to your form"
       }
     >
-
       <div className="flex items-center gap-1">
         <div
           className="w-8 h-8 rounded flex items-center justify-center"
           style={{ backgroundColor: "rgba(240, 240, 240, 1)" }}
         >
           <PayPalIcon
-            className={`w-5 h-5 ${hasPaymentField ? "text-gray-400" : "text-blue-600"
-              }`}
+            className={`w-5 h-5 ${
+              hasPaymentField ? "text-gray-400" : "text-blue-600"
+            }`}
           />
         </div>
         <span
-          className={`text-sm font-medium ${hasPaymentField ? "text-gray-400" : "text-gray-700"
-            }`}
+          className={`text-sm font-medium ${
+            hasPaymentField ? "text-gray-400" : "text-gray-700"
+          }`}
         >
           {label}
           {hasPaymentField && (

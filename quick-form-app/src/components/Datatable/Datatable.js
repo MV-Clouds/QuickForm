@@ -320,7 +320,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, han
                       style={{ border: '1px solid #0B295E' }}
                       onClick={() => handleViewForm(item.id)}
                     >
-                      View Form
+                      Edit Form
                     </motion.button>
                   </div>
                 </div>
@@ -421,6 +421,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, han
           </Select>
         </div>
         {/* Custom Pagination UI */}
+        {filteredData.length > pageSize && (
         <div className="flex items-center gap-2 select-none">
           {/* Left Arrow */}
           <motion.button
@@ -509,7 +510,7 @@ const DataTable = ({ forms, columns, data, handleCreateForm, handleEditForm, han
               <path d="M7.88976 6.35993C7.9601 6.28967 7.99967 6.19435 7.99976 6.09493V5.90493C7.9986 5.80572 7.9592 5.71079 7.88976 5.63993L5.31976 3.07493C5.27281 3.0276 5.20892 3.00098 5.14226 3.00098C5.0756 3.00098 5.0117 3.0276 4.96476 3.07493L4.60976 3.42993C4.56272 3.47601 4.53622 3.53908 4.53622 3.60493C4.53622 3.67077 4.56272 3.73384 4.60976 3.77993L6.83476 5.99993L4.60976 8.21993C4.56243 8.26687 4.53581 8.33077 4.53581 8.39743C4.53581 8.46409 4.56243 8.52798 4.60976 8.57493L4.96476 8.92493C5.0117 8.97225 5.0756 8.99888 5.14226 8.99888C5.20892 8.99888 5.27281 8.97225 5.31976 8.92493L7.88976 6.35993Z" fill="#5F6165" />
             </svg>
           </motion.button>
-        </div>
+        </div>)}
       </div>
     </div>
   );

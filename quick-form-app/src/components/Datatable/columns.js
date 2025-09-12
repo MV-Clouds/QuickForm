@@ -4,7 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import Loader from '../Loader'
 const StatusCell = ({ row }) => {
-  const [localStatus, setLocalStatus] = useState(row.getValue("status"));
+   // compute a stable normalized status value from the row
+   const rawStatus = row.getValue?.('status') ?? row.original?.status ?? 'Inactive';
+   const normalizedStatus = typeof rawStatus === 'string' ? rawStatus.trim() : rawStatus;
+  const [localStatus, setLocalStatus] = useState(normalizedStatus);
   const [loading, setLoading] = useState(false);
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
@@ -21,7 +24,11 @@ const StatusCell = ({ row }) => {
       return null;
     }
   };
-
+  useEffect(() => {
+    if (!loading) {
+      setLocalStatus(normalizedStatus);
+    }
+  }, [normalizedStatus, loading]);
   const handleStatusChange = async (formId) => {
     if (loading) return;
     const prevStatus = localStatus;
@@ -99,16 +106,23 @@ const StatusCell = ({ row }) => {
 export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavoriteForm, handleCloneForm }) => [
   {
     header: 'Sr. No.',
-    cell: ({ row }) => {
-      const formId = row.original.id;
-      const srNo = forms.findIndex((f) => f.Id === formId) + 1;
-      return <div className="text-center">{srNo}</div>;
+    cell: ({ row , table }) => {
+      const pageIndex = table.getState().pagination.pageIndex;
+    const pageSize = table.getState().pagination.pageSize;
+
+    // Use the actual rowModel length instead of manual slice
+    const rowIndex = table.getRowModel().rows.findIndex(r => r.id === row.id);
+
+    const srNo = pageIndex * pageSize + (rowIndex + 1);
+    return <div className="text-center">{srNo}</div>;
     },
     enableSorting: false,
     enableHiding: false,
   },
   {
     accessorKey: 'formName',
+    enableSorting: true,
+    sortingFn: 'alphanumeric',
     header: ({ column }) => (
       <button
         className="flex items-center mx-auto text-gray-700 hover:text-indigo-600 justify-center w-full"
@@ -116,6 +130,7 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
       >
         TITLE
+        <ArrowUpDown className="ml-2 h-4 w-4" />
       </button>
     ),
     cell: ({ row }) => {
@@ -150,6 +165,13 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
   },
   {
     accessorKey: 'submissionCount',
+    enableSorting: true,
+    // Ensure numeric sort even if values come as strings/null
+    sortingFn: (rowA, rowB, columnId) => {
+      const a = Number(rowA.getValue(columnId) ?? 0);
+      const b = Number(rowB.getValue(columnId) ?? 0);
+      return a === b ? 0 : a > b ? 1 : -1;
+    },
     header: ({ column }) => {
       return(<button
         className="flex items-center mx-auto  text-gray-700 hover:text-indigo-600"
@@ -163,15 +185,27 @@ export const Columns = ({ forms, handleEditForm, handleDeleteForm , handleFavori
   },
   {
     accessorKey: 'lastmodDate',
-    header: 'Modified Date',
+    enableSorting: true,
+    sortingFn: (rowA, rowB, columnId) => {
+      const a = new Date(rowA.getValue(columnId));
+      const b = new Date(rowB.getValue(columnId));
+      return a - b;
+    },
+    header: ({ column }) => (
+      <button
+        className="flex items-center mx-auto text-gray-700 hover:text-indigo-600"
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      >
+        MODIFIED DATE
+        <ArrowUpDown className="ml-2 h-4 w-4" />
+      </button>
+    ),
     cell: ({ row }) => {
-      const lastmodData = row.getValue('lastmodDate')
+      const lastmodData = row.getValue('lastmodDate');
       return (
         <div className="text-center">
-          <span
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold `}
-          >
-            {lastmodData}
+          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold">
+            {lastmodData || 'N/A'}
           </span>
         </div>
       );

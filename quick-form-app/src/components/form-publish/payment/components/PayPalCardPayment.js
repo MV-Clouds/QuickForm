@@ -6,7 +6,13 @@ import {
 } from "@paypal/react-paypal-js";
 
 // Submit button component that uses the card fields
-const SubmitCardPayment = ({ onError, disabled, isPaying, setIsPaying }) => {
+const SubmitCardPayment = ({
+  onError,
+  disabled,
+  isPaying,
+  setIsPaying,
+  setValidationError,
+}) => {
   const { cardFieldsForm } = usePayPalCardFields();
 
   const handleClick = async () => {
@@ -21,9 +27,13 @@ const SubmitCardPayment = ({ onError, disabled, isPaying, setIsPaying }) => {
       const formState = await cardFieldsForm.getState();
 
       if (!formState.isFormValid) {
-        onError(
-          new Error("The payment form is invalid. Please check all fields.")
+        const err = new Error(
+          "The payment form is invalid. Please check all fields."
         );
+        setValidationError?.(
+          "The card payment form is invalid. Please complete all required fields."
+        );
+        onError(err);
         return;
       }
 
@@ -69,8 +79,9 @@ const PayPalCardPayment = ({
   disabled = false,
 }) => {
   const [isPaying, setIsPaying] = useState(false);
-  // Expose a validator function (set by a child inside the Provider)
-  const validateCardFieldsRef = useRef(async () => true);
+  const [validationError, setValidationError] = useState("");
+  // Expose a validator function (set by a child inside the Provider). Be conservative by default.
+  const validateCardFieldsRef = useRef(async () => false);
 
   // Use the same createOrder function as the main PayPal buttons
   const createOrder = async (data, actions) => {
@@ -87,6 +98,9 @@ const PayPalCardPayment = ({
             "The payment form is invalid. Please check all fields."
           );
           console.warn("💳 Blocking createOrder due to invalid card fields");
+          setValidationError(
+            "The card payment form is invalid. Please complete all required fields."
+          );
           onError?.(err);
           throw err; // Ensure SDK halts
         }
@@ -94,11 +108,17 @@ const PayPalCardPayment = ({
         // If validator isn't ready or throws, block to be safe
         const err =
           e instanceof Error ? e : new Error("Unable to validate card fields");
+        setValidationError(
+          "Unable to validate card fields at this time. Please check the inputs and try again."
+        );
         onError?.(err);
         throw err;
       }
 
       console.log("💳 Creating order for card payment using shared handler");
+      setValidationError("");
+      console.log("💳 createOrder data:", data);
+      console.log("💳 createOrder actions:", actions);
       return await createOrderHandler(data, actions);
     } catch (error) {
       console.error("💳 Create order error:", error);
@@ -132,6 +152,7 @@ const PayPalCardPayment = ({
         : new Error(error?.message || error?.toString() || "Card fields error");
     console.error("💳 PayPal card fields error:", err);
     setIsPaying(false);
+    setValidationError(err.message || "Card fields error");
     onError(err);
   };
 
@@ -146,6 +167,12 @@ const PayPalCardPayment = ({
         Secure card payment powered by PayPal. Your card information is
         encrypted and never stored.
       </p>
+
+      {validationError && (
+        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          {validationError}
+        </div>
+      )}
 
       <PayPalCardFieldsProvider
         createOrder={createOrder}

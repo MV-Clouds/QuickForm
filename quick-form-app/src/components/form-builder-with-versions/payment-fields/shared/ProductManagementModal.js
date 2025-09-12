@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import ReactDOM from "react-dom";
 import {
   FaTimes,
   FaPlus,
@@ -23,7 +24,7 @@ const ProductManagementModal = ({
   selectedMerchantId,
 }) => {
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -41,18 +42,46 @@ const ProductManagementModal = ({
     category: "",
   });
 
-  // Get products from field data
+  // Get products from field data (support both legacy subFields.products and subFields.formItems)
+  const loadProducts = useCallback(() => {
+    const subFields = selectedField?.subFields || {};
+    const directProducts = Array.isArray(subFields.products)
+      ? subFields.products
+      : [];
+
+    // Fallback to formItems where type === 'product' and use the entry key as a stable id
+    const formItems = subFields.formItems || {};
+    const itemsProducts = Object.entries(formItems)
+      .filter(([, it]) => it && it.type === "product")
+      .map(([key, it]) => ({
+        id: it.id || key,
+        name: it.name || it.title || "",
+        description: it.description || "",
+        price:
+          typeof it.price === "number" ? it.price : parseFloat(it.price || 0),
+        currency: it.currency || "USD",
+        status: it.status || "enabled",
+        sku: it.sku || "",
+        category: it.category || "",
+        createdAt: it.createdAt,
+        updatedAt: it.updatedAt,
+      }));
+
+    // Prefer explicit products array; otherwise use itemsProducts
+    const merged = directProducts?.length ? directProducts : itemsProducts;
+    setProducts(merged);
+    console.log("📦 Loaded products:", {
+      directProducts,
+      itemsProducts,
+      used: merged,
+    });
+  }, [selectedField]);
+
   useEffect(() => {
     if (isOpen && selectedField) {
       loadProducts();
     }
-  }, [isOpen, selectedField]);
-
-  const loadProducts = () => {
-    const fieldProducts = selectedField?.subFields?.products || [];
-    setProducts(fieldProducts);
-    console.log("📦 Loaded products:", fieldProducts);
-  };
+  }, [isOpen, selectedField, loadProducts]);
 
   const resetForm = () => {
     setForm({
@@ -152,9 +181,46 @@ const ProductManagementModal = ({
     setProducts(updatedProducts);
 
     // Update the field data
+    const prevSubFields = selectedField.subFields || {};
+
+    // Keep subFields.formItems in sync for compatibility with other parts of the app
+    const prevFormItems = prevSubFields.formItems || {};
+    const nextFormItems = { ...prevFormItems };
+
+    // Build a set of current product IDs for quick lookup
+    const currentIds = new Set(updatedProducts.map((p) => p.id));
+
+    // Remove any product entries that no longer exist (match by id)
+    Object.entries(nextFormItems).forEach(([key, item]) => {
+      if (item && item.type === "product") {
+        const id = item.id || key;
+        if (!currentIds.has(id)) {
+          delete nextFormItems[key];
+        }
+      }
+    });
+
+    // Add/update all current products into formItems
+    updatedProducts.forEach((p) => {
+      nextFormItems[p.id] = {
+        id: p.id,
+        type: "product",
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        currency: p.currency || "USD",
+        status: p.status || "enabled",
+        sku: p.sku || "",
+        category: p.category || "",
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      };
+    });
+
     const updatedSubFields = {
-      ...selectedField.subFields,
+      ...prevSubFields,
       products: updatedProducts,
+      formItems: nextFormItems,
     };
 
     onUpdateField(selectedField.id, { subFields: updatedSubFields });
@@ -167,9 +233,9 @@ const ProductManagementModal = ({
 
   if (!isOpen) return null;
 
-  return (
+  const modalUi = (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
@@ -448,6 +514,9 @@ const ProductManagementModal = ({
       </div>
     </div>
   );
+
+  // Render via portal so it overlays the entire app (not constrained by side panels)
+  return ReactDOM.createPortal(modalUi, document.body);
 };
 
 export default ProductManagementModal;

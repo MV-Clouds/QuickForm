@@ -23,7 +23,6 @@ const MerchantAccountSelector = ({
   className = "",
   userId = null, // Optional: can be passed from parent component
   formId = null, // Optional: can be passed from parent component
-  isEditable = true
 }) => {
   // State management following Main1.js patterns
   const [accounts, setAccounts] = useState([]);
@@ -242,7 +241,6 @@ const MerchantAccountSelector = ({
           </label>
           <button
             type="button"
-            disabled={!isEditable}
             onClick={() => setShowOnboardingModal(true)}
             className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
             title="Add new PayPal merchant account"
@@ -291,7 +289,6 @@ const MerchantAccountSelector = ({
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
-                    disabled={!isEditable}
                     onClick={onAddNewAccount}
                     className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
                   >
@@ -317,7 +314,7 @@ const MerchantAccountSelector = ({
             value={selectedMerchantId || ""}
             onChange={(e) => handleMerchantChange(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-            disabled={disabled || accounts?.length === 0 || !isEditable}
+            disabled={disabled || accounts?.length === 0}
           >
             <option value="">Select a merchant account</option>
             {accounts.map((acc) => (
@@ -426,7 +423,6 @@ const MerchantAccountSelector = ({
           fetchOnboardedAccount(); // Refresh accounts list
         }}
         provider="paypal"
-        isEditable = {isEditable}
       />
 
       {/* Help Text */}
