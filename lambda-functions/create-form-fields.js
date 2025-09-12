@@ -7,17 +7,9 @@ export const handler = async (event) => {
   try {
     // Extract data from the Lambda event
     const body = JSON.parse(event.body || '{}');
-    const { userId, instanceUrl, formData, formUpdate  } = body;
-    const token = event.headers.Authorization?.split(' ')[1]; // Extract Bearer token
-
-    // Validate required parameters
-    if (!userId || !instanceUrl || !formData || !token) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ error: 'Missing required parameters: userId, instanceUrl, formData, or Authorization token' }),
-      };
-    }
+    const { userId, instanceUrl, formData, formUpdate } = body;
+    let token = event.headers.Authorization?.split(' ')[1]; // Extract Bearer token
+    let tokenRefreshed = false;
 
     const cleanedInstanceUrl = instanceUrl.replace(/https?:\/\//, '');
     const salesforceBaseUrl = `https://${cleanedInstanceUrl}/services/data/v60.0`;
@@ -25,6 +17,26 @@ export const handler = async (event) => {
     let formVersionId;
     let formId; // To store Form__c ID
     const { Id, Form__c, ...formVersion } = formData.formVersion;
+
+    const fetchNewAccessToken = async (userId) => {
+      const response = await fetch('https://76vlfwtmig.execute-api.us-east-1.amazonaws.com/getAccessToken/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch new access token');
+      const data = await response.json();
+      return data.access_token;
+    };
+    
+    // Validate required parameters
+    if (!userId || !instanceUrl || !formData ||  (!formVersion.Name && !formVersion.Description__c) || !token) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ error: 'Missing required parameters: userId, instanceUrl, formData, or Authorization token' }),
+      };
+    }
 
     let allItems = [];
     let ExclusiveStartKey = undefined;
@@ -69,29 +81,17 @@ export const handler = async (event) => {
             const aNum = parseInt(a.ChunkIndex.S.split('_')[1]);
             const bNum = parseInt(b.ChunkIndex.S.split('_')[1]);
             return aNum - bNum;
-          })
-          .map(item => {
-            // Clean the string by removing any non-printable characters
-            let cleanStr = item.FormRecords.S.replace(/[^\x20-\x7E]/g, '');
-            // Ensure the string is properly formatted JSON
-            if (!cleanStr.startsWith('[') && !cleanStr.startsWith('{')) {
-              // Try to find the actual JSON start
-              const jsonStart = cleanStr.search(/[{\[]/);
-              if (jsonStart !== -1) {
-                cleanStr = cleanStr.substring(jsonStart);
-              }
-            }
-            return cleanStr;
           });
-        
-        // Verify the combined string is valid JSON
-        const combinedFormRecords = sortedChunks.join('');
-        if (combinedFormRecords.trim() === '') {
-          console.warn('Empty FormRecords data');
-          formRecords = [];
-        } else {
-          formRecords = JSON.parse(combinedFormRecords);
+        const expectedChunks = sortedChunks.length;
+        for (let i = 0; i < expectedChunks; i++) {
+          if (!sortedChunks.some(item => item.ChunkIndex.S === `FormRecords_${i}`)) {
+            console.warn(`Missing chunk FormRecords_${i}`);
+            formRecords = [];
+            break;
+          }
         }
+        const combinedFormRecords = sortedChunks.map(item => item.FormRecords.S).join('');
+        formRecords = JSON.parse(combinedFormRecords);
       } catch (e) {
         console.error('Failed to parse FormRecords chunks:', e);
         console.error('Raw chunk data:', formRecordItems.map(item => item.FormRecords.S));
@@ -121,11 +121,11 @@ export const handler = async (event) => {
     } else if (formVersion.Version__c !== '1') {
       // For new versions (e.g., 2, 3), find the previous version's Form__c from DynamoDB
       const previousVersion = (parseInt(formVersion.Version__c) - 1).toString();
-      
+
       let version = null;
       for (const form of formRecords) {
         version = form.FormVersions.find(
-          v => v.Name === formVersion.Name && v.Version__c === previousVersion
+          v => v.Name === formVersion.Name && v.Version__c === previousVersion && v.FormId === Form__c
         );
         if (version) {
           formId = version.FormId;
@@ -138,7 +138,7 @@ export const handler = async (event) => {
       }
     } else {
       // For version 1, create a new Form__c
-      const formResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c`, {
+      let formResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -151,8 +151,25 @@ export const handler = async (event) => {
       });
 
       if (!formResponse.ok) {
-        const errorData = await formResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to create Form__c record');
+        if (formResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          formResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              Active_Version__c: `None`,
+              Status__c: 'Inactive',
+            }),
+          });
+        }
+        if (!formResponse.ok) {
+          const errorData = await formResponse.json();
+          throw new Error(errorData[0]?.message || 'Failed to create Form__c record');
+        }
       }
 
       const formDataResponse = await formResponse.json();
@@ -162,18 +179,49 @@ export const handler = async (event) => {
 
     // Step 2: Handle Form_Version__c record
     if (Id) {
-      const formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${Id}`, {
+      let formVersionPayload;
+      // Only send Name/Description__c if those are present & ONLY those are present
+      if (
+        Object.keys(formVersion).every(
+          k => ["Name", "Description__c"].includes(k)
+        )
+      ) {
+        formVersionPayload = {};
+        if (formVersion.Name) formVersionPayload.Name = formVersion.Name;
+        if (formVersion.Description__c)
+          formVersionPayload.Description__c = formVersion.Description__c;
+        formVersionPayload.Form__c = formId;
+      } else {
+        // All form fields update
+        formVersionPayload = { ...formVersion, Form__c: formId };
+      }
+
+      let formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${Id}`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...formVersion, Form__c: formId }),
+        body: JSON.stringify(formVersionPayload),
       });
 
       if (!formVersionResponse.ok) {
-        const errorData = await formVersionResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to update Form_Version__c record');
+        if (formVersionResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c/${Id}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formVersionPayload),
+          });
+        }
+        if (!formVersionResponse.ok) {
+          const errorData = await formVersionResponse.json();
+          throw new Error(errorData[0]?.message || 'Failed to update Form_Version__c record');
+        }
       }
 
       formVersionId = Id;
@@ -182,7 +230,7 @@ export const handler = async (event) => {
       if (formVersion.Stage__c === 'Publish') {
         const otherVersionsQuery = `SELECT Id, Stage__c FROM Form_Version__c WHERE Form__c = '${formId}' AND Id != '${formVersionId}' AND Stage__c = 'Publish'`;
         const otherVersionsUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(otherVersionsQuery)}`;
-        const otherVersionsRes = await fetch(otherVersionsUrl, {
+        let otherVersionsRes = await fetch(otherVersionsUrl, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -191,8 +239,21 @@ export const handler = async (event) => {
         });
 
         if (!otherVersionsRes.ok) {
-          const errorData = await otherVersionsRes.json();
-          throw new Error(errorData[0]?.message || 'Failed to query other Form_Version__c records');
+          if (otherVersionsRes.status === 401 && !tokenRefreshed) {
+            token = await fetchNewAccessToken(userId);
+            tokenRefreshed = true;
+            otherVersionsRes = await fetch(otherVersionsUrl, {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+          }
+          if (!otherVersionsRes.ok) {
+            const errorData = await otherVersionsRes.json();
+            throw new Error(errorData[0]?.message || 'Failed to query other Form_Version__c records');
+          }
         }
 
         const otherVersionsData = await otherVersionsRes.json();
@@ -205,8 +266,8 @@ export const handler = async (event) => {
               Stage__c: 'Locked',
             })),
           };
-        
-          const compositeResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+
+          let compositeResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
             method: 'PATCH',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -214,14 +275,28 @@ export const handler = async (event) => {
             },
             body: JSON.stringify(compositeRequest),
           });
-        
+
           if (!compositeResponse.ok) {
-            const errorData = await compositeResponse.json();
-            throw new Error(errorData[0]?.message || 'Failed to update other Form_Version__c records');
+            if (compositeResponse.status === 401 && !tokenRefreshed) {
+              token = await fetchNewAccessToken(userId);
+              tokenRefreshed = true;
+              compositeResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+                method: 'PATCH',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(compositeRequest),
+              });
+            }
+            if (!compositeResponse.ok) {
+              const errorData = await compositeResponse.json();
+              throw new Error(errorData[0]?.message || 'Failed to update other Form_Version__c records');
+            }
           }
         }
 
-        const updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
+        let updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
           method: 'PATCH',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -233,17 +308,36 @@ export const handler = async (event) => {
             Status__c: 'Active',
           }),
         });
-      
+
         if (!updateFormResponse.ok) {
-          const errorData = await updateFormResponse.json();
-          throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
+          if (updateFormResponse.status === 401 && !tokenRefreshed) {
+            token = await fetchNewAccessToken(userId);
+            tokenRefreshed = true;
+            updateFormResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form__c/${formId}`, {
+              method: 'PATCH',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                Active_Version__c: `V${formVersion.Version__c}`,
+                Publish_Link__c: formUpdate?.Publish_Link__c || '',
+                Status__c: 'Active',
+              }),
+            });
+          }
+          if (!updateFormResponse.ok) {
+            const errorData = await updateFormResponse.json();
+            throw new Error(errorData[0]?.message || 'Failed to update Form__c Active_Version__c');
+          }
         }
       }
     } else {
       // Enforce only one Draft per Form__c
       const draftQuery = `SELECT Id FROM Form_Version__c WHERE Form__c = '${formId}' AND Stage__c = 'Draft'`;
+
       const draftQueryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(draftQuery)}`;
-      const draftQueryRes = await fetch(draftQueryUrl, {
+      let draftQueryRes = await fetch(draftQueryUrl, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -252,17 +346,31 @@ export const handler = async (event) => {
       });
 
       if (!draftQueryRes.ok) {
-        const errorData = await draftQueryRes.json();
-        throw new Error(errorData[0]?.message || 'Failed to query Draft Form_Version__c');
+        if (draftQueryRes.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          draftQueryRes = await fetch(draftQueryUrl, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+        }
+        if (!draftQueryRes.ok) {
+          const errorData = await draftQueryRes.json();
+          throw new Error(errorData[0]?.message || 'Failed to query Draft Form_Version__c');
+        }
       }
 
       const draftData = await draftQueryRes.json();
+
       if (draftData.records?.length > 0) {
         throw new Error('A Draft version already exists for this Form__c');
       }
 
       // Create new Form_Version__c record
-      const formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c`, {
+      let formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -272,8 +380,22 @@ export const handler = async (event) => {
       });
 
       if (!formVersionResponse.ok) {
-        const errorData = await formVersionResponse.json();
-        throw new Error(errorData[0]?.message || 'Failed to create Form_Version__c record');
+        if (formVersionResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          formVersionResponse = await fetch(`${salesforceBaseUrl}/sobjects/Form_Version__c`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ...formVersion, Form__c: formId }),
+          });
+        }
+        if (!formVersionResponse.ok) {
+          const errorData = await formVersionResponse.json();
+          throw new Error(errorData[0]?.message || 'Failed to create Form_Version__c record');
+        }
       }
 
       const formVersionData = await formVersionResponse.json();
@@ -284,7 +406,7 @@ export const handler = async (event) => {
     // Step 1: Query existing fields for this version
     const query = `SELECT Id, Unique_Key__c, Name, Field_Type__c, Properties__c, Page_Number__c, Order_Number__c FROM Form_Field__c WHERE Form_Version__c = '${formVersionId}'`;
     const queryUrl = `${salesforceBaseUrl}/query?q=${encodeURIComponent(query)}`;
-    const queryResponse = await fetch(queryUrl, {
+    let queryResponse = await fetch(queryUrl, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -293,8 +415,21 @@ export const handler = async (event) => {
     });
 
     if (!queryResponse.ok) {
-      const errorData = await queryResponse.json();
-      throw new Error(errorData[0]?.message || 'Failed to query Form_Field__c records');
+      if (queryResponse.status === 401 && !tokenRefreshed) {
+        token = await fetchNewAccessToken(userId);
+        tokenRefreshed = true;
+        queryResponse = await fetch(queryUrl, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+      if (!queryResponse.ok) {
+        const errorData = await queryResponse.json();
+        throw new Error(errorData[0]?.message || 'Failed to query Form_Field__c records');
+      }
     }
 
     const queryData = await queryResponse.json();
@@ -327,10 +462,10 @@ export const handler = async (event) => {
         existing.Order_Number__c !== f.Order_Number__c
       );
     })
-    .map(f => ({
-      ...f,
-      Id: existingFieldsMap[f.Unique_Key__c]?.Id, // add the existing Salesforce record ID here
-    }));;
+      .map(f => ({
+        ...f,
+        Id: existingFieldsMap[f.Unique_Key__c]?.Id, // add the existing Salesforce record ID here
+      }));;
 
 
     // Determine fields to create
@@ -343,7 +478,7 @@ export const handler = async (event) => {
       const batchFields = toDelete.slice(i, i + batchSize);
       const ids = batchFields.map(f => f.Id).join(',');
 
-      const deleteResponse = await fetch(
+      let deleteResponse = await fetch(
         `${salesforceBaseUrl}/composite/sobjects?ids=${encodeURIComponent(ids)}&allOrNone=true`,
         {
           method: 'DELETE',
@@ -352,8 +487,21 @@ export const handler = async (event) => {
       );
 
       if (!deleteResponse.ok) {
-        const err = await deleteResponse.json();
-        throw new Error(err[0]?.message || 'Failed to batch delete form fields');
+        if (deleteResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          deleteResponse = await fetch(
+            `${salesforceBaseUrl}/composite/sobjects?ids=${encodeURIComponent(ids)}&allOrNone=true`,
+            {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+        }
+        if (!deleteResponse.ok) {
+          const err = await deleteResponse.json();
+          throw new Error(err[0]?.message || 'Failed to batch delete form fields');
+        }
       }
     }
 
@@ -385,7 +533,7 @@ export const handler = async (event) => {
         }),
       };
 
-      const updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+      let updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -395,8 +543,22 @@ export const handler = async (event) => {
       });
 
       if (!updateResponse.ok) {
-        const err = await updateResponse.json();
-        throw new Error(err[0]?.message || 'Failed to batch update form fields');
+        if (updateResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(compositeUpdateRequest),
+          });
+        }
+        if (!updateResponse.ok) {
+          const err = await updateResponse.json();
+          throw new Error(err[0]?.message || 'Failed to batch update form fields');
+        }
       }
     }
 
@@ -462,7 +624,7 @@ export const handler = async (event) => {
         }),
       };
 
-      const createResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+      let createResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -472,8 +634,22 @@ export const handler = async (event) => {
       });
 
       if (!createResponse.ok) {
-        const err = await createResponse.json();
-        throw new Error(err[0]?.message || 'Failed to batch create form fields');
+        if (createResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          createResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(compositeCreateRequest),
+          });
+        }
+        if (!createResponse.ok) {
+          const err = await createResponse.json();
+          throw new Error(err[0]?.message || 'Failed to batch create form fields');
+        }
       }
 
       // Capture the created record IDs
@@ -519,7 +695,7 @@ export const handler = async (event) => {
         }),
       };
 
-      const updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+      let updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -529,8 +705,22 @@ export const handler = async (event) => {
       });
 
       if (!updateResponse.ok) {
-        const err = await updateResponse.json();
-        throw new Error(err[0]?.message || 'Failed to batch update form fields');
+        if (updateResponse.status === 401 && !tokenRefreshed) {
+          token = await fetchNewAccessToken(userId);
+          tokenRefreshed = true;
+          updateResponse = await fetch(`${salesforceBaseUrl}/composite/sobjects`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(compositeUpdateRequest),
+          });
+        }
+        if (!updateResponse.ok) {
+          const err = await updateResponse.json();
+          throw new Error(err[0]?.message || 'Failed to batch update form fields');
+        }
       }
     }
 
@@ -542,15 +732,15 @@ export const handler = async (event) => {
         !createdFields.some(cf => cf.Unique_Key__c === f.Unique_Key__c) &&
         !updatedFields.some(uf => uf.Unique_Key__c === f.Unique_Key__c) &&
         !toDelete.some(d => d.Unique_Key__c === f.Unique_Key__c)
-        ).map(f => ({
-          Id: f.Id,
-          Name: f.Name,
-          Field_Type__c: f.Field_Type__c,
-          Page_Number__c: f.Page_Number__c,
-          Order_Number__c: f.Order_Number__c,
-          Properties__c: f.Properties__c,
-          Unique_Key__c: f.Unique_Key__c,
-        })),
+      ).map(f => ({
+        Id: f.Id,
+        Name: f.Name,
+        Field_Type__c: f.Field_Type__c,
+        Page_Number__c: f.Page_Number__c,
+        Order_Number__c: f.Order_Number__c,
+        Properties__c: f.Properties__c,
+        Unique_Key__c: f.Unique_Key__c,
+      })),
     ];
     // // Step 5: Update DynamoDB SalesforceMetadata table
     // const currentTime = new Date().toISOString();
@@ -614,7 +804,7 @@ export const handler = async (event) => {
     if (!Array.isArray(formRecords)) {
       formRecords = [];
     }
-    
+
     let existingConditions = [];
     if (Id) {
       const existingFormVersion = formRecords
@@ -631,7 +821,7 @@ export const handler = async (event) => {
         .find(version => version && version.Id === Id);
       if (existingFormVersion && existingFormVersion.ThankYou) {
         existingThankYou = existingFormVersion.ThankYou || [];
-      } 
+      }
     }
     let existingPrefill = [];
     if (Id) {
@@ -640,7 +830,17 @@ export const handler = async (event) => {
         .find(version => version && version.Id === Id);
       if (existingFormVersion && existingFormVersion.Prefills) {
         existingPrefill = existingFormVersion.Prefills || [];
-      } 
+      }
+    }
+
+    let existingMapping = [];
+    if (Id) {
+      const existingFormVersion = formRecords
+        .flatMap(form => form.FormVersions || [])
+        .find(version => version && version.Id === Id);
+      if (existingFormVersion && existingFormVersion.Mappings) {
+        existingMapping = existingFormVersion.Mappings || [];
+      }
     }
 
     // Construct new or updated form version record
@@ -655,8 +855,9 @@ export const handler = async (event) => {
       Object_Info__c: formData.formVersion.Object_Info__c || [],
       Fields: allFields, // Use the combined fields with IDs
       Conditions: existingConditions,
-      ThankYou : existingThankYou,
-      Prefills : existingPrefill,
+      ThankYou: existingThankYou,
+      Prefills: existingPrefill,
+      Mappings: existingMapping,
       Source: 'Form_Version__c',
     };
 
@@ -703,30 +904,51 @@ export const handler = async (event) => {
         Source: 'Form__c',
       });
     }
-
     const formRecordsString = JSON.stringify(updatedFormRecords);
     const CHUNK_SIZE = 370000;
     const chunks = [];
     for (let i = 0; i < formRecordsString.length; i += CHUNK_SIZE) {
       chunks.push(formRecordsString.slice(i, i + CHUNK_SIZE));
     }
+    const oldIndexes = formRecordItems.map(i => i.ChunkIndex.S);
+    const newIndexes = chunks.map((_, idx) => `FormRecords_${idx}`);
 
-    const writeRequests = [
-      {
-        PutRequest: {
-          Item: {
-            UserId: { S: userId },
-            ChunkIndex: { S: 'Metadata' },
-            InstanceUrl: { S: cleanedInstanceUrl },
-            Metadata: { S: JSON.stringify(existingMetadata) },
-            UserProfile: { S: metadataItem.UserProfile?.S },
-            Folders : { S: metadataItem.Folders?.S || "{}" },
-            Fieldset : { S: metadataItem.Fieldset?.S || "{}" },
-            CreatedAt: { S: createdAt },
-            UpdatedAt: { S: currentTime },
+    const toDeleteChunk = oldIndexes.filter(i => !newIndexes.includes(i));
+    for (const index of toDeleteChunk) {
+      await dynamoClient.send(
+        new BatchWriteItemCommand({
+          RequestItems: {
+            [METADATA_TABLE_NAME]: [
+              {
+                DeleteRequest: {
+                  Key: {
+                    UserId: { S: userId },
+                    ChunkIndex: { S: index },
+                  },
+                },
+              },
+            ],
           },
-        },  
-      },
+        })
+      );
+    }
+    const writeRequests = [
+      // {
+      //   PutRequest: {
+      //     Item: {
+      //       UserId: { S: userId },
+      //       ChunkIndex: { S: 'Metadata' },
+      //       InstanceUrl: { S: cleanedInstanceUrl },
+      //       Metadata: { S: JSON.stringify(existingMetadata) },
+      //       UserProfile: { S: metadataItem.UserProfile?.S },
+      //       Folders : { S: metadataItem.Folders?.S || "[]" },
+      //       Fieldset : { S: metadataItem.Fieldset?.S || "[]" },
+      //       GoogleData : { S: metadataItem.GoogleData?.S || "[]" },
+      //       CreatedAt: { S: createdAt },
+      //       UpdatedAt: { S: currentTime },
+      //     },
+      //   },  
+      // },
       ...chunks.map((chunk, index) => ({
         PutRequest: {
           Item: {
@@ -739,7 +961,7 @@ export const handler = async (event) => {
         },
       })),
     ];
-    
+
     await dynamoClient.send(
       new BatchWriteItemCommand({
         RequestItems: {
@@ -747,13 +969,31 @@ export const handler = async (event) => {
         },
       })
     );
-    
+
+    const fieldRecordIdsMapping = {};
+    allFields.forEach(field => {
+      if (field.Unique_Key__c && field.Id) {
+        fieldRecordIdsMapping[field.Unique_Key__c] = field.Id;
+      }
+    });
+
+    console.log('fieldRecordIdsMapping==> ', fieldRecordIdsMapping);
+
+
+    if (tokenRefreshed) {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId, newAccessToken: token, fieldRecordIds: fieldRecordIdsMapping }),
+      };
+    }
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId }),
+      body: JSON.stringify({ success: true, message: 'Form saved successfully', formVersionId, fieldRecordIds: fieldRecordIdsMapping }),
     };
   } catch (error) {
+
     return {
       statusCode: error.response?.status || 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
