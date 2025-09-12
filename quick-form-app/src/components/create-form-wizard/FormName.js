@@ -1225,13 +1225,12 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
                 Cancel
               </button>
             </div>
-            <div className={` ${!formName.trim() ? 'next-button' : 'next-button-enabled'}`}>
+            <div className='next-button-enabled'>
               <button
                 onClick={handleFormNameSubmit}
-                disabled={isSaving}
                 className="wizard-btn wizard-btn-primary"
               >
-                {isSaving ? "Creating..." : "Create Form"}
+                Create Form
               </button>
             </div>
           </div>

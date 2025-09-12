@@ -326,6 +326,10 @@ const CreateFormWizard = ({ onClose }) => {
 
   // Handle navigation from Step 1 to Step 2
   const handleNextStep = async () => {
+    if(selectedObjects.length === 0){
+      setError('Select atleast one object');
+      return;
+    }
     setError(''); // Clear any existing error
     if (selectedObjects.length === 0) { // Check if any objects are selected
       setError('Please select at least one object.'); // Set error if no objects selected
@@ -678,11 +682,10 @@ const CreateFormWizard = ({ onClose }) => {
                     Cancel
                   </button>
                 </div>
-                <div className={` ${selectedObjects.length === 0 ? 'next-button' : 'next-button-enabled'}`}>
+                <div className='next-button-enabled'>
                   
                 <button
                   onClick={handleNextStep}
-                  disabled={selectedObjects.length === 0}
                   className="wizard-btn wizard-btn-primary"
                 >
                   Next
