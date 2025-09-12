@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { decrypt } from "../form-builder-with-versions/crypto";
@@ -21,12 +20,13 @@ import {
   parsePhoneNumberFromString,
   getExampleNumber,
 } from "libphonenumber-js";
-import { Select, Tooltip , message} from "antd";
+import { Select, Tooltip, message } from "antd";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import ThankYouPage from "./PublicThankyouPage";
 import { evaluateFormula } from './FormulaEvaluator';
 // import PaymentFieldRenderer from "./PaymentFieldRenderer";
 import PaymentFieldRenderer from "./payment/PaymentFieldRenderer";
+import MultipartUploader from "../file-upload/multiple-file-upload";
 
 const { Option } = Select;
 
@@ -61,12 +61,13 @@ function PublicFormViewer({ runPrefill = false }) {
   const [manualPrefillsState, setManualPrefillsState] = useState({});
   const [thankyouData, setThankyouData] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [notificationData , setNotificationData] = useState([]);
-  const [twilioData , setTwilioData] = useState([]);
+  const [notificationData, setNotificationData] = useState([]);
+  const [twilioData, setTwilioData] = useState([]);
   // Payment-related state
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [hasPaymentField, setHasPaymentField] = useState(false);
+  const [uploadedFileUrls, setUploadedFileUrls] = useState({});
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -1032,6 +1033,21 @@ function PublicFormViewer({ runPrefill = false }) {
     return null; // No error
   };
 
+  const handleFileUploadComplete = (fieldId, urls) => {
+    setUploadedFileUrls(prev => ({
+      ...prev,
+      [fieldId]: urls
+    }));
+
+    // Update form values with the uploaded URL(s)
+    if (urls && urls.length > 0) {
+      setFormValues(prev => ({
+        ...prev,
+        [fieldId]: urls // Store the array of URLs, not just the first one
+      }));
+    }
+  };
+
   // In handleSubmit function
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1057,6 +1073,7 @@ function PublicFormViewer({ runPrefill = false }) {
           }
         }
       });
+
       const submissionData = {};
       const filesToUpload = {};
 
@@ -1175,6 +1192,20 @@ function PublicFormViewer({ runPrefill = false }) {
         );
       }
 
+      // Use the uploaded file URLs
+      Object.keys(uploadedFileUrls).forEach(fieldId => {
+        if (uploadedFileUrls[fieldId] && uploadedFileUrls[fieldId].length > 0) {
+          // For fileupload fields, store the array of URLs
+          const field = formData.Fields.find(f => f.Id === fieldId);
+          if (field && field.Field_Type__c === 'fileupload') {
+            submissionData[fieldId] = uploadedFileUrls[fieldId];
+          } else {
+            // For other field types (imageuploader, signature), use the first URL
+            submissionData[fieldId] = uploadedFileUrls[fieldId][0];
+          }
+        }
+      });
+
       for (const key of Object.keys(filteredFormValues)) {
         const field = formData.Fields.find((f) => f.Id === key);
         const fieldType = field?.Field_Type__c;
@@ -1186,7 +1217,6 @@ function PublicFormViewer({ runPrefill = false }) {
         }
 
         if (['fileupload', 'imageuploader'].includes(fieldType) && filteredFormValues[key] instanceof File) {
-          filesToUpload[key] = filteredFormValues[key];
           submissionData[key] = filteredFormValues[key].name;
         } else if (fieldType === 'signature' && signatures[key]) {
           const signatureBlob = await (await fetch(signatures[key])).blob();
@@ -1224,45 +1254,6 @@ function PublicFormViewer({ runPrefill = false }) {
           continue;
         } else {
           submissionData[key] = filteredFormValues[key];
-        }
-      }
-
-      const uploadToS3 = async (file) => {
-        const reader = new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result.split(',')[1]);
-          r.onerror = reject;
-          r.readAsDataURL(file);
-        });
-
-        const base64String = await reader;
-
-        const apiUrl = `https://gqmyfq34x5.execute-api.us-east-1.amazonaws.com/image?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`;
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          body: base64String,
-          headers: { 'Content-Type': 'application/octet-stream' }
-        });
-
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.message || 'Upload to S3 failed');
-        }
-
-        const data = await response.json();
-        return data.fileUrl;  // S3 URL
-      };
-
-      // Upload all files and assign URLs into submissionData
-      for (const [key, file] of Object.entries(filesToUpload)) {
-        try {
-          const s3Url = await uploadToS3(file);
-          submissionData[key] = s3Url;
-        } catch (uploadErr) {
-          console.error(`Failed to upload ${key}`, uploadErr);
-          setIsSubmitting(false);
-          return;  // stop submission on error or handle as needed
         }
       }
 
@@ -1575,8 +1566,8 @@ function PublicFormViewer({ runPrefill = false }) {
 
   const getFieldUiState = (fieldId, formValues) => {
     let state = { hidden: false, required: undefined, mask: null, disabled: undefined };
-    if(fieldId.includes('_'))
-    fieldId = Object.keys(localIdToSFId).find(key => localIdToSFId[key] === fieldId) || fieldId;
+    if (fieldId.includes('_'))
+      fieldId = Object.keys(localIdToSFId).find(key => localIdToSFId[key] === fieldId) || fieldId;
     formConditions.forEach(c => {
       if (c.type === 'show_hide' && c.thenFields?.includes(fieldId)) {
         if (evaluateCondition(c, formValues)) {
@@ -1618,18 +1609,18 @@ function PublicFormViewer({ runPrefill = false }) {
             const intermediatePageFields = pages[i];
             for (const field of intermediatePageFields) {
               const properties = typeof field.Properties__c === "string" ? JSON.parse(field.Properties__c || "{}") : (field.Properties__c || {});
-              const fieldId =  properties.id || field.Id;
+              const fieldId = properties.id || field.Id;
               // Get UI state from conditions (required/don't require)
               const uiState = getFieldUiState(fieldId, formValues);
               const required = properties.isRequired || uiState.required;
-              
+
               if (required) {
                 // Dynamically don't require
                 const dontRequire = uiState && uiState.required === false && properties.isRequired;
-                
+
                 // Only block if not dynamically set to "don't require"
                 if (!dontRequire && (formValues[fieldId] === undefined || formValues[fieldId] === "" ||
-                    (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
+                  (Array.isArray(formValues[fieldId]) && formValues[fieldId].length === 0))) {
                   blockSkip = true;
                   break;
                 }
@@ -2058,12 +2049,12 @@ function PublicFormViewer({ runPrefill = false }) {
     const fieldId = field.Id || properties.id;
     const fieldType = field.Field_Type__c;
     const fieldLabel = properties.label || field.Name;
-    const isDisabled = 
+    const isDisabled =
       typeof state.disabled === 'boolean'
         ? state.disabled
         : !!properties.isDisabled;
 
-    const isRequired = 
+    const isRequired =
       typeof state.required === 'boolean'
         ? state.required
         : !!properties.isRequired;
@@ -2404,7 +2395,7 @@ function PublicFormViewer({ runPrefill = false }) {
 
       case 'phone':
         if (isHidden) return null;
-        const countryCodeState = getFieldUiState(`${fieldId}_countryCode`,formValues);
+        const countryCodeState = getFieldUiState(`${fieldId}_countryCode`, formValues);
         const countryCode = formValues[`${fieldId}_countryCode`] || properties.subFields?.countryCode?.value || 'US';
         let phoneMask = '(999) 999-9999'; // Default mask for non-country code case
         try {
@@ -2424,7 +2415,7 @@ function PublicFormViewer({ runPrefill = false }) {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-          {properties.subFields?.countryCode?.enabled && !countryCodeState.hidden ? (
+            {properties.subFields?.countryCode?.enabled && !countryCodeState.hidden ? (
               <div className="flex items-center gap-3">
                 <div className="w-1/3">
                   <PhoneInput
@@ -2682,7 +2673,7 @@ function PublicFormViewer({ runPrefill = false }) {
               })}
             </div>
 
-             {/* Selection count and validation messages */}
+            {/* Selection count and validation messages */}
             <div className="mt-1 text-sm text-gray-500">
               Selected: {selectedCount}
               {(minSelection > 0 || maxSelection < Infinity) && ` of ${maxSelection < Infinity ? maxSelection : '∞'}`}
@@ -2739,7 +2730,7 @@ function PublicFormViewer({ runPrefill = false }) {
             <Select
               style={{ width: '100%' }}
               value={formValues[fieldId] || undefined}
-onChange={(val) => {
+              onChange={(val) => {
                 // Validate selection limits for multiple selections
                 if (properties.allowMultipleSelections && Array.isArray(val)) {
                   if (val.length <= properties.maxSelection) {
@@ -2748,9 +2739,9 @@ onChange={(val) => {
                 } else {
                   handleChange(fieldId, val);
                 }
-              }}              onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
+              }} onBlur={() => dependentFields.has(fieldId) && runPrefillForField(fieldId)}
               mode={properties.allowMultipleSelections ? 'multiple' : undefined}
-                            maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
+              maxTagCount={properties.allowMultipleSelections ? properties.maxSelection : undefined}
 
               placeholder={properties.placeholder?.main || 'Select an option'}
               disabled={isDisabled}
@@ -2767,7 +2758,7 @@ onChange={(val) => {
                 {`Select between ${properties.minSelection} and ${properties.maxSelection < Infinity ? properties.maxSelection : 'unlimited'} options`}
               </div>
             )}
-            
+
             {renderError()}
           </div>
         );
@@ -2782,16 +2773,25 @@ onChange={(val) => {
                 <InfoCircleOutlined className="text-gray-400 cursor-pointer" />
               </Tooltip>
             )}
-            <input
-              type="file"
-              {...commonProps}
-              onChange={(e) => handleFileChange(fieldId, e, 'fileupload')}
-              accept={properties.allowedFileTypes || 'image/*,application/pdf,.doc,.docx'}
+            <MultipartUploader
               multiple={properties.multipleFiles}
+              onChange={(urls) => handleFileUploadComplete(fieldId, urls)}
+              onRemove={() => handleFileUploadComplete(fieldId, [])}
             />
-            {filePreviews[fieldId] && (
+            {uploadedFileUrls[fieldId] && uploadedFileUrls[fieldId].length > 0 && (
               <div className="mt-2">
-                <img src={filePreviews[fieldId]} alt="Preview" className="max-h-32" onError={(e) => (e.target.style.display = 'none')} />
+                {uploadedFileUrls[fieldId].map((url, index) => (
+                  <div key={index} className="flex items-center mt-1">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      View uploaded file {index + 1}
+                    </a>
+                  </div>
+                ))}
               </div>
             )}
             {properties.maxFileSize && (
@@ -2803,7 +2803,6 @@ onChange={(val) => {
             {renderError()}
           </div>
         );
-
       case 'imageuploader':
         if (isHidden) return null;
         return (
@@ -2867,9 +2866,9 @@ onChange={(val) => {
 
       case 'fullname':
         if (isHidden) return null;
-        const salutationFieldState = getFieldUiState(`${fieldId}_salutation`,formValues);
-        const firstNameFieldState = getFieldUiState(`${fieldId}_firstName`,formValues);
-        const lastNameFieldState = getFieldUiState(`${fieldId}_lastName`,formValues);
+        const salutationFieldState = getFieldUiState(`${fieldId}_salutation`, formValues);
+        const firstNameFieldState = getFieldUiState(`${fieldId}_firstName`, formValues);
+        const lastNameFieldState = getFieldUiState(`${fieldId}_lastName`, formValues);
         return (
           <div className="mb-4">
             {renderLabel()}
@@ -2879,7 +2878,7 @@ onChange={(val) => {
               </Tooltip>
             )}
             <div className="flex gap-3">
-              {properties.subFields?.salutation?.enabled && !salutationFieldState.hidden &&(
+              {properties.subFields?.salutation?.enabled && !salutationFieldState.hidden && (
                 <Select
                   style={{ width: '33%' }}
                   required={salutationFieldState.required}
@@ -2896,28 +2895,28 @@ onChange={(val) => {
                 />
               )}
               {!firstNameFieldState.hidden && (
-              <input
-                type="text"
-                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                value={formValues[`${fieldId}_firstName`] || ''}
-                onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
-                onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
-                placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
-                disabled={firstNameFieldState.disabled}
-                required={firstNameFieldState.required}
-              />
+                <input
+                  type="text"
+                  className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                  value={formValues[`${fieldId}_firstName`] || ''}
+                  onChange={(e) => handleChange(`${fieldId}_firstName`, e.target.value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_firstName`) && runPrefillForField(`${fieldId}_firstName`)}
+                  placeholder={properties.subFields.firstName?.placeholder || 'First Name'}
+                  disabled={firstNameFieldState.disabled}
+                  required={firstNameFieldState.required}
+                />
               )}
               {!lastNameFieldState.hidden && (
-              <input
-                type="text"
-                className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
-                value={formValues[`${fieldId}_lastName`] || ''}
-                onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
-                onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
-                placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
-                disabled={lastNameFieldState.disabled}
-                required={lastNameFieldState.required}
-              />
+                <input
+                  type="text"
+                  className={`w-full p-2 border rounded ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+                  value={formValues[`${fieldId}_lastName`] || ''}
+                  onChange={(e) => handleChange(`${fieldId}_lastName`, e.target.value)}
+                  onBlur={() => dependentFields.has(`${fieldId}_lastName`) && runPrefillForField(`${fieldId}_lastName`)}
+                  placeholder={properties.subFields.lastName?.placeholder || 'Last Name'}
+                  disabled={lastNameFieldState.disabled}
+                  required={lastNameFieldState.required}
+                />
               )}
             </div>
             {renderError()}

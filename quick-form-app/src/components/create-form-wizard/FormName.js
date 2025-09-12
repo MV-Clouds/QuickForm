@@ -1,8 +1,580 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './FormName.css'
 import { motion, AnimatePresence } from 'framer-motion';
 import Loader from '../Loader';
+import { Select, Button, Input, Space } from 'antd';
+import ReCAPTCHA from "react-google-recaptcha";
+
+const { Option } = Select;
+
+
+// 1. Canvas Random Text CAPTCHA, dynamic and verify
+const CanvasTextCaptcha = ({ onVerify, onGenerate }) => {
+  const canvasRef = useRef(null);
+  const [captchaText, setCaptchaText] = useState("");
+
+  const generateCaptcha = () => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const width = 150;
+    const height = 60;
+    canvas.width = width;
+    canvas.height = height;
+
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let text = "";
+    for (let i = 0; i < 6; i++) {
+      text += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCaptchaText(text);
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Make background gradient noise
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    grad.addColorStop(0, "#f0f0f0");
+    grad.addColorStop(1, "#dcdcdc");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    for (let i = 0; i < 250; i++) {
+      ctx.fillStyle = `rgba(${Math.floor(Math.random() * 255)},${Math.floor(
+        Math.random() * 255
+      )},${Math.floor(Math.random() * 255)},0.1)`;
+      ctx.beginPath();
+      ctx.arc(Math.random() * width, Math.random() * height, Math.random() * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.font = "34px 'Comic Sans MS', cursive, Arial";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const x = 20 + i * 24 + Math.sin(i) * 6;
+      const y = height / 2 + Math.cos(i) * 6;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((Math.random() * 40 - 20) * (Math.PI / 180));
+      ctx.fillStyle = `hsl(${(i * 45 + 120) % 360}, 80%, 40%)`;
+      ctx.shadowColor = "rgba(0,0,0,0.2)";
+      ctx.shadowBlur = 2;
+      ctx.fillText(char, 0, 0);
+      ctx.restore();
+    }
+  };
+
+  useEffect(() => {
+    generateCaptcha();
+  }, []);
+
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState(null);
+
+  const handleVerify = () => {
+    if (input.toUpperCase() === captchaText) {
+      setStatus("Correct!");
+      onVerify(true);
+    } else {
+      setStatus("Incorrect. Try again.");
+      onVerify(false);
+    }
+    setInput("");
+  };
+
+  const handleGenerate = () => {
+    generateCaptcha();
+    setInput("");
+    setStatus(null);
+    onGenerate();
+  };
+
+  return (
+    <div className="captcha-verify enhanced" role="region">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <canvas ref={canvasRef} width={150} height={60} className="captcha-canvas" aria-label="Canvas text captcha" />
+        <button onClick={handleGenerate} className="btn-generate" aria-label="Generate new captcha">
+          ↻
+        </button>
+      </div>
+      <input
+        type="text"
+        aria-label="Enter captcha text"
+        value={input}
+        placeholder="Enter CAPTCHA"
+        onChange={(e) => setInput(e.target.value)}
+        spellCheck={false}
+        className="captcha-input"
+      />
+      <button onClick={handleVerify} aria-label="Verify captcha text" className="btn-verify">
+        Verify
+      </button>
+      <div role="alert" aria-live="polite" className={`captcha-status ${status === "Correct!" ? "success" : "error"}`}>
+        {status}
+      </div>
+    </div>
+  );
+};
+
+// 2. Arithmetic CAPTCHA with colorful operator, dynamic problem, verify
+const ArithmeticCaptcha = ({ onVerify, onGenerate }) => {
+  const [problem, setProblem] = useState({ a: 0, b: 0, op: "+" });
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState(null);
+
+  const operators = { "+": "Addition", "-": "Subtraction", "*": "Multiplication" };
+
+  const generateProblem = () => {
+    const ops = ["+", "-", "*"];
+    const a = Math.floor(Math.random() * 15) + 1;
+    const b = Math.floor(Math.random() * 15) + 1;
+    const op = ops[Math.floor(Math.random() * ops.length)];
+    setProblem({ a, b, op });
+    setStatus(null);
+    setInput("");
+    onGenerate();
+  };
+
+  useEffect(() => generateProblem(), []);
+
+  const calculate = () => {
+    const { a, b, op } = problem;
+    switch (op) {
+      case "+": return a + b;
+      case "-": return a - b;
+      case "*": return a * b;
+      default: return null;
+    }
+  };
+
+  const handleVerify = (e) => {
+    e.preventDefault();
+    if (parseInt(input, 10) === calculate()) {
+      setStatus("Correct!");
+      onVerify(true);
+      generateProblem();
+    } else {
+      setStatus("Incorrect. Try again.");
+      onVerify(false);
+    }
+    setInput("");
+  };
+
+  return (
+    <form className="captcha-arithmetic enhanced" onSubmit={handleVerify} role="region" aria-label={`Arithmetic captcha ${operators[problem.op]}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <label htmlFor="mathAnswer" className="arithmetic-label">
+          Solve: <span className="a">{problem.a}</span> <span className={`op op-${problem.op}`}>{problem.op}</span> <span className="b">{problem.b}</span> = ?
+        </label>
+        <button onClick={generateProblem} className="btn-generate" aria-label="Generate new problem">
+          ↻
+        </button>
+      </div>
+      <input
+        id="mathAnswer"
+        type="number"
+        autoComplete="off"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        required
+        aria-describedby="arithmeticStatus"
+        spellCheck={false}
+        className="captcha-input"
+      />
+      <button type="submit" className="btn-verify">Verify</button>
+      <div id="arithmeticStatus" role="alert" aria-live="polite" className={`captcha-status ${status === "Correct!" ? "success" : "error"}`}>
+        {status}
+      </div>
+    </form>
+  );
+};
+
+// 3. Drag & Drop CAPTCHA with glowing drop border and reset button
+const DragDropCaptcha = ({ onVerify }) => {
+  const [dragOver, setDragOver] = useState(false);
+  const [dropped, setDropped] = useState(false);
+
+  const onDragStart = (e) => {
+    e.dataTransfer.setData("text/plain", "circle");
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    const data = e.dataTransfer.getData("text");
+    if (data === "circle") {
+      setDropped(true);
+      onVerify(true);
+    } else onVerify(false);
+    setDragOver(false);
+  };
+
+  const onDragOver = (e) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const reset = () => {
+    setDropped(false);
+    onVerify(false);
+  };
+
+  return (
+    <div className="captcha-dragdrop enhanced" role="region">
+      <p>Drag the glowing circle into the glowing target box</p>
+      <div className="drag-container">
+        <div
+          className={`drag-target ${dragOver ? "dragover" : ""} ${dropped ? "dropped" : ""}`}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          aria-label="Drop target"
+          aria-dropeffect="move"
+          role="region"
+        >
+          {dropped ? <span className="drop-confirm">✔</span> : "Drop here"}
+        </div>
+        <div
+          draggable={!dropped}
+          onDragStart={onDragStart}
+          className={`draggable-circle ${dropped ? "hidden" : ""}`}
+          role="button"
+          aria-grabbed={!dropped}
+          tabIndex={0}
+          aria-label="Draggable glowing circle"
+        />
+      </div>
+      {dropped && (
+        <button onClick={reset} className="btn-reset" aria-label="Reset drag and drop captcha">
+          Reset
+        </button>
+      )}
+    </div>
+  );
+};
+
+// 4. Slider to unlock CAPTCHA with dynamic unlock percent & smooth gradient fill
+const SliderCaptcha = ({ onVerify, onGenerate }) => {
+  // dynamic unlock point between 85% to 100%
+  const [unlockPoint, setUnlockPoint] = useState(85 + Math.floor(Math.random() * 16));
+  const [value, setValue] = useState(0);
+  const [unlocked, setUnlocked] = useState(false);
+
+  const generateNewSlider = () => {
+    setUnlockPoint(85 + Math.floor(Math.random() * 16));
+    setValue(0);
+    setUnlocked(false);
+    onVerify(false);
+    onGenerate();
+  };
+
+  const onChange = (e) => {
+    const val = parseInt(e.target.value);
+    setValue(val);
+    if (val >= unlockPoint) {
+      setUnlocked(true);
+      onVerify(true);
+    } else {
+      if (unlocked) onVerify(false);
+      setUnlocked(false);
+    }
+  };
+
+  return (
+    <div className="captcha-slider enhanced" role="region" aria-label="Slider captcha unlock">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <p>Slide to unlock (Reach {unlockPoint}%)</p>
+        <button onClick={generateNewSlider} className="btn-generate" aria-label="Generate new slider">
+          ↻
+        </button>
+      </div>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={value}
+        onChange={onChange}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={value}
+        aria-label="Slide captcha unlock"
+        className="slider"
+      />
+      <div className={`slider-status ${unlocked ? "unlocked" : ""}`}>
+        {unlocked ? `Unlocked ✔` : `${value}%`}
+      </div>
+    </div>
+  );
+};
+
+// 6. Dynamic Color Grid CAPTCHA with neon green target and vibrant palette
+const ColorGridCaptcha = ({ onVerify, onGenerate }) => {
+  const colorsPool = [
+    "#f44336",
+    "#4caf50",
+    "#2196f3",
+    "#ffeb3b",
+    "#9c27b0",
+    "#009688",
+    "#e91e63",
+    "#ff5722",
+  ];
+  const [gridColors, setGridColors] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [targetColor, setTargetColor] = useState("#4caf50");
+
+  const generateColorGrid = () => {
+    let colors = [];
+    while (colors.length < 6) {
+      const c = colorsPool[Math.floor(Math.random() * colorsPool.length)];
+      if (!colors.includes(c)) colors.push(c);
+    }
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    setTargetColor(randomColor);
+    setGridColors(colors);
+    setSelected(null);
+    onVerify(false);
+    onGenerate();
+  };
+
+  useEffect(() => {
+    generateColorGrid();
+  }, []);
+
+  const correctIndex = gridColors.findIndex((c) => c === targetColor);
+
+  const handleSelect = (idx) => {
+    setSelected(idx);
+    onVerify(idx === correctIndex);
+  };
+
+  return (
+    <div className="captcha-color-grid enhanced" aria-label="Select the color captcha" role="region">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <p>Select the color: <span style={{color:targetColor, fontWeight:"700"}}>{targetColor.toUpperCase()}</span></p>
+        <button onClick={generateColorGrid} className="btn-generate" aria-label="Generate new color grid">
+          ↻
+        </button>
+      </div>
+      <div className="color-grid color-grid-large">
+        {gridColors.map((color, idx) => (
+          <div
+            key={idx}
+            onClick={() => handleSelect(idx)}
+            className={`color-square ${selected === idx ? "selected" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={selected === idx}
+            aria-label={`Select color square ${color}`}
+            style={{ backgroundColor: color }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") handleSelect(idx);
+            }}
+          />
+        ))}
+      </div>
+      {selected !== null && (
+        <p className={`captcha-result ${selected === correctIndex ? "success" : "error"}`}>
+          {selected === correctIndex ? "Correct!" : "Wrong, try again."}
+        </p>
+      )}
+    </div>
+  );
+};
+
+// Google reCAPTCHA component
+const GoogleRecaptcha = ({ onVerify, onGenerate }) => {
+  const recaptchaRef = useRef(null);
+  
+  const resetRecaptcha = () => {
+    if (recaptchaRef.current) {
+      recaptchaRef.current.reset();
+      onVerify(false);
+      onGenerate();
+    }
+  };
+
+  return (
+    <div className="captcha-google enhanced" role="region">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+        <p>Complete the Google reCAPTCHA</p>
+        <button onClick={resetRecaptcha} className="btn-generate" aria-label="Reset reCAPTCHA">
+          ↻
+        </button>
+      </div>
+      <ReCAPTCHA
+        sitekey="6LfkJMYrAAAAANTDVpmNDqgYNYMjQCtAeaiLEJuv"
+        onChange={(value) => onVerify(value !== null)}
+        onExpired={() => onVerify(false)}
+        onErrored={() => onVerify(false)}
+        ref={recaptchaRef}
+      />
+    </div>
+  );
+};
+
+const CirclesStepProgress = ({ steps = 4, current = 3 }) => (
+    <div className="progress-circles-bar">
+      {Array.from({ length: steps }).map((_, idx) => (
+        <div key={idx} className="step-circle-group">
+          <div className={`step-circle ${idx < current ? "done" : ""} ${idx === current ? "active" : ""}`}>
+            {idx < current ? <span>&#10003;</span> : ""}
+          </div>
+          {idx < steps - 1 && <div className={`step-line ${idx < current - 1 ? "filled" : ""}`}></div>}
+        </div>
+      ))}
+    </div>
+  );
+
+  const ArrowStepsProgress = ({ 
+    steps = ["Step 1", "Step 2", "Step 3"], 
+    current = 2,
+    completedColor = "#3f51b5",
+    activeColor = "#a9c7fa",
+    defaultColor = "#f1f5fc"
+  }) => {
+    return (
+      <div className="progress-arrow-bar">
+        {steps.map((step, idx) => (
+          <div 
+            key={idx} 
+            className={`arrow-step ${idx < current ? "completed" : ""} ${idx === current ? "active" : ""}`}
+            style={{
+              '--completed-color': completedColor,
+              '--active-color': activeColor,
+              '--default-color': defaultColor
+            }}
+          >
+            {step}
+            {idx < steps.length - 1 && <div className="arrow-divider"></div>}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const SquareStepsProgress = ({
+    steps = ["Step 1", "Step 2", "Step 3"],
+    current = 2, // 1-based index (so 2 means step 2 active)
+  }) => (
+    <div className="progress-square-bar">
+      {steps.map((step, idx) => (
+        <div key={idx} className="square-step-block">
+          <div
+            className={[
+              "square-step",
+              idx + 1 < current ? "completed" : "",
+              idx + 1 === current ? "active" : "",
+            ].join(" ")}
+          >
+            {idx + 1}
+          </div>
+          <div className="step-label">{step}</div>
+          {idx < steps.length - 1 && (
+            <div
+              className={[
+                "square-line",
+                idx + 1 < current ? "filled" : "",
+              ].join(" ")}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  // 1. Simple Progress Bar Component
+ const SimpleProgressBar = ({ percent = 0, height = 20, bgColor = "#e0e0e0", fillColor = "#4caf50" }) => {
+  return (
+    <div className="simple-progress-bar">
+      <div className="bar-bg" style={{ height: `${height}px`, backgroundColor: bgColor }}>
+        <div 
+          className="bar-fill" 
+          style={{ 
+            width: `${percent}%`, 
+            backgroundColor: fillColor,
+            height: `${height}px`
+          }} 
+        />
+      </div>
+      <span className="bar-percent-text">{percent}%</span>
+    </div>
+  );
+};
+
+// 2. Circular Progress Component
+const CircularProgress = ({ 
+  percent = 0, 
+  size = 60, 
+  strokeWidth = 4, 
+  bgColor = "#e0e0e0", 
+  fillColor = "#4caf50" 
+}) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percent / 100) * circumference;
+
+  return (
+    <div className="circular-progress">
+      <div className="circle-spinner">
+        <div className="spinner-text">{percent}%</div>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <circle 
+            cx={size / 2} 
+            cy={size / 2} 
+            r={radius} 
+            className="circle-bg" 
+            stroke={bgColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            className="circle-foreground"
+            stroke={fillColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+// 3. Pagination Progress Component
+const PaginationProgress = ({ current = 1, total = 3, textColor = "#333" }) => {
+  return (
+    <div className="pagination-progress" style={{ color: textColor }}>
+      <span className="progress-label">Page {current} of {total}</span>
+    </div>
+  );
+};
+
+  
+const captchaComponents = {
+  'Canvas Text': CanvasTextCaptcha,
+  'Arithmetic': ArithmeticCaptcha,
+  'Drag & Drop': DragDropCaptcha,
+  'Slider': SliderCaptcha,
+  'Color Grid': ColorGridCaptcha,
+  'Google reCAPTCHA': GoogleRecaptcha,
+};
+
+const progressBarComponents = {
+  'Simple Progress Bar': SimpleProgressBar,
+  'Circular Progress': CircularProgress,
+  'Pagination Progress': PaginationProgress,
+  'Circles Steps': CirclesStepProgress,
+  'Arrow Steps': ArrowStepsProgress,
+  'Square Steps': SquareStepsProgress,
+};
 
 const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
   const initialName = fields.find(f => f.id === 'name')?.defaultValue || '';
@@ -16,6 +588,42 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
     setFormName(initialName);
     setFormDescription(initialDescription);
   }, [initialName, initialDescription]);
+  // New states for Captcha & Progress bar selections
+  const [captchaType, setCaptchaType] = useState('Canvas Text');
+  const [progressType, setProgressType] = useState('Circles Steps');
+
+  // For CAPTCHA interaction
+  const [captchaGenerateKey, setCaptchaGenerateKey] = useState(0); // to force new captcha instance
+  const [captchaInput, setCaptchaInput] = useState('');
+  const [captchaVerifyStatus, setCaptchaVerifyStatus] = useState(null);
+  const captchaVerifyResult = useRef(null);
+
+  // Handler for CAPTCHA verify button click
+  const handleCaptchaVerify = () => {
+    if (captchaVerifyResult.current !== null) {
+      if (captchaVerifyResult.current) setCaptchaVerifyStatus('Correct!');
+      else setCaptchaVerifyStatus('Incorrect. Try again.');
+    } else {
+      setCaptchaVerifyStatus('Please generate and enter captcha to verify');
+    }
+  };
+
+  // Handler for CAPTCHA Generate button click (force re-render with new key)
+  const handleCaptchaGenerate = () => {
+    setCaptchaInput('');
+    setCaptchaVerifyStatus(null);
+    setCaptchaGenerateKey(prev => prev + 1);
+    captchaVerifyResult.current = null;
+  };
+
+  // Callback passed to captcha to update verification result
+  const onCaptchaVerify = (result) => {
+    captchaVerifyResult.current = result;
+  };
+
+  // Select the captcha and progress components dynamically
+  const SelectedCaptchaComponent = captchaComponents[captchaType];
+  const SelectedProgressComponent = progressBarComponents[progressType];
 
   const typeMapping = {
     string: ['shorttext'],
@@ -348,6 +956,14 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
       setFormNameError('Form name is required.');
       return;
     }
+    if (formName.length > 80) {
+      setFormNameError('Form Name can\'t exceed 80 characters.');
+      return;
+    }
+    if (formDescription.length > 255) {
+      setFormNameError('Description can\'t exceed 255 characters.');
+      return;
+    }
     setIsSaving(true);
     setFormNameError(null)
 
@@ -524,12 +1140,65 @@ const FormName = ({ onClose, onSubmit, fields = [], objectInfo = [] }) => {
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder="Enter form description"
                   className="formdetails-modal-textarea"
-                  rows={3}
-                  style={{ resize: 'vertical' }}
+                  rows={2}
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3 }}
                 />
+              </div>
+              {/* Captcha Selection & Preview */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label className="formdetails-modal-label">Select CAPTCHA Type</label>
+                  <Select
+                    value={captchaType}
+                    onChange={(val) => {
+                      setCaptchaType(val);
+                      setCaptchaVerifyStatus(null);
+                      setCaptchaInput('');
+                      setCaptchaGenerateKey(prev => prev + 1);
+                      captchaVerifyResult.current = null;
+                    }}
+                    options={Object.keys(captchaComponents).map((key) => ({ label: key, value: key }))}
+                    style={{ width: '100%' }}
+                    aria-label="Select CAPTCHA Type"
+                  />
+                </div>
+                <div style={{ flex: 1, border: '1px solid #ddd', borderRadius: 10, padding: 12, background: '#fafafa', minHeight: 130 }}>
+                  {SelectedCaptchaComponent && (
+                    <SelectedCaptchaComponent
+                      key={captchaGenerateKey}
+                      onVerify={onCaptchaVerify}
+                      onGenerate={handleCaptchaGenerate}  
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Progress Bar Selection & Preview */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label className="formdetails-modal-label">Select Progress Bar Type</label>
+                  <Select
+                    value={progressType}
+                    onChange={(val) => setProgressType(val)}
+                    options={Object.keys(progressBarComponents).map((key) => ({ label: key, value: key }))}
+                    style={{ width: '100%' }}
+                    aria-label="Select Progress Bar Type"
+                  />
+                </div>
+                <div style={{ flex: 1, border: '1px solid #ddd', borderRadius: 10, padding: 12, background: '#fafafa', minHeight: 130, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {SelectedProgressComponent && (
+                    // Provide props for preview for all progress bar types
+                    SelectedProgressComponent === SimpleProgressBar ? <SimpleProgressBar percent={50} />
+                    : SelectedProgressComponent === CircularProgress ? <CircularProgress percent={75} />
+                    : SelectedProgressComponent === PaginationProgress ? <PaginationProgress current={1} total={3} />
+                    : SelectedProgressComponent === CirclesStepProgress ? <CirclesStepProgress steps={4} current={2} />
+                    : SelectedProgressComponent === ArrowStepsProgress ? <ArrowStepsProgress steps={["Step 1", "Step 2", "Step 3"]} current={1} />
+                    : SelectedProgressComponent === SquareStepsProgress ? <SquareStepsProgress steps={["Step 1", "Step 2", "Step 3", "Step 4"]} current={3} />
+                    : null
+                  )}
+                </div>
               </div>
               <AnimatePresence>
                 {formNameError && (

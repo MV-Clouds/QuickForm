@@ -186,7 +186,8 @@
   /* height: calc(100vh - 150px); */
   background-color: transparent;
   position: relative;
-  padding-bottom: 120px; /* Add space for footer and last Add Page button */
+  padding-bottom: 120px; 
+  border-radius: 0.35rem;
 }
 
 /* Hide scrollbar for Chrome, Safari, Edge */

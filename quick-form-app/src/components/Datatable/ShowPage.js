@@ -20,38 +20,6 @@ const mapApiToTableData = (apiData) => {
 };
 
 const ShowPage = ({forms , handleEditForm ,handleCreateForm,  isLoading ,handleDeleteForm ,handleFavoriteForm, handleCloneForm }) => {
-  // const [data, setData] = useState([]);
-  // const [loading, setLoading] = useState(true);
-
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     setLoading(true);
-  //     try {
-  //       const result = await fetchFormData();
-  //       // console.log(result.FormRecords)
-  //       if (result && result.FormRecords) {
-  //         const records = Array.isArray(result.FormRecords)
-  //           ? result.FormRecords
-  //           : result.FormRecords
-  //             ? [result.FormRecords]
-  //             : [];
-  //         setData(mapApiToTableData(JSON.parse(result.FormRecords)));
-  //       } else {
-  //         setData([]); // Ensure data is always an array
-  //       }
-  //       console.log('Data loaded:', JSON.parse(result.FormRecords).map(item => item));
-  //     } catch (error) {
-  //       console.error('Error loading data:', error);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-  //   fetchData();
-  // }, []);
-
-
-
-
   return (
     <div className="container mx-auto py-10">
       <DataTable columns={Columns({forms,handleEditForm , handleDeleteForm , handleFavoriteForm, handleCloneForm})} forms = {forms} data={mapApiToTableData(forms)} handleCreateForm={handleCreateForm} handleEditForm={handleEditForm} handleCloneForm={handleCloneForm} />

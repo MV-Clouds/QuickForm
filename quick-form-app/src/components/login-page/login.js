@@ -39,9 +39,9 @@ const Login = () => {
 
   // Check if already logged in on mount
   useEffect(() => {
-    // sessionStorage.setItem('isLoggedIn', 'true');
-    // sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
-    // sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
+    sessionStorage.setItem('isLoggedIn', 'true');
+    sessionStorage.setItem('userId', '005gL000002qyRxQAI'); // Clear userId
+    sessionStorage.setItem('instanceUrl', 'https://orgfarm-53dd64db2b-dev-ed.develop.my.salesforce.com'); // Clear instanceUrl
     const shuffleArray = (array) => {
       const shuffled = [...array];
       for (let i = shuffled.length - 1; i > 0; i--) {
@@ -110,7 +110,8 @@ const Login = () => {
   }, [org, customUrl]);
 
   const handleOrgChange = (value) => {
-    if(isLoginProgress) return;
+    if(isLoginProgress) 
+    setIsLoginProgress(false);
     setOrg(value); // Update state
     if (value !== 'custom') {
       setCustomUrl(''); // Clear custom URL if not custom
@@ -237,7 +238,6 @@ const Login = () => {
                         placeholder = "Pick an option"
                         style={{ width: '100%' }}
                         className="dropdown"
-                        disabled={isLoginProgress}
                       >
                         <Option value="production">Production (login.salesforce.com)</Option>
                         <Option value="sandbox">Sandbox (test.salesforce.com)</Option>
