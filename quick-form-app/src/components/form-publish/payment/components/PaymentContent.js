@@ -6,6 +6,7 @@ import SubscriptionSelection from "./SubscriptionSelection";
 import PayPalCardPayment from "./PayPalCardPayment";
 import GooglePayIntegration from "./GooglePayIntegration";
 import PayPalDonateButton from "./PayPalDonateButton";
+import BillingAddressForm from "./BillingAddressForm";
 
 /**
  * Payment Content Component
@@ -30,6 +31,9 @@ const PaymentContent = ({
   isPaymentButtonReady,
   isProcessing,
   merchantCredentials,
+  billingAddress,
+  onBillingAddressChange,
+  billingAddressError,
 }) => {
   useEffect(() => {
     console.log("SimplePayPalButton type:", typeof SimplePayPalButton);
@@ -255,7 +259,14 @@ const PaymentContent = ({
     // For subscriptions, force PayPal-only subscribe button regardless of selected payment method
     if (paymentType === "subscription") {
       return (
-        <div className="mt-6">
+        <div className="mt-6 space-y-4">
+          {subFields?.behavior?.collectBillingAddress && (
+            <BillingAddressForm
+              value={billingAddress}
+              onChange={onBillingAddressChange}
+              error={billingAddressError}
+            />
+          )}
           <SimplePayPalButton
             createOrder={undefined}
             createSubscription={createSubscription}
@@ -273,7 +284,14 @@ const PaymentContent = ({
     switch (paymentMethod) {
       case "paypal":
         return (
-          <div className="mt-6">
+          <div className="mt-6 space-y-4">
+            {subFields?.behavior?.collectBillingAddress && (
+              <BillingAddressForm
+                value={billingAddress}
+                onChange={onBillingAddressChange}
+                error={billingAddressError}
+              />
+            )}
             <SimplePayPalButton
               createOrder={createOrder}
               createSubscription={undefined}

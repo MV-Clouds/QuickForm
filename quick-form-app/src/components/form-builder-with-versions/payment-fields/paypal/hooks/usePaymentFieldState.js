@@ -250,9 +250,15 @@ export function usePaymentFieldState(subFields, onUpdateField, fieldId) {
   );
 
   // Generate subFields object from current state
-  const currentSubFields = useMemo(
-    () => ({
-      // Save both identifiers explicitly
+  const currentSubFields = useMemo(() => {
+    // Get the original subFields to preserve existing data that we don't manage
+    const originalSubFields = subFields || {};
+
+    return {
+      // Preserve existing data that this hook doesn't manage
+      ...originalSubFields,
+
+      // Override with current state values
       merchantId: state.capabilities?.merchantId || null, // Actual PayPal Merchant_ID__c
       merchantAccountId: state.selectedMerchantId, // Salesforce record Id for the custom setting
       merchantResolvedId: state.capabilities?.merchantId || null, // Redundant but explicit for consumers
@@ -260,9 +266,14 @@ export function usePaymentFieldState(subFields, onUpdateField, fieldId) {
       amount: state.amount,
       paymentMethods: state.paymentMethods,
       behavior: state.behavior,
-    }),
-    [state]
-  );
+
+      // Explicitly preserve products and formItems (these are managed by ProductManagementModal)
+      products: originalSubFields.products || [],
+      formItems: originalSubFields.formItems || {},
+
+      // Preserve any other fields that might exist (like processingResult, etc.)
+    };
+  }, [state, subFields]);
 
   // Auto-sync to parent when state changes
   useEffect(() => {

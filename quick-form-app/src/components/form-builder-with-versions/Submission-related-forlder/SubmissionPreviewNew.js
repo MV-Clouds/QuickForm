@@ -1221,6 +1221,73 @@ const SubmissionPreviewNew = ({
                               </div>
                             )}
                           </div>
+                          {p.billingAddress && (
+                            <div className="mt-3 bg-white border rounded p-3">
+                              <div className="text-xs font-semibold text-gray-700 mb-2">
+                                Billing Address
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-800">
+                                {p.billingAddress.address_line_1 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Address Line 1
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.address_line_1}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.address_line_2 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Address Line 2
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.address_line_2}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.admin_area_2 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">City</span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.admin_area_2}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.admin_area_1 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      State/Region
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.admin_area_1}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.postal_code && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Postal Code
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.postal_code}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.country_code && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Country
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.country_code}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1500,6 +1567,73 @@ const SubmissionPreviewNew = ({
                               </div>
                             )}
                           </div>
+                          {p.billingAddress && (
+                            <div className="mt-3 bg-white border rounded p-3">
+                              <div className="text-xs font-semibold text-gray-700 mb-2">
+                                Billing Address
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-800">
+                                {p.billingAddress.address_line_1 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Address Line 1
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.address_line_1}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.address_line_2 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Address Line 2
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.address_line_2}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.admin_area_2 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">City</span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.admin_area_2}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.admin_area_1 && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      State/Region
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.admin_area_1}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.postal_code && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Postal Code
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.postal_code}
+                                    </span>
+                                  </div>
+                                )}
+                                {p.billingAddress.country_code && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-600">
+                                      Country
+                                    </span>
+                                    <span className="ml-3 break-all">
+                                      {p.billingAddress.country_code}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

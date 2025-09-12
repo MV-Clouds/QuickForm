@@ -9,6 +9,10 @@ import { validatePaymentAmount } from "../utils/paymentValidation";
 import PaymentStatusCallout from "../components/PaymentStatusCallout";
 import PaymentContent from "../components/PaymentContent";
 import PayPalDonateButton from "../components/PayPalDonateButton";
+import {
+  validateBillingAddress,
+  defaultBillingAddress,
+} from "../components/BillingAddressForm";
 import { API_ENDPOINTS } from "../../../../config";
 import {
   fetchMerchantCredentialsWithCache,
@@ -56,6 +60,8 @@ const PayPalPaymentProvider = ({
   // const [formValidationPassed, setFormValidationPassed] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [billingAddress, setBillingAddress] = useState(null);
+  const [billingAddressError, setBillingAddressError] = useState(false);
 
   // Merchant credentials state
   const [merchantCredentials, setMerchantCredentials] = useState(null);
@@ -508,7 +514,7 @@ const PayPalPaymentProvider = ({
       // Handle both single product and multiple products
       const hasProducts = Array.isArray(selectedProduct)
         ? selectedProduct.length > 0
-      : !!selectedProduct;
+        : !!selectedProduct;
       return hasProducts && !!paymentAmount && !!currentItemNumber;
     }
 
@@ -520,6 +526,13 @@ const PayPalPaymentProvider = ({
       return !!amountConfig.value;
     }
 
+    // When billing address collection is enabled, ensure it's filled before enabling payment
+    if (subFields?.behavior?.collectBillingAddress) {
+      const { valid } = validateBillingAddress(
+        billingAddress || defaultBillingAddress
+      );
+      return !!paymentAmount && !amountError && valid;
+    }
     return !!paymentAmount && !amountError;
   };
 
@@ -635,6 +648,16 @@ const PayPalPaymentProvider = ({
         // setIsProcessing(false);
         // Throw to ensure PayPal SDK rejects onClick and does not open a window
         throw new Error("Form validation failed");
+      }
+      // Validate billing address if required
+      if (subFields?.behavior?.collectBillingAddress) {
+        const { valid } = validateBillingAddress(
+          billingAddress || defaultBillingAddress
+        );
+        if (!valid) {
+          setBillingAddressError(true);
+          throw new Error("Billing address is required");
+        }
       }
       console.log("✅ Form validation passed - proceeding with payment");
 
@@ -1770,6 +1793,12 @@ const PayPalPaymentProvider = ({
           isPaymentButtonReady={isPaymentButtonReady()}
           isProcessing={isProcessing}
           merchantCredentials={merchantCredentials}
+          billingAddress={billingAddress || defaultBillingAddress}
+          onBillingAddressChange={(addr) => {
+            setBillingAddressError(false);
+            setBillingAddress(addr);
+          }}
+          billingAddressError={billingAddressError}
         />
 
         {/* Payment Method Selection */}

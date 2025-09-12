@@ -39,6 +39,7 @@ const PayPalSubscriptionImportModal = ({
 
     try {
       const result = await fetchPaypalSubscriptions(selectedMerchantId);
+      console.log("❗ Fetched PayPal subscriptions:", result);
       if (result.success) {
         setPaypalSubscriptions(result.subscriptions || []);
       } else {

@@ -4,8 +4,6 @@ import {
   FaCog,
   FaCreditCard,
   FaReceipt,
-  FaCheckCircle,
-  FaExclamationTriangle,
   FaSpinner,
   FaChevronDown,
   FaChevronRight,
@@ -67,7 +65,6 @@ const PayPalFieldEditorTabsRefactored = ({
   const validator = usePaymentFieldValidation();
 
   // UI-only state (doesn't need to persist)
-  const [activeTab, setActiveTab] = useState("account");
   const [expandedSections, setExpandedSections] = useState({
     account: true,
     paymentMethods: true,
@@ -84,7 +81,7 @@ const PayPalFieldEditorTabsRefactored = ({
     fieldId,
     isInitialized,
     state: state,
-    activeTab,
+    activeTab: "single",
     timestamp: new Date().toISOString(),
   });
 
@@ -200,30 +197,7 @@ const PayPalFieldEditorTabsRefactored = ({
     [actions]
   );
 
-  // Tab definitions
-  const tabs = useMemo(
-    () => [
-      {
-        id: "account",
-        label: "Account & Payment Type",
-        icon: FaCog,
-        description: "Configure merchant account and payment type",
-      },
-      {
-        id: "configuration",
-        label: "Payment Configuration",
-        icon: FaCreditCard,
-        description: "Configure amounts, products, and payment methods",
-      },
-      {
-        id: "advanced",
-        label: "Advanced Settings",
-        icon: FaReceipt,
-        description: "Additional settings and behavior options",
-      },
-    ],
-    []
-  );
+  // No tabs in the new single-section UI
 
   // Don't render until state is initialized
   if (
@@ -240,7 +214,7 @@ const PayPalFieldEditorTabsRefactored = ({
   }
 
   return (
-    <div className={`paypal-field-editor-tabs-refactored ${className}`}>
+    <div className={`paypal-field-editor-single ${className}`}>
       {/* Header */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-2">
@@ -259,7 +233,7 @@ const PayPalFieldEditorTabsRefactored = ({
           <ContextualHelp section="merchantAccount" />
         </div>
         <p className="text-sm text-blue-700">
-          Configure your PayPal payment field with organized settings sections
+          Configure your PayPal payment field below
         </p>
 
         {/* State debug info (remove in production) */}
@@ -281,51 +255,140 @@ const PayPalFieldEditorTabsRefactored = ({
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200 mb-6">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => {
-                const previousTab = activeTab;
-                performanceMonitor.trackTabSwitch(previousTab, tab.id);
-                setActiveTab(tab.id);
-              }}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === tab.id
-                  ? "text-blue-600 border-blue-600 bg-blue-50"
-                  : "text-gray-600 border-transparent hover:text-gray-800 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Icon size={16} />
-                <span className="hidden sm:inline">{tab.label}</span>
+      {/* Single-section Content */}
+      <div className="space-y-6">
+        {/* Merchant Account */}
+        <div className="bg-white border border-gray-200 rounded-lg">
+          <button
+            onClick={() => toggleSection("account")}
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-3">
+              <FaCog className="text-blue-600" />
+              <div>
+                <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                  Merchant Account
+                  <HelpTooltip
+                    title="Merchant Account Setup"
+                    content="Connect your verified PayPal business account to accept payments."
+                  />
+                </h4>
+                <p className="text-sm text-gray-600">
+                  Select and verify your PayPal merchant account
+                </p>
               </div>
-            </button>
-          );
-        })}
-      </div>
+            </div>
+            {expandedSections.account ? <FaChevronDown /> : <FaChevronRight />}
+          </button>
 
-      {/* Tab Content */}
-      <div className="tab-content">
-        {/* Account & Payment Type Tab */}
-        {activeTab === "account" && (
-          <AccountTab
-            state={state}
-            actions={actions}
-            expandedSections={expandedSections}
-            toggleSection={toggleSection}
-            onMerchantChange={handleMerchantChange}
-            onPaymentTypeChange={handlePaymentTypeChange}
-            userId={userId}
-            formId={formId}
-          />
-        )}
+          {expandedSections.account && (
+            <div className="px-4 pb-4 border-t border-gray-100">
+              <MerchantAccountSelector
+                selectedMerchantId={state.selectedMerchantId}
+                onMerchantChange={handleMerchantChange}
+                onCapabilitiesChange={actions.updateCapabilities}
+                className="mt-4"
+                userId={userId}
+                formId={formId}
+                hideCapabilitiesPanel
+              />
+            </div>
+          )}
+        </div>
 
-        {/* Payment Configuration Tab */}
-        {activeTab === "configuration" && (
+        {/* Payment Type + Manage Button */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <FaCreditCard className="text-blue-600" />
+            <div>
+              <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                Payment Type
+                <HelpTooltip
+                  title="Payment Types"
+                  content="Choose the type of payment to accept: products, subscriptions, donations, or custom amounts."
+                />
+              </h4>
+              <p className="text-sm text-gray-600">
+                Choose the type of payment to accept
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <select
+                value={state.paymentType}
+                onChange={handlePaymentTypeChange}
+                className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="product_wise">Product-wise Payment</option>
+                <option value="custom_amount">Custom Amount</option>
+                <option
+                  value="subscription"
+                  disabled={!state.capabilities?.subscriptions}
+                >
+                  Subscription{" "}
+                  {!state.capabilities?.subscriptions ? "(Not Available)" : ""}
+                </option>
+                <option
+                  value="donation"
+                  disabled={!state.capabilities?.donations}
+                >
+                  Donation (Custom Amount){" "}
+                  {!state.capabilities?.donations ? "(Not Available)" : ""}
+                </option>
+                <option
+                  value="donation_button"
+                  disabled={!state.capabilities?.donations}
+                >
+                  Donation (with Button ID){" "}
+                  {!state.capabilities?.donations ? "(Not Available)" : ""}
+                </option>
+              </select>
+            </div>
+            <div className="flex justify-end">
+              {state.paymentType === "product_wise" && (
+                <button
+                  onClick={() => handleOpenManager("product")}
+                  disabled={!state.selectedMerchantId}
+                  title={
+                    !state.selectedMerchantId
+                      ? "Select a merchant account first"
+                      : undefined
+                  }
+                  className={`px-6 py-3 text-white text-sm font-medium rounded-lg transition-colors shadow-md ${
+                    !state.selectedMerchantId
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700 hover:shadow-lg"
+                  }`}
+                >
+                  Manage Products
+                </button>
+              )}
+              {state.paymentType === "subscription" && (
+                <button
+                  onClick={() => handleOpenManager("subscription")}
+                  disabled={!state.selectedMerchantId}
+                  title={
+                    !state.selectedMerchantId
+                      ? "Select a merchant account first"
+                      : undefined
+                  }
+                  className={`px-6 py-3 text-white text-sm font-medium rounded-lg transition-colors shadow-md ${
+                    !state.selectedMerchantId
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-purple-600 hover:bg-purple-700 hover:shadow-lg"
+                  }`}
+                >
+                  Manage Subscriptions
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Custom Amount Configuration (only when selected) */}
+        {state.paymentType === "custom_amount" && (
           <ConfigurationTab
             state={state}
             actions={actions}
@@ -339,16 +402,160 @@ const PayPalFieldEditorTabsRefactored = ({
           />
         )}
 
-        {/* Advanced Settings Tab */}
-        {activeTab === "advanced" && (
-          <AdvancedTab
-            state={state}
-            actions={actions}
-            onBehaviorChange={handleBehaviorChange}
-            expandedSections={expandedSections}
-            toggleSection={toggleSection}
-          />
-        )}
+        {/* Payment Methods - hide for subscription/donation_button */}
+        {state.paymentType !== "donation_button" &&
+          state.paymentType !== "subscription" && (
+            <div className="bg-white border border-gray-200 rounded-lg">
+              <button
+                onClick={() => toggleSection("paymentMethods")}
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-3">
+                  <FaCreditCard className="text-green-600" />
+                  <div>
+                    <h4 className="font-medium text-gray-900">
+                      Payment Methods
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      Choose which payment methods to accept
+                    </p>
+                  </div>
+                </div>
+                {expandedSections.paymentMethods ? (
+                  <FaChevronDown />
+                ) : (
+                  <FaChevronRight />
+                )}
+              </button>
+
+              {expandedSections.paymentMethods && (
+                <div className="px-4 pb-4 border-t border-gray-100">
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={state.paymentMethods.paypal}
+                        onChange={(e) =>
+                          handlePaymentMethodChange("paypal", e.target.checked)
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">PayPal</span>
+                    </label>
+
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={state.paymentMethods.cards}
+                        onChange={(e) =>
+                          handlePaymentMethodChange("cards", e.target.checked)
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">
+                        Credit/Debit Cards
+                      </span>
+                    </label>
+
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={state.paymentMethods.venmo}
+                        disabled={!state.capabilities?.venmo}
+                        onChange={(e) =>
+                          handlePaymentMethodChange("venmo", e.target.checked)
+                        }
+                        className="mr-2"
+                      />
+                      <span
+                        className={`text-sm ${
+                          !state.capabilities?.venmo
+                            ? "text-gray-400"
+                            : "text-gray-700"
+                        }`}
+                      >
+                        Venmo{" "}
+                        {!state.capabilities?.venmo ? "(Not Available)" : ""}
+                      </span>
+                    </label>
+
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={state.paymentMethods.googlePay}
+                        disabled={!state.capabilities?.googlePay}
+                        onChange={(e) =>
+                          handlePaymentMethodChange(
+                            "googlePay",
+                            e.target.checked
+                          )
+                        }
+                        className="mr-2"
+                      />
+                      <span
+                        className={`text-sm ${
+                          !state.capabilities?.googlePay
+                            ? "text-gray-400"
+                            : "text-gray-700"
+                        }`}
+                      >
+                        Google Pay{" "}
+                        {!state.capabilities?.googlePay
+                          ? "(Not Available)"
+                          : ""}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        {/* Behavior - Only billing address toggle */}
+        <div className="bg-white border border-gray-200 rounded-lg">
+          <button
+            onClick={() => toggleSection("behavior")}
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-3">
+              <FaCog className="text-purple-600" />
+              <div>
+                <h4 className="font-medium text-gray-900">Field Behavior</h4>
+                <p className="text-sm text-gray-600">
+                  Configure additional field behavior
+                </p>
+              </div>
+            </div>
+            {expandedSections.behavior ? <FaChevronDown /> : <FaChevronRight />}
+          </button>
+
+          {expandedSections.behavior && (
+            <div className="px-4 pb-4 border-t border-gray-100">
+              <div className="space-y-3 mt-4">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={state.behavior.collectBillingAddress}
+                    onChange={(e) =>
+                      handleBehaviorChange({
+                        collectBillingAddress: e.target.checked,
+                      })
+                    }
+                    className="mr-3"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">
+                      Collect Billing Address
+                    </span>
+                    <p className="text-xs text-gray-500">
+                      Request billing address during payment
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Modals */}
@@ -371,142 +578,7 @@ const PayPalFieldEditorTabsRefactored = ({
   );
 };
 
-// Account Tab Component
-const AccountTab = React.memo(
-  ({
-    state,
-    actions,
-    expandedSections,
-    toggleSection,
-    onMerchantChange,
-    onPaymentTypeChange,
-    userId,
-    formId,
-  }) => (
-    <div className="space-y-6">
-      {/* Merchant Account Section */}
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <button
-          onClick={() => toggleSection("account")}
-          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-        >
-          <div className="flex items-center gap-3">
-            <FaCog className="text-blue-600" />
-            <div>
-              <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                Merchant Account
-                <HelpTooltip
-                  title="Merchant Account Setup"
-                  content="Connect your verified PayPal business account to accept payments."
-                />
-              </h4>
-              <p className="text-sm text-gray-600">
-                Select and verify your PayPal merchant account
-              </p>
-            </div>
-          </div>
-          {expandedSections.account ? <FaChevronDown /> : <FaChevronRight />}
-        </button>
-
-        {expandedSections.account && (
-          <div className="px-4 pb-4 border-t border-gray-100">
-            <MerchantAccountSelector
-              selectedMerchantId={state.selectedMerchantId}
-              onMerchantChange={onMerchantChange}
-              onCapabilitiesChange={actions.updateCapabilities}
-              className="mt-4"
-              userId={userId}
-              formId={formId}
-            />
-
-            {/* Account Status Display */}
-            {state.selectedMerchantId && state.accountStatus && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  {state.accountStatus.status === "active" ? (
-                    <FaCheckCircle className="text-green-600" />
-                  ) : (
-                    <FaExclamationTriangle className="text-red-600" />
-                  )}
-                  <span
-                    className={`text-sm font-medium ${
-                      state.accountStatus.status === "active"
-                        ? "text-green-700"
-                        : "text-red-700"
-                    }`}
-                  >
-                    {state.accountStatus.status === "active"
-                      ? "Connected & Active"
-                      : "Connection Issue"}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Payment Type Section */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <FaCreditCard className="text-blue-600" />
-          <div>
-            <h4 className="font-medium text-gray-900 flex items-center gap-2">
-              Payment Type
-              <HelpTooltip
-                title="Payment Types"
-                content="Choose the type of payment to accept: products, subscriptions, donations, or custom amounts."
-              />
-            </h4>
-            <p className="text-sm text-gray-600">
-              Choose the type of payment to accept
-            </p>
-          </div>
-        </div>
-
-        <select
-          value={state.paymentType}
-          onChange={onPaymentTypeChange}
-          className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="product_wise">Product-wise Payment</option>
-          <option value="custom_amount">Custom Amount</option>
-          <option
-            value="subscription"
-            disabled={!state.capabilities?.subscriptions}
-          >
-            Subscription{" "}
-            {!state.capabilities?.subscriptions ? "(Not Available)" : ""}
-          </option>
-          <option value="donation" disabled={!state.capabilities?.donations}>
-            Donation (Custom Amount){" "}
-            {!state.capabilities?.donations ? "(Not Available)" : ""}
-          </option>
-          <option
-            value="donation_button"
-            disabled={!state.capabilities?.donations}
-          >
-            Donation (with Button ID){" "}
-            {!state.capabilities?.donations ? "(Not Available)" : ""}
-          </option>
-        </select>
-
-        {/* Payment type guidance */}
-        {state.paymentType === "product_wise" && (
-          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <FaInfoCircle className="inline text-green-600 mr-2" />
-            <span className="text-sm text-green-700">
-              <strong>Product-wise payment selected!</strong> Go to the "Payment
-              Configuration" tab to manage your products and set up pricing.
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-);
-
-// Configuration Tab Component
+// Configuration section for custom amount (reused as-is)
 const ConfigurationTab = React.memo(
   ({
     state,
@@ -779,231 +851,12 @@ const ConfigurationTab = React.memo(
         </div>
       )}
 
-      {/* Payment Methods - Only show for types that support multiple methods */}
-      {state.paymentType !== "donation_button" &&
-        state.paymentType !== "subscription" && (
-          <div className="bg-white border border-gray-200 rounded-lg">
-            <button
-              onClick={() => toggleSection("paymentMethods")}
-              className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-            >
-              <div className="flex items-center gap-3">
-                <FaCreditCard className="text-green-600" />
-                <div>
-                  <h4 className="font-medium text-gray-900">Payment Methods</h4>
-                  <p className="text-sm text-gray-600">
-                    Choose which payment methods to accept
-                  </p>
-                </div>
-              </div>
-              {expandedSections.paymentMethods ? (
-                <FaChevronDown />
-              ) : (
-                <FaChevronRight />
-              )}
-            </button>
-
-            {expandedSections.paymentMethods && (
-              <div className="px-4 pb-4 border-t border-gray-100">
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={state.paymentMethods.paypal}
-                      onChange={(e) =>
-                        onPaymentMethodChange("paypal", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-700">PayPal</span>
-                  </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={state.paymentMethods.cards}
-                      onChange={(e) =>
-                        onPaymentMethodChange("cards", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    <span className="text-sm text-gray-700">
-                      Credit/Debit Cards
-                    </span>
-                  </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={state.paymentMethods.venmo}
-                      disabled={!state.capabilities?.venmo}
-                      onChange={(e) =>
-                        onPaymentMethodChange("venmo", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    <span
-                      className={`text-sm ${
-                        !state.capabilities?.venmo
-                          ? "text-gray-400"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      Venmo{" "}
-                      {!state.capabilities?.venmo ? "(Not Available)" : ""}
-                    </span>
-                  </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={state.paymentMethods.googlePay}
-                      disabled={!state.capabilities?.googlePay}
-                      onChange={(e) =>
-                        onPaymentMethodChange("googlePay", e.target.checked)
-                      }
-                      className="mr-2"
-                    />
-                    <span
-                      className={`text-sm ${
-                        !state.capabilities?.googlePay
-                          ? "text-gray-400"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      Google Pay{" "}
-                      {!state.capabilities?.googlePay ? "(Not Available)" : ""}
-                    </span>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+      {/* Payment Methods removed from this section in single-layout; shown centrally above */}
     </div>
   )
 );
 
-// Advanced Tab Component
-const AdvancedTab = React.memo(
-  ({ state, actions, onBehaviorChange, expandedSections, toggleSection }) => (
-    <div className="space-y-6">
-      {/* Field Behavior */}
-      <div className="bg-white border border-gray-200 rounded-lg">
-        <button
-          onClick={() => toggleSection("behavior")}
-          className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
-        >
-          <div className="flex items-center gap-3">
-            <FaCog className="text-purple-600" />
-            <div>
-              <h4 className="font-medium text-gray-900">Field Behavior</h4>
-              <p className="text-sm text-gray-600">
-                Configure additional field behavior and data collection
-              </p>
-            </div>
-          </div>
-          {expandedSections.behavior ? <FaChevronDown /> : <FaChevronRight />}
-        </button>
-
-        {expandedSections.behavior && (
-          <div className="px-4 pb-4 border-t border-gray-100">
-            <div className="space-y-3 mt-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={state.behavior.collectBillingAddress}
-                  onChange={(e) =>
-                    onBehaviorChange({
-                      collectBillingAddress: e.target.checked,
-                    })
-                  }
-                  className="mr-3"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-700">
-                    Collect Billing Address
-                  </span>
-                  <p className="text-xs text-gray-500">
-                    Request billing address during payment
-                  </p>
-                </div>
-              </label>
-
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={state.behavior.collectShippingAddress}
-                  onChange={(e) =>
-                    onBehaviorChange({
-                      collectShippingAddress: e.target.checked,
-                    })
-                  }
-                  className="mr-3"
-                />
-                <div>
-                  <span className="text-sm font-medium text-gray-700">
-                    Collect Shipping Address
-                  </span>
-                  <p className="text-xs text-gray-500">
-                    Request shipping address during payment
-                  </p>
-                </div>
-              </label>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Information Panel */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <FaInfoCircle className="text-yellow-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-yellow-800">
-            <strong>Important Notes:</strong>
-            <ul className="mt-2 space-y-1 list-disc list-inside">
-              <li>Only one payment field is allowed per form</li>
-              <li>
-                Payment methods availability depends on your merchant account
-                capabilities
-              </li>
-              <li>
-                Test your payment configuration before publishing the form
-              </li>
-              <li>All payment data is processed securely through PayPal</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Debug Information (remove in production) */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <h5 className="text-sm font-medium text-gray-700 mb-2">
-          Debug Information
-        </h5>
-        <div className="text-xs text-gray-600 space-y-1">
-          <div>State Initialized: {state.isInitialized ? "Yes" : "No"}</div>
-          <div>State Dirty: {state.isDirty ? "Yes" : "No"}</div>
-          <div>
-            Last Updated:{" "}
-            {state.lastUpdated
-              ? new Date(state.lastUpdated).toLocaleString()
-              : "Never"}
-          </div>
-          <div>Merchant ID: {state.selectedMerchantId || "Not set"}</div>
-          <div>Payment Type: {state.paymentType}</div>
-          <div>
-            Payment Methods:{" "}
-            {Object.entries(state.paymentMethods)
-              .filter(([_, enabled]) => enabled)
-              .map(([method]) => method)
-              .join(", ")}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-);
+// Removed AdvancedTab in favor of minimal behavior section above
 
 // Wrapper component with PaymentProvider
 const PayPalFieldEditorTabs = ({

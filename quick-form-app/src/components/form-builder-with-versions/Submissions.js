@@ -822,138 +822,177 @@ const Submissions = ({
   const generateCSV = (data) => {
     if (data.length === 0) return "";
 
-    // For headers, use the combined fields mapping
-    const headers = [
-      "Date",
-      ...visibleFields.map((fieldId) => fields[fieldId] || fieldId),
-    ];
+    // Helper to resolve potential payment object for a field in a submission
+    const resolveFieldValueForCSV = (sub, fieldId) => {
+      let fieldValue;
+      if (fieldId.includes("__sub__")) {
+        const [baseId, suffix] = fieldId.split("__sub__");
+        fieldValue = sub?.data?.[`${baseId}_${suffix}`];
+      } else {
+        fieldValue = sub.data[fieldId];
+
+        if (
+          selectedVersion === "all" &&
+          (fieldValue === null || fieldValue === undefined || fieldValue === "")
+        ) {
+          const targetLabel = fields[fieldId];
+          if (
+            targetLabel &&
+            sub.formVersionId &&
+            fieldsByVersion[sub.formVersionId]
+          ) {
+            const versionFields = fieldsByVersion[sub.formVersionId];
+            for (const [versionFieldId, versionFieldInfo] of Object.entries(
+              versionFields
+            )) {
+              if (
+                versionFieldInfo.label === targetLabel &&
+                sub.data[versionFieldId] !== undefined
+              ) {
+                fieldValue = sub.data[versionFieldId];
+                break;
+              }
+            }
+          }
+        }
+
+        const paymentKey = `payment_${fieldId}`;
+        const paymentFromKey = sub.data?.[paymentKey];
+        const paymentFromRoot =
+          sub.data?.paymentData?.fieldId === fieldId
+            ? sub.data.paymentData
+            : null;
+        const paymentObj = paymentFromKey || paymentFromRoot;
+        if (
+          (fieldValue === null ||
+            fieldValue === undefined ||
+            fieldValue === "") &&
+          paymentObj
+        ) {
+          fieldValue = paymentObj;
+        }
+
+        if (
+          fieldValue === null ||
+          fieldValue === undefined ||
+          fieldValue === ""
+        ) {
+          const prefix = `${fieldId}_`;
+          const subEntries = Object.entries(sub.data || {})
+            .filter(([k, v]) => k.startsWith(prefix))
+            .map(([k, v]) => ({ key: k.slice(prefix.length), value: v }))
+            .filter(
+              (e) => e.value !== undefined && e.value !== null && e.value !== ""
+            );
+          if (subEntries.length > 0) {
+            const priority = [
+              "fullName",
+              "firstName",
+              "street",
+              "email",
+              "phone",
+              "city",
+              "state",
+              "postal",
+              "zip",
+              "country",
+            ];
+            const notMeta = subEntries.filter(
+              (e) => e.key.toLowerCase() !== "countrycode"
+            );
+            const pickFrom = notMeta.length > 0 ? notMeta : subEntries;
+            let picked = pickFrom.find((e) => priority.includes(e.key));
+            if (!picked) picked = pickFrom[0];
+            fieldValue = picked?.value;
+          }
+        }
+      }
+      return fieldValue;
+    };
+
+    // Determine which visible fields have payment objects with billingAddress to add extra columns
+    const fieldsWithBillingAddress = new Set();
+    for (const fieldId of visibleFields) {
+      for (const sub of data) {
+        const fv = resolveFieldValueForCSV(sub, fieldId);
+        if (fv && typeof fv === "object" && fv.billingAddress) {
+          fieldsWithBillingAddress.add(fieldId);
+          break; // no need to check more submissions for this field
+        }
+      }
+    }
+
+    // For headers, use the combined fields mapping, and append billing address columns when needed
+    const headers = ["Date"];
+    visibleFields.forEach((fieldId) => {
+      const baseLabel = fields[fieldId] || fieldId;
+      headers.push(baseLabel);
+      if (fieldsWithBillingAddress.has(fieldId)) {
+        headers.push(
+          `${baseLabel} - Billing Address Line 1`,
+          `${baseLabel} - Billing Address Line 2`,
+          `${baseLabel} - Billing City`,
+          `${baseLabel} - Billing State/Region`,
+          `${baseLabel} - Billing Postal Code`,
+          `${baseLabel} - Billing Country`
+        );
+      }
+    });
     const csvRows = [headers.join(",")];
 
     data.forEach((sub) => {
-      const row = [
-        formatDate(sub.submissionDate),
-        ...visibleFields.map((fieldId) => {
-          // Use the same logic as the table to find the correct field value
-          let fieldValue;
+      const rowCells = [];
+      const quoteCsv = (v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`;
 
-          // Synthetic sub-field IDs formatted as <baseId>__sub__<suffix>
-          if (fieldId.includes("__sub__")) {
-            const [baseId, suffix] = fieldId.split("__sub__");
-            fieldValue = sub?.data?.[`${baseId}_${suffix}`];
-          } else {
-            fieldValue = sub.data[fieldId];
+      rowCells.push(quoteCsv(formatDate(sub.submissionDate)));
 
-            // For "All Versions", search for field with same label if not found
-            if (
-              selectedVersion === "all" &&
-              (fieldValue === null ||
-                fieldValue === undefined ||
-                fieldValue === "")
-            ) {
-              const targetLabel = fields[fieldId];
-              if (
-                targetLabel &&
-                sub.formVersionId &&
-                fieldsByVersion[sub.formVersionId]
-              ) {
-                const versionFields = fieldsByVersion[sub.formVersionId];
-                for (const [versionFieldId, versionFieldInfo] of Object.entries(
-                  versionFields
-                )) {
-                  if (
-                    versionFieldInfo.label === targetLabel &&
-                    sub.data[versionFieldId] !== undefined
-                  ) {
-                    fieldValue = sub.data[versionFieldId];
-                    break;
-                  }
-                }
-              }
-            }
+      visibleFields.forEach((fieldId) => {
+        const fieldValue = resolveFieldValueForCSV(sub, fieldId);
 
-            // Map to payment object if present under known keys
-            const paymentKey = `payment_${fieldId}`;
-            const paymentFromKey = sub.data?.[paymentKey];
-            const paymentFromRoot =
-              sub.data?.paymentData?.fieldId === fieldId
-                ? sub.data.paymentData
-                : null;
-            const paymentObj = paymentFromKey || paymentFromRoot;
-            if (
-              (fieldValue === null ||
-                fieldValue === undefined ||
-                fieldValue === "") &&
-              paymentObj
-            ) {
-              fieldValue = paymentObj;
-            }
+        // Base cell
+        let csvValue = "";
+        if (Array.isArray(fieldValue)) {
+          csvValue = fieldValue.join("; ");
+        } else if (typeof fieldValue === "boolean") {
+          csvValue = fieldValue ? "Yes" : "No";
+        } else if (
+          fieldValue &&
+          typeof fieldValue === "object" &&
+          (fieldValue.amount || fieldValue.paymentMethod || fieldValue.status)
+        ) {
+          const parts = [];
+          if (fieldValue.amount)
+            parts.push(
+              `${fieldValue.currency ? fieldValue.currency + " " : ""}${
+                fieldValue.amount
+              }`
+            );
+          if (fieldValue.paymentMethod) parts.push(fieldValue.paymentMethod);
+          if (fieldValue.status) parts.push(`(${fieldValue.status})`);
+          csvValue = parts.join(" ");
+        } else {
+          csvValue = (fieldValue || "").toString();
+        }
+        rowCells.push(quoteCsv(csvValue));
 
-            // If still empty, check for composite subfields like `${fieldId}_firstName`
-            if (
-              fieldValue === null ||
-              fieldValue === undefined ||
-              fieldValue === ""
-            ) {
-              const prefix = `${fieldId}_`;
-              const subEntries = Object.entries(sub.data || {})
-                .filter(([k, v]) => k.startsWith(prefix))
-                .map(([k, v]) => ({ key: k.slice(prefix.length), value: v }))
-                .filter(
-                  (e) =>
-                    e.value !== undefined && e.value !== null && e.value !== ""
-                );
-              if (subEntries.length > 0) {
-                const priority = [
-                  "fullName",
-                  "firstName",
-                  "street",
-                  "email",
-                  "phone",
-                  "city",
-                  "state",
-                  "postal",
-                  "zip",
-                  "country",
-                ];
-                const notMeta = subEntries.filter(
-                  (e) => e.key.toLowerCase() !== "countrycode"
-                );
-                const pickFrom = notMeta.length > 0 ? notMeta : subEntries;
-                let picked = pickFrom.find((e) => priority.includes(e.key));
-                if (!picked) picked = pickFrom[0];
-                fieldValue = picked?.value;
-              }
-            }
-          }
+        // Optional billing address expanded columns
+        if (fieldsWithBillingAddress.has(fieldId)) {
+          const addr =
+            fieldValue && typeof fieldValue === "object"
+              ? fieldValue.billingAddress || {}
+              : {};
+          rowCells.push(
+            quoteCsv(addr.address_line_1 || ""),
+            quoteCsv(addr.address_line_2 || ""),
+            quoteCsv(addr.admin_area_2 || ""),
+            quoteCsv(addr.admin_area_1 || ""),
+            quoteCsv(addr.postal_code || ""),
+            quoteCsv(addr.country_code || "")
+          );
+        }
+      });
 
-          // Handle different data types for CSV
-          let csvValue = "";
-          if (Array.isArray(fieldValue)) {
-            csvValue = fieldValue.join("; ");
-          } else if (typeof fieldValue === "boolean") {
-            csvValue = fieldValue ? "Yes" : "No";
-          } else if (
-            fieldValue &&
-            typeof fieldValue === "object" &&
-            (fieldValue.amount || fieldValue.paymentMethod || fieldValue.status)
-          ) {
-            const parts = [];
-            if (fieldValue.amount)
-              parts.push(
-                `${fieldValue.currency ? fieldValue.currency + " " : ""}${
-                  fieldValue.amount
-                }`
-              );
-            if (fieldValue.paymentMethod) parts.push(fieldValue.paymentMethod);
-            if (fieldValue.status) parts.push(`(${fieldValue.status})`);
-            csvValue = parts.join(" ");
-          } else {
-            csvValue = (fieldValue || "").toString();
-          }
-          return `"${csvValue.replace(/"/g, '""')}"`;
-        }),
-      ];
-      csvRows.push(row.join(","));
+      csvRows.push(rowCells.join(","));
     });
 
     return csvRows.join("\n");

@@ -1787,6 +1787,8 @@ function FieldEditor({
                         </div>
                       )}
                       {/* Default Value Feature */}
+                      {selectedField?.type === "paypal_payment" ? null : (
+                      <>
                       {isPhone ? (
                         <div className="mb-4">
                           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1971,6 +1973,8 @@ function FieldEditor({
                           />
                         </div>
                       )}
+                      </>
+                      )}
                       {!isAddress && (
                         <div className="mb-4 flex items-center">
                           <ToggleSwitch
@@ -1983,52 +1987,56 @@ function FieldEditor({
                           </span>
                         </div>
                       )}
-                      <div className="mb-4 flex items-center">
-                        <ToggleSwitch
-                          checked={isDisabled}
-                          onChange={handleDisabledChange}
-                          id="disabled-toggle"
-                        />
-                        <span className="text-sm font-medium text-gray-700">
-                          Disable Field (Read-Only)
-                        </span>
-                      </div>
-                      <div className="mb-4 flex items-center">
-                        <ToggleSwitch
-                          checked={isHidden}
-                          onChange={handleHiddenChange}
-                          id="hidden-toggle"
-                        />
-                        <span className="text-sm font-medium text-gray-700">
-                          Hidden Field
-                        </span>
-                      </div>
-                      <div className="mb-4">
-                        <div className="flex items-center">
-                          <ToggleSwitch
-                            checked={showHelpText}
-                            onChange={handleShowHelpTextChange}
-                            id="help-text-toggle"
-                          />
-                          <span className="text-sm font-medium text-gray-700">
-                            Show Help Text
-                          </span>
-                        </div>
-                        {showHelpText && (
-                          <div className="mt-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Help Text
-                            </label>
-                            <textarea
-                              value={helpText}
-                              onChange={handleHelpTextChange}
-                              className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
-                              placeholder="Enter help text"
-                              rows="4"
+                      {selectedField?.type === "paypal_payment" ? null : (
+                        <>
+                          <div className="mb-4 flex items-center">
+                            <ToggleSwitch
+                              checked={isDisabled}
+                              onChange={handleDisabledChange}
+                              id="disabled-toggle"
                             />
+                            <span className="text-sm font-medium text-gray-700">
+                              Disable Field (Read-Only)
+                            </span>
                           </div>
-                        )}
-                      </div>
+                          <div className="mb-4 flex items-center">
+                            <ToggleSwitch
+                              checked={isHidden}
+                              onChange={handleHiddenChange}
+                              id="hidden-toggle"
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                              Hidden Field
+                            </span>
+                          </div>
+                          <div className="mb-4">
+                            <div className="flex items-center">
+                              <ToggleSwitch
+                                checked={showHelpText}
+                                onChange={handleShowHelpTextChange}
+                                id="help-text-toggle"
+                              />
+                              <span className="text-sm font-medium text-gray-700">
+                                Show Help Text
+                              </span>
+                            </div>
+                            {showHelpText && (
+                              <div className="mt-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Help Text
+                                </label>
+                                <textarea
+                                  value={helpText}
+                                  onChange={handleHelpTextChange}
+                                  className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                                  placeholder="Enter help text"
+                                  rows="4"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

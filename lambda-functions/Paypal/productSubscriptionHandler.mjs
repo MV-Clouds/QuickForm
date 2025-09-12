@@ -789,7 +789,7 @@ async function listPaypalSubscriptionsAction(body) {
 
   try {
     const subscriptions = await listPaypalSubscriptions(merchantId);
-
+    
     return {
       statusCode: 200,
       headers: {

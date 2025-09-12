@@ -23,6 +23,7 @@ const MerchantAccountSelector = ({
   className = "",
   userId = null, // Optional: can be passed from parent component
   formId = null, // Optional: can be passed from parent component
+  hideCapabilitiesPanel = false, // When true, suppress full capabilities UI (still fetch in background)
 }) => {
   // State management following Main1.js patterns
   const [accounts, setAccounts] = useState([]);
@@ -40,7 +41,7 @@ const MerchantAccountSelector = ({
     if (!merchantId) return;
 
     // Prevent duplicate calls for the same merchant
-    if (merchantId === lastFetchedMerchantRef.current && capabilities) {
+    if (merchantId === lastFetchedMerchantRef.current) {
       console.log(
         "🔍 MerchantAccountSelector: Skipping duplicate capabilities fetch for:",
         merchantId
@@ -145,7 +146,7 @@ const MerchantAccountSelector = ({
     } finally {
       setLoading(false);
     }
-  }, [fetchCapabilities, selectedMerchantId]);
+  }, [fetchCapabilities, selectedMerchantId, onMerchantChange]);
 
   // Set user context if provided
   useEffect(() => {
@@ -229,7 +230,7 @@ const MerchantAccountSelector = ({
     if (onCapabilitiesChange) {
       onCapabilitiesChange(capabilities);
     }
-  }, [capabilities]);
+  }, [capabilities, onCapabilitiesChange]);
 
   return (
     <div className={`merchant-account-selector ${className}`}>
@@ -355,6 +356,16 @@ const MerchantAccountSelector = ({
                       {selectedAccount.Status__c}
                     </span>
                   </div>
+                  {hideCapabilitiesPanel && (
+                    <div className="mt-2">
+                      {capabilitiesLoading && (
+                        <div className="flex items-center gap-2 text-blue-600">
+                          <FaSpinner className="animate-spin" />
+                          <span>Checking account capabilities…</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -362,8 +373,8 @@ const MerchantAccountSelector = ({
         )}
       </div>
 
-      {/* Capabilities Display */}
-      {selectedMerchantId && (
+      {/* Capabilities Display (optional) */}
+      {selectedMerchantId && !hideCapabilitiesPanel && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">

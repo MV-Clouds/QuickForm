@@ -18,9 +18,9 @@ import ThankYouPageBuilder from "../Thankyou/TY3";
 import NotificationPage from "../NotificationSettings/NotificationSettingsModal.js";
 import Conditions from "../conditions/Conditions"; // Or your actual path
 import { v4 as uuidv4 } from "uuid";
-import AnimatedTooltip from '../create-form-wizard/AnimatedTooltip';
-import SharePage from '../share-page/SharePage.js'
-import Prefill from '../form-prefill/Prefill.js';
+import AnimatedTooltip from "../create-form-wizard/AnimatedTooltip";
+import SharePage from "../share-page/SharePage.js";
+import Prefill from "../form-prefill/Prefill.js";
 import { enhancedFormPaymentProcessor } from "./payment-fields/EnhancedFormPaymentProcessor";
 import { setUserContext } from "./payment-fields/paypal/api/paypalApi";
 import Submissions from "./Submissions";
@@ -102,14 +102,19 @@ function MainFormBuilder({
   showCondition,
   showShare,
   showPrefill,
-  showSubmission
+  showSubmission,
 }) {
   // const { formVersionId } = useParams();
-    const location = useLocation();
+  const location = useLocation();
   const { formVersionId: urlFormVersionId } = useParams();
   const formVersionId =
     urlFormVersionId || location.state?.formVersionId || null;
-  const { refreshData, formRecords: sfFormRecords , Fieldset: fieldsets , googleData } = useSalesforceData();
+  const {
+    refreshData,
+    formRecords: sfFormRecords,
+    Fieldset: fieldsets,
+    googleData,
+  } = useSalesforceData();
   const [formId, setFormId] = useState(null);
   const [selectedVersionId, setSelectedVersionId] = useState(formVersionId);
   const [isEditable, setIsEditable] = useState(true);
@@ -130,7 +135,7 @@ function MainFormBuilder({
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const [formRecords, setFormRecords] = useState([]);
-  const [publishLink, setPublishLink] = useState('');
+  const [publishLink, setPublishLink] = useState("");
   const [submissionStats, setSubmissionStats] = useState({
     totalSubmissions: 0,
     recentSubmissions: 0,
@@ -138,7 +143,10 @@ function MainFormBuilder({
   });
 
   const [showPreview, setShowPreview] = useState(false);
-  const [previewFormData, setPreviewFormData] = useState({ formVersion: null, formFields: [] });
+  const [previewFormData, setPreviewFormData] = useState({
+    formVersion: null,
+    formFields: [],
+  });
   const [previewStep, setPreviewStep] = useState(0); // 0: builder, 1: fade mainmenubar, 2: fade sidebar, 3: show preview
   const [formConditions, setFormConditions] = useState([]);
   const [prefills, setPrefills] = useState([]);
@@ -148,19 +156,18 @@ function MainFormBuilder({
   const [fieldsState, { set: setFields, undo, redo, canUndo, canRedo }] =
     useUndo([]);
 
-
   const modalVariants = {
     hidden: { opacity: 0, scale: 0.8 },
     visible: {
       opacity: 1,
       scale: 1,
-      transition: { type: "spring", stiffness: 300, damping: 25 }
+      transition: { type: "spring", stiffness: 300, damping: 25 },
     },
     exit: {
       opacity: 0,
       scale: 0.8,
-      transition: { duration: 0.15 }
-    }
+      transition: { duration: 0.15 },
+    },
   };
 
   // Initialize data for Thank You Page
@@ -255,10 +262,14 @@ function MainFormBuilder({
     let thankyouRecord;
     thankyouRecord = formVersion?.ThankYou;
     console.log("ty record", thankyouRecord);
-    if ((typeof thankyouRecord === 'object' && Object.keys(thankyouRecord)?.length > 0) || thankyouRecord?.length > 0) {
+    if (
+      (typeof thankyouRecord === "object" &&
+        Object.keys(thankyouRecord)?.length > 0) ||
+      thankyouRecord?.length > 0
+    ) {
       const { content: loadedContent, elements: loadedElements } =
         mapSalesforceThankYouToUI(thankyouRecord);
-      console.log('mapped...')
+      console.log("mapped...");
       setContent(loadedContent || content); // fallback to default if null
       setElements(
         Array.isArray(loadedElements) && loadedElements.length > 0
@@ -268,9 +279,9 @@ function MainFormBuilder({
     }
   }, [sfFormRecords]);
   useEffect(() => {
-    console.log('elements in formbuilder', elements);
-    console.log('content ==>', content)
-  }, [elements, content])
+    console.log("elements in formbuilder", elements);
+    console.log("content ==>", content);
+  }, [elements, content]);
   /**
    * Maps a Salesforce Thank_You__c record to your content and elements state shapes.
    * @param {object} sfRecord - The Thank_You__c record from Salesforce
@@ -301,12 +312,12 @@ function MainFormBuilder({
         Array.isArray(imageParsed.images) && imageParsed.images.length > 0
           ? imageParsed.images
           : [
-            {
-              id: uuidv4(),
-              url: "https://quickform-images.s3.us-east-1.amazonaws.com/1751534809565_quickform-logo.png",
-              name: "Main Image",
-            },
-          ],
+              {
+                id: uuidv4(),
+                url: "https://quickform-images.s3.us-east-1.amazonaws.com/1751534809565_quickform-logo.png",
+                name: "Main Image",
+              },
+            ],
       socialLinks: bodyParsed.socialLinks || {},
       customTexts: bodyParsed.customTexts || [],
       description: sfRecord.Description__c || "",
@@ -316,15 +327,15 @@ function MainFormBuilder({
     const elements = Array.isArray(bodyParsed.layout)
       ? bodyParsed.layout
       : [
-        imageParsed && { ...imageParsed, id: "image", type: "image" },
-        headingParsed && { ...headingParsed, id: "title", type: "title" },
-        subHeadingParsed && {
-          ...subHeadingParsed,
-          id: "subtitle",
-          type: "subtitle",
-        },
-        actionsParsed && { ...actionsParsed, id: "button", type: "button" },
-      ].filter(Boolean);
+          imageParsed && { ...imageParsed, id: "image", type: "image" },
+          headingParsed && { ...headingParsed, id: "title", type: "title" },
+          subHeadingParsed && {
+            ...subHeadingParsed,
+            id: "subtitle",
+            type: "subtitle",
+          },
+          actionsParsed && { ...actionsParsed, id: "button", type: "button" },
+        ].filter(Boolean);
 
     return { content, elements };
   }
@@ -339,8 +350,7 @@ function MainFormBuilder({
   const [saveError, setSaveError] = useState(null);
   const fields = fieldsState.present;
 
- const [footerConfigs, setFooterConfigs] = useState({});
-
+  const [footerConfigs, setFooterConfigs] = useState({});
 
   const fetchAccessToken = async (userId, instanceUrl) => {
     try {
@@ -376,10 +386,9 @@ function MainFormBuilder({
     }, 600); // single delay controlling fade out -> preview show
   };
 
-
   const handleBackToBuilder = () => {
     // Find first draft version
-    const draftVersion = formVersions.find(v => v.Stage__c === "Draft");
+    const draftVersion = formVersions.find((v) => v.Stage__c === "Draft");
     if (draftVersion) {
       setSelectedVersionId(draftVersion.Id);
       navigate(`/form-builder/${draftVersion.Id}`);
@@ -648,26 +657,30 @@ function MainFormBuilder({
 
       // Process footer fields into footerConfigs
       const footerConfigsFromDB = {};
-      
+
       formFields.forEach((field) => {
         if (field.Field_Type__c === "footer") {
           try {
             const properties = JSON.parse(field.Properties__c || "{}");
             if (properties.pageIndex !== undefined) {
-              footerConfigsFromDB[properties.pageIndex] = properties.subFields || {};
+              footerConfigsFromDB[properties.pageIndex] =
+                properties.subFields || {};
             }
           } catch (e) {
-            console.warn(`Failed to parse footer properties for field ${field.Unique_Key__c}:`, e);
+            console.warn(
+              `Failed to parse footer properties for field ${field.Unique_Key__c}:`,
+              e
+            );
           }
         }
       });
-      
+
       setFooterConfigs(footerConfigsFromDB);
 
       const pages = {};
       formFields.forEach((field) => {
         if (field.Field_Type__c === "footer") return;
-        
+
         const pageNumber = field.Page_Number__c || 1;
         if (!pages[pageNumber]) {
           pages[pageNumber] = [];
@@ -691,7 +704,7 @@ function MainFormBuilder({
             properties.subFields || getDefaultSubFields(field.Field_Type__c),
           isHidden: field?.isHidden__c || false,
           defaultValue: field?.Default_Value__c || null,
-          sectionSide: properties?.sectionSide || null
+          sectionSide: properties?.sectionSide || null,
         });
       });
 
@@ -727,7 +740,7 @@ function MainFormBuilder({
 
   const handleVersionChange = (e) => {
     const newVersionId = e.target.value;
-    const selectedVersion = formVersions.find(v => v.Id === newVersionId);
+    const selectedVersion = formVersions.find((v) => v.Id === newVersionId);
     setSelectedVersionId(newVersionId);
 
     const userId = sessionStorage.getItem("userId");
@@ -743,7 +756,10 @@ function MainFormBuilder({
         setTimeout(() => setPreviewStep(2), 400);
         setTimeout(() => setPreviewStep(3), 500);
         setTimeout(() => {
-          setPreviewFormData({ formVersion: selectedVersion, formFields: selectedVersion.Fields || [] });
+          setPreviewFormData({
+            formVersion: selectedVersion,
+            formFields: selectedVersion.Fields || [],
+          });
           setShowPreview(true);
         }, 1200);
       }
@@ -775,37 +791,40 @@ function MainFormBuilder({
     }
   }, [fields]);
 
-
   useEffect(() => {
-    console.log('currentFormVersion changed', currentFormVersion);
+    console.log("currentFormVersion changed", currentFormVersion);
 
     if (currentFormVersion && currentFormVersion.Conditions) {
       // Parse conditions if needed
-      const parsedConditions = currentFormVersion.Conditions.map(c =>
+      const parsedConditions = currentFormVersion.Conditions.map((c) =>
         c.Condition_Data__c
-          ? (typeof c.Condition_Data__c === 'string'
+          ? typeof c.Condition_Data__c === "string"
             ? JSON.parse(c.Condition_Data__c)
-            : c.Condition_Data__c)
+            : c.Condition_Data__c
           : c
       );
       setFormConditions(parsedConditions);
     }
     if (currentFormVersion && currentFormVersion.Prefills) {
       // Parse Prefill array from currentFormVersion Prefills if available
-      if (currentFormVersion.Prefills && Array.isArray(currentFormVersion.Prefills)) {
-        const parsedPrefills = currentFormVersion.Prefills.map(p => {
+      if (
+        currentFormVersion.Prefills &&
+        Array.isArray(currentFormVersion.Prefills)
+      ) {
+        const parsedPrefills = currentFormVersion.Prefills.map((p) => {
           let parsedData = {};
           try {
-            parsedData = typeof p.Prefill_Data__c === 'string'
-              ? JSON.parse(p.Prefill_Data__c)
-              : p.Prefill_Data__c || {};
+            parsedData =
+              typeof p.Prefill_Data__c === "string"
+                ? JSON.parse(p.Prefill_Data__c)
+                : p.Prefill_Data__c || {};
           } catch (e) {
-            console.warn('Invalid Prefill_Data__c JSON', e);
+            console.warn("Invalid Prefill_Data__c JSON", e);
           }
           return {
             Id: p.Id,
             Order__c: p.Order__c || 0,
-            ...parsedData
+            ...parsedData,
           };
         });
         setPrefills(parsedPrefills);
@@ -833,8 +852,8 @@ function MainFormBuilder({
     const lastSubmissionDate =
       submissions.length > 0
         ? new Date(
-          Math.max(...submissions.map((sub) => new Date(sub.submissionDate)))
-        )
+            Math.max(...submissions.map((sub) => new Date(sub.submissionDate)))
+          )
         : null;
 
     setSubmissionStats({
@@ -862,33 +881,37 @@ function MainFormBuilder({
     }
 
     // Create footer fields from footerConfigs
-  const footerFields = Object.entries(footerConfigs).map(([pageIndexStr, config]) => {
-    const pageIndex = parseInt(pageIndexStr);
-    const pageNumber = pageIndex + 1; // Convert 0-indexed to 1-indexed
-    
-    const footerId = `footer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    const footerProperties = {
-      id: footerId,
-      type: "footer",
-      label: "Footer",
-      alignment: "center",
-      pageIndex: pageIndex,
-      subFields: config,
-      isHidden: false
-    };
+    const footerFields = Object.entries(footerConfigs).map(
+      ([pageIndexStr, config]) => {
+        const pageIndex = parseInt(pageIndexStr);
+        const pageNumber = pageIndex + 1; // Convert 0-indexed to 1-indexed
 
-    return {
-      Name: "Footer",
-      Field_Type__c: "footer",
-      Page_Number__c: pageNumber,
-      Order_Number__c: 999, // Place at the end of the page
-      Properties__c: JSON.stringify(footerProperties),
-      Unique_Key__c: footerId,
-      isHidden__c: false,
-      Default_Value__c: null
-    };
-  });
+        const footerId = `footer-${Date.now()}-${Math.random()
+          .toString(36)
+          .substr(2, 9)}`;
+
+        const footerProperties = {
+          id: footerId,
+          type: "footer",
+          label: "Footer",
+          alignment: "center",
+          pageIndex: pageIndex,
+          subFields: config,
+          isHidden: false,
+        };
+
+        return {
+          Name: "Footer",
+          Field_Type__c: "footer",
+          Page_Number__c: pageNumber,
+          Order_Number__c: 999, // Place at the end of the page
+          Properties__c: JSON.stringify(footerProperties),
+          Unique_Key__c: footerId,
+          isHidden__c: false,
+          Default_Value__c: null,
+        };
+      }
+    );
 
     const formVersion = {
       Name: currentFormVersion?.Name || formName || "Contact Form",
@@ -928,23 +951,23 @@ function MainFormBuilder({
             subFields: {
               leftField: field.subFields?.leftField
                 ? {
-                  ...field.subFields.leftField,
-                  label:
-                    field.subFields.leftField.label ||
-                    field.subFields.leftField.type?.charAt(0).toUpperCase() +
-                    field.subFields.leftField.type?.slice(1) ||
-                    "Left Field",
-                }
+                    ...field.subFields.leftField,
+                    label:
+                      field.subFields.leftField.label ||
+                      field.subFields.leftField.type?.charAt(0).toUpperCase() +
+                        field.subFields.leftField.type?.slice(1) ||
+                      "Left Field",
+                  }
                 : null,
               rightField: field.subFields?.rightField
                 ? {
-                  ...field.subFields.rightField,
-                  label:
-                    field.subFields.rightField.label ||
-                    field.subFields.rightField.type?.charAt(0).toUpperCase() +
-                    field.subFields.rightField.type?.slice(1) ||
-                    "Right Field",
-                }
+                    ...field.subFields.rightField,
+                    label:
+                      field.subFields.rightField.label ||
+                      field.subFields.rightField.type?.charAt(0).toUpperCase() +
+                        field.subFields.rightField.type?.slice(1) ||
+                      "Right Field",
+                  }
                 : null,
             },
           };
@@ -957,7 +980,7 @@ function MainFormBuilder({
             Properties__c: JSON.stringify(sectionProperties),
             Unique_Key__c: field.id,
             isHidden__c: field.isHidden,
-            Default_Value__c: field.defaultValue
+            Default_Value__c: field.defaultValue,
           };
         }
 
@@ -1003,13 +1026,12 @@ function MainFormBuilder({
           Order_Number__c: index + 1,
           Properties__c: JSON.stringify(properties),
           Unique_Key__c: field.id,
-          isHidden__c: field.isHidden
+          isHidden__c: field.isHidden,
         };
       })
     );
-    
 
-    return { formVersion, formFields: [...formFields, ...footerFields]};
+    return { formVersion, formFields: [...formFields, ...footerFields] };
   };
 
   const saveFormToSalesforce = async () => {
@@ -1483,7 +1505,7 @@ function MainFormBuilder({
     });
 
     setFields(flattenedFields);
-    setSelectedFieldId(null)
+    setSelectedFieldId(null);
     setSelectedSectionSide(null);
   };
 
@@ -1797,8 +1819,9 @@ function MainFormBuilder({
         />
       </div>
       <div
-        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${!showPreview && isSidebarOpen ? "ml-64" : !showPreview ? "ml-16" : ""
-          }`}
+        className={`flex-1 flex flex-col relative h-screen transition-all duration-300 ${
+          !showPreview && isSidebarOpen ? "ml-64" : !showPreview ? "ml-16" : ""
+        }`}
       >
         <div className="inset-x-1 h-screen flex flex-col">
           <div className="text-white p-5 w-full flex justify-between items-center header-main">
@@ -1832,10 +1855,15 @@ function MainFormBuilder({
                   <FaRegStar className="text-white text-base" />
                 </span>
               </Whisper> */}
-              <AnimatedTooltip content={currentFormVersion?.Description__c || 'Define the form structure'}>
+              <AnimatedTooltip
+                content={
+                  currentFormVersion?.Description__c ||
+                  "Define the form structure"
+                }
+              >
                 <span className="flex items-center gap-2 cursor-pointer">
                   <span className="text-2xl font-semibold text-white">
-                    {currentFormVersion?.Name || 'Contact Form'}
+                    {currentFormVersion?.Name || "Contact Form"}
                   </span>
                   {!showPreview && (
                     <FaRegStar className="text-white text-base" />
@@ -1844,7 +1872,10 @@ function MainFormBuilder({
               </AnimatedTooltip>
             </div>
             {!showPreview && (
-              <div className="flex items-center gap-4" style={{ position: "relative" }}>
+              <div
+                className="flex items-center gap-4"
+                style={{ position: "relative" }}
+              >
                 <button
                   className="flex items-center justify-center my-version-btn"
                   onClick={() => setShowVersionDropdown((v) => !v)}
@@ -1899,11 +1930,14 @@ function MainFormBuilder({
                 </button>
                 <button
                   onClick={saveFormToSalesforce}
-                  disabled={isSaving || currentFormVersion?.Stage__c !== "Draft"}
-                  className={`save-btn flex items-center gap-2 ${isSaving
-                    ? "opacity-50 cursor-not-allowed"
-                    : "hover:bg-white/10"
-                    }`}
+                  disabled={
+                    isSaving || currentFormVersion?.Stage__c !== "Draft"
+                  }
+                  className={`save-btn flex items-center gap-2 ${
+                    isSaving
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-white/10"
+                  }`}
                   title="Save Form"
                 >
                   <span className="flex items-center">
@@ -1935,34 +1969,35 @@ function MainFormBuilder({
                 </button>
                 {(currentFormVersion?.Stage__c === "Draft" ||
                   currentFormVersion?.Stage__c === "Locked") && (
-                    <button
-                      onClick={handlePublish}
-                      disabled={
-                        isLoadingForm || currentFormVersion?.Stage__c === "Publish"
-                      }
-                      className="publish-btn flex items-center gap-2"
-                    >
-                      <span className="flex items-center">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M4.35031 7.64885L5.76031 8.11885C6.69231 8.42885 7.15731 8.58485 7.49131 8.91885C7.82531 9.25285 7.98131 9.71885 8.29131 10.6489L8.76131 12.0589C9.54531 14.4129 9.93731 15.5889 10.6583 15.5889C11.3783 15.5889 11.7713 14.4129 12.5553 12.0589L15.3933 3.54685C15.9453 1.89085 16.2213 1.06285 15.7843 0.625853C15.3473 0.188853 14.5193 0.464853 12.8643 1.01585L4.34931 3.85585C1.99831 4.63885 0.820312 5.03085 0.820312 5.75185C0.820312 6.47285 1.99731 6.86485 4.35031 7.64885Z"
-                            fill="white"
-                          />
-                          <path
-                            d="M6.1841 9.59379L4.1221 8.90679C3.97781 8.85869 3.82445 8.84414 3.67369 8.86424C3.52293 8.88434 3.37874 8.93857 3.2521 9.02279L2.1621 9.74879C2.03307 9.83476 1.9318 9.95636 1.87061 10.0988C1.80941 10.2413 1.79094 10.3985 1.81742 10.5512C1.84391 10.704 1.91421 10.8458 2.01979 10.9593C2.12537 11.0729 2.26166 11.1533 2.4121 11.1908L4.3671 11.6788C4.45508 11.7008 4.53542 11.7462 4.59954 11.8103C4.66366 11.8745 4.70914 11.9548 4.7311 12.0428L5.2191 13.9978C5.25661 14.1482 5.33703 14.2845 5.45058 14.3901C5.56413 14.4957 5.7059 14.566 5.85867 14.5925C6.01144 14.619 6.16861 14.6005 6.31107 14.5393C6.45353 14.4781 6.57513 14.3768 6.6611 14.2478L7.3871 13.1578C7.47132 13.0311 7.52555 12.887 7.54565 12.7362C7.56575 12.5854 7.5512 12.4321 7.5031 12.2878L6.8161 10.2258C6.76699 10.0786 6.68433 9.94494 6.57464 9.83525C6.46495 9.72556 6.33124 9.6429 6.1841 9.59379Z"
-                            fill="white"
-                          />
-                        </svg>
-                      </span>
-                      Publish
-                    </button>
-                  )}
+                  <button
+                    onClick={handlePublish}
+                    disabled={
+                      isLoadingForm ||
+                      currentFormVersion?.Stage__c === "Publish"
+                    }
+                    className="publish-btn flex items-center gap-2"
+                  >
+                    <span className="flex items-center">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M4.35031 7.64885L5.76031 8.11885C6.69231 8.42885 7.15731 8.58485 7.49131 8.91885C7.82531 9.25285 7.98131 9.71885 8.29131 10.6489L8.76131 12.0589C9.54531 14.4129 9.93731 15.5889 10.6583 15.5889C11.3783 15.5889 11.7713 14.4129 12.5553 12.0589L15.3933 3.54685C15.9453 1.89085 16.2213 1.06285 15.7843 0.625853C15.3473 0.188853 14.5193 0.464853 12.8643 1.01585L4.34931 3.85585C1.99831 4.63885 0.820312 5.03085 0.820312 5.75185C0.820312 6.47285 1.99731 6.86485 4.35031 7.64885Z"
+                          fill="white"
+                        />
+                        <path
+                          d="M6.1841 9.59379L4.1221 8.90679C3.97781 8.85869 3.82445 8.84414 3.67369 8.86424C3.52293 8.88434 3.37874 8.93857 3.2521 9.02279L2.1621 9.74879C2.03307 9.83476 1.9318 9.95636 1.87061 10.0988C1.80941 10.2413 1.79094 10.3985 1.81742 10.5512C1.84391 10.704 1.91421 10.8458 2.01979 10.9593C2.12537 11.0729 2.26166 11.1533 2.4121 11.1908L4.3671 11.6788C4.45508 11.7008 4.53542 11.7462 4.59954 11.8103C4.66366 11.8745 4.70914 11.9548 4.7311 12.0428L5.2191 13.9978C5.25661 14.1482 5.33703 14.2845 5.45058 14.3901C5.56413 14.4957 5.7059 14.566 5.85867 14.5925C6.01144 14.619 6.16861 14.6005 6.31107 14.5393C6.45353 14.4781 6.57513 14.3768 6.6611 14.2478L7.3871 13.1578C7.47132 13.0311 7.52555 12.887 7.54565 12.7362C7.56575 12.5854 7.5512 12.4321 7.5031 12.2878L6.8161 10.2258C6.76699 10.0786 6.68433 9.94494 6.57464 9.83525C6.46495 9.72556 6.33124 9.6429 6.1841 9.59379Z"
+                          fill="white"
+                        />
+                      </svg>
+                    </span>
+                    Publish
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2012,7 +2047,11 @@ function MainFormBuilder({
           ) : showCondition ? (
             <Conditions formVersionId={formVersionId} />
           ) : showShare ? (
-            <SharePage publishLink={publishLink} noPublishLink={!publishLink} onPublish={handlePublish} />
+            <SharePage
+              publishLink={publishLink}
+              noPublishLink={!publishLink}
+              onPublish={handlePublish}
+            />
           ) : showSubmission ? (
             <Submissions
               isSidebarOpen={isSidebarOpen}
@@ -2020,103 +2059,120 @@ function MainFormBuilder({
               onStatsUpdate={updateSubmissionStats}
               formId={formId}
             />
-          )
-            : showPrefill ? <Prefill /> : showNotification ? (
-              <NotificationPage
-                currentFields={formVersions[0]?.Fields}
-                sendNotificationData={sendNotificationData}
-                GoogleData = {googleData}
-                formRecords = {sfFormRecords}
-              />
-            ) : showMapping ? (
-              <MappingFields />
-            ) : (
-              <div className="flex w-full h-screen builder-start" style={{ position: "relative" }}>
-                {/* Builder fades out when preview is active */}
-                <div className={`w-3/4 inner-builder-container ${showPreview ? "fade-out" : "fade-in"}`} style={{ position: "relative" }}>
-                  {!showPreview && (
-                    <FormBuilder
-                      fields={fields}
-                      onDrop={handleDrop}
-                      onReorder={handleReorder}
-                      onUpdateField={handleUpdateField}
-                      onDeleteField={handleDeleteField}
-                      onDeletePage={handleDeletePage}
-                      showSidebar={showSidebar}
-                      setShowSidebar={setShowSidebar}
-                      setSelectedFieldId={setSelectedFieldId}
-                      setSelectedSectionSide={setSelectedSectionSide}
-                      setSelectedFooter={setSelectedFooter}
-                      selectedFieldId={selectedFieldId}
-                      selectedSectionSide={selectedSectionSide}
-                      setClipboard={setClipboard}
-                      clipboard={clipboard}
-                      selectedTheme={selectedTheme}
-                      currentPageIndex={currentPageIndex}
-                      setCurrentPageIndex={setCurrentPageIndex}
-                      onAddPage={handleAddPage}
-                      onMovePageUp={handleMovePageUp}
-                      onMovePageDown={handleMovePageDown}
-                      canUndo={canUndo}
-                      canRedo={canRedo}
-                      onUndo={undo}
-                      onRedo={redo}
-                      isSidebarOpen={isSidebarOpen}
-                       footerConfigs={footerConfigs}
-  setFooterConfigs={setFooterConfigs}
-                    />
-                  )}
-                </div>
-                {/* Sidebar only visible when not in preview */}
-                <div className={`w-1/4 pl-2 ${previewStep > 1 ? "slide-out-right" : "slide-in-right"}`}>
-                    {showSidebar && !selectedFieldId && !selectedFooter ? (
-                      <Sidebar
-                        selectedTheme={selectedTheme}
-                        onThemeSelect={setSelectedTheme}
-                        themes={themes}
+          ) : showPrefill ? (
+            <Prefill />
+          ) : showNotification ? (
+            <NotificationPage
+              currentFields={formVersions[0]?.Fields}
+              sendNotificationData={sendNotificationData}
+              GoogleData={googleData}
+              formRecords={sfFormRecords}
+            />
+          ) : showMapping ? (
+            <MappingFields />
+          ) : (
+            <div
+              className="flex w-full h-screen builder-start"
+              style={{ position: "relative" }}
+            >
+              {/* Builder fades out when preview is active */}
+              <div
+                className={`w-3/4 inner-builder-container ${
+                  showPreview ? "fade-out" : "fade-in"
+                }`}
+                style={{ position: "relative" }}
+              >
+                {!showPreview && (
+                  <FormBuilder
+                    fields={fields}
+                    onDrop={handleDrop}
+                    onReorder={handleReorder}
+                    onUpdateField={handleUpdateField}
+                    onDeleteField={handleDeleteField}
+                    onDeletePage={handleDeletePage}
+                    showSidebar={showSidebar}
+                    setShowSidebar={setShowSidebar}
+                    setSelectedFieldId={setSelectedFieldId}
+                    setSelectedSectionSide={setSelectedSectionSide}
+                    setSelectedFooter={setSelectedFooter}
+                    selectedFieldId={selectedFieldId}
+                    selectedSectionSide={selectedSectionSide}
+                    setClipboard={setClipboard}
+                    clipboard={clipboard}
+                    selectedTheme={selectedTheme}
+                    currentPageIndex={currentPageIndex}
+                    setCurrentPageIndex={setCurrentPageIndex}
+                    onAddPage={handleAddPage}
+                    onMovePageUp={handleMovePageUp}
+                    onMovePageDown={handleMovePageDown}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
+                    onUndo={undo}
+                    onRedo={redo}
+                    isSidebarOpen={isSidebarOpen}
+                    footerConfigs={footerConfigs}
+                    setFooterConfigs={setFooterConfigs}
+                  />
+                )}
+              </div>
+              {/* Sidebar only visible when not in preview */}
+              <div
+                className={`w-1/4 pl-2 ${
+                  previewStep > 1 ? "slide-out-right" : "slide-in-right"
+                }`}
+              >
+                {showSidebar && !selectedFieldId && !selectedFooter ? (
+                  <Sidebar
+                    selectedTheme={selectedTheme}
+                    onThemeSelect={setSelectedTheme}
+                    themes={themes}
+                  />
+                ) : (
+                  <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
+                    {(selectedFieldId || selectedFooter) && (
+                      <FieldEditor
+                        selectedField={selectedField}
+                        selectedFooter={selectedFooter}
+                        onUpdateField={handleUpdateField}
+                        onDeleteField={handleDeleteField}
+                        onClose={() => {
+                          setSelectedFieldId(null);
+                          setSelectedSectionSide(null);
+                          setSelectedFooter(null);
+                          setShowSidebar(true);
+                        }}
+                        fields={fields}
+                        fieldsets={fieldsets}
+                        onAddFieldsFromFieldset={handleAddFieldsFromFieldset}
+                        footerConfigs={footerConfigs}
+                        setFooterConfigs={setFooterConfigs}
                       />
-                    ) : (
-                      <div className="bg-white dark:bg-gray-800 h-full rounded-lg">
-                        {(selectedFieldId || selectedFooter) && (
-                          <FieldEditor
-                            selectedField={selectedField}
-                            selectedFooter={selectedFooter}
-                            onUpdateField={handleUpdateField}
-                            onDeleteField={handleDeleteField}
-                            onClose={() => {
-                              setSelectedFieldId(null);
-                              setSelectedSectionSide(null);
-                              setSelectedFooter(null);
-                              setShowSidebar(true);
-                            }}
-                            fields={fields}
-                            fieldsets = {fieldsets}
-                        onAddFieldsFromFieldset = {handleAddFieldsFromFieldset}
-                              footerConfigs={footerConfigs}
-  setFooterConfigs={setFooterConfigs}
-                          />
-                        )}
-                      </div>
                     )}
                   </div>
-
-                {/* PreviewForm covers full width below header */}
-                {showPreview && (
-                  <div className="absolute top-10 left-0 w-full h-full flex items-start justify-center fade-in preview-div">
-                    <div className="bg-white rounded-lg shadow-lg border p-8" style={{ minWidth: 700 }}>
-                      <PreviewForm
-                        formVersion={previewFormData.formVersion}
-                        formFields={previewFormData.formFields}
-                        formConditions={formConditions}
-                        prefills={prefills}
-                      />
-                    </div>
-                  </div>
                 )}
-                {/* Confirmation Modal */}
-                <AnimatePresence>
-                  {showConfirmation && (
-                    <div style={{
+              </div>
+
+              {/* PreviewForm covers full width below header */}
+              {showPreview && (
+                <div className="absolute top-10 left-0 w-full h-full flex items-start justify-center fade-in preview-div">
+                  <div
+                    className="bg-white rounded-lg shadow-lg border p-8"
+                    style={{ minWidth: 700 }}
+                  >
+                    <PreviewForm
+                      formVersion={previewFormData.formVersion}
+                      formFields={previewFormData.formFields}
+                      formConditions={formConditions}
+                      prefills={prefills}
+                    />
+                  </div>
+                </div>
+              )}
+              {/* Confirmation Modal */}
+              <AnimatePresence>
+                {showConfirmation && (
+                  <div
+                    style={{
                       position: "fixed",
                       top: 0,
                       left: 0,
@@ -2126,118 +2182,144 @@ function MainFormBuilder({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      zIndex: 2000
-                    }}>
-                      <motion.div
-                        variants={modalVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        style={{
-                          background: "white",
-                          borderRadius: 10,
-                          padding: "16px",
-                          maxWidth: 400,
-                          width: "100%",
-                          boxShadow: "0 8px 32px rgba(0,0,0,0.18)"
-                        }}
-                      >
-                        {/* Get the selected version to check its stage */}
-                        {pendingVersionId && (() => {
-                          const selectedVersion = formVersions.find(v => v.Id === pendingVersionId);
+                      zIndex: 2000,
+                    }}
+                  >
+                    <motion.div
+                      variants={modalVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      style={{
+                        background: "white",
+                        borderRadius: 10,
+                        padding: "16px",
+                        maxWidth: 400,
+                        width: "100%",
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+                      }}
+                    >
+                      {/* Get the selected version to check its stage */}
+                      {pendingVersionId &&
+                        (() => {
+                          const selectedVersion = formVersions.find(
+                            (v) => v.Id === pendingVersionId
+                          );
                           const isDraft = selectedVersion?.Stage__c === "Draft";
 
                           return (
                             <>
                               {!isDraft && (
                                 <div className="flex gap-1">
-                                  <svg width="25" height="25" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M83.5712 91.6669H16.4285C14.218 91.6664 12.0466 91.0843 10.1323 89.9789C8.21807 88.8735 6.62846 87.2838 5.52318 85.3695C4.41789 83.4551 3.83586 81.2837 3.83557 79.0732C3.83528 76.8627 4.41673 74.6911 5.52151 72.7765L39.0928 14.6303C40.1983 12.7158 41.7882 11.126 43.7028 10.0207C45.6173 8.91539 47.7891 8.3335 49.9998 8.3335C52.2106 8.3335 54.3824 8.91539 56.2969 10.0207C58.2115 11.126 59.8014 12.7158 60.9068 14.6303L94.4782 72.7765C95.583 74.6911 96.1644 76.8627 96.1641 79.0732C96.1638 81.2837 95.5818 83.4551 94.4765 85.3695C93.3712 87.2838 91.7816 88.8735 89.8674 89.9789C87.9531 91.0843 85.7817 91.6664 83.5712 91.6669Z" fill="#FFB92E" />
-                                    <path d="M50 74.9998C52.3012 74.9998 54.1667 73.1344 54.1667 70.8332C54.1667 68.532 52.3012 66.6665 50 66.6665C47.6989 66.6665 45.8334 68.532 45.8334 70.8332C45.8334 73.1344 47.6989 74.9998 50 74.9998Z" fill="white" />
-                                    <path d="M50 58.3335C48.895 58.3335 47.8352 57.8945 47.0538 57.1131C46.2724 56.3317 45.8334 55.2719 45.8334 54.1668V37.5002C45.8334 36.3951 46.2724 35.3353 47.0538 34.5539C47.8352 33.7725 48.895 33.3335 50 33.3335C51.1051 33.3335 52.1649 33.7725 52.9463 34.5539C53.7277 35.3353 54.1667 36.3951 54.1667 37.5002V54.1668C54.1667 55.2719 53.7277 56.3317 52.9463 57.1131C52.1649 57.8945 51.1051 58.3335 50 58.3335Z" fill="white" />
+                                  <svg
+                                    width="25"
+                                    height="25"
+                                    viewBox="0 0 100 100"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <path
+                                      d="M83.5712 91.6669H16.4285C14.218 91.6664 12.0466 91.0843 10.1323 89.9789C8.21807 88.8735 6.62846 87.2838 5.52318 85.3695C4.41789 83.4551 3.83586 81.2837 3.83557 79.0732C3.83528 76.8627 4.41673 74.6911 5.52151 72.7765L39.0928 14.6303C40.1983 12.7158 41.7882 11.126 43.7028 10.0207C45.6173 8.91539 47.7891 8.3335 49.9998 8.3335C52.2106 8.3335 54.3824 8.91539 56.2969 10.0207C58.2115 11.126 59.8014 12.7158 60.9068 14.6303L94.4782 72.7765C95.583 74.6911 96.1644 76.8627 96.1641 79.0732C96.1638 81.2837 95.5818 83.4551 94.4765 85.3695C93.3712 87.2838 91.7816 88.8735 89.8674 89.9789C87.9531 91.0843 85.7817 91.6664 83.5712 91.6669Z"
+                                      fill="#FFB92E"
+                                    />
+                                    <path
+                                      d="M50 74.9998C52.3012 74.9998 54.1667 73.1344 54.1667 70.8332C54.1667 68.532 52.3012 66.6665 50 66.6665C47.6989 66.6665 45.8334 68.532 45.8334 70.8332C45.8334 73.1344 47.6989 74.9998 50 74.9998Z"
+                                      fill="white"
+                                    />
+                                    <path
+                                      d="M50 58.3335C48.895 58.3335 47.8352 57.8945 47.0538 57.1131C46.2724 56.3317 45.8334 55.2719 45.8334 54.1668V37.5002C45.8334 36.3951 46.2724 35.3353 47.0538 34.5539C47.8352 33.7725 48.895 33.3335 50 33.3335C51.1051 33.3335 52.1649 33.7725 52.9463 34.5539C53.7277 35.3353 54.1667 36.3951 54.1667 37.5002V54.1668C54.1667 55.2719 53.7277 56.3317 52.9463 57.1131C52.1649 57.8945 51.1051 58.3335 50 58.3335Z"
+                                      fill="white"
+                                    />
                                   </svg>
 
-                                  <p style={{
-                                    fontSize: 14,
-                                    paddingBottom: 5,
-                                    paddingTop: 5,
-                                    color: "#666",
-                                    fontStyle: "italic",
-                                    margin: 0,
-                                  }}>
-                                    {selectedVersion?.Stage__c} version cannot be edited, only previewed.
+                                  <p
+                                    style={{
+                                      fontSize: 14,
+                                      paddingBottom: 5,
+                                      paddingTop: 5,
+                                      color: "#666",
+                                      fontStyle: "italic",
+                                      margin: 0,
+                                    }}
+                                  >
+                                    {selectedVersion?.Stage__c} version cannot
+                                    be edited, only previewed.
                                   </p>
                                 </div>
                               )}
-                              <p style={{
-                                fontSize: 16,
-                                paddingBottom: 20,
-                                paddingTop: 10,
-                                fontWeight: 500,
-                                color: "black",
-                                lineHeight: 1.5,
-                                margin: 0
-                              }}>
+                              <p
+                                style={{
+                                  fontSize: 16,
+                                  paddingBottom: 20,
+                                  paddingTop: 10,
+                                  fontWeight: 500,
+                                  color: "black",
+                                  lineHeight: 1.5,
+                                  margin: 0,
+                                }}
+                              >
                                 Are you sure you want to switch versions?
                               </p>
                             </>
                           );
                         })()}
 
-                        <div style={{
+                      <div
+                        style={{
                           display: "flex",
                           justifyContent: "flex-end",
-                          gap: 10
-                        }}>
-                          <button
-                            onClick={() => {
-                              setShowConfirmation(false);
+                          gap: 10,
+                        }}
+                      >
+                        <button
+                          onClick={() => {
+                            setShowConfirmation(false);
+                            setPendingVersionId(null);
+                          }}
+                          style={{
+                            padding: "7px 14px",
+                            borderRadius: 5,
+                            border: "1px solid #d9d9d9",
+                            background: "#fff",
+                            color: "#666",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowConfirmation(false);
+                            if (pendingVersionId) {
+                              handleVersionChange({
+                                target: { value: pendingVersionId },
+                              });
                               setPendingVersionId(null);
-                            }}
-                            style={{
-                              padding: "7px 14px",
-                              borderRadius: 5,
-                              border: "1px solid #d9d9d9",
-                              background: "#fff",
-                              color: "#666",
-                              fontWeight: 500,
-                              cursor: "pointer"
-                            }}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowConfirmation(false);
-                              if (pendingVersionId) {
-                                handleVersionChange({ target: { value: pendingVersionId } });
-                                setPendingVersionId(null);
-                              }
-                            }}
-                            style={{
-                              padding: "7px 14px",
-                              borderRadius: 5,
-                              border: "none",
-                              background: "#028AB0",
-                              color: "#fff",
-                              fontWeight: 500,
-                              cursor: "pointer"
-                            }}
-                          >
-                            Confirm
-                          </button>
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-            )}
+                            }
+                          }}
+                          style={{
+                            padding: "7px 14px",
+                            borderRadius: 5,
+                            border: "none",
+                            background: "#028AB0",
+                            color: "#fff",
+                            fontWeight: 500,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       </div>
     </div>
-
   );
 }
 
